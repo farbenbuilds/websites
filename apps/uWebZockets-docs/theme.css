@@ -1,0 +1,33 @@
+/*
+ * Blume inlines this file into the site's Tailwind entry, so Tailwind
+ * directives work here.
+ *
+ * The shared UI package (@farben/ui) ships the shadcn-svelte design tokens and
+ * the components that use them. The overrides below keep those components on
+ * Blume's palette so both themes stay in sync.
+ */
+@import "@farben/ui/theme.css";
+
+:root {
+  --background: var(--blume-background);
+  --foreground: var(--blume-foreground);
+  --card: var(--blume-background);
+  --card-foreground: var(--blume-foreground);
+  --popover: var(--blume-background);
+  --popover-foreground: var(--blume-foreground);
+  --primary: var(--blume-accent);
+  --primary-foreground: var(--blume-accent-foreground);
+  --secondary: var(--blume-muted);
+  --secondary-foreground: var(--blume-foreground);
+  --muted: var(--blume-muted);
+  --muted-foreground: var(--blume-muted-foreground);
+  --accent: var(--blume-accent);
+  --accent-foreground: var(--blume-accent-foreground);
+  --border: var(--blume-border);
+  --input: var(--blume-border);
+  --ring: var(--blume-accent);
+  --radius: var(--blume-radius);
+}
+
+/* Generate the utility classes the shared components use. */
+@source "../../packages/ui/src";

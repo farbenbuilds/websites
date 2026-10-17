@@ -13,6 +13,9 @@
     "doctor": "blume doctor"
   },
   "dependencies": {
-    "blume": "catalog:"
+    "@astrojs/svelte": "^9.1.0",
+    "@farben/ui": "workspace:*",
+    "blume": "catalog:",
+    "svelte": "catalog:"
   }
 }

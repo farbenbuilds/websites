@@ -38,3 +38,10 @@ release. Add a tool name to select part of the graph. For example, run
 - Formatting is Oxfmt and linting is Oxlint; both are configured in
   `vite.config.ts` (`fmt` and `lint` keys). Do not add a second formatter or
   linter to the workspace.
+- `packages/ui` (`@farben/ui`) holds the shared shadcn-svelte components.
+  Components are consumed as source — apps import them directly and import the
+  design tokens from `@farben/ui/theme.css` in their Tailwind entry, scanning
+  the package with `@source`. Add components with the shadcn-svelte CLI from
+  inside the package: `pnpm dlx shadcn-svelte@latest add <component>`.
+- Oxfmt doesn't format `.svelte` files yet; Oxlint lints their `<script>`
+  blocks, and `svelte-check` (a package `check` task) covers their types.
