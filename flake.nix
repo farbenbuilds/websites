@@ -1,5 +1,5 @@
 {
-  description = "Farben's official web presence: documentation for uWebZockets and ventiws, the landing/branding page, and the merchandise shop";
+  description = "Farben's official web presence: a growing documentation hub, the landing/branding page, and the merchandise shop";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";

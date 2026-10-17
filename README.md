@@ -1,8 +1,8 @@
 # websites
 
-Farben's monorepo for all official web presences:
+Farben's official web presence — everything we publish on the web lives in this monorepo:
 
-- **docs** — documentation for [uWebZockets](https://github.com/farbenbuilds/uWebZockets) and [ventiws](https://github.com/farbenbuilds/ventiws)
+- **docs** — the documentation hub for Farben's projects, starting with [uWebZockets](https://github.com/farbenbuilds/uWebZockets) and [ventiws](https://github.com/farbenbuilds/ventiws)
 - **landing** — Farben's landing and branding page
 - **shop** — merchandise e-commerce shop
 
