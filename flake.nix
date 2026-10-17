@@ -34,8 +34,28 @@
           else null;
 
         # `vp` is a prebuilt binary whose glibc closure lives in the Nix store,
-        # so the same package runs in the musl shell as well.
-        vitePlus = inputs.nix-vite-plus.packages.${system}.vp;
+        # so the same package runs in the musl shell as well. Every native
+        # loader bundled with it (vite-plus, rolldown, oxlint, oxfmt, …) probes
+        # /usr/bin/ldd before checking the running process, though, and on a
+        # musl host that makes them look for musl bindings the package
+        # deliberately does not ship. Point the probe at a path that never
+        # exists so each loader falls through to the glibc process report.
+        vitePlus = inputs.nix-vite-plus.packages.${system}.vp.overrideAttrs (
+          old:
+            lib.optionalAttrs isLinux {
+              postFixup =
+                (old.postFixup or "")
+                + ''
+                  grep -rl --include='*.js' --include='*.cjs' --include='*.mjs' \
+                    "/usr/bin/ldd" $out/node_modules \
+                  | while IFS= read -r f; do
+                      substituteInPlace "$f" \
+                        --replace '"/usr/bin/ldd"' '"/usr/bin/ldd.nix-vite-plus"' \
+                        --replace "'/usr/bin/ldd'" "'/usr/bin/ldd.nix-vite-plus'"
+                    done
+                '';
+            }
+        );
 
         # The standalone pnpm releases ship native glibc and musl builds, so
         # each shell pins the flavour matching its libc.
