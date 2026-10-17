@@ -6,9 +6,12 @@ Farben's official web presence — everything we publish on the web lives in thi
 - **landing** — Farben's landing and branding page
 - **shop** — merchandise e-commerce shop
 
+The first app has landed: `apps/uWebZockets-docs` is the [uWebZockets](https://github.com/farbenbuilds/uWebZockets) documentation site, built with [Blume](https://useblume.dev) from the Markdown in its `docs/` folder.
+
 ## Stack
 
 - [Vite+](https://viteplus.dev) (`vp`) — the unified toolchain: Vite, Rolldown, Vitest, [Oxlint](https://oxc.rs/docs/guide/usage/linter) for linting, [Oxfmt](https://oxc.rs/docs/guide/usage/formatter) for formatting, and task running
+- Documentation sites use [Blume](https://useblume.dev) — Markdown in `docs/`, Astro-generated output, plus search, `llms.txt`, and an MCP server out of the box
 - TypeScript everywhere; apps are expected to lean on Astro and Svelte
 - pnpm workspaces (`apps/*`, `packages/*`, `tools/*`)
 
@@ -26,11 +29,13 @@ pnpm ready   # vp check && vp run -r test && vp run -r build
 Day-to-day commands, all through the project-local Vite+ CLI:
 
 ```bash
-pnpm dev                    # start the website dev server
-pnpm exec vp check          # Oxfmt + Oxlint + type-aware checks
-pnpm exec vp check --fix    # apply formatting/lint fixes
-pnpm exec vp run -r test    # run tests across the workspace
-pnpm exec vp run -r build   # build all workspace members
+pnpm dev                                  # start the docs dev server
+pnpm exec vp run uWebZockets-docs#build   # build the docs site
+pnpm exec vp run uWebZockets-docs#doctor  # diagnose the docs project
+pnpm exec vp check                        # Oxfmt + Oxlint + type-aware checks
+pnpm exec vp check --fix                  # apply formatting/lint fixes
+pnpm exec vp run -r test                  # run tests across the workspace
+pnpm exec vp run -r build                 # build all workspace members
 ```
 
 > On musl hosts, reach for the project-local CLI through `pnpm` (`pnpm exec vp …`).
@@ -38,4 +43,4 @@ pnpm exec vp run -r build   # build all workspace members
 > musl-flavored native bindings that pnpm installs; the project-local CLI runs
 > under the shell's Node.js and stays consistent with the installed packages.
 
-New applications and packages can be scaffolded inside the workspace with `vp create vite:application` / `vp create vite:library`.
+New applications and packages can be scaffolded inside the workspace with `vp create vite:application` / `vp create vite:library`; documentation sites start with `blume init` in their app folder.

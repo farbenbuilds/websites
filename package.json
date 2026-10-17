@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp check && vp run -r test && vp run -r build",
-    "dev": "vp run website#dev"
+    "ready": "vp check && vp run -r check && vp run -r test && vp run -r build",
+    "dev": "vp run uWebZockets-docs#dev"
   },
   "devDependencies": {
     "vite-plus": "catalog:"
@@ -18,6 +18,6 @@
     }
   },
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=22.19.0"
   }
 }

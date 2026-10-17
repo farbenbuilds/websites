@@ -1,0 +1,53 @@
+---
+title: Introduction
+description: µWebZockets is a zero-allocation, shared-nothing server framework for Zig — HTTP, WebSocket, and JSON-RPC from one type-safe API.
+---
+
+**µWebZockets** is a server framework for [Zig 0.16.0](https://ziglang.org) that serves HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through a single type-safe `Request`/`Response` API. Requests are parsed, routed, and answered from bounded slabs that are allocated once at startup, owned by one thread each, and reused without locking.
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" href="/getting-started" icon="rocket">
+    Run the hello world example and add µWebZockets to your own project.
+  </Card>
+  <Card
+    title="uWebZockets on GitHub"
+    href="https://github.com/farbenbuilds/uWebZockets"
+    icon="github"
+  >
+    Source, releases, and the issue tracker.
+  </Card>
+</CardGroup>
+
+## Highlights
+
+- **Zero allocation** — no request, parse, route, or write path allocates.
+- **Shared-nothing** — every worker runs its own event loop, slab set, and pinned physical core, coordinated only through lock-free rings.
+- **Data-oriented** — struct-of-arrays pools, parallel router arrays, and compile-time capacities that make exhaustion explicit.
+- **Readable types** — named callback, event, and override types instead of inline anonymous structs.
+- **Cross-platform** — Linux and macOS on x86_64 and aarch64 are supported and tested; Windows is compile-checked only.
+
+## A complete server
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from uWebZockets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The same module carries the rest of the battery: `app.ws(...)` for WebSocket, `app.rpc(...)` for JSON-RPC, `app.static(...)` for assets, `build_cluster` for thread-per-core workers, `init_https_ephemeral` for HTTPS with no certificate files, and `listen_udp` plus `init_http3` for HTTP/3.
+
+:::note
+This documentation site is being written. [Getting Started](/getting-started) is ready today; the rest of the guides are on the way.
+:::
