@@ -1,0 +1,25 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+catalogMode: prefer
+
+catalog:
+  "@types/node": ^24
+  typescript: ^7.0.2
+  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
+  vite-plus: 1.3.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+
+# Node.js and pnpm are provided by the Nix dev shell (flake.nix, system-first
+# mode); keep pnpm from downloading and switching toolchains on its own.
+# https://viteplus.dev/guide/env
+runtimeOnFail: ignore
+pmOnFail: ignore
