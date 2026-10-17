@@ -7,9 +7,21 @@ catalogMode: prefer
 
 catalog:
   "@types/node": ^24
-  typescript: ^7.0.2
+  blume: ^2.2.4
+  svelte: ^5.57.2
+  # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
+  # TypeScript 7 yet, so the workspace stays on 6.
+  typescript: ^6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0
   vite-plus: 1.3.0
+
+# Approve the install scripts the docs stack needs. Blume's generated Astro
+# project depends on esbuild; pnpm 12 refuses to run its install script unless
+# it is allowed here. https://useblume.dev/docs/quickstart
+allowBuilds:
+  esbuild: true
+  "@scarf/scarf": false
+
 overrides:
   vite@*: "catalog:"
 peerDependencyRules:
@@ -23,3 +35,6 @@ peerDependencyRules:
 # https://viteplus.dev/guide/env
 runtimeOnFail: ignore
 pmOnFail: ignore
+minimumReleaseAgeExclude:
+  - blume@2.2.4
+  - "@lucide/svelte@1.59.0"
