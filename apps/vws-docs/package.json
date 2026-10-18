@@ -1,8 +1,8 @@
 {
-  "name": "uWebZockets-docs",
+  "name": "vws-docs",
   "version": "0.0.0",
   "private": true,
-  "description": "Documentation site for uWebZockets, built with Blume.",
+  "description": "Documentation site for ventiws, built with Blume.",
   "type": "module",
   "scripts": {
     "dev": "blume dev",
@@ -13,9 +13,6 @@
     "doctor": "blume doctor"
   },
   "dependencies": {
-    "@astrojs/svelte": "^9.1.0",
-    "@farben/ui": "workspace:*",
-    "blume": "catalog:",
-    "svelte": "catalog:"
+    "blume": "catalog:"
   }
 }

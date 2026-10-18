@@ -8,7 +8,7 @@ export default defineConfig({
     owner: "farbenbuilds",
     repo: "websites",
     // Point edit links at this project inside the monorepo.
-    dir: "apps/uWebZockets-docs",
+    dir: "apps/uwz-docs",
   },
   theme: {
     accent: "orange",

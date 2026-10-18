@@ -1,0 +1,49 @@
+---
+title: Introduction
+description: ventiws is a WebSocket implementation for Node.js with the API of ws, delivered as a native addon whose framing engine is written in Zig.
+---
+
+**ventiws** is a WebSocket implementation for Node.js with the API of [`ws`](https://github.com/websockets/ws), delivered as a native addon whose framing engine is written in [Zig](https://ziglang.org). It targets `ws` 8.22.0 and reproduces that release's observable behaviour rather than its source. ventiws is not affiliated with the `ws` project and vendors none of its code.
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" href="/getting-started" icon="rocket">
+    Install ventiws and run an echo server and client.
+  </Card>
+  <Card title="ventiws on GitHub" href="https://github.com/farbenbuilds/ventiws" icon="github">
+    Source, releases, and the issue tracker.
+  </Card>
+</CardGroup>
+
+## Highlights
+
+- **The `ws` API** — `WebSocket` and `WebSocketServer`, with option defaults matching `ws`: `maxPayload` 100 MiB, `maxFragments` 16384, and `closeTimeout` 30000 ms.
+- **A native addon** — the framing engine is Zig; the constructors are plain functions returning state records, with no `class`, no `this`, and no prototype.
+- **No compiler on install** — per-platform binding packages mean `pnpm add ventiws` needs no toolchain.
+- **Compatibility you can check** — every `ws` surface item, its status, and the evidence test behind it are tracked in the repository's compatibility matrix.
+- **A dev logger** — lifecycle records print as they happen (splash, open, close, error) with no callbacks to subscribe.
+
+## Echo server and client
+
+```ts
+import { WebSocket, WebSocketServer } from "ventiws";
+
+const server = new WebSocketServer({ port: 8080 });
+
+server.on("connection", (socket) => {
+  socket.on("message", (data, isBinary) => {
+    socket.send(isBinary ? data : `echo: ${data.toString()}`);
+  });
+});
+
+const client = new WebSocket("ws://127.0.0.1:8080/");
+client.on("open", () => client.send("hello"));
+client.on("message", (data) => console.log("client saw", data.toString()));
+```
+
+:::warning
+ventiws is pre-1.0: the surface may change between beta releases, and Windows is not supported yet. The compatibility matrix and the known divergences from `ws` live in the [repository](https://github.com/farbenbuilds/ventiws).
+:::
+
+:::note
+This documentation site is being prepared. [Getting Started](/getting-started) covers install and first use; the rest of the guides are on the way.
+:::
