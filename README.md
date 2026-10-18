@@ -6,7 +6,7 @@ Farben's official web presence — everything we publish on the web lives in thi
 - **landing** — Farben's landing and branding page
 - **shop** — merchandise e-commerce shop
 
-The first app has landed: `apps/uWebZockets-docs` is the [uWebZockets](https://github.com/farbenbuilds/uWebZockets) documentation site, built with [Blume](https://useblume.dev) from the Markdown in its `docs/` folder.
+Both apps have landed: `apps/uwz-docs` is the [uWebZockets](https://github.com/farbenbuilds/uWebZockets) documentation site, and `apps/vws-docs` prepares the [ventiws](https://github.com/farbenbuilds/ventiws) docs — both built with [Blume](https://useblume.dev) from the Markdown in their `docs/` folders.
 
 ## Stack
 
@@ -29,9 +29,10 @@ pnpm ready   # vp check && vp run -r check && vp run -r test && vp run -r build
 Day-to-day commands, all through the project-local Vite+ CLI:
 
 ```bash
-pnpm dev                                  # start the docs dev server
-pnpm exec vp run uWebZockets-docs#build   # build the docs site
-pnpm exec vp run uWebZockets-docs#doctor  # diagnose the docs project
+pnpm dev                                  # start the uWebZockets docs dev server
+pnpm dev:vws                              # start the ventiws docs dev server
+pnpm exec vp run uwz-docs#build           # build the uWebZockets docs site
+pnpm exec vp run uwz-docs#doctor          # diagnose the uWebZockets docs project
 pnpm exec vp run @farben/ui#check         # type-check the shared UI package
 pnpm exec vp check                        # Oxfmt + Oxlint + type-aware checks
 pnpm exec vp check --fix                  # apply formatting/lint fixes

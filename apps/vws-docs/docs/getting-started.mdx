@@ -1,0 +1,76 @@
+---
+title: Getting Started
+description: Install ventiws, run an echo server and client, and find the reference material while these docs are being written.
+---
+
+ventiws is a WebSocket implementation for Node.js with the API of `ws`. This guide installs it and runs a first echo server. It assumes a supported platform (Linux or macOS on x64 or arm64) and Node.js.
+
+## Install
+
+```package-install
+ventiws
+```
+
+The addon arrives as a per-platform package that your package manager installs only on a host it matches, so the install needs no compiler:
+
+| Platform                    | Package                            |
+| --------------------------- | ---------------------------------- |
+| Linux x64, glibc            | `@ventiws/binding-linux-x64-gnu`   |
+| Linux x64, musl (Alpine)    | `@ventiws/binding-linux-x64-musl`  |
+| Linux arm64, glibc          | `@ventiws/binding-linux-arm64-gnu` |
+| macOS x64                   | `@ventiws/binding-darwin-x64`      |
+| macOS arm64 (Apple silicon) | `@ventiws/binding-darwin-arm64`    |
+
+Any other host installs ventiws with no addon behind it, and the first `WebSocketServer` says so by name. Windows is not supported yet, at either layer.
+
+## Echo server and client
+
+The server echoes every message back; the client sends one and logs the reply:
+
+```ts server.mjs
+import { WebSocketServer } from "ventiws";
+
+const server = new WebSocketServer({ port: 8080 });
+
+server.on("listening", () => {
+  console.log("listening on", server.address()?.port);
+});
+
+server.on("connection", (socket) => {
+  socket.on("message", (data, isBinary) => {
+    socket.send(isBinary ? data : `echo: ${data.toString()}`);
+  });
+});
+```
+
+```ts client.mjs
+import { WebSocket } from "ventiws";
+
+const client = new WebSocket("ws://127.0.0.1:8080/");
+
+client.on("open", () => client.send("hello"));
+client.on("message", (data) => console.log("client saw", data.toString()));
+client.on("error", (error) => console.error(error));
+```
+
+Both halves run against a real `ws` peer in the repository's suites.
+
+## Dev logger
+
+ventiws prints lifecycle records as they happen — the splash when a server starts listening, then open, close, and error records for every connection — with no callbacks to subscribe. It is on by default and silenced with one switch:
+
+```ts
+import { setLoggerEnabled } from "ventiws/logging";
+
+setLoggerEnabled(false); // VENTIWS_LOG=0 does the same at load
+```
+
+## Where to go next
+
+Until the guides here are written, the reference material lives in the [ventiws repository](https://github.com/farbenbuilds/ventiws#docs-and-licence):
+
+- [COMPATIBILITY.md](https://github.com/farbenbuilds/ventiws/blob/main/COMPATIBILITY.md) — every `ws` surface item, its owner module, its status, and its evidence test
+- [CODEBASE.md](https://github.com/farbenbuilds/ventiws/blob/main/CODEBASE.md) — repository layout, the two routes, the boundary, and the compiled capacities
+- [docs/migrating.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/migrating.md) — moving an existing `ws` application over
+- [docs/logging.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/logging.md) — the dev logger and startup splash
+- [docs/performance.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/performance.md) — the benchmark harness and its history
