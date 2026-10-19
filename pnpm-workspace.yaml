@@ -11,7 +11,7 @@ catalog:
   svelte: ^5.57.2
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
-  typescript: ^6.0.3
+  typescript: ^7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0
   vite-plus: 1.3.0
 
