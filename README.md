@@ -89,7 +89,7 @@ The short version:
 - Keep content, presentation, styling, domain logic, and tooling separate.
 - Source files target 150 to 200 lines and never exceed 200.
 - Semicolons, double quotes, and trailing commas are mandatory.
-- Files are kebab-case; Svelte components are PascalCase. Functions are camelCase.
+- Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase.
 - Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - `lefthook` runs the pre-commit gate. Run `pnpm ready` before opening a pull request.
 

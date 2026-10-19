@@ -70,7 +70,7 @@ bindings on musl systems.
 - Svelte 5 runes only. No `<style>` blocks. Tailwind utilities and shared tokens.
 - TypeScript strict. No `any` and no unchecked casts.
 - Semicolons, double quotes, and trailing commas are mandatory.
-- Files are kebab-case; Svelte components are PascalCase. Functions are camelCase.
+- Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
 - Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - `lefthook` runs the pre-commit gate. Do not bypass it.
 - Do not weaken a lint, test, build, accessibility, or CI gate.

@@ -107,8 +107,8 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
 - TypeScript strict. No `any`, unchecked casts, or non-null assertions used to
   silence uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory.
-- Files are kebab-case; Svelte components are PascalCase. Functions are
-  camelCase, except exported HTTP method handlers.
+- Files are kebab-case, including Svelte and Astro files; component identifiers
+  are PascalCase. Functions are camelCase, except exported HTTP method handlers.
 - Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 

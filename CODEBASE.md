@@ -51,7 +51,8 @@ websites/
 ├── apps/
 │   ├── uwz-docs/                 # uWebZockets documentation
 │   │   ├── docs/                # Markdown and MDX source
-│   │   ├── islands/             # Svelte islands used by MDX
+│   │   ├── components/          # Svelte islands registered in components.ts
+│   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, GitHub edit links
 │   │   └── theme.css            # host Tailwind entry and tokens
 │   └── vws-docs/                 # ventiws documentation

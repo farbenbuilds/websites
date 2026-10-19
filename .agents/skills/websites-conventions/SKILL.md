@@ -32,8 +32,9 @@ the working checklist.
 - No file over 200 lines. No `part-2` files.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt settings
   live in `.oxfmtrc.json`.
-- Files are kebab-case; Svelte components are PascalCase. Functions are
-  camelCase, except exported HTTP method handlers such as `GET`.
+- Files are kebab-case, including Svelte and Astro files; component identifiers
+  are PascalCase. Functions are camelCase, except exported HTTP method handlers
+  such as `GET`.
 - Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - No second formatter, linter, package manager, or test runner.
 - Do not weaken a gate to pass a change.

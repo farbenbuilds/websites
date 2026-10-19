@@ -32,8 +32,9 @@ violates it is rejected in review, not negotiated in a pull request.
   documentation uses Blume and MDX.
 - Use `type` rather than `interface` for object shapes and unions. Use
   `import type` for type-only imports.
-- File names are kebab-case for TypeScript, CSS, and Markdown. Svelte component
-  files are PascalCase, matching the component they export.
+- File names are kebab-case for TypeScript, CSS, Markdown, Svelte, and Astro.
+  Component identifiers stay PascalCase in markup and imports, even when the file
+  is kebab-case.
 - Types and components use PascalCase. Functions and variables use camelCase.
   Function declarations, function expressions, and arrow functions assigned to
   a variable must use camelCase; exported HTTP method handlers such as `GET`

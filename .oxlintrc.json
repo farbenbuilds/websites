@@ -51,13 +51,7 @@
   },
   "overrides": [
     {
-      "files": ["**/*.svelte"],
-      "rules": {
-        "unicorn/filename-case": "off"
-      }
-    },
-    {
-      "files": ["**/*.config.{js,mjs,ts}", "scripts/oxlint-plugin.mjs"],
+      "files": ["**/*.config.{js,mjs,ts}", "apps/*/components.ts", "scripts/oxlint-plugin.mjs"],
       "rules": {
         "import/no-default-export": "off"
       }

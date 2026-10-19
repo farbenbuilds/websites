@@ -47,8 +47,9 @@ rules agents most often break:
   silence a real uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the
   formatting settings in `.oxfmtrc.json`.
-- Files are kebab-case; Svelte components are PascalCase. Functions are
-  camelCase, except exported HTTP method handlers such as `GET`.
+- Files are kebab-case, including Svelte and Astro files; component identifiers
+  are PascalCase. Functions are camelCase, except exported HTTP method handlers
+  such as `GET`.
 - Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - Do not weaken lint rules, type checks, tests, builds, accessibility, or CI to
   make a change pass.
