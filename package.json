@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "ready": "vp check && vp run -r check && vp run -r test && vp run -r build",
-    "dev": "vp run uwz-docs#dev",
+    "dev:uwz": "vp run uwz-docs#dev",
     "dev:vws": "vp run vws-docs#dev"
   },
   "devDependencies": {

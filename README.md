@@ -29,7 +29,7 @@ pnpm ready   # vp check && vp run -r check && vp run -r test && vp run -r build
 Day-to-day commands, all through the project-local Vite+ CLI:
 
 ```bash
-pnpm dev                                  # start the uWebZockets docs dev server
+pnpm dev:uwz                              # start the uWebZockets docs dev server
 pnpm dev:vws                              # start the ventiws docs dev server
 pnpm exec vp run uwz-docs#build           # build the uWebZockets docs site
 pnpm exec vp run uwz-docs#doctor          # diagnose the uWebZockets docs project
@@ -39,6 +39,10 @@ pnpm exec vp check --fix                  # apply formatting/lint fixes
 pnpm exec vp run -r test                  # run tests across the workspace
 pnpm exec vp run -r build                 # build all workspace members
 ```
+
+> The docs sites are Blume/Astro apps, so their dev servers start through their
+> package scripts. `vp dev` is Vite+'s built-in Vite server and cannot start
+> them; use `pnpm dev:uwz` / `pnpm dev:vws` (or `pnpm exec vp run dev:uwz`).
 
 > On musl hosts, reach for the project-local CLI through `pnpm` (`pnpm exec vp …`).
 > The global `vp` is glibc-based and its helper tools cannot load the

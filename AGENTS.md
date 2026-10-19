@@ -29,7 +29,7 @@ release. Add a tool name to select part of the graph. For example, run
 ## Repo notes (websites)
 
 - Prefer the project-local Vite+ CLI through pnpm for project commands, e.g.
-  `pnpm exec vp check`, `pnpm exec vp run -r test`, `pnpm dev`. The global `vp`
+  `pnpm exec vp check`, `pnpm exec vp run -r test`, `pnpm dev:uwz`. The global `vp`
   is glibc-based (Nix) and is intended for environment and scaffolding work
   (`vp env`, `vp create`, `vp config`). This matters on musl hosts, where pnpm
   installs musl-flavored native bindings that the global CLI cannot load.
