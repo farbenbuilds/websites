@@ -24,7 +24,9 @@ permissions:
 
 # Security Reviewer
 
-Load `web-security-review`. Read [SECURITY.md](../../SECURITY.md),
+Load `web-security-review`, `context7`, and `find-skills` before review. Add
+`technical-documentation` for disclosure and policy accuracy, and
+`verification-and-release` for evidence checks. Read [SECURITY.md](../../SECURITY.md),
 [CODING_CONVENTION.md](../../CODING_CONVENTION.md), and the changed surface.
 
 ## Responsibilities

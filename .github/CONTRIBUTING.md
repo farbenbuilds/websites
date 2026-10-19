@@ -48,10 +48,14 @@ bindings on musl hosts.
 ```sh
 pnpm dev:uwz                            # uWebZockets docs dev server
 pnpm dev:vws                            # ventiws docs dev server
+pnpm lint                               # Oxlint, anti-slop, project rules
+pnpm lint:fix                           # apply safe lint fixes
+pnpm format                             # Oxfmt with .oxfmtrc.json
+pnpm format:check                       # verify formatting
+pnpm typecheck                          # every workspace check
+pnpm test                               # root Vitest suite
+pnpm test:watch                         # Vitest watch mode
 pnpm check:size                         # enforce the 200-line source limit
-pnpm exec vp check                      # format, lint, type-aware checks
-pnpm exec vp check --fix                # apply fixes
-pnpm exec vp run -r check               # every workspace check
 pnpm exec vp run -r test                # every workspace test
 pnpm exec vp run -r build               # every workspace build
 pnpm exec vp run uwz-docs#check
@@ -102,6 +106,10 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
 - Svelte 5 runes only. No `<style>` blocks.
 - TypeScript strict. No `any`, unchecked casts, or non-null assertions used to
   silence uncertainty.
+- Semicolons, double quotes, and trailing commas are mandatory.
+- Files are kebab-case, including Svelte and Astro files; component identifiers
+  are PascalCase. Functions are camelCase, except exported HTTP method handlers.
+- Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 
 ## Commits

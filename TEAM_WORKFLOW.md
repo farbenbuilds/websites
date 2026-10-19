@@ -127,8 +127,11 @@ suppress a finding, reclassify a failure, or weaken a check to close the phase.
 The default gate is `pnpm ready`. Targeted gates are additive:
 
 ```sh
-pnpm exec vp check
-pnpm exec vp run -r check
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm check:size
+pnpm test
 pnpm exec vp run -r test
 pnpm exec vp run -r build
 pnpm exec vp run uwz-docs#check
@@ -165,3 +168,28 @@ Escalate to the root agent when:
 
 The root agent resolves with the user when the decision changes scope, risk,
 cost, or public behavior.
+
+## 8. Skill Routing
+
+Skills live in `.agents/skills/<id>/SKILL.md`. OpenCode loads them with the
+`skill` tool by ID. Codex reads the named `SKILL.md` before acting. Load the
+narrowest set that fits the phase; do not load the whole library. If a listed
+skill is missing, report the drift instead of guessing.
+
+| Role                | Load first                                                                                                                      | Add for the task                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `architect`         | `agent-team-orchestration`, `websites-conventions`, `grill-me`, `ponytail`                                                      | `pragmatic-functional-programming`, `thermo-nuclear-code-quality-review`, domain skills for the affected surface |
+| `developer`         | `websites-conventions`, `agent-team-orchestration`, `pragmatic-functional-programming`, `ponytail`, `typescript-best-practices` | `typescript-advanced-types`, `install-anti-slop`, `vite`, `vitest`, domain skills for the slice                  |
+| `reviewer`          | `websites-conventions`, `thermo-nuclear-code-quality-review`, `verification-and-release`                                        | `web-security-review`, `ui-ux-pro-max`, `impeccable`, `svelte5-best-practices`                                   |
+| `integrator`        | `agent-team-orchestration`, `verification-and-release`, `technical-documentation`                                               | `ponytail`, `docs-site-authoring`, `web-security-review`                                                         |
+| `docs-writer`       | `technical-documentation`, `docs-site-authoring`, `blume`, `astro`                                                              | `context7`, `websites-conventions`, `impeccable` for reader-facing structure                                     |
+| `ui-stylist`        | `web-ui-styling`, `ui-ux-pro-max`, `impeccable`, `tailwind-design-system`, `shadcn-svelte`                                      | `gsap-core`, `chrome-devtools`, `svelte5-best-practices`                                                         |
+| `astro-blume`       | `astro`, `blume`, `docs-site-authoring`, `vite`                                                                                 | `technical-documentation`, `context7`, `nix-best-practices`                                                      |
+| `svelte-engineer`   | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`, `typescript-best-practices`                             | `typescript-advanced-types`, `web-ui-styling`, `vitest`                                                          |
+| `verification`      | `verification-and-release`, `vitest`, `vite`, `thermo-nuclear-code-quality-review`                                              | `install-anti-slop`, `typescript-best-practices`, `nix-best-practices`                                           |
+| `security-reviewer` | `web-security-review`, `context7`, `find-skills`                                                                                | `technical-documentation`, `verification-and-release`                                                            |
+
+`caveman` is opt-in only when the user asks for terse output. `find-skills` is
+for discovering a missing capability, not for loading a skill that is already
+listed here. `context7` is for current library documentation, not for project
+rules.

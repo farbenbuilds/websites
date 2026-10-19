@@ -32,11 +32,18 @@ violates it is rejected in review, not negotiated in a pull request.
   documentation uses Blume and MDX.
 - Use `type` rather than `interface` for object shapes and unions. Use
   `import type` for type-only imports.
-- File names are kebab-case for TypeScript, CSS, and Markdown. Svelte component
-  files are PascalCase, matching the component they export.
+- File names are kebab-case for TypeScript, CSS, Markdown, Svelte, and Astro.
+  Component identifiers stay PascalCase in markup and imports, even when the file
+  is kebab-case.
 - Types and components use PascalCase. Functions and variables use camelCase.
-  Module constants use `SCREAMING_SNAKE_CASE` only when they are true process
+  Function declarations, function expressions, and arrow functions assigned to
+  a variable must use camelCase; exported HTTP method handlers such as `GET`
+  are the only uppercase exception.
+- Module constants use `SCREAMING_SNAKE_CASE` only when they are true process
   constants.
+- Semicolons are mandatory. Trailing commas are mandatory in multiline
+  literals, parameters, and imports. Strings use double quotes. Oxfmt owns
+  these settings in `.oxfmtrc.json`.
 - Do not use `any`. Parse unknown input at the boundary, narrow with type
   guards, and keep the trusted type inside the module.
 - Prefer `as const` objects and discriminated unions over enums and namespaces.
@@ -136,12 +143,22 @@ package only when at least two apps use it.
 - Agent-facing documents describe observable behavior, ownership, and
   verification. They do not duplicate the full codebase.
 
-## 9. Formatting and Verification
+## 9. Formatting, Linting, and Verification
 
 - Oxfmt formats and Oxlint lints. Do not add a second formatter or linter.
-- Run `pnpm exec vp check --fix` for formatting and lint fixes, then
-  `pnpm ready` for the full workspace gate. `pnpm check:size` enforces the
-  200-line source limit inside that gate.
+- Formatter settings live in `.oxfmtrc.json`: semicolons on, double quotes, and
+  trailing commas for all multiline constructs.
+- Linter settings live in `.oxlintrc.json`: kebab-case filenames, camelCase
+  functions, the 200-line limit, strict TypeScript rules, project rules, and the
+  vendored anti-slop rules.
+- The anti-slop plugin is vendored under `tools/oxlint/anti-slop/`. Update it
+  through the `install-anti-slop` skill, not by editing rule files in place.
+- `lefthook` runs lint, format, size, typecheck, and tests before a commit. Do
+  not bypass the hook with `--no-verify`.
+- Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
+  full workspace gate. `pnpm check:size` enforces the 200-line source limit.
+- Vitest tests live in the root `tests/` directory and use `vite-plus/test`.
+  Run them with `pnpm test` or `pnpm test:watch`.
 - Use the project-local CLI through pnpm on every host: `pnpm exec vp ...`.
 - A pull request reports the exact commands that ran and their outcomes. Never
   claim a check that was not executed.

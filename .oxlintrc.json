@@ -1,0 +1,78 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": [
+    { "name": "farben", "specifier": "./scripts/oxlint-plugin.mjs" },
+    { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
+    { "name": "vite-plus", "specifier": "vite-plus/oxlint-plugin" }
+  ],
+  "plugins": ["import", "oxc", "typescript", "unicorn"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "anti-slop/no-array-filter-map": "error",
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-reduce-accumulator-copy": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-runtime-typeof": ["error", { "allowInTypeGuards": true }],
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-returns": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/require-readable-spacing": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "farben/function-name-camel-case": "error",
+    "farben/no-emoji": "error",
+    "farben/no-enum": "error",
+    "farben/no-oop": "error",
+    "eqeqeq": ["error", "always"],
+    "import/no-default-export": "error",
+    "max-lines": ["error", { "max": 200 }],
+    "no-else-return": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/consistent-type-imports": [
+      "error",
+      { "prefer": "type-imports", "fixStyle": "separate-type-imports" }
+    ],
+    "typescript/explicit-module-boundary-types": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "unicorn/filename-case": ["error", { "case": "kebabCase" }],
+    "vite-plus/prefer-vite-plus-imports": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.config.{js,mjs,ts}", "apps/*/components.ts", "scripts/oxlint-plugin.mjs"],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    ".agent/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".continue/**",
+    ".cursor/**",
+    ".gemini/**",
+    ".opencode/**",
+    ".pi/**",
+    ".roo/**",
+    ".windsurf/**",
+    "tools/oxlint/anti-slop/**",
+    ".blume/**",
+    "dist/**",
+    "**/dist/**",
+    "node_modules/**"
+  ]
+}

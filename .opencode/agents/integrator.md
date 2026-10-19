@@ -27,6 +27,13 @@ permissions:
 Read [TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md), the architect plan, the
 developer report, the reviewer findings, and the specialist reports.
 
+## Skills
+
+Load `agent-team-orchestration`, `verification-and-release`, and
+`technical-documentation`. Add `ponytail` for scope discipline,
+`docs-site-authoring` for documentation delivery, and `web-security-review`
+when security evidence is required.
+
 ## Responsibilities
 
 - Check the combined diff against the architect's scope and acceptance criteria.

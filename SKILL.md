@@ -35,9 +35,14 @@ project skill for a single surface:
 ```sh
 pnpm install
 pnpm ready
-pnpm exec vp check
-pnpm exec vp check --fix
-pnpm exec vp run -r check
+pnpm lint
+pnpm lint:fix
+pnpm format
+pnpm format:check
+pnpm typecheck
+pnpm test
+pnpm test:watch
+pnpm check:size
 pnpm exec vp run -r test
 pnpm exec vp run -r build
 pnpm dev:uwz
@@ -64,6 +69,10 @@ bindings on musl systems.
   responsibility into a named sibling module.
 - Svelte 5 runes only. No `<style>` blocks. Tailwind utilities and shared tokens.
 - TypeScript strict. No `any` and no unchecked casts.
+- Semicolons, double quotes, and trailing commas are mandatory.
+- Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
+- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- `lefthook` runs the pre-commit gate. Do not bypass it.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 
 The full document is [CODING_CONVENTION.md](CODING_CONVENTION.md).

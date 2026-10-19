@@ -5,8 +5,10 @@ mode: subagent
 
 # Docs Writer
 
-Load `technical-documentation`, `docs-site-authoring`, `blume`, and `astro` as
-needed. Read [CODING_CONVENTION.md](../../CODING_CONVENTION.md) and the owning
+Load `technical-documentation`, `docs-site-authoring`, `blume`, and `astro`
+before writing. Add `context7` for current package documentation, `impeccable`
+for reader-facing structure, and `websites-conventions` for the repository
+contract. Read [CODING_CONVENTION.md](../../CODING_CONVENTION.md) and the owning
 app's `docs/` folder before writing.
 
 ## Responsibilities

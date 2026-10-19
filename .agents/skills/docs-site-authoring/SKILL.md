@@ -15,7 +15,7 @@ generated documentation output.
 - `apps/vws-docs`: ventiws documentation.
 - `blume.config.ts`: site title, description, theme, GitHub edit links.
 - `theme.css`: host Tailwind entry and token overrides.
-- `islands/`: Svelte components used from MDX.
+- `components/`: Svelte components registered for MDX in `components.ts`.
 
 Blume owns routing, search, `llms.txt`, `llms-full.txt`, OpenAPI output, and the
 Astro build. Do not hand-roll replacements.

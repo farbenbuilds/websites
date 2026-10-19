@@ -45,6 +45,12 @@ rules agents most often break:
   Tailwind utilities and `@farben/ui/theme.css` tokens.
 - TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
   silence a real uncertainty.
+- Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the
+  formatting settings in `.oxfmtrc.json`.
+- Files are kebab-case, including Svelte and Astro files; component identifiers
+  are PascalCase. Functions are camelCase, except exported HTTP method handlers
+  such as `GET`.
+- Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - Do not weaken lint rules, type checks, tests, builds, accessibility, or CI to
   make a change pass.
 - Do not commit `dist/`, `.blume/`, `node_modules/`, local env files, or secrets.
@@ -57,11 +63,15 @@ hosts.
 
 ```sh
 pnpm install
-pnpm ready                              # size, format, lint, type check, tests, builds
+pnpm ready                              # lint, format, typecheck, size, tests, builds
+pnpm lint                               # Oxlint, anti-slop, project rules
+pnpm lint:fix                           # apply safe lint fixes
+pnpm format                             # Oxfmt with .oxfmtrc.json
+pnpm format:check                       # verify formatting without writing
+pnpm typecheck                          # every workspace check task
+pnpm test                               # root Vitest suite
+pnpm test:watch                         # Vitest watch mode
 pnpm check:size                         # enforce the 200-line source limit
-pnpm exec vp check                      # Oxfmt, Oxlint, type-aware checks
-pnpm exec vp check --fix                # apply formatting and lint fixes
-pnpm exec vp run -r check               # every workspace check task
 pnpm exec vp run -r test                # every workspace test task
 pnpm exec vp run -r build               # every workspace build
 pnpm dev:uwz                            # uWebZockets docs dev server
@@ -88,8 +98,11 @@ Vite+ notes:
   dependency graph.
 - Oxfmt does not format `.svelte` files yet. Oxlint checks their `<script>`
   blocks, and `svelte-check` covers their types.
-- Formatting and linting live in `vite.config.ts`; do not add another formatter
-  or linter.
+- Formatting lives in `.oxfmtrc.json`; linting lives in `.oxlintrc.json`; the
+  vendored anti-slop rules live in `tools/oxlint/anti-slop/`. Do not add another
+  formatter or linter.
+- `lefthook` installs through pnpm and runs the pre-commit gate. Do not bypass
+  it with `--no-verify`.
 
 ## Repository Shape
 
@@ -99,15 +112,23 @@ Vite+ notes:
 - `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
   design tokens. Add components with the shadcn-svelte CLI from inside the
   package.
+- `tests` holds the root Vitest suite.
 - `.agents/skills` holds installed third-party skills and project-owned skills.
 - `.opencode/agents` and `.codex/agents` mirror the same agent team.
-- `.github` holds community, security, and pull-request templates.
+- `.oxlintrc.json`, `.oxfmtrc.json`, and `tools/oxlint/anti-slop` define lint
+  and format enforcement.
+- `lefthook.yml` defines the pre-commit gate.
+- `.github` holds community, security, and pull-request templates plus the
+  `ci`, `lint`, and `test` workflows.
 
 ## Skill Library
 
 Load the narrowest skill that fits the phase. Do not load every skill because it
-is available. Third-party skills are pinned by `skills-lock.json`; update them
-with the `skills` CLI instead of editing vendored copies.
+is available. Every role has a required routing row in
+[TEAM_WORKFLOW.md](TEAM_WORKFLOW.md#8-skill-routing); load those skills before
+planning, implementing, reviewing, or verifying. Third-party skills are pinned
+by `skills-lock.json`; update them with the `skills` CLI instead of editing
+vendored copies.
 
 ### Project Skills
 

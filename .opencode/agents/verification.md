@@ -6,8 +6,11 @@ mode: subagent
 # Verification
 
 Load `verification-and-release`, `vitest`, `vite`, and
-`thermo-nuclear-code-quality-review`. Read [TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md)
-and [.github/CONTRIBUTING.md](../../.github/CONTRIBUTING.md) before reporting.
+`thermo-nuclear-code-quality-review` before reporting. Add
+`install-anti-slop` for lint rule audits, `typescript-best-practices` for type
+failures, and `nix-best-practices` for toolchain failures. Read
+[TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md) and
+[.github/CONTRIBUTING.md](../../.github/CONTRIBUTING.md) before reporting.
 
 ## Responsibilities
 
