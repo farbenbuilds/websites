@@ -5,23 +5,23 @@ on:
     branches:
       - main
     paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.mts"
-      - "**.cts"
-      - "**.js"
-      - "**.jsx"
-      - "**.mjs"
-      - "**.cjs"
-      - "**.svelte"
-      - "**.astro"
-      - "**.css"
-      - "**.json"
-      - "**.jsonc"
-      - "**.md"
-      - "**.mdx"
-      - "**.yaml"
-      - "**.yml"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.mts"
+      - "**/*.cts"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.svelte"
+      - "**/*.astro"
+      - "**/*.css"
+      - "**/*.json"
+      - "**/*.jsonc"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "**/*.yaml"
+      - "**/*.yml"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -31,28 +31,30 @@ on:
       - "lefthook.yml"
       - "scripts/**"
       - "tools/**"
-      - ".github/workflows/lint.yml"
+      - ".github/**"
+      - ".oxlintrc.json"
+      - ".oxfmtrc.json"
   pull_request:
     branches:
       - main
     paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.mts"
-      - "**.cts"
-      - "**.js"
-      - "**.jsx"
-      - "**.mjs"
-      - "**.cjs"
-      - "**.svelte"
-      - "**.astro"
-      - "**.css"
-      - "**.json"
-      - "**.jsonc"
-      - "**.md"
-      - "**.mdx"
-      - "**.yaml"
-      - "**.yml"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.mts"
+      - "**/*.cts"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.svelte"
+      - "**/*.astro"
+      - "**/*.css"
+      - "**/*.json"
+      - "**/*.jsonc"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "**/*.yaml"
+      - "**/*.yml"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -62,7 +64,9 @@ on:
       - "lefthook.yml"
       - "scripts/**"
       - "tools/**"
-      - ".github/workflows/lint.yml"
+      - ".github/**"
+      - ".oxlintrc.json"
+      - ".oxfmtrc.json"
   workflow_dispatch:
 
 permissions:
@@ -74,7 +78,8 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint, format, and typecheck
+    name: Lint, format, typecheck, and size
+    environment: Lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -100,3 +105,6 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Check file size
+        run: pnpm check:size

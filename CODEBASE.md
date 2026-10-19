@@ -182,6 +182,8 @@ Workspace `test` tasks run `blume validate`; workspace `build` tasks run
 
 `lefthook` runs lint, format, size, typecheck, and tests on pre-commit. The
 GitHub workflows split the same gate into `lint.yml`, `test.yml`, and `ci.yml`.
+Path filters limit each workflow to the files it can affect, and the jobs report
+through the `Lint`, `Test`, and `Build` environments.
 
 The full gate is intentionally short. A change that needs a protocol compliance
 suite, browser matrix, or load test adds a targeted workflow for that surface

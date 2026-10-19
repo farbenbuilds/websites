@@ -5,41 +5,53 @@ on:
     branches:
       - main
     paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.mts"
-      - "**.cts"
-      - "**.js"
-      - "**.jsx"
-      - "**.mjs"
-      - "**.cjs"
-      - "**.svelte"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.mts"
+      - "**/*.cts"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.svelte"
+      - "**/*.astro"
+      - "apps/**"
+      - "packages/**"
+      - "tests/**"
+      - "scripts/**"
+      - "tools/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "tsconfig.json"
+      - "vite.config.ts"
       - "vitest.config.ts"
-      - "tests/**"
       - ".github/workflows/test.yml"
   pull_request:
     branches:
       - main
     paths:
-      - "**.ts"
-      - "**.tsx"
-      - "**.mts"
-      - "**.cts"
-      - "**.js"
-      - "**.jsx"
-      - "**.mjs"
-      - "**.cjs"
-      - "**.svelte"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.mts"
+      - "**/*.cts"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.svelte"
+      - "**/*.astro"
+      - "apps/**"
+      - "packages/**"
+      - "tests/**"
+      - "scripts/**"
+      - "tools/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "tsconfig.json"
+      - "vite.config.ts"
       - "vitest.config.ts"
-      - "tests/**"
       - ".github/workflows/test.yml"
   workflow_dispatch:
 
@@ -52,7 +64,8 @@ concurrency:
 
 jobs:
   test:
-    name: Vitest
+    name: Tests
+    environment: Test
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -70,5 +83,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
+      - name: Run root tests
         run: pnpm test
+
+      - name: Run workspace tests
+        run: pnpm exec vp run -r test
