@@ -145,6 +145,22 @@ A pull request description includes:
 3. Screenshots or recordings for visual changes.
 4. Follow-up work that is intentionally out of scope.
 
+## Continuous Integration
+
+GitHub Actions uses path filters so a change runs only the checks it can affect:
+
+- `Lint` runs for source, documentation, configuration, and the files checked by
+  the 200-line limit.
+- `Test` runs for application, package, test, script, and tooling changes.
+- `Build` runs for application, package, and build configuration changes.
+
+Each job attaches to the `Lint`, `Test`, or `Build` environment, so its progress
+appears in the pull request deployments section. `pnpm ready` remains the full
+local gate; CI splits it across the three workflows to avoid duplicate work.
+
+If a workflow becomes a required status check, keep its path filter aligned with
+that check so a filtered skip does not block a merge.
+
 ## Agent-Assisted Contributions
 
 Agent-assisted changes follow the same rules. The agent team is defined in
