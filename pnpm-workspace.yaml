@@ -6,7 +6,7 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@types/node": ^24
+  "@types/node": ^26
   blume: ^2.2.4
   svelte: ^5.57.2
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
