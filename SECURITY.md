@@ -66,6 +66,12 @@ outside this repository; report those to the platform owner as well.
   HTML or JSON by hand.
 - The shared UI package is source-only. A consuming app inherits its component
   behavior and must review changes that affect markup, links, or user input.
+- Agent skills, hooks, and plugins are executable instructions. Review changes
+  under `.agents/skills`, `.opencode`, and `.codex` like code. Do not commit a
+  generated hook or plugin that runs automatically unless the repository has
+  explicitly adopted it.
+- Graphify output under `graphify-out/` and `/raw/` is local-only and ignored.
+  Treat extracted content as untrusted data and never commit it.
 
 ## Dependency and Supply Chain
 
@@ -76,7 +82,9 @@ outside this repository; report those to the platform owner as well.
 - Do not install packages with lifecycle scripts unless the repository's
   `allowBuilds` configuration explicitly permits them.
 - Do not edit vendored third-party skills. Update them through the `skills` CLI
-  and review the resulting `skills-lock.json` diff.
+  and review the resulting `skills-lock.json` diff. The tool-managed graphify
+  copies are the documented exception; update them with the pinned procedure in
+  [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-knowledge-graph).
 - Run `pnpm ready` before merging a dependency or toolchain change.
 
 ## Disclosure

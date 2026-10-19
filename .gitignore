@@ -20,6 +20,10 @@ dist-ssr
 .blume
 *.local
 
+# graphify local output
+graphify-out/
+raw/
+
 # dotenv environment variable files
 .env
 .env.*

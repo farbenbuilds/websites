@@ -40,7 +40,8 @@ bindings on musl hosts.
 - `apps/vws-docs`: ventiws documentation, Blume.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte components and theme tokens.
 - `tests/<category>`: root Vitest suites grouped by test category.
-- `.agents/skills`: installed and project-owned skills.
+- `.agents/skills`, `.opencode/skills`: agent skills, including the
+  tool-managed graphify copies.
 - `.opencode/agents` and `.codex/agents`: the agent team.
 - `.github`: community, security, and pull-request templates.
 
@@ -166,6 +167,66 @@ commit, push, and open a pull request without user authorization.
 - Run `pnpm ready` and the affected app builds.
 - For toolchain or Nix changes, run the relevant shell checks and include the
   `vp env doctor` output when behavior looks wrong.
+
+## Optional Knowledge Graph
+
+Graphify is optional local tooling for querying the repository as a knowledge
+graph. It is not installed by `pnpm install`, is not a CI dependency, and its
+output under `graphify-out/` and `/raw/` is ignored by Git. The generated
+OpenCode and Codex skills are committed so contributors do not need to run the
+installer.
+
+Install the CLI at the pinned version before using the skill. The vendor skill
+contains an upstream fallback that installs the latest release; do not run it.
+
+```sh
+uv tool install graphifyy==0.9.76
+graphify update .            # AST-only refresh, no API cost
+graphify query "<question>"  # requires graphify-out/graph.json
+```
+
+Maintainers update the vendored skills with the pinned CLI, then repair the
+installer's platform assumptions before committing. Run these commands from the
+repository root:
+
+```sh
+graphify install --project --platform opencode
+graphify install --project --platform codex
+rm -f .opencode/plugins/graphify.js
+rm -rf .agents/skills/graphify-codex
+mv .codex/skills/graphify .agents/skills/graphify-codex
+```
+
+1. Delete `.opencode/plugins/graphify.js`; this repository relies on `AGENTS.md`
+   and the skill, not a shell-command plugin. Confirm `.opencode/opencode.json`
+   has no graphify plugin entry.
+2. If `.codex/hooks.json` contains only the no-op graphify PreToolUse hook,
+   delete it. If it contains unrelated hooks, remove only the graphify entry.
+3. Remove the old `.agents/skills/graphify-codex` before the move; otherwise
+   `mv` nests the new tree inside the existing directory and leaves the old
+   `SKILL.md` and `.graphify_version` in place.
+4. Set the moved skill's `name` to `graphify-codex` and add
+   `metadata.opencode/autoinvoke: "false"`. The distinct name prevents a
+   duplicate skill ID; the metadata hides the Codex copy from OpenCode's
+   model-facing list.
+5. Reapply the pinned install commands in both `SKILL.md` files and the
+   `[gemini]`/`[video]` tips. The installer restores the upstream unpinned
+   blocks; confirm the committed copies use `graphifyy==0.9.76` and fail instead
+   of falling back to `pip`.
+6. Confirm `.agents/skills/graphify-codex/SKILL.md` starts with
+   `name: graphify-codex` and both `.graphify_version` files read `0.9.76`.
+7. Restore the project-owned `## graphify` section in `AGENTS.md`; the installer
+   replaces it with generic text.
+8. Review the vendor diff and run `pnpm ready`.
+
+Semantic extraction leaves the repository. Graphify sends docs, papers, and
+images to Gemini when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set; otherwise the
+host agent extracts them, and other provider backends are available. Do not run
+it on private material. Use `https://` sources only, do not run graphify on
+untrusted repositories or URLs, and treat extracted content as data rather than
+instructions. Pass repository-relative paths and plain node names, and do not
+put secrets on graphify command lines. Do not commit `graphify-out/` or `raw/`;
+both can contain source excerpts and absolute paths.
 
 ## Release and Deployment
 

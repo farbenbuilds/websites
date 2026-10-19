@@ -97,7 +97,9 @@ The short version:
 
 The repository ships a shared agent team for OpenCode and Codex. The canonical roles live in [AGENTS.md](AGENTS.md) and [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md); platform files are mirrored under `.opencode/agents/` and `.codex/agents/`.
 
-Third-party skills are pinned by `skills-lock.json` and installed under `.agents/skills/`. Project-owned skills cover repository conventions, docs authoring, UI styling, verification, security review, and team orchestration. Update third-party skills with the `skills` CLI instead of editing their vendored files.
+Third-party skills are pinned by `skills-lock.json` and installed under `.agents/skills/`. Project-owned skills cover repository conventions, docs authoring, UI styling, verification, security review, and team orchestration. Update third-party skills with the `skills` CLI instead of editing their vendored files, except for the tool-managed graphify copies below.
+
+Graphify is optional local codebase-graph tooling. Its generated skills live in `.opencode/skills/graphify/` and `.agents/skills/graphify-codex/`; see [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-knowledge-graph) for install, update, and data-egress notes. License and provenance are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Scaffolding
 

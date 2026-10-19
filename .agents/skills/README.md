@@ -1,6 +1,6 @@
 # Skills
 
-This directory contains two kinds of skills.
+This directory contains three kinds of skills.
 
 ## Installed Third-Party Skills
 
@@ -27,6 +27,24 @@ These are maintained in this repository and are not listed in
 | `verification-and-release` | Gates, CI parity, pull-request evidence |
 | `web-security-review` | Trust boundaries, secrets, injection, dependency risk |
 
+## Tool-Managed Skills
+
+Graphify is installed by its own CLI, not the `skills` CLI, so it is not listed
+in `skills-lock.json`. Its generated copies are vendored and excluded from lint,
+formatting, and the size check:
+
+- `.opencode/skills/graphify/` for OpenCode.
+- `.agents/skills/graphify-codex/` for Codex. Codex reads `.agents/skills`. The
+  distinct name prevents a duplicate skill ID, and `opencode/autoinvoke: "false"`
+  hides the Codex copy from OpenCode's model-facing list.
+
+Both copies are graphify 0.9.76 (Apache-2.0). Their bodies are upstream content
+except for the pinned install fallback. The other local adaptations are the
+Codex copy's name and its OpenCode visibility metadata. License texts and notices
+are in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). The update and
+cleanup procedure is in
+[CONTRIBUTING.md](../../.github/CONTRIBUTING.md#optional-knowledge-graph).
+
 ## Adding a Project Skill
 
 1. Create `.agents/skills/<kebab-case-id>/SKILL.md`.
@@ -40,6 +58,6 @@ These are maintained in this repository and are not listed in
 
 ## Loading
 
-OpenCode discovers `.agents/skills` automatically. Codex agents read the
-relevant `SKILL.md` path listed in their instructions. Load the narrowest skill
-that matches the current phase.
+OpenCode and Codex discover `.agents/skills` automatically. OpenCode also
+discovers `.opencode/skills`. Load the narrowest skill that matches the current
+phase.
