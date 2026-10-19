@@ -35,7 +35,7 @@ the working checklist.
 - Files are kebab-case, including Svelte and Astro files; component identifiers
   are PascalCase. Functions are camelCase, except exported HTTP method handlers
   such as `GET`.
-- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See `tests/README.md`.
 - No second formatter, linter, package manager, or test runner.
 - Do not weaken a gate to pass a change.
 

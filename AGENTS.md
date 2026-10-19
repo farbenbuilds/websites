@@ -50,7 +50,9 @@ rules agents most often break:
 - Files are kebab-case, including Svelte and Astro files; component identifiers
   are PascalCase. Functions are camelCase, except exported HTTP method handlers
   such as `GET`.
-- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- Vitest tests live under a category directory in `tests/`, for example
+  `tests/config/workspace-manifest.test.ts`, and import from `vite-plus/test`.
+  Keep the `tests/` root to category directories and `tests/README.md`.
 - Do not weaken lint rules, type checks, tests, builds, accessibility, or CI to
   make a change pass.
 - Do not commit `dist/`, `.blume/`, `node_modules/`, local env files, or secrets.
@@ -112,7 +114,8 @@ Vite+ notes:
 - `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
   design tokens. Add components with the shadcn-svelte CLI from inside the
   package.
-- `tests` holds the root Vitest suite.
+- `tests` holds the root Vitest suite grouped by category. See
+  [tests/README.md](tests/README.md).
 - `.agents/skills` holds installed third-party skills and project-owned skills.
 - `.opencode/agents` and `.codex/agents` mirror the same agent team.
 - `.oxlintrc.json`, `.oxfmtrc.json`, and `tools/oxlint/anti-slop` define lint

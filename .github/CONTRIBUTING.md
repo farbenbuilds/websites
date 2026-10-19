@@ -39,6 +39,7 @@ bindings on musl hosts.
 - `apps/uwz-docs`: uWebZockets documentation, Blume, Astro, Svelte islands.
 - `apps/vws-docs`: ventiws documentation, Blume.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte components and theme tokens.
+- `tests/<category>`: root Vitest suites grouped by test category.
 - `.agents/skills`: installed and project-owned skills.
 - `.opencode/agents` and `.codex/agents`: the agent team.
 - `.github`: community, security, and pull-request templates.
@@ -109,7 +110,8 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers
   are PascalCase. Functions are camelCase, except exported HTTP method handlers.
-- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- Vitest tests live under category directories in `tests/` and import from
+  `vite-plus/test`. See [tests/README.md](../tests/README.md).
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 
 ## Commits

@@ -63,7 +63,7 @@ websites/
 │       ├── src/lib/components/   # shadcn-svelte components
 │       ├── src/lib/styles/       # shared theme tokens
 │       └── components.json       # shadcn CLI aliases
-├── tests/                        # root Vitest suite
+├── tests/                        # root Vitest suites grouped by category
 ├── tools/oxlint/anti-slop/       # vendored anti-slop Oxlint plugin
 ├── .agents/skills/               # installed and project agent skills
 ├── .opencode/agents/             # OpenCode subagent definitions
