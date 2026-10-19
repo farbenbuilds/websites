@@ -63,7 +63,7 @@ websites/
 │       ├── src/lib/components/   # shadcn-svelte components
 │       ├── src/lib/styles/       # shared theme tokens
 │       └── components.json       # shadcn CLI aliases
-├── tests/                        # root Vitest suite
+├── tests/                        # root Vitest suites grouped by category
 ├── tools/oxlint/anti-slop/       # vendored anti-slop Oxlint plugin
 ├── LICENSES/                     # third-party license texts
 ├── THIRD_PARTY_NOTICES.md        # vendored content provenance

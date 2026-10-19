@@ -90,7 +90,7 @@ The short version:
 - Source files target 150 to 200 lines and never exceed 200.
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase.
-- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See [tests/README.md](tests/README.md).
 - `lefthook` runs the pre-commit gate. Run `pnpm ready` before opening a pull request.
 
 ## Agents and skills

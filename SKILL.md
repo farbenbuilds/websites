@@ -71,7 +71,7 @@ bindings on musl systems.
 - TypeScript strict. No `any` and no unchecked casts.
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
-- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See [tests/README.md](tests/README.md).
 - `lefthook` runs the pre-commit gate. Do not bypass it.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 

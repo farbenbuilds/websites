@@ -14,7 +14,7 @@ function isManifest(value: unknown): value is Manifest {
 }
 
 async function readManifest(): Promise<Manifest> {
-  const content = await readFile(new URL("../package.json", import.meta.url), "utf8");
+  const content = await readFile(new URL("../../package.json", import.meta.url), "utf8");
   const parsed: unknown = JSON.parse(content);
 
   if (!isManifest(parsed)) throw new Error("package.json does not expose a scripts object");

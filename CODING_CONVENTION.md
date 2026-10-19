@@ -157,8 +157,10 @@ package only when at least two apps use it.
   not bypass the hook with `--no-verify`.
 - Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
   full workspace gate. `pnpm check:size` enforces the 200-line source limit.
-- Vitest tests live in the root `tests/` directory and use `vite-plus/test`.
-  Run them with `pnpm test` or `pnpm test:watch`.
+- Vitest tests live under `tests/<category>/<subject>.test.ts` and use
+  `vite-plus/test`. The category groups related tests; the file names the
+  behavior. See [tests/README.md](tests/README.md). Run them with
+  `pnpm test` or `pnpm test:watch`.
 - Use the project-local CLI through pnpm on every host: `pnpm exec vp ...`.
 - A pull request reports the exact commands that ran and their outcomes. Never
   claim a check that was not executed.
