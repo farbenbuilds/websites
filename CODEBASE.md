@@ -65,9 +65,14 @@ websites/
 │       └── components.json       # shadcn CLI aliases
 ├── tests/                        # root Vitest suite
 ├── tools/oxlint/anti-slop/       # vendored anti-slop Oxlint plugin
-├── .agents/skills/               # installed and project agent skills
-├── .opencode/agents/             # OpenCode subagent definitions
-├── .codex/agents/                # Codex subagent definitions
+├── LICENSES/                     # third-party license texts
+├── THIRD_PARTY_NOTICES.md        # vendored content provenance
+├── .agents/skills/               # installed, project-owned, and tool skills
+│   └── graphify-codex/           # generated Codex graphify skill
+├── .opencode/                    # OpenCode agents, skills, and project config
+│   ├── agents/
+│   └── skills/graphify/          # generated OpenCode graphify skill
+├── .codex/                       # Codex agents and config
 ├── .github/                      # community templates and workflows
 ├── .oxfmtrc.json                 # Oxfmt settings and ignores
 ├── .oxlintrc.json                # Oxlint rules, plugins, and overrides
@@ -195,11 +200,13 @@ security review before launch. Client-side checks are not a security boundary.
 
 ## Repository hygiene
 
-- Do not commit `node_modules`, `dist`, `.blume`, `.direnv`, or local env files.
+- Do not commit `node_modules`, `dist`, `.blume`, `.direnv`, `graphify-out/`, or
+  local env files.
 - Do not add a second package manager, formatter, linter, or test runner.
 - Do not add a dependency for a behavior the platform or an existing package
   already provides.
 - Do not edit third-party skills under `.agents/skills`; update them through
-  `skills-lock.json` and the `skills` CLI.
+  `skills-lock.json` and the `skills` CLI. The tool-managed graphify copies are
+  the exception and follow [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-knowledge-graph).
 - Project-owned skills, agents, and commands live beside the installed skills
   but are maintained in this repository.
