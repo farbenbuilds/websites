@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "CODING_CONVENTION.md",
+    "TEAM_WORKFLOW.md",
+    ".github/COMMIT_CONVENTION.md"
+  ],
+  "permissions": [
+    { "action": "shell", "resource": "git push*", "effect": "ask" },
+    { "action": "shell", "resource": "gh pr create*", "effect": "ask" }
+  ]
+}

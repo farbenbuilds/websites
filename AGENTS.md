@@ -1,47 +1,194 @@
-<!--VITE PLUS START-->
+# Farben Websites Agent Guide
 
-# Using Vite+, the Unified Toolchain for the Web
+## Project
 
-This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, and it invokes Vite through `vp dev` and `vp build`. Run `vp help` to print a list of commands and `vp <command> --help` for information about a specific command.
+Farben's official web presence: a pnpm monorepo for the documentation hub, the
+landing and branding page, and the merchandise shop. Today the repository ships
+two Blume documentation sites and a shared Svelte component package.
 
-Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.dev/guide/.
+This is a documentation-first, static-web codebase. Treat content, presentation,
+and tooling as separate products with separate owners.
 
-## Built-in Commands vs Scripts
+## Documentation Map
 
-`vp <name>` runs a built-in command. `vp run <name>` runs a `package.json` script or a `vite.config.ts` task. Scripts cannot overwrite built-ins, so `vp dev` and `vp run dev` may do different things. Check `package.json` and `vite.config.ts` first, and run `vp run <name>` when the project defines a script or task with that name.
+| Document                                                     | Read it for                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| [CODEBASE.md](CODEBASE.md)                                   | Architecture, workspace layout, docs pipeline, ownership boundaries      |
+| [CODING_CONVENTION.md](CODING_CONVENTION.md)                 | Non-negotiable coding rules, FP, separation of concerns, file-size limit |
+| [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)                         | Architect, Developer, Reviewer, Integrator, specialist handoffs          |
+| [CONTRIBUTING.md](.github/CONTRIBUTING.md)                   | Environment, commands, branch and PR process                             |
+| [SECURITY.md](SECURITY.md)                                   | Reporting, supported versions, trust boundaries                          |
+| [SKILL.md](SKILL.md)                                         | Project master skill and skill routing                                   |
+| [.github/COMMIT_CONVENTION.md](.github/COMMIT_CONVENTION.md) | Commit message format                                                    |
 
-## Tool Versions
+## Non-Negotiable Rules
 
-Run `vp toolchain` to show versions and relationships in the active Vite+
-release. Add a tool name to select part of the graph. For example, run
-`vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
-`vp why <package>` to show the package-manager dependency graph.
+The full contract is [CODING_CONVENTION.md](CODING_CONVENTION.md). These are the
+rules agents most often break:
 
-## Review Checklist
+- No emoji characters in repository-authored files. Not in source,
+  documentation, commit messages, issue bodies, UI copy, test names, or logs.
+  Vendored third-party skills under `.agents/skills` are upstream content and
+  are exempt; do not edit them to satisfy this rule.
+- Reduce comments to the minimum. Keep only a short "why" for a non-obvious
+  constraint, workaround, or safety boundary. Never restate the code, never
+  leave commented-out code, and never add `TODO`, `FIXME`, `XXX`, or `HACK`.
+- Functional programming over object-oriented programming. No classes,
+  prototypes, `this`, inheritance, or hidden mutable state. Data is plain,
+  transformations are pure, and effects stay at the edges.
+- Separation of concerns is mandatory. Content, presentation, styling, domain
+  logic, integration, and tooling do not leak into each other.
+- A source file targets 150 to 200 lines and must not exceed 200 lines. Split
+  by responsibility into a named sibling module before the limit. Never create
+  a `part-2` file.
+- Svelte 5 runes only. No legacy reactive syntax, no `<style>` blocks. Use
+  Tailwind utilities and `@farben/ui/theme.css` tokens.
+- TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
+  silence a real uncertainty.
+- Do not weaken lint rules, type checks, tests, builds, accessibility, or CI to
+  make a change pass.
+- Do not commit `dist/`, `.blume/`, `node_modules/`, local env files, or secrets.
 
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
-- [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
-- [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
+## Commands
 
-<!--VITE PLUS END-->
+Use the project-local Vite+ CLI through pnpm on every host. The global `vp` is
+for environment and scaffolding work and cannot load musl bindings on musl
+hosts.
 
-## Repo notes (websites)
+```sh
+pnpm install
+pnpm ready                              # size, format, lint, type check, tests, builds
+pnpm check:size                         # enforce the 200-line source limit
+pnpm exec vp check                      # Oxfmt, Oxlint, type-aware checks
+pnpm exec vp check --fix                # apply formatting and lint fixes
+pnpm exec vp run -r check               # every workspace check task
+pnpm exec vp run -r test                # every workspace test task
+pnpm exec vp run -r build               # every workspace build
+pnpm dev:uwz                            # uWebZockets docs dev server
+pnpm dev:vws                            # ventiws docs dev server
+pnpm exec vp run uwz-docs#check
+pnpm exec vp run vws-docs#check
+pnpm exec vp run uwz-docs#build
+pnpm exec vp run vws-docs#build
+pnpm exec vp run @farben/ui#check
+```
 
-- Prefer the project-local Vite+ CLI through pnpm for project commands, e.g.
-  `pnpm exec vp check`, `pnpm exec vp run -r test`, `pnpm dev:uwz`. The global `vp`
-  is glibc-based (Nix) and is intended for environment and scaffolding work
-  (`vp env`, `vp create`, `vp config`). This matters on musl hosts, where pnpm
-  installs musl-flavored native bindings that the global CLI cannot load.
-- `pnpm ready` is the single command CI should mirror: format, lint, type
-  check, tests, and builds across the workspace.
-- Formatting is Oxfmt and linting is Oxlint; both are configured in
-  `vite.config.ts` (`fmt` and `lint` keys). Do not add a second formatter or
-  linter to the workspace.
-- `packages/ui` (`@farben/ui`) holds the shared shadcn-svelte components.
-  Components are consumed as source — apps import them directly and import the
-  design tokens from `@farben/ui/theme.css` in their Tailwind entry, scanning
-  the package with `@source`. Add components with the shadcn-svelte CLI from
-  inside the package: `pnpm dlx shadcn-svelte@latest add <component>`.
-- Oxfmt doesn't format `.svelte` files yet; Oxlint lints their `<script>`
-  blocks, and `svelte-check` (a package `check` task) covers their types.
+Docs apps are Blume/Astro projects. Their dev servers start through their package
+scripts, not `vp dev`. On musl hosts, `pnpm exec vp ...` is the supported path.
+
+If setup, runtime, or package-manager behavior looks wrong, run
+`pnpm exec vp env doctor` and include the output in the report.
+
+Vite+ notes:
+
+- `vp <name>` runs a built-in command. `vp run <name>` runs a `package.json`
+  script or a `vite.config.ts` task. Check the project before assuming they
+  match.
+- `vp toolchain` shows the active tool graph; `vp why <package>` shows the
+  dependency graph.
+- Oxfmt does not format `.svelte` files yet. Oxlint checks their `<script>`
+  blocks, and `svelte-check` covers their types.
+- Formatting and linting live in `vite.config.ts`; do not add another formatter
+  or linter.
+
+## Repository Shape
+
+- `apps/uwz-docs` documents uWebZockets. It uses Blume, Astro, Svelte islands,
+  and `@farben/ui`.
+- `apps/vws-docs` documents ventiws. It currently uses Blume only.
+- `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
+  design tokens. Add components with the shadcn-svelte CLI from inside the
+  package.
+- `.agents/skills` holds installed third-party skills and project-owned skills.
+- `.opencode/agents` and `.codex/agents` mirror the same agent team.
+- `.github` holds community, security, and pull-request templates.
+
+## Skill Library
+
+Load the narrowest skill that fits the phase. Do not load every skill because it
+is available. Third-party skills are pinned by `skills-lock.json`; update them
+with the `skills` CLI instead of editing vendored copies.
+
+### Project Skills
+
+| Skill                      | Use                                                                  |
+| -------------------------- | -------------------------------------------------------------------- |
+| `websites-conventions`     | Repository rules, file-size limit, FP, separation of concerns        |
+| `agent-team-orchestration` | Phase routing, handoffs, parallel work, definition of done           |
+| `docs-site-authoring`      | Blume and MDX content, navigation, search, docs verification         |
+| `web-ui-styling`           | Design tokens, Tailwind, shadcn-svelte, responsive and accessible UI |
+| `verification-and-release` | Local gates, CI parity, PR readiness, evidence format                |
+| `web-security-review`      | Trust boundaries, secrets, injection, dependency risk                |
+
+### Installed Skills
+
+| Area       | Skills                                                                               |
+| ---------- | ------------------------------------------------------------------------------------ |
+| Process    | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming` |
+| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`                    |
+| TypeScript | `typescript-advanced-types`, `install-anti-slop`                                     |
+| Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`               |
+| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`                 |
+| Docs       | `technical-documentation`, `blume`, `astro`, `context7`                              |
+| Build      | `vite`, `vitest`, `chrome-devtools`, `nix-best-practices`                            |
+
+## Agent Team
+
+The canonical workflow is [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md). OpenCode and
+Codex expose the same roles.
+
+Core roles:
+
+1. `architect` is read-only. It states assumptions, scope, ownership, slice
+   order, and verifiable acceptance criteria.
+2. `developer` implements one assigned slice and reports changed files,
+   commands, outcomes, and blockers.
+3. `reviewer` is read-only. It reports actionable findings by severity with file
+   and line references and a concrete failure scenario.
+4. `integrator` checks the combined diff, acceptance criteria, and evidence, then
+   prepares the delivery summary.
+
+Specialists:
+
+- `docs-writer` owns technical documentation accuracy, structure, and style.
+- `ui-stylist` owns visual hierarchy, layout, typography, color, responsive
+  behavior, and accessibility.
+- `astro-blume` owns Astro and Blume integration, content loading, navigation,
+  search, and generated output.
+- `svelte-engineer` owns Svelte 5 components and islands.
+- `verification` owns lint, type check, tests, builds, and regression evidence.
+- `security-reviewer` owns trust boundaries, secrets, injection, and dependency
+  risk.
+
+The root agent assigns specialists. A subagent does not silently change another
+specialist's surface. Read the owning module and the relevant skill before
+editing. Keep edits to shared files serialized; parallelize only independent
+slices.
+
+## Workflow Summary
+
+1. Architect plans and assigns. No edits.
+2. Developer implements the slice. New concerns return to the Architect.
+3. Reviewer verifies independently. Findings return to the Developer.
+4. Integrator checks the combined result and reports delivery evidence.
+
+No phase advances while its required artifact is missing. Report exact commands
+and actual outcomes. Never claim an unrun check passed.
+
+## Delivery
+
+- Branch names use `docs/`, `feat/`, `fix/`, `refactor/`, `test/`, `ci/`, or
+  `chore/` followed by a short kebab-case description.
+- Commits follow [.github/COMMIT_CONVENTION.md](.github/COMMIT_CONVENTION.md):
+  `type(scope): subject`, imperative, no trailing period.
+- A pull request states the changed behavior, the verification commands, and any
+  remaining risk. Assign the requested maintainer and use the repository labels.
+- Do not commit, push, or open a pull request unless the root agent has user
+  authorization for that action.
+
+## graphify
+
+When `graphify-out/graph.json` exists, use the graphify skill before broad
+codebase exploration. Query the graph for architecture and relationship
+questions, and confirm behavior in source. Do not regenerate the graph as a
+side effect of a scoped code change.

@@ -1,0 +1,71 @@
+name: Feature Request
+description: Propose a documentation, interface, tooling, or agent-workflow improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+        Thank you for improving Farben's websites.
+
+        Features must respect the repository contract: static-first delivery, accessible interfaces, functional TypeScript, separation of concerns, and the 200-line source limit. Read [CODING_CONVENTION.md](https://github.com/farbenbuilds/websites/blob/main/CODING_CONVENTION.md) before proposing implementation details.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the proposed change.
+      placeholder: Add a versioned reference page for the ventiws WebSocket API.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What reader, developer, or maintainer problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired behavior and the affected app, package, or document.
+      placeholder: Add MDX pages under apps/vws-docs/docs, link them from the sidebar, and verify the build.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What existing page, component, or tool could solve this instead?
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation content
+        - Navigation or search
+        - Visual design or accessibility
+        - Shared component
+        - Build, dependency, or CI
+        - Agent instructions or skills
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add links, sketches, examples, or acceptance criteria.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and pull requests for this proposal.
+          required: true
+        - label: I understand that new dependencies and public surfaces need review.
+          required: true

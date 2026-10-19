@@ -1,0 +1,89 @@
+name: Bug Report
+description: Report a broken page, incorrect documentation, visual defect, or build failure
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+        Thank you for reporting an issue with Farben's websites.
+        Do not disclose a security vulnerability here. Follow [SECURITY.md](https://github.com/farbenbuilds/websites/blob/main/SECURITY.md) and use the private advisory link instead.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A concise description of the problem.
+      placeholder: The installation command on the Getting Started page fails under pnpm 12.
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Page or Package
+      description: The URL, app, package, or file where the problem appears.
+      placeholder: https://uwz.farben.build/getting-started or apps/uwz-docs/docs/getting-started.mdx
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide the smallest sequence that reproduces the problem.
+      placeholder: |
+        1. Open the page...
+        2. Run the command...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happened? Include the exact error or a screenshot when possible.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected Surface
+      options:
+        - uWebZockets documentation
+        - ventiws documentation
+        - Shared UI package
+        - Build or toolchain
+        - Agent instructions or skills
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, Node.js version, pnpm version, and whether Nix is active.
+      placeholder: Firefox 128, NixOS x86_64, Node.js 24, pnpm 12.4.2, nix develop
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Screenshots
+      description: Paste build output or attach screenshots. Remove secrets and personal data.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: This report does not contain a security vulnerability or secret.
+          required: true

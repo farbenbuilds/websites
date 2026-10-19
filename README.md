@@ -71,6 +71,25 @@ cd packages/ui
 pnpm dlx shadcn-svelte@latest add <component>
 ```
 
+## Contributing
+
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md), [CODING_CONVENTION.md](CODING_CONVENTION.md), and [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) before changing shared code or the build graph. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+The short version:
+
+- No emojis in repository-authored files.
+- Comments only for a non-obvious why.
+- Functional TypeScript over OOP.
+- Keep content, presentation, styling, domain logic, and tooling separate.
+- Source files target 150 to 200 lines and never exceed 200.
+- Run `pnpm ready` before opening a pull request.
+
+## Agents and skills
+
+The repository ships a shared agent team for OpenCode and Codex. The canonical roles live in [AGENTS.md](AGENTS.md) and [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md); platform files are mirrored under `.opencode/agents/` and `.codex/agents/`.
+
+Third-party skills are pinned by `skills-lock.json` and installed under `.agents/skills/`. Project-owned skills cover repository conventions, docs authoring, UI styling, verification, security review, and team orchestration. Update third-party skills with the `skills` CLI instead of editing their vendored files.
+
 ## Scaffolding
 
 New applications and packages can be scaffolded inside the workspace with `vp create vite:application` / `vp create vite:library`; documentation sites start with `blume init` in their app folder.
