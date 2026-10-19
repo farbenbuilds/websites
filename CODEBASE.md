@@ -28,8 +28,10 @@ and the task runner. Node.js 22.19 or newer and pnpm 12.4.2 are pinned by
 Use the project-local CLI through pnpm on every host:
 
 ```sh
-pnpm exec vp check
-pnpm exec vp run -r test
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm test
 pnpm exec vp run -r build
 ```
 
@@ -60,10 +62,16 @@ websites/
 │       ├── src/lib/components/   # shadcn-svelte components
 │       ├── src/lib/styles/       # shared theme tokens
 │       └── components.json       # shadcn CLI aliases
+├── tests/                        # root Vitest suite
+├── tools/oxlint/anti-slop/       # vendored anti-slop Oxlint plugin
 ├── .agents/skills/               # installed and project agent skills
 ├── .opencode/agents/             # OpenCode subagent definitions
 ├── .codex/agents/                # Codex subagent definitions
 ├── .github/                      # community templates and workflows
+├── .oxfmtrc.json                 # Oxfmt settings and ignores
+├── .oxlintrc.json                # Oxlint rules, plugins, and overrides
+├── lefthook.yml                  # pre-commit hook definition
+├── vitest.config.ts              # root Vitest configuration
 ├── AGENTS.md                     # root agent instructions
 ├── CODING_CONVENTION.md          # engineering contract
 ├── TEAM_WORKFLOW.md              # architect/developer/reviewer/integrator flow
@@ -150,17 +158,24 @@ needs different content hands the copy contract to `docs-writer`.
 `pnpm ready` is the single local gate CI mirrors:
 
 ```sh
-vp check
-node scripts/check-file-size.mjs
-vp run -r check
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm check:size
+pnpm test
 vp run -r test
 vp run -r build
 ```
 
-`vp check` runs Oxfmt, Oxlint, and type-aware checks. Workspace `check` tasks
-run `svelte-check` where the package defines it and `blume check` for docs.
-Workspace `test` tasks run `blume validate`. Workspace `build` tasks run
+`pnpm lint` runs Oxlint with `.oxlintrc.json`, the vendored anti-slop plugin,
+project rules, and type-aware checks. `pnpm format:check` runs Oxfmt with
+`.oxfmtrc.json`. `pnpm typecheck` runs every workspace `check` task, including
+`svelte-check` and `blume check`. `pnpm test` runs the root Vitest suite.
+Workspace `test` tasks run `blume validate`; workspace `build` tasks run
 `blume build`.
+
+`lefthook` runs lint, format, size, typecheck, and tests on pre-commit. The
+GitHub workflows split the same gate into `lint.yml`, `test.yml`, and `ci.yml`.
 
 The full gate is intentionally short. A change that needs a protocol compliance
 suite, browser matrix, or load test adds a targeted workflow for that surface

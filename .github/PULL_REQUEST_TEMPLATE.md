@@ -28,10 +28,11 @@ Describe the change and why it should be merged.
 List the exact commands and their outcomes:
 
 ```sh
-pnpm exec vp check
-pnpm exec vp run -r check
-pnpm exec vp run -r test
-pnpm exec vp run -r build
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm test
+pnpm ready
 ```
 
 ## Screenshots

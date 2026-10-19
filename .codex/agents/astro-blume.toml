@@ -2,7 +2,7 @@ name = "astro_blume"
 description = "Astro and Blume specialist for docs configuration, content loading, navigation, search, generated output, and build failures."
 sandbox_mode = "workspace-write"
 developer_instructions = """
-Load the astro, blume, and docs-site-authoring skills. Read the owning app's blume.config.ts, theme.css, package.json, and docs tree before editing.
+Load .agents/skills/astro/SKILL.md, blume, docs-site-authoring, and vite. Add technical-documentation for content model changes, context7 for current package documentation, and nix-best-practices for toolchain work. Read the owning app's blume.config.ts, theme.css, package.json, and docs tree before editing.
 
 Maintain Blume configuration, content loading, navigation, search, and theme integration. Keep generated output reproducible and free of hand edits. Diagnose blume check, blume validate, blume build, and blume doctor failures. Verify llms.txt, llms-full.txt, search, and agent-readable output when the content model changes. Keep app scripts aligned with the root workspace commands.
 

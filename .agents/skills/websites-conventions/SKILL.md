@@ -30,6 +30,11 @@ the working checklist.
 - No `any`, unchecked casts, or non-null assertions used to silence uncertainty.
 - No `<style>` blocks in Svelte. No legacy Svelte syntax.
 - No file over 200 lines. No `part-2` files.
+- Semicolons, double quotes, and trailing commas are mandatory. Oxfmt settings
+  live in `.oxfmtrc.json`.
+- Files are kebab-case; Svelte components are PascalCase. Functions are
+  camelCase, except exported HTTP method handlers such as `GET`.
+- Vitest tests live in root `tests/` and import from `vite-plus/test`.
 - No second formatter, linter, package manager, or test runner.
 - Do not weaken a gate to pass a change.
 
@@ -96,11 +101,18 @@ Run the narrowest relevant command while working, then the full gate before
 review:
 
 ```sh
-pnpm exec vp check
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm test
 pnpm exec vp run <workspace>#check
 pnpm exec vp run <workspace>#build
 pnpm ready
 ```
+
+`lefthook` runs the same lint, format, size, typecheck, and test commands on
+pre-commit. The anti-slop rules live in `.oxlintrc.json` and
+`tools/oxlint/anti-slop/`; formatting lives in `.oxfmtrc.json`.
 
 Report the exact command and result. If a command could not run, say so.
 
@@ -112,4 +124,5 @@ Report the exact command and result. If a command could not run, say so.
 - Comments explain only a non-obvious why.
 - Types are explicit and external input is validated.
 - Svelte uses runes and Tailwind, not `<style>`.
+- Formatting follows `.oxfmtrc.json`; lint follows `.oxlintrc.json`.
 - The narrowest check and the full gate are reported honestly.

@@ -8,6 +8,9 @@ catalogMode: prefer
 catalog:
   "@types/node": ^26
   blume: ^2.2.4
+  lefthook: ^2.2.2
+  oxfmt: 0.73.0
+  oxlint: 1.88.0
   svelte: ^5.57.2
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
@@ -29,11 +32,13 @@ supportedArchitectures:
     - glibc
     - musl
 
-# Approve the install scripts the docs stack needs. Blume's generated Astro
-# project depends on esbuild; pnpm 12 refuses to run its install script unless
-# it is allowed here. https://useblume.dev/docs/quickstart
+# Approve the install scripts the workspace needs. Blume's generated Astro
+# project depends on esbuild, and lefthook installs the Git hooks from its
+# postinstall. pnpm 12 refuses to run either without permission.
+# https://useblume.dev/docs/quickstart
 allowBuilds:
   esbuild: true
+  lefthook: true
   "@scarf/scarf": false
 
 overrides:

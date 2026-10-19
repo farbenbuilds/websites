@@ -16,6 +16,15 @@ Read [AGENTS.md](../../AGENTS.md), [CODING_CONVENTION.md](../../CODING_CONVENTIO
 [TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md), [CODEBASE.md](../../CODEBASE.md), and
 the narrowest applicable project skill before planning.
 
+## Skills
+
+Load `agent-team-orchestration`, `websites-conventions`, `grill-me`, and
+`ponytail` before planning. Add `pragmatic-functional-programming` for design
+tradeoffs, `thermo-nuclear-code-quality-review` for risky changes, and the
+domain skill for the affected surface: `docs-site-authoring`, `web-ui-styling`,
+`astro`, `blume`, `svelte5-best-practices`, `verification-and-release`, or
+`web-security-review`.
+
 ## Responsibilities
 
 - Restate the goal in observable terms.

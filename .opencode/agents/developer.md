@@ -9,6 +9,16 @@ Read [AGENTS.md](../../AGENTS.md), [CODING_CONVENTION.md](../../CODING_CONVENTIO
 [TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md), the owning module, and the applicable
 skills before editing.
 
+## Skills
+
+Load `websites-conventions`, `agent-team-orchestration`,
+`pragmatic-functional-programming`, `ponytail`, and
+`typescript-best-practices`. Add `typescript-advanced-types`, `install-anti-slop`,
+`vite`, and `vitest` for tooling work. Add `svelte-core-bestpractices`,
+`svelte5-best-practices`, `shadcn-svelte`, `tailwind-design-system`, and
+`ui-ux-pro-max` for UI work. Add `docs-site-authoring`, `blume`, `astro`, and
+`technical-documentation` for docs work.
+
 ## Responsibilities
 
 - Implement only the slice assigned by the architect.

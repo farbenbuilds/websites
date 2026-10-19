@@ -6,8 +6,10 @@ mode: subagent
 # Svelte Engineer
 
 Load `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`, and
-`typescript-best-practices`. Read the owning component and the shared UI package
-before editing.
+`typescript-best-practices` before editing. Add `typescript-advanced-types` for
+complex props, `web-ui-styling` for visual constraints, and `vitest` for
+component tests. Read the owning component and the shared UI package before
+editing.
 
 ## Responsibilities
 

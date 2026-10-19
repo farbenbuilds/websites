@@ -13,8 +13,11 @@ failing gate, or preparing a pull request.
 `pnpm ready` is the repository contract. It runs:
 
 ```text
-vp check
-vp run -r check
+pnpm lint
+pnpm format:check
+pnpm typecheck
+pnpm check:size
+pnpm test
 vp run -r test
 vp run -r build
 ```
@@ -25,10 +28,14 @@ Run the narrowest check while iterating, then the full gate before review.
 
 ```sh
 pnpm install
+pnpm lint
+pnpm lint:fix
+pnpm format
+pnpm format:check
+pnpm typecheck
 pnpm check:size
-pnpm exec vp check
-pnpm exec vp check --fix
-pnpm exec vp run -r check
+pnpm test
+pnpm test:watch
 pnpm exec vp run -r test
 pnpm exec vp run -r build
 pnpm exec vp run uwz-docs#check
@@ -42,6 +49,10 @@ pnpm ready
 Use `pnpm exec vp ...` on every host. The global `vp` cannot load musl native
 bindings on musl systems. Run `pnpm exec vp env doctor` when the toolchain
 behavior is unexpected.
+
+`lefthook` runs the same lint, format, size, typecheck, and test commands on
+pre-commit. The GitHub workflows split the gate into `lint.yml`, `test.yml`, and
+the aggregate `ci.yml`.
 
 ## Evidence Format
 

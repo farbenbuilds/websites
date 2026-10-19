@@ -11,6 +11,7 @@ Both apps have landed: `apps/uwz-docs` is the [uWebZockets](https://github.com/f
 ## Stack
 
 - [Vite+](https://viteplus.dev) (`vp`) — the unified toolchain: Vite, Rolldown, Vitest, [Oxlint](https://oxc.rs/docs/guide/usage/linter) for linting, [Oxfmt](https://oxc.rs/docs/guide/usage/formatter) for formatting, and task running
+- [Lefthook](https://lefthook.dev) pre-commit hooks, Oxlint anti-slop rules, and a root Vitest suite
 - Documentation sites use [Blume](https://useblume.dev) — Markdown in `docs/`, Astro-generated output, plus search, `llms.txt`, and an MCP server out of the box
 - TypeScript everywhere; apps are expected to lean on Astro and Svelte
 - pnpm workspaces (`apps/*`, `packages/*`, `tools/*`)
@@ -23,7 +24,7 @@ Install dependencies and run the full check suite:
 
 ```bash
 pnpm install
-pnpm ready   # vp check && vp run -r check && vp run -r test && vp run -r build
+pnpm ready   # lint, format, typecheck, size, Vitest, workspace tests, builds
 ```
 
 Day-to-day commands, all through the project-local Vite+ CLI:
@@ -31,11 +32,16 @@ Day-to-day commands, all through the project-local Vite+ CLI:
 ```bash
 pnpm dev:uwz                              # start the uWebZockets docs dev server
 pnpm dev:vws                              # start the ventiws docs dev server
+pnpm lint                                 # Oxlint, anti-slop, project rules
+pnpm lint:fix                             # apply safe lint fixes
+pnpm format                               # format with .oxfmtrc.json
+pnpm format:check                         # verify formatting
+pnpm typecheck                            # type-check every workspace
+pnpm test                                 # run the root Vitest suite
+pnpm test:watch                           # run Vitest in watch mode
 pnpm exec vp run uwz-docs#build           # build the uWebZockets docs site
 pnpm exec vp run uwz-docs#doctor          # diagnose the uWebZockets docs project
 pnpm exec vp run @farben/ui#check         # type-check the shared UI package
-pnpm exec vp check                        # Oxfmt + Oxlint + type-aware checks
-pnpm exec vp check --fix                  # apply formatting/lint fixes
 pnpm exec vp run -r test                  # run tests across the workspace
 pnpm exec vp run -r build                 # build all workspace members
 ```
@@ -82,7 +88,10 @@ The short version:
 - Functional TypeScript over OOP.
 - Keep content, presentation, styling, domain logic, and tooling separate.
 - Source files target 150 to 200 lines and never exceed 200.
-- Run `pnpm ready` before opening a pull request.
+- Semicolons, double quotes, and trailing commas are mandatory.
+- Files are kebab-case; Svelte components are PascalCase. Functions are camelCase.
+- Vitest tests live in root `tests/` and import from `vite-plus/test`.
+- `lefthook` runs the pre-commit gate. Run `pnpm ready` before opening a pull request.
 
 ## Agents and skills
 

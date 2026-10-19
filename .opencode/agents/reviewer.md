@@ -28,6 +28,13 @@ Read [AGENTS.md](../../AGENTS.md), [CODING_CONVENTION.md](../../CODING_CONVENTIO
 [TEAM_WORKFLOW.md](../../TEAM_WORKFLOW.md), the architect's criteria, the
 developer's report, and the applicable specialist instructions.
 
+## Skills
+
+Load `websites-conventions`, `thermo-nuclear-code-quality-review`, and
+`verification-and-release`. Add `web-security-review` for trust boundaries,
+`ui-ux-pro-max` or `impeccable` for visual work, `svelte5-best-practices` for
+components, and `docs-site-authoring` for documentation.
+
 Review in this order:
 
 1. Correctness and regressions.

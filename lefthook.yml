@@ -1,0 +1,41 @@
+# Lefthook configuration: https://lefthook.dev/configuration/
+# Hooks install through pnpm because lefthook is allowed in pnpm-workspace.yaml.
+
+min_version: 2.1.14
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,svelte}"
+      exclude:
+        - ".agents/**"
+        - "tools/oxlint/anti-slop/**"
+      run: pnpm exec vp lint -c .oxlintrc.json --fix {staged_files}
+      stage_fixed: true
+
+    - name: format
+      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,md,mdx,yaml,yml,css}"
+      exclude:
+        - ".agents/**"
+        - "tools/oxlint/anti-slop/**"
+      run: pnpm exec vp fmt -c .oxfmtrc.json --write --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+    - name: size
+      run: pnpm check:size
+
+    - name: typecheck
+      glob: "**/*.{ts,tsx,mts,cts,svelte}"
+      exclude:
+        - ".agents/**"
+        - "tools/oxlint/anti-slop/**"
+      run: pnpm typecheck
+
+    - name: test
+      glob: "**/*.{ts,tsx,mts,cts,js,mjs}"
+      exclude:
+        - ".agents/**"
+        - "tools/oxlint/anti-slop/**"
+      run: pnpm test

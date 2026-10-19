@@ -9,6 +9,15 @@ catalogs:
     blume:
       specifier: ^2.2.4
       version: 2.2.4
+    lefthook:
+      specifier: ^2.2.2
+      version: 2.2.2
+    oxfmt:
+      specifier: 0.73.0
+      version: 0.73.0
+    oxlint:
+      specifier: 1.88.0
+      version: 1.88.0
     svelte:
       specifier: ^5.57.2
       version: 5.57.2
@@ -26,6 +35,15 @@ importers:
 
   .:
     devDependencies:
+      lefthook:
+        specifier: 'catalog:'
+        version: 2.2.2
+      oxfmt:
+        specifier: 'catalog:'
+        version: 0.73.0(@astrojs/compiler-rs@0.5.2)(svelte@5.57.2)(vite-plus@1.3.0(@astrojs/compiler-rs@0.5.2)(@types/node@26.6.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1))
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.88.0(oxlint-tsgolint@7.0.2004)(vite-plus@1.3.0(@astrojs/compiler-rs@0.5.2)(@types/node@26.6.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1))
       vite-plus:
         specifier: 'catalog:'
         version: 1.3.0(@astrojs/compiler-rs@0.5.2)(@types/node@26.6.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1)
@@ -49,7 +67,7 @@ importers:
     dependencies:
       blume:
         specifier: 'catalog:'
-        version: 2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@7.0.2))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1)
+        version: 2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1)
 
   packages/ui:
     dependencies:
@@ -3327,6 +3345,65 @@ packages:
   layout-base@2.0.1:
     resolution: {integrity: sha512-dp3s92+uNI1hWIpPGH3jK2kxE2lMjdXdr+DH8ynZHpd6PUlH6x6cbuXnoMmiNumznqaNO31xu9e79F0uuZ0JFg==}
 
+  lefthook-android-arm64@2.2.2:
+    resolution: {integrity: sha512-wb9rQQFLX7u1dJLxvMrq9VUfMYi5kxM7tJQ6Y4mWEOwaU+SmIm2wjoT/nromKq27Y8fh2Qd7FgCD3G1wfW8CnQ==}
+    cpu: [arm64]
+    os: [android]
+
+  lefthook-darwin-arm64@2.2.2:
+    resolution: {integrity: sha512-6V8D3bLnD/60Xhqn0o2EQD6H3Fe/U9LGkt4WF1O/3eBHbux+5ZJqoH0hfrC+Bi9Dy1Ve1AWxiAY7U2asYl8qVA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  lefthook-darwin-x64@2.2.2:
+    resolution: {integrity: sha512-fH/kArZ9ZZ65wCFtvBMgGcq25qwQpkQ5jp93ba+8wpjgxxzjczYGluwHvM/NQDJWLOFXuKXW0yFs76SramQkyQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  lefthook-freebsd-arm64@2.2.2:
+    resolution: {integrity: sha512-MCRsU01ju989QQffOfS3gCeFfyVDXs5B/FzR65fmrNvqcxb98fldvfzzoAbnK2q6SBJlRT3QT1tNEMCxddCwlA==}
+    cpu: [arm64]
+    os: [freebsd]
+
+  lefthook-freebsd-x64@2.2.2:
+    resolution: {integrity: sha512-LkKuJU0S2oLimeoHwPTy1TLWB6GcN0t5lLxiXNlsBKUkr6R47QRcvPMZMoXmu3IetQtd+WliXMLE8qTwi2fqBg==}
+    cpu: [x64]
+    os: [freebsd]
+
+  lefthook-linux-arm64@2.2.2:
+    resolution: {integrity: sha512-d+HFtS2DEKaOnD7vRU0tUz8pNgHwsUYmQ22+1dyXpOrXGyzNXR0AqX5KsIRF36JGhVvO5X5Anw5QYgR3mxVSuA==}
+    cpu: [arm64]
+    os: [linux]
+
+  lefthook-linux-x64@2.2.2:
+    resolution: {integrity: sha512-N/OlQyAhcU6RAXjrwFxLsh70sn96rBoi+XkuLJ8CVBkk9Ci3VDXQayDZTNz5B1xML8RwoMcV8Wblniy1xFOmSA==}
+    cpu: [x64]
+    os: [linux]
+
+  lefthook-openbsd-arm64@2.2.2:
+    resolution: {integrity: sha512-6G/gKXcpIwC+XcODg7ELZYP/hIrVIHQxhy2GoRdVyecmpGMFj+BZo3iqcUmeWusQMuL+UdNexbkrUaeJalIkNw==}
+    cpu: [arm64]
+    os: [openbsd]
+
+  lefthook-openbsd-x64@2.2.2:
+    resolution: {integrity: sha512-eMJGi3/tqKEqu7XCZlqwQWRtK5JlL/9diaqqgRlEdlRD7GxwzHZN21z6awbITum9emea3lALvXFe6V8odQLGOA==}
+    cpu: [x64]
+    os: [openbsd]
+
+  lefthook-windows-arm64@2.2.2:
+    resolution: {integrity: sha512-4P1EaQb5xG1zhYD1RLJ6TEGdFkmHkB+Slqx6yRDPKuBDNxMiD0+kTAAdUY2E8xPuRR35xHpVPR+b3/HtzPrjQQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  lefthook-windows-x64@2.2.2:
+    resolution: {integrity: sha512-9Ck4zancQilBfXT3ZeRipm7Lcq4RQfxyMpy8SAVINw0t/BrbjsT25V46ZuziERcwdajnE4myfMzC33GoCBwr7g==}
+    cpu: [x64]
+    os: [win32]
+
+  lefthook@2.2.2:
+    resolution: {integrity: sha512-37fYHAhL12r1twaEV0PA5TwoIT491eTGGYjhhXxlYNMq3DSkiGZBQ++Jfk5maXj0vq52NRauLtMikBKtbNJs3Q==}
+    hasBin: true
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -5001,11 +5078,11 @@ snapshots:
       astro: 7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       es-module-lexer: 3.0.4
 
-  '@astrojs/mdx@8.1.0(@astrojs/markdown-satteri@0.4.4)(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))':
+  '@astrojs/mdx@8.1.0(@astrojs/markdown-satteri@0.4.4)(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))':
     dependencies:
       '@astrojs/internal-helpers': 0.13.0
       '@astrojs/markdown-satteri': 0.4.4
-      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       es-module-lexer: 3.0.4
 
   '@astrojs/node@11.1.8(astro@7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))':
@@ -5017,10 +5094,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@11.1.8(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))':
+  '@astrojs/node@11.1.8(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))':
     dependencies:
       '@astrojs/internal-helpers': 0.13.0
-      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       send: 1.2.1
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -5041,44 +5118,6 @@ snapshots:
       react-dom: 19.3.1(react@19.3.1)
       ultrahtml: 1.7.0
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
-    optionalDependencies:
-      oxc-transform-react: 0.145.0
-    transitivePeerDependencies:
-      - '@arethetypeswrong/core'
-      - '@rolldown/plugin-babel'
-      - '@types/node'
-      - '@typescript/native-preview'
-      - '@vitejs/devtools'
-      - '@volar/typescript'
-      - '@vue/language-core'
-      - babel-plugin-react-compiler
-      - esbuild
-      - jiti
-      - less
-      - publint
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - typescript
-      - unplugin-unused
-      - unrun
-      - vue-tsc
-      - yaml
-
-  '@astrojs/react@7.1.0(@types/node@22.20.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(oxc-transform-react@0.145.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(yaml@2.9.1)':
-    dependencies:
-      '@astrojs/internal-helpers': 0.13.0
-      '@types/react': 19.3.0
-      '@types/react-dom': 19.3.0(@types/react@19.3.0)
-      '@vitejs/plugin-react': 6.1.2(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(oxc-transform-react@0.145.0)
-      devalue: 6.0.3
-      react: 19.3.1
-      react-dom: 19.3.1(react@19.3.1)
-      ultrahtml: 1.7.0
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
     optionalDependencies:
       oxc-transform-react: 0.145.0
     transitivePeerDependencies:
@@ -5137,14 +5176,14 @@ snapshots:
       - vue-tsc
       - yaml
 
-  '@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1)':
+  '@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1)':
     dependencies:
       '@sveltejs/vite-plugin-svelte': 7.3.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(svelte@5.57.2)
-      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       svelte: 5.57.2
-      svelte2tsx: 0.7.62(svelte@5.57.2)(typescript@7.0.2)
-      typescript: 7.0.2
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      svelte2tsx: 0.7.62(svelte@5.57.2)(typescript@6.0.3)
+      typescript: 6.0.3
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
@@ -5201,14 +5240,14 @@ snapshots:
       - vue-router
       - ws
 
-  '@astrojs/vercel@11.0.15(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(react@19.3.1)(svelte@5.57.2)(ws@8.22.0)':
+  '@astrojs/vercel@11.0.15(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(react@19.3.1)(svelte@5.57.2)(ws@8.22.0)':
     dependencies:
       '@astrojs/internal-helpers': 0.13.0
       '@vercel/analytics': 2.0.1(react@19.3.1)(svelte@5.57.2)
       '@vercel/functions': 3.10.1(ws@8.22.0)
       '@vercel/nft': 1.11.0
       '@vercel/routing-utils': 6.6.0
-      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       rolldown: 1.2.14
       tinyglobby: 0.2.17
     transitivePeerDependencies:
@@ -5884,10 +5923,10 @@ snapshots:
       '@scalar/client-side-rendering': 0.4.12
       astro: 7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
 
-  '@scalar/astro@0.4.30(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))':
+  '@scalar/astro@0.4.30(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))':
     dependencies:
       '@scalar/client-side-rendering': 0.4.12
-      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
 
   '@scalar/client-side-rendering@0.4.12':
     dependencies:
@@ -6513,13 +6552,6 @@ snapshots:
     optionalDependencies:
       oxc-transform-react: 0.145.0
 
-  '@vitejs/plugin-react@6.1.2(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(oxc-transform-react@0.145.0)':
-    dependencies:
-      '@rolldown/pluginutils': 1.0.1
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
-    optionalDependencies:
-      oxc-transform-react: 0.145.0
-
   '@vitest/browser-preview@5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(vitest@5.0.5)':
     dependencies:
       '@testing-library/dom': 10.4.2
@@ -6611,7 +6643,7 @@ snapshots:
       typescript: 6.0.3
       yaml: 2.9.1
 
-  '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)':
+  '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)':
     dependencies:
       '@oxc-project/runtime': 0.154.0
       '@oxc-project/types': 0.154.0
@@ -6619,7 +6651,7 @@ snapshots:
       postcss: 8.5.30
       yuku-parser: 0.19.0
     optionalDependencies:
-      '@types/node': 22.20.5
+      '@types/node': 26.6.5
       '@voidzero-dev/vite-plus-darwin-arm64': 1.3.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.3.0
       '@voidzero-dev/vite-plus-linux-arm64-gnu': 1.3.0
@@ -6628,7 +6660,7 @@ snapshots:
       '@voidzero-dev/vite-plus-linux-x64-musl': 1.3.0
       '@voidzero-dev/vite-plus-win32-arm64-msvc': 1.3.0
       '@voidzero-dev/vite-plus-win32-x64-msvc': 1.3.0
-      '@volar/typescript': 2.4.28(typescript@7.0.2)
+      '@volar/typescript': 2.4.28(typescript@6.0.3)
       fsevents: 2.3.3
       jiti: 2.7.0
       typescript: 6.0.3
@@ -6974,7 +7006,7 @@ snapshots:
       - vue-tsc
       - yaml
 
-  astro@7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1):
+  astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1):
     dependencies:
       '@astrojs/compiler-rs': 0.5.2
       '@astrojs/internal-helpers': 0.13.0
@@ -7023,105 +7055,7 @@ snapshots:
       unifont: 1.0.3
       unstorage: 1.17.6(@vercel/functions@3.10.1(ws@8.22.0))
       verkit: 0.5.0
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
-      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
-      xxhash-wasm: 1.1.0
-      yargs-parser: 22.0.0
-      zod: 4.6.7
-    optionalDependencies:
-      sharp: 0.35.5(@types/node@22.20.5)
-    transitivePeerDependencies:
-      - '@arethetypeswrong/core'
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@types/node'
-      - '@typescript/native-preview'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - '@vitejs/devtools'
-      - '@volar/typescript'
-      - '@vue/language-core'
-      - aws4fetch
-      - db0
-      - esbuild
-      - idb-keyval
-      - ioredis
-      - jiti
-      - less
-      - publint
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - typescript
-      - unplugin-unused
-      - unrun
-      - uploadthing
-      - vue-tsc
-      - yaml
-
-  astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1):
-    dependencies:
-      '@astrojs/compiler-rs': 0.5.2
-      '@astrojs/internal-helpers': 0.13.0
-      '@astrojs/markdown-satteri': 0.4.4
-      '@astrojs/telemetry': 3.4.0
-      '@capsizecss/unpack': 4.0.1
-      '@clack/prompts': 1.8.1
-      '@oslojs/encoding': 1.1.0
-      am-i-vibing: 0.5.0
-      aria-query: 5.3.2
-      axobject-query: 4.1.0
-      ci-info: 4.4.0
-      clsx: 2.1.1
-      common-ancestor-path: 2.0.0
-      cookie: 2.0.1
-      devalue: 6.0.3
-      diff: 9.0.0
-      dset: 3.1.4
-      es-module-lexer: 3.0.4
-      flattie: 1.1.1
-      fontace: 0.4.1
-      get-tsconfig: 5.0.0-beta.6
-      github-slugger: 2.0.0
-      html-escaper: 3.0.3
-      http-cache-semantics: 4.3.0
-      jsonc-parser: 3.3.1
-      magic-string: 1.4.3
-      magicast: 0.5.5
-      mrmime: 2.0.1
-      neotraverse: 1.0.1
-      obug: 3.0.0
-      p-limit: 7.3.3
-      p-queue: 9.3.5
-      package-manager-detector: 1.9.0
-      piccolore: 0.1.3
-      picomatch: 4.0.7
-      rolldown: 1.2.14
-      shiki: 4.5.0
-      smol-toml: 1.9.1
-      svgo: 4.1.0
-      tinyclip: 1.0.3
-      tinyexec: 1.3.1
-      tinyglobby: 0.2.17
-      tinyps: 0.5.0
-      ultrahtml: 1.7.0
-      unifont: 1.0.3
-      unstorage: 1.17.6(@vercel/functions@3.10.1(ws@8.22.0))
-      verkit: 0.5.0
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
       xxhash-wasm: 1.1.0
       yargs-parser: 22.0.0
@@ -7336,14 +7270,14 @@ snapshots:
       - ws
       - yaml
 
-  blume@2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@7.0.2))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1):
+  blume@2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1):
     dependencies:
       '@astrojs/check': 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.10)(typescript@6.0.3)
       '@astrojs/markdown-satteri': 0.4.4
-      '@astrojs/mdx': 8.1.0(@astrojs/markdown-satteri@0.4.4)(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
-      '@astrojs/node': 11.1.8(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
-      '@astrojs/react': 7.1.0(@types/node@22.20.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(oxc-transform-react@0.145.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(yaml@2.9.1)
-      '@astrojs/vercel': 11.0.15(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(react@19.3.1)(svelte@5.57.2)(ws@8.22.0)
+      '@astrojs/mdx': 8.1.0(@astrojs/markdown-satteri@0.4.4)(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
+      '@astrojs/node': 11.1.8(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
+      '@astrojs/react': 7.1.0(@types/node@22.20.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(oxc-transform-react@0.145.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)(yaml@2.9.1)
+      '@astrojs/vercel': 11.0.15(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(react@19.3.1)(svelte@5.57.2)(ws@8.22.0)
       '@clack/prompts': 1.8.1
       '@iconify-json/lucide': 1.2.145
       '@iconify/types': 2.0.0
@@ -7351,7 +7285,7 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.32.1(zod@4.6.7)
       '@orama/orama': 3.1.18
       '@pierre/diffs': 1.5.2(@shikijs/themes@4.5.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@scalar/astro': 0.4.30(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
+      '@scalar/astro': 0.4.30(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
       '@scalar/openapi-parser': 0.29.14
       '@scalar/openapi-types': 0.9.8
       '@shikijs/transformers': 4.5.0
@@ -7363,7 +7297,7 @@ snapshots:
       '@vercel/analytics': 2.0.1(react@19.3.1)(svelte@5.57.2)
       '@vitejs/plugin-react': 6.1.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(oxc-transform-react@0.145.0)
       ai: 7.0.142(zod@4.6.7)
-      astro: 7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
+      astro: 7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       chokidar: 5.0.0
       citty: 0.2.2
       consola: 3.4.2
@@ -7421,7 +7355,7 @@ snapshots:
       write-file-atomic: 7.0.1
       zod: 4.6.7
     optionalDependencies:
-      '@astrojs/svelte': 9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@7.0.2)(yaml@2.9.1)
+      '@astrojs/svelte': 9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1)
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
       - '@astrojs/markdown-remark'
@@ -8412,6 +8346,53 @@ snapshots:
   layout-base@1.0.2: {}
 
   layout-base@2.0.1: {}
+
+  lefthook-android-arm64@2.2.2:
+    optional: true
+
+  lefthook-darwin-arm64@2.2.2:
+    optional: true
+
+  lefthook-darwin-x64@2.2.2:
+    optional: true
+
+  lefthook-freebsd-arm64@2.2.2:
+    optional: true
+
+  lefthook-freebsd-x64@2.2.2:
+    optional: true
+
+  lefthook-linux-arm64@2.2.2:
+    optional: true
+
+  lefthook-linux-x64@2.2.2:
+    optional: true
+
+  lefthook-openbsd-arm64@2.2.2:
+    optional: true
+
+  lefthook-openbsd-x64@2.2.2:
+    optional: true
+
+  lefthook-windows-arm64@2.2.2:
+    optional: true
+
+  lefthook-windows-x64@2.2.2:
+    optional: true
+
+  lefthook@2.2.2:
+    optionalDependencies:
+      lefthook-android-arm64: 2.2.2
+      lefthook-darwin-arm64: 2.2.2
+      lefthook-darwin-x64: 2.2.2
+      lefthook-freebsd-arm64: 2.2.2
+      lefthook-freebsd-x64: 2.2.2
+      lefthook-linux-arm64: 2.2.2
+      lefthook-linux-x64: 2.2.2
+      lefthook-openbsd-arm64: 2.2.2
+      lefthook-openbsd-x64: 2.2.2
+      lefthook-windows-arm64: 2.2.2
+      lefthook-windows-x64: 2.2.2
 
   lie@3.3.0:
     dependencies:
@@ -9620,14 +9601,6 @@ snapshots:
       scule: 1.3.0
       svelte: 5.57.2
       typescript: 6.0.3
-
-  svelte2tsx@0.7.62(svelte@5.57.2)(typescript@7.0.2):
-    dependencies:
-      dedent-js: 1.0.1
-      scule: 1.3.0
-      svelte: 5.57.2
-      typescript: 7.0.2
-    optional: true
 
   svelte@5.57.2:
     dependencies:

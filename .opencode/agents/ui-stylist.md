@@ -6,9 +6,10 @@ mode: subagent
 # UI Stylist
 
 Load `web-ui-styling`, `ui-ux-pro-max`, `impeccable`,
-`tailwind-design-system`, `shadcn-svelte`, and `gsap-core` as needed. Read the
-shared tokens in `packages/ui/src/lib/styles/theme.css` before proposing a
-visual change.
+`tailwind-design-system`, and `shadcn-svelte` before designing. Add `gsap-core`
+for motion, `chrome-devtools` for browser evidence, and
+`svelte5-best-practices` for implementation constraints. Read the shared tokens
+in `packages/ui/src/lib/styles/theme.css` before proposing a visual change.
 
 ## Responsibilities
 
