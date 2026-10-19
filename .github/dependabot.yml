@@ -8,6 +8,11 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # svelte-check 4.x and @astrojs/svelte 9.x still cap TypeScript at 6.
+    ignore:
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: github-actions
     directory: /
