@@ -1,0 +1,8 @@
+/*
+ * Blume inlines this file into the site's Tailwind entry and loads it after the
+ * config tokens, so the font stack below wins over the generated default.
+ */
+:root {
+  /* Outfit lacks Vietnamese diacritics, so headings fall back to Be Vietnam Pro. */
+  --blume-font-display-src: var(--blume-ff-outfit), var(--blume-ff-be-vietnam-pro);
+}

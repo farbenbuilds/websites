@@ -27,6 +27,8 @@
   --input: var(--blume-border);
   --ring: var(--blume-accent);
   --radius: var(--blume-radius);
+  /* Outfit lacks Vietnamese diacritics, so headings fall back to Be Vietnam Pro. */
+  --blume-font-display-src: var(--blume-ff-outfit), var(--blume-ff-be-vietnam-pro);
 }
 
 /* Generate the utility classes the shared components use. */
