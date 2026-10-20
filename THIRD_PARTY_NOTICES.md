@@ -1,5 +1,16 @@
 # Third-Party Notices
 
+## Farben artwork
+
+- Source: https://github.com/farbenbuilds/farben-artwork
+- Source paths: `icons/farben-logo.svg`, `github/farben-logo-github.png`
+- Author: Noah Trần
+- License: CC-BY-SA-4.0
+- License text: [LICENSES/CC-BY-SA-4.0.txt](LICENSES/CC-BY-SA-4.0.txt)
+- Vendored paths: `apps/uwz-docs/public/`, `apps/vws-docs/public/`
+- Local changes: the 1024px GitHub avatar was downscaled to 180px for the Apple
+  touch icon.
+
 ## Graphify
 
 - Source: https://github.com/Graphify-Labs/graphify
