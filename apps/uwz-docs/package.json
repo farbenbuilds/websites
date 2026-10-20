@@ -13,9 +13,16 @@
     "doctor": "blume doctor"
   },
   "dependencies": {
-    "@astrojs/svelte": "^9.1.0",
+    "@astrojs/svelte": "catalog:",
     "@farben/ui": "workspace:*",
+    "@threlte/core": "catalog:",
     "blume": "catalog:",
-    "svelte": "catalog:"
+    "gsap": "catalog:",
+    "svelte": "catalog:",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/three": "catalog:",
+    "takumi-js": "catalog:"
   }
 }

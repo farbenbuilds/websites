@@ -6,9 +6,21 @@ settings:
 
 catalogs:
   default:
+    '@astrojs/svelte':
+      specifier: ^9.1.0
+      version: 9.1.0
+    '@threlte/core':
+      specifier: ^8.6.1
+      version: 8.6.1
+    '@types/three':
+      specifier: ^0.186.0
+      version: 0.186.0
     blume:
       specifier: ^2.2.4
       version: 2.2.4
+    gsap:
+      specifier: ^3.15.0
+      version: 3.15.0
     lefthook:
       specifier: ^2.2.2
       version: 2.2.2
@@ -21,6 +33,12 @@ catalogs:
     svelte:
       specifier: ^5.57.2
       version: 5.57.2
+    takumi-js:
+      specifier: ^2.17.0
+      version: 2.17.0
+    three:
+      specifier: ^0.186.1
+      version: 0.186.1
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -51,23 +69,61 @@ importers:
   apps/uwz-docs:
     dependencies:
       '@astrojs/svelte':
-        specifier: ^9.1.0
+        specifier: 'catalog:'
         version: 9.1.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1)
       '@farben/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@threlte/core':
+        specifier: 'catalog:'
+        version: 8.6.1(svelte@5.57.2)(three@0.186.1)
       blume:
         specifier: 'catalog:'
         version: 2.2.4(@astrojs/svelte@9.1.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1)
+      gsap:
+        specifier: 'catalog:'
+        version: 3.15.0
       svelte:
         specifier: 'catalog:'
         version: 5.57.2
+      three:
+        specifier: 'catalog:'
+        version: 0.186.1
+    devDependencies:
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.186.0
+      takumi-js:
+        specifier: 'catalog:'
+        version: 2.17.0(csstype@3.2.3)(react@19.3.1)
 
   apps/vws-docs:
     dependencies:
+      '@astrojs/svelte':
+        specifier: 'catalog:'
+        version: 9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1)
+      '@threlte/core':
+        specifier: 'catalog:'
+        version: 8.6.1(svelte@5.57.2)(three@0.186.1)
       blume:
         specifier: 'catalog:'
-        version: 2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1)
+        version: 2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1)
+      gsap:
+        specifier: 'catalog:'
+        version: 3.15.0
+      svelte:
+        specifier: 'catalog:'
+        version: 5.57.2
+      three:
+        specifier: 'catalog:'
+        version: 0.186.1
+    devDependencies:
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.186.0
+      takumi-js:
+        specifier: 'catalog:'
+        version: 2.17.0(csstype@3.2.3)(react@19.3.1)
 
   packages/ui:
     dependencies:
@@ -376,6 +432,9 @@ packages:
   '@clack/prompts@1.8.1':
     resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
+
+  '@dimforge/rapier3d-compat@0.12.0':
+    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
   '@emmetio/abbreviation@2.3.3':
     resolution: {integrity: sha512-mgv58UrU3rh4YgbE/TzgLQwJ3pFsHHhCLqY20aJq+9comytTXUDNGG/SMtSeMJdkpxgXSXunBGLD8Boka3JyVA==}
@@ -1462,60 +1521,60 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@takumi-rs/core-darwin-arm64@2.16.3':
-    resolution: {integrity: sha512-VZDIKbguqCk5hZ62rMx4zRJf/B0DVwGy/XXGCZ6e0Ydo88pPWFc5S3XYTC3nyl8AY2RK20brHsowZuyUho7nuA==}
+  '@takumi-rs/core-darwin-arm64@2.17.0':
+    resolution: {integrity: sha512-xF2U1RdiGLHd8NKdjwrPCKK+tg2fLeNAsBtIhg/krQjjgIQdfF7uiEpSITHWe9wK/wPMoMDkcrJOGhSlWrB2zg==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [darwin]
 
-  '@takumi-rs/core-darwin-x64@2.16.3':
-    resolution: {integrity: sha512-R0oFG2jrnTkf6z6OmUF7MA6fwk+5W4fqdGZlo9wwL3qD6l7tw2am3mPdO9aD3KAanSGxt2iEeMPeOFOQqDb/nA==}
+  '@takumi-rs/core-darwin-x64@2.17.0':
+    resolution: {integrity: sha512-EBOWeS+omxo2KON7j7rVNDAG1K9+z/kvMig2B1lqgh2aeyS2UhSk9yg9Fk2yI3t7OiTlkGpFUZz2Q6ffvx+dvw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [darwin]
 
-  '@takumi-rs/core-linux-arm64-gnu@2.16.3':
-    resolution: {integrity: sha512-YYmLGQVrMxNVEd6FOcZi/ArePSxCeLE4zUjlA9C9mTyzxiMAv6TjL84h4/pAS6IUM8rIu/uNYyniLrrlWrFV3w==}
+  '@takumi-rs/core-linux-arm64-gnu@2.17.0':
+    resolution: {integrity: sha512-WcpqVmoqWDH1OqE5chNfVCFPRMbQ5vffze2FdOxCH6sUg12+bArg64vhQNLgjJ9eXT2FihypiMr3zhDMGbRADQ==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@takumi-rs/core-linux-arm64-musl@2.16.3':
-    resolution: {integrity: sha512-0EbBn/+xyWaDupmfOakonMLqThUh3kkVFrWCFFwemq3Fcn/QIqxznFka3rHjQ/cygcofRky03s+7Fdj4LA5IjQ==}
+  '@takumi-rs/core-linux-arm64-musl@2.17.0':
+    resolution: {integrity: sha512-QmFFnnZjV6g4mXmgMs9juYe31gtq4WPURGxEBnBCe2zEz6W21zPJP0MsW7ZS7cO8+oxcOPmHYb2vZDe+8ejMUA==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@takumi-rs/core-linux-x64-gnu@2.16.3':
-    resolution: {integrity: sha512-m9nBAJ7QL4t5C+YVVa8/s6ROIXoZNxQ8JVu/HGM+yEoTn8feWSIzCEW3jAc3FNejWpFQG2cj+E680y4XOWgkMQ==}
+  '@takumi-rs/core-linux-x64-gnu@2.17.0':
+    resolution: {integrity: sha512-MpV7gj5ZvCl3rXjKbUysMy+/CM71/duzR+f+oKpq3kC9SOGhUWuA3YveNs9k2UvdtirNrsD7nee4w+pyQJ8WUQ==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@takumi-rs/core-linux-x64-musl@2.16.3':
-    resolution: {integrity: sha512-XkpBFsJ9F0+pJ0zg6/Q1ZVmdHbd1vlsryl2YMiCzFyk7xOgXR/hym6dt/+zNp956GS45uiiO5f3jrwh3JvZ/tg==}
+  '@takumi-rs/core-linux-x64-musl@2.17.0':
+    resolution: {integrity: sha512-mGU3RfbVuxtovZA4wLQVgdz+A1l0b3LOrQvUAMhd4JuxeQUqOWiTB2dQsqrznJkLCsab9VTPq2tS6bQ5g55+mw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@takumi-rs/core-win32-arm64-msvc@2.16.3':
-    resolution: {integrity: sha512-ixrXUiZH1isfnFGwBVKHiNhskAFfTY607Ij5tZizeH8O0XHBKEyb8Rl2y8Y8FAq9OotT3qAUXZheJLNLd9ulPA==}
+  '@takumi-rs/core-win32-arm64-msvc@2.17.0':
+    resolution: {integrity: sha512-8GMt6gDW6YHfMGhAId5EVaxLHNrJcgurX1LsdCNqdd3YB9l7ngOwVXuE+SDhWekT14TjZrtrXKSBVN8nBl6XVw==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [win32]
 
-  '@takumi-rs/core-win32-x64-msvc@2.16.3':
-    resolution: {integrity: sha512-vGf0rlxqn8iqxOgatPMZx5WNTpdjQZ+maCgbTtmNOrRxRcWF6/riGoONXyWmQgkfv7rKtctHwuerPtZ4dAO5aw==}
+  '@takumi-rs/core-win32-x64-msvc@2.17.0':
+    resolution: {integrity: sha512-OWdQOFjRA8qwxRjPNXzobVmnYYQ9LzFtTSgQ1wJ8MdD4+uNOYEv3yh0f7Wm5H4Lm4H5rEKYsdFBkWITPYao6/A==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
 
-  '@takumi-rs/core@2.16.3':
-    resolution: {integrity: sha512-zfT8tb/+8qvC+0N9l925l+YMLIC/t/tpt5ULY1o4dgvKliNotmNaH+3o51fTRF+3kMNPInJm3UhOmCSwa16mRw==}
+  '@takumi-rs/core@2.17.0':
+    resolution: {integrity: sha512-M1z99zsXmCA+F/wdtMXzg+/OtAEz6K9wzrSHQInVAb4feh6jS0yMBGM4y56mn5nWcdZGmd17E5vIP+E7WVGbGw==}
     engines: {node: '>=18'}
     peerDependencies:
       csstype: '*'
@@ -1523,8 +1582,8 @@ packages:
       csstype:
         optional: true
 
-  '@takumi-rs/helpers@2.16.3':
-    resolution: {integrity: sha512-RVa02yhVPde1ZBR2uJEDICC2k0aFPInoeaZqFnwBIGeoK0hlVUDU9DewZX62KFj+0TeWZPnUKqAwbBzAz84VAg==}
+  '@takumi-rs/helpers@2.17.0':
+    resolution: {integrity: sha512-gm793JsFxdIJKc3gGnZfefZcq46K+Z61yYMCzp32yeW1xHcMluGDCa7bM+rF2d01Kc7mhdOovKztmWbT9Glblw==}
     engines: {node: '>=18'}
     peerDependencies:
       preact: ^10.0.0 || ^11.0.0
@@ -1535,8 +1594,8 @@ packages:
       react:
         optional: true
 
-  '@takumi-rs/wasm@2.16.3':
-    resolution: {integrity: sha512-5Qjbqdj27YlNm1EB/NaqMyAR4wRrCXffTWo5j79rFrvqUyl3U2wnPrmEibE5IAo+KwENduQpXcNp2OLSvJ8cDw==}
+  '@takumi-rs/wasm@2.17.0':
+    resolution: {integrity: sha512-9il5i3RvQZAufJhUiVwf/4gHRKBuwqV+4L9ubVFFVjaAJVkSxoFqRySRp6/BZQM4zCx0z/0ozuG+QRQL6vUVCg==}
     engines: {node: '>=20.19'}
     peerDependencies:
       csstype: '*'
@@ -1553,6 +1612,15 @@ packages:
     engines: {node: '>=12', npm: '>=6'}
     peerDependencies:
       '@testing-library/dom': '>=7.21.4'
+
+  '@threlte/core@8.6.1':
+    resolution: {integrity: sha512-8wge5mfgXS5pPxiZLpk007Rw5VpDCOlpc9kdNpAOgXW4gjuBqDhnkUPGsdbzikddqF+61S7T6v6O+j6mtZhB2g==}
+    peerDependencies:
+      svelte: '>=5'
+      three: '>=0.172'
+
+  '@tweenjs/tween.js@23.1.3':
+    resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -1700,11 +1768,20 @@ packages:
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
+  '@types/stats.js@0.17.4':
+    resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
+
+  '@types/three@0.186.0':
+    resolution: {integrity: sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@types/webxr@0.5.24':
+    resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -3147,6 +3224,9 @@ packages:
     resolution: {integrity: sha512-5v6yZd4JK3eMI3FqqCouswVqwugaA9r4dNZB1wwcmrD02QkV5H0y7XBQW8QwQqEaZY1pM9aqORSORhJRdNK44Q==}
     engines: {node: '>=6.0'}
 
+  gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
+
   h3@1.15.11:
     resolution: {integrity: sha512-L3THSe2MPeBwgIZVSH5zLdBBU90TOxarvhK9d04IDY2AmVS8j2Jz2LIWtwsGOU3lu2I5jCN7FNvVfY2+XyF+mg==}
 
@@ -3667,6 +3747,9 @@ packages:
   mermaid@12.2.0:
     resolution: {integrity: sha512-w7nr/SFrLO7BaVTs3dQTvYSV6nYSBj0Yy9DjBhsIJtAcHqRzXSq4Pg32ujHZ/AdWsAMNEvvhbm5dt9E2tOiHzw==}
     engines: {node: '>=22.12.0'}
+
+  meshoptimizer@1.1.1:
+    resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
 
   micromark-core-commonmark@2.0.4:
     resolution: {integrity: sha512-wxEeE8v8XVvOrxn1TZj74qYhAtTQsSqufHVS3uNVyT1MupXxhyaHk8/9xDNPh9BmL77QNDgWTkZ3RsYHB2ry7w==}
@@ -4392,8 +4475,8 @@ packages:
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
-  takumi-js@2.16.3:
-    resolution: {integrity: sha512-x6J7EoGux3tWhWoYAymFdg1LGBoL6XGpOr52DziAf5v27TFoP43GBbMrJ05JPhEUufpZ3F6gY/xajSjKZk1TrQ==}
+  takumi-js@2.17.0:
+    resolution: {integrity: sha512-7vGunLTexSmCZgqt4ZAQSDpu7zBdPLZiJcXs3oeGUotIf98dABhNH3iN466GPYHV7T4U8je5ohQTM95l1YOsEA==}
     engines: {node: '>=20.19'}
 
   tapable@2.3.3:
@@ -4410,6 +4493,9 @@ packages:
 
   thenify@3.3.1:
     resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
+
+  three@0.186.1:
+    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
 
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
@@ -5178,13 +5264,13 @@ snapshots:
 
   '@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1)':
     dependencies:
-      '@sveltejs/vite-plugin-svelte': 7.3.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(svelte@5.57.2)
+      '@sveltejs/vite-plugin-svelte': 7.3.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(svelte@5.57.2)
       astro: 7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       svelte: 5.57.2
       svelte2tsx: 0.7.62(svelte@5.57.2)(typescript@6.0.3)
       typescript: 6.0.3
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
-      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
+      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
       - '@types/node'
@@ -5206,7 +5292,6 @@ snapshots:
       - unrun
       - vue-tsc
       - yaml
-    optional: true
 
   '@astrojs/telemetry@3.4.0':
     dependencies:
@@ -5355,6 +5440,8 @@ snapshots:
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
+
+  '@dimforge/rapier3d-compat@0.12.0': {}
 
   '@emmetio/abbreviation@2.3.3':
     dependencies:
@@ -6064,15 +6151,14 @@ snapshots:
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
 
-  '@sveltejs/vite-plugin-svelte@7.3.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(svelte@5.57.2)':
+  '@sveltejs/vite-plugin-svelte@7.3.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(svelte@5.57.2)':
     dependencies:
       deepmerge: 4.3.1
       magic-string: 1.4.3
       obug: 2.2.1
       svelte: 5.57.2
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
-      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
-    optional: true
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
+      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
 
   '@tailwindcss/node@4.3.3':
     dependencies:
@@ -6147,61 +6233,61 @@ snapshots:
       tailwindcss: 4.3.3
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
 
-  '@tailwindcss/vite@4.3.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))':
+  '@tailwindcss/vite@4.3.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
 
-  '@takumi-rs/core-darwin-arm64@2.16.3':
+  '@takumi-rs/core-darwin-arm64@2.17.0':
     optional: true
 
-  '@takumi-rs/core-darwin-x64@2.16.3':
+  '@takumi-rs/core-darwin-x64@2.17.0':
     optional: true
 
-  '@takumi-rs/core-linux-arm64-gnu@2.16.3':
+  '@takumi-rs/core-linux-arm64-gnu@2.17.0':
     optional: true
 
-  '@takumi-rs/core-linux-arm64-musl@2.16.3':
+  '@takumi-rs/core-linux-arm64-musl@2.17.0':
     optional: true
 
-  '@takumi-rs/core-linux-x64-gnu@2.16.3':
+  '@takumi-rs/core-linux-x64-gnu@2.17.0':
     optional: true
 
-  '@takumi-rs/core-linux-x64-musl@2.16.3':
+  '@takumi-rs/core-linux-x64-musl@2.17.0':
     optional: true
 
-  '@takumi-rs/core-win32-arm64-msvc@2.16.3':
+  '@takumi-rs/core-win32-arm64-msvc@2.17.0':
     optional: true
 
-  '@takumi-rs/core-win32-x64-msvc@2.16.3':
+  '@takumi-rs/core-win32-x64-msvc@2.17.0':
     optional: true
 
-  '@takumi-rs/core@2.16.3(csstype@3.2.3)(react@19.3.1)':
+  '@takumi-rs/core@2.17.0(csstype@3.2.3)(react@19.3.1)':
     dependencies:
-      '@takumi-rs/helpers': 2.16.3(react@19.3.1)
+      '@takumi-rs/helpers': 2.17.0(react@19.3.1)
     optionalDependencies:
-      '@takumi-rs/core-darwin-arm64': 2.16.3
-      '@takumi-rs/core-darwin-x64': 2.16.3
-      '@takumi-rs/core-linux-arm64-gnu': 2.16.3
-      '@takumi-rs/core-linux-arm64-musl': 2.16.3
-      '@takumi-rs/core-linux-x64-gnu': 2.16.3
-      '@takumi-rs/core-linux-x64-musl': 2.16.3
-      '@takumi-rs/core-win32-arm64-msvc': 2.16.3
-      '@takumi-rs/core-win32-x64-msvc': 2.16.3
+      '@takumi-rs/core-darwin-arm64': 2.17.0
+      '@takumi-rs/core-darwin-x64': 2.17.0
+      '@takumi-rs/core-linux-arm64-gnu': 2.17.0
+      '@takumi-rs/core-linux-arm64-musl': 2.17.0
+      '@takumi-rs/core-linux-x64-gnu': 2.17.0
+      '@takumi-rs/core-linux-x64-musl': 2.17.0
+      '@takumi-rs/core-win32-arm64-msvc': 2.17.0
+      '@takumi-rs/core-win32-x64-msvc': 2.17.0
       csstype: 3.2.3
     transitivePeerDependencies:
       - preact
       - react
 
-  '@takumi-rs/helpers@2.16.3(react@19.3.1)':
+  '@takumi-rs/helpers@2.17.0(react@19.3.1)':
     optionalDependencies:
       react: 19.3.1
 
-  '@takumi-rs/wasm@2.16.3(csstype@3.2.3)(react@19.3.1)':
+  '@takumi-rs/wasm@2.17.0(csstype@3.2.3)(react@19.3.1)':
     dependencies:
-      '@takumi-rs/helpers': 2.16.3(react@19.3.1)
+      '@takumi-rs/helpers': 2.17.0(react@19.3.1)
     optionalDependencies:
       csstype: 3.2.3
     transitivePeerDependencies:
@@ -6222,6 +6308,13 @@ snapshots:
   '@testing-library/user-event@14.6.8(@testing-library/dom@10.4.2)':
     dependencies:
       '@testing-library/dom': 10.4.2
+
+  '@threlte/core@8.6.1(svelte@5.57.2)(three@0.186.1)':
+    dependencies:
+      svelte: 5.57.2
+      three: 0.186.1
+
+  '@tweenjs/tween.js@23.1.3': {}
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -6398,10 +6491,23 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
+  '@types/stats.js@0.17.4': {}
+
+  '@types/three@0.186.0':
+    dependencies:
+      '@dimforge/rapier3d-compat': 0.12.0
+      '@tweenjs/tween.js': 23.1.3
+      '@types/stats.js': 0.17.4
+      '@types/webxr': 0.5.24
+      fflate: 0.8.3
+      meshoptimizer: 1.1.1
+
   '@types/trusted-types@2.0.7':
     optional: true
 
   '@types/unist@3.0.3': {}
+
+  '@types/webxr@0.5.24': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -6538,10 +6644,10 @@ snapshots:
     optionalDependencies:
       oxc-transform-react: 0.145.0
 
-  '@vitejs/plugin-react@6.1.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(oxc-transform-react@0.145.0)':
+  '@vitejs/plugin-react@6.1.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(oxc-transform-react@0.145.0)':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
     optionalDependencies:
       oxc-transform-react: 0.145.0
 
@@ -6549,6 +6655,13 @@ snapshots:
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
+    optionalDependencies:
+      oxc-transform-react: 0.145.0
+
+  '@vitejs/plugin-react@6.1.2(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(oxc-transform-react@0.145.0)':
+    dependencies:
+      '@rolldown/pluginutils': 1.0.1
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
     optionalDependencies:
       oxc-transform-react: 0.145.0
 
@@ -7056,7 +7169,7 @@ snapshots:
       unstorage: 1.17.6(@vercel/functions@3.10.1(ws@8.22.0))
       verkit: 0.5.0
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
-      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
+      vitefu: 1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
       xxhash-wasm: 1.1.0
       yargs-parser: 22.0.0
       zod: 4.6.7
@@ -7196,7 +7309,7 @@ snapshots:
       string-width: 8.3.0
       sucrase: 3.35.1
       tailwindcss: 4.3.3
-      takumi-js: 2.16.3(csstype@3.2.3)(react@19.3.1)
+      takumi-js: 2.17.0(csstype@3.2.3)(react@19.3.1)
       tinyglobby: 0.2.17
       twoslash: 0.3.9(typescript@6.0.3)
       typescript: 6.0.3
@@ -7270,7 +7383,7 @@ snapshots:
       - ws
       - yaml
 
-  blume@2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1):
+  blume@2.2.4(@astrojs/svelte@9.1.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(astro@7.4.0(@types/node@26.6.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.2)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.1(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.28(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.2)(ws@8.22.0)(yaml@2.9.1):
     dependencies:
       '@astrojs/check': 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.10)(typescript@6.0.3)
       '@astrojs/markdown-satteri': 0.4.4
@@ -7291,11 +7404,11 @@ snapshots:
       '@shikijs/transformers': 4.5.0
       '@shikijs/twoslash': 4.5.0(typescript@6.0.3)
       '@tailwindcss/typography': 0.5.20(tailwindcss@4.3.3)
-      '@tailwindcss/vite': 4.3.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
+      '@tailwindcss/vite': 4.3.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))
       '@types/mdast': 4.0.4
       '@types/node': 22.20.5
       '@vercel/analytics': 2.0.1(react@19.3.1)(svelte@5.57.2)
-      '@vitejs/plugin-react': 6.1.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))(oxc-transform-react@0.145.0)
+      '@vitejs/plugin-react': 6.1.1(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(oxc-transform-react@0.145.0)
       ai: 7.0.142(zod@4.6.7)
       astro: 7.4.0(@types/node@22.20.5)(@vercel/functions@3.10.1(ws@8.22.0))(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)
       chokidar: 5.0.0
@@ -7346,7 +7459,7 @@ snapshots:
       string-width: 8.3.0
       sucrase: 3.35.1
       tailwindcss: 4.3.3
-      takumi-js: 2.16.3(csstype@3.2.3)(react@19.3.1)
+      takumi-js: 2.17.0(csstype@3.2.3)(react@19.3.1)
       tinyglobby: 0.2.17
       twoslash: 0.3.9(typescript@6.0.3)
       typescript: 6.0.3
@@ -8166,6 +8279,8 @@ snapshots:
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
 
+  gsap@3.15.0: {}
+
   h3@1.15.11:
     dependencies:
       cookie-es: 1.2.3
@@ -8687,6 +8802,8 @@ snapshots:
       stylis: 4.4.0
       ts-dedent: 2.3.0
       uuid: 14.0.3
+
+  meshoptimizer@1.1.1: {}
 
   micromark-core-commonmark@2.0.4:
     dependencies:
@@ -9640,11 +9757,11 @@ snapshots:
 
   tailwindcss@4.3.3: {}
 
-  takumi-js@2.16.3(csstype@3.2.3)(react@19.3.1):
+  takumi-js@2.17.0(csstype@3.2.3)(react@19.3.1):
     dependencies:
-      '@takumi-rs/core': 2.16.3(csstype@3.2.3)(react@19.3.1)
-      '@takumi-rs/helpers': 2.16.3(react@19.3.1)
-      '@takumi-rs/wasm': 2.16.3(csstype@3.2.3)(react@19.3.1)
+      '@takumi-rs/core': 2.17.0(csstype@3.2.3)(react@19.3.1)
+      '@takumi-rs/helpers': 2.17.0(react@19.3.1)
+      '@takumi-rs/wasm': 2.17.0(csstype@3.2.3)(react@19.3.1)
     transitivePeerDependencies:
       - csstype
       - preact
@@ -9667,6 +9784,8 @@ snapshots:
   thenify@3.3.1:
     dependencies:
       any-promise: 1.3.0
+
+  three@0.186.1: {}
 
   tiny-inflate@1.0.3: {}
 
@@ -9918,9 +10037,9 @@ snapshots:
     optionalDependencies:
       vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
 
-  vitefu@1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)):
+  vitefu@1.1.3(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)):
     optionalDependencies:
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1)'
 
   vitest@5.0.5(@types/node@26.6.5)(@vitest/browser-preview@5.0.5)(@vitest/ui@5.0.5)(@voidzero-dev/vite-plus-core@1.3.0(@types/node@26.6.5)(@volar/typescript@2.4.28(typescript@7.0.2))(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)):
     dependencies:

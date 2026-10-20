@@ -6,12 +6,18 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@astrojs/svelte": ^9.1.0
+  "@threlte/core": ^8.6.1
   "@types/node": ^26
+  "@types/three": ^0.186.0
   blume: ^2.2.4
+  gsap: ^3.15.0
   lefthook: ^2.2.2
   oxfmt: 0.73.0
   oxlint: 1.88.0
   svelte: ^5.57.2
+  takumi-js: ^2.17.0
+  three: ^0.186.1
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
   typescript: ^6.0.3
