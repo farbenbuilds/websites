@@ -50,14 +50,16 @@ of native packages so a checkout remains usable after a shell switch.
 websites/
 ├── apps/
 │   ├── uwz-docs/                 # uWebZockets documentation
-│   │   ├── docs/                # Markdown and MDX source
+│   │   ├── docs/                # English Markdown and MDX source
+│   │   ├── docs/vi/             # Vietnamese translations
 │   │   ├── components/          # Svelte islands registered in components.ts
 │   │   ├── components.ts        # MDX component and island registration
-│   │   ├── blume.config.ts      # site title, theme, GitHub edit links
+│   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
 │   │   └── theme.css            # host Tailwind entry and tokens
 │   └── vws-docs/                 # ventiws documentation
-│       ├── docs/
-│       └── blume.config.ts
+│       ├── docs/                 # English Markdown and MDX source
+│       ├── docs/vi/              # Vietnamese translations
+│       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
 ├── packages/
 │   └── ui/                       # @farben/ui source components
 │       ├── src/lib/components/   # shadcn-svelte components
@@ -111,6 +113,13 @@ Astro route generation and MDX rendering
 `CopyCommand` island. `apps/vws-docs` currently uses Blume only. Both apps run
 the same package scripts: `dev`, `build`, `preview`, `check`, `test`, and
 `doctor`.
+
+Both sites publish English at the root and Vietnamese under `/vi`. English
+content lives at the root of `docs/`, and Vietnamese translations live in
+`docs/vi/` with matching page paths. Blume owns the language switcher, fallback
+routing, translated UI strings, locale-aware search, `llms.txt`, and the JSON
+API. Keep translated headings pinned to their English anchor ids so fragment
+links resolve in both languages.
 
 Documentation source is the product. Do not edit generated output under
 `dist/` or generated Blume state under `.blume/`; those directories are

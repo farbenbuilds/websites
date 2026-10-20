@@ -1,0 +1,76 @@
+---
+title: Bắt đầu
+description: Cài đặt ventiws, chạy một echo server và client, đồng thời tìm tài liệu tham chiếu trong khi bộ tài liệu này đang được viết.
+---
+
+ventiws là một bản triển khai WebSocket cho Node.js với API của `ws`. Hướng dẫn này cài đặt và chạy echo server đầu tiên. Giả định bạn dùng một nền tảng được hỗ trợ (Linux hoặc macOS trên x64/arm64) và Node.js.
+
+## Cài đặt [#install]
+
+```package-install
+ventiws
+```
+
+Addon được phân phối dưới dạng gói theo nền tảng; trình quản lý gói chỉ cài gói khớp với host, nên không cần compiler:
+
+| Nền tảng                    | Gói                                |
+| --------------------------- | ---------------------------------- |
+| Linux x64, glibc            | `@ventiws/binding-linux-x64-gnu`   |
+| Linux x64, musl (Alpine)    | `@ventiws/binding-linux-x64-musl`  |
+| Linux arm64, glibc          | `@ventiws/binding-linux-arm64-gnu` |
+| macOS x64                   | `@ventiws/binding-darwin-x64`      |
+| macOS arm64 (Apple silicon) | `@ventiws/binding-darwin-arm64`    |
+
+Mọi host khác sẽ cài ventiws mà không có addon đi kèm, và lần tạo `WebSocketServer` đầu tiên sẽ báo lỗi nêu rõ nền tảng. Windows chưa được hỗ trợ ở cả hai lớp.
+
+## Echo server và client [#echo-server-and-client]
+
+Máy chủ echo mọi tin nhắn trở lại; client gửi một tin nhắn và ghi lại phản hồi:
+
+```ts server.mjs
+import { WebSocketServer } from "ventiws";
+
+const server = new WebSocketServer({ port: 8080 });
+
+server.on("listening", () => {
+  console.log("listening on", server.address()?.port);
+});
+
+server.on("connection", (socket) => {
+  socket.on("message", (data, isBinary) => {
+    socket.send(isBinary ? data : `echo: ${data.toString()}`);
+  });
+});
+```
+
+```ts client.mjs
+import { WebSocket } from "ventiws";
+
+const client = new WebSocket("ws://127.0.0.1:8080/");
+
+client.on("open", () => client.send("hello"));
+client.on("message", (data) => console.log("client saw", data.toString()));
+client.on("error", (error) => console.error(error));
+```
+
+Cả hai nửa đều chạy với một peer `ws` thật trong các bộ kiểm thử của kho.
+
+## Dev logger [#dev-logger]
+
+ventiws in các bản ghi vòng đời ngay khi chúng xảy ra — splash khi máy chủ bắt đầu lắng nghe, rồi các bản ghi open, close và error cho mỗi kết nối — mà không cần đăng ký callback. Tính năng này bật mặc định và có thể tắt bằng một công tắc:
+
+```ts
+import { setLoggerEnabled } from "ventiws/logging";
+
+setLoggerEnabled(false); // VENTIWS_LOG=0 does the same at load
+```
+
+## Tiếp theo [#where-to-go-next]
+
+Cho đến khi các hướng dẫn ở đây được viết xong, tài liệu tham chiếu nằm trong [kho ventiws](https://github.com/farbenbuilds/ventiws#docs-and-licence):
+
+- [COMPATIBILITY.md](https://github.com/farbenbuilds/ventiws/blob/main/COMPATIBILITY.md) — từng mục bề mặt `ws`, module sở hữu, trạng thái và bài kiểm thử bằng chứng
+- [CODEBASE.md](https://github.com/farbenbuilds/ventiws/blob/main/CODEBASE.md) — bố cục kho, hai tuyến, ranh giới và dung lượng biên dịch
+- [docs/migrating.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/migrating.md) — chuyển một ứng dụng `ws` hiện có sang
+- [docs/logging.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/logging.md) — dev logger và splash khởi động
+- [docs/performance.md](https://github.com/farbenbuilds/ventiws/blob/main/docs/performance.md) — bộ benchmark và lịch sử của nó

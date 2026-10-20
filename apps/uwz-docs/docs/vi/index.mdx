@@ -1,0 +1,53 @@
+---
+title: Giới thiệu
+description: µWebZockets là framework máy chủ zero-allocation, shared-nothing cho Zig — HTTP, WebSocket và JSON-RPC qua một API type-safe duy nhất.
+---
+
+**µWebZockets** là framework máy chủ cho [Zig 0.16.0](https://ziglang.org), phục vụ HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API `Request`/`Response` type-safe duy nhất. Các yêu cầu được phân tích, định tuyến và phản hồi từ những slab có giới hạn, được cấp phát một lần khi khởi động, mỗi luồng sở hữu một slab riêng và tái sử dụng mà không cần khóa.
+
+<CardGroup cols={2}>
+  <Card title="Bắt đầu" href="/getting-started" icon="rocket">
+    Chạy ví dụ hello world và thêm µWebZockets vào dự án của bạn.
+  </Card>
+  <Card
+    title="uWebZockets trên GitHub"
+    href="https://github.com/farbenbuilds/uWebZockets"
+    icon="github"
+  >
+    Mã nguồn, bản phát hành và nơi theo dõi issue.
+  </Card>
+</CardGroup>
+
+## Điểm nổi bật [#highlights]
+
+- **Zero allocation** — không có đường xử lý yêu cầu, phân tích, định tuyến hay ghi nào cấp phát bộ nhớ.
+- **Shared-nothing** — mỗi worker chạy event loop, bộ slab và lõi vật lý được ghim riêng, chỉ phối hợp qua các ring không khóa.
+- **Định hướng dữ liệu** — pool struct-of-arrays, mảng router song song và dung lượng xác định lúc biên dịch, khiến việc cạn tài nguyên trở nên tường minh.
+- **Kiểu dễ đọc** — các kiểu callback, event và override có tên thay cho struct ẩn danh nội tuyến.
+- **Đa nền tảng** — hỗ trợ và kiểm thử trên Linux và macOS x86_64/aarch64; Windows mới chỉ được kiểm tra biên dịch.
+
+## Một máy chủ hoàn chỉnh [#a-complete-server]
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from uWebZockets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Cùng một module mang phần còn lại của bộ công cụ: `app.ws(...)` cho WebSocket, `app.rpc(...)` cho JSON-RPC, `app.static(...)` cho tài nguyên tĩnh, `build_cluster` cho worker thread-per-core, `init_https_ephemeral` cho HTTPS không cần tệp chứng chỉ, cùng `listen_udp` và `init_http3` cho HTTP/3.
+
+:::note
+Trang tài liệu này đang được viết. [Bắt đầu](/getting-started) đã sẵn sàng; các hướng dẫn còn lại sẽ được bổ sung.
+:::

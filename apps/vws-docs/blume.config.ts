@@ -10,19 +10,35 @@ export default defineConfig({
     // Point edit links at this project inside the monorepo.
     dir: "apps/vws-docs",
   },
+  i18n: {
+    defaultLocale: "en",
+    locales: [
+      { code: "en", label: "English" },
+      { code: "vi", label: "Tiếng Việt" },
+    ],
+  },
   theme: {
     accent: "teal",
     fonts: {
-      display: { name: "Outfit", weights: [500, 600, 700] },
+      display: {
+        name: "Google Sans Flex",
+        weights: ["500..700"],
+        subsets: ["latin", "vietnamese"],
+      },
       body: {
         name: "Be Vietnam Pro",
         weights: [400, 500, 600, 700],
         subsets: ["latin", "vietnamese"],
       },
-      mono: "geist-mono",
+      mono: "jetbrains-mono",
     },
   },
   footer: {
-    links: [{ label: "ventiws on GitHub", href: "https://github.com/farbenbuilds/ventiws" }],
+    links: [
+      {
+        label: { en: "ventiws on GitHub", vi: "ventiws trên GitHub" },
+        href: "https://github.com/farbenbuilds/ventiws",
+      },
+    ],
   },
 });
