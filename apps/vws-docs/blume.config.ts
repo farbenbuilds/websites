@@ -12,6 +12,15 @@ export default defineConfig({
   },
   theme: {
     accent: "teal",
+    fonts: {
+      display: { name: "Outfit", weights: [500, 600, 700] },
+      body: {
+        name: "Be Vietnam Pro",
+        weights: [400, 500, 600, 700],
+        subsets: ["latin", "vietnamese"],
+      },
+      mono: "geist-mono",
+    },
   },
   footer: {
     links: [{ label: "ventiws on GitHub", href: "https://github.com/farbenbuilds/ventiws" }],
