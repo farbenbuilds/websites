@@ -9,7 +9,8 @@
 - License text: [LICENSES/CC-BY-SA-4.0.txt](LICENSES/CC-BY-SA-4.0.txt)
 - Vendored paths: `apps/uwz-docs/public/`, `apps/vws-docs/public/`
 - Local changes: the 1024px GitHub avatar was downscaled to 180px for the Apple
-  touch icon.
+  touch icon. The SVG favicon crops the transparent margin around the mark and
+  raises the outline weight from 16.63 to 24 for legibility at tab sizes.
 
 ## Graphify
 
