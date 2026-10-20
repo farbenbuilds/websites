@@ -59,8 +59,7 @@ websites/
 │   └── vws-docs/                 # ventiws documentation
 │       ├── docs/                 # English Markdown and MDX source
 │       ├── docs/vi/              # Vietnamese translations
-│       ├── blume.config.ts       # site title, theme, i18n, GitHub edit links
-│       └── theme.css             # font fallback tokens
+│       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
 ├── packages/
 │   └── ui/                       # @farben/ui source components
 │       ├── src/lib/components/   # shadcn-svelte components

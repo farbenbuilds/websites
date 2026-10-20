@@ -20,13 +20,17 @@ export default defineConfig({
   theme: {
     accent: "teal",
     fonts: {
-      display: { name: "Outfit", weights: [500, 600, 700], subsets: ["latin"] },
+      display: {
+        name: "Google Sans Flex",
+        weights: ["500..700"],
+        subsets: ["latin", "vietnamese"],
+      },
       body: {
         name: "Be Vietnam Pro",
         weights: [400, 500, 600, 700],
         subsets: ["latin", "vietnamese"],
       },
-      mono: "geist-mono",
+      mono: "jetbrains-mono",
     },
   },
   footer: {
