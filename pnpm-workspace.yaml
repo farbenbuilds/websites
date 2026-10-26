@@ -22,7 +22,7 @@ catalog:
   # TypeScript 7 yet, so the workspace stays on 6.
   typescript: ^6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0
-  vite-plus: 1.3.0
+  vite-plus: 1.4.0
 
 # The glibc and musl dev shells share this checkout's node_modules. Install
 # both libc variants so a checkout installed under one shell still has the
