@@ -6,7 +6,7 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@astrojs/svelte": ^9.1.0
+  "@astrojs/svelte": ^9.1.1
   "@threlte/core": ^8.6.1
   "@types/node": ^26
   "@types/three": ^0.186.0
