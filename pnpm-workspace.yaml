@@ -14,7 +14,7 @@ catalog:
   gsap: ^3.15.0
   lefthook: ^2.2.2
   oxfmt: 0.73.0
-  oxlint: 1.88.0
+  oxlint: 1.89.0
   svelte: ^5.57.2
   takumi-js: ^2.17.0
   three: ^0.186.1
