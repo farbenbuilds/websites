@@ -16,7 +16,7 @@ catalog:
   oxfmt: 0.73.0
   oxlint: 1.88.0
   svelte: ^5.57.2
-  takumi-js: ^2.17.0
+  takumi-js: ^2.17.1
   three: ^0.186.1
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
