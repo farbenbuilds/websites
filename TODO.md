@@ -12,16 +12,17 @@ boxes below describe future work; this document does not implement the hero.
 flat, small groups of monospace characters. Svelte can render them as text;
 Tailwind can place and color them; GSAP can move their wrappers with transforms.
 Three.js and Threlte would add a scene, camera, renderer, and WebGL lifecycle
-without contributing to the desired two-dimensional result. Both apps list
-those packages already, but their presence is not a reason to use them.
+without contributing to the desired two-dimensional result. Neither package
+belongs in the dependency set for this plan.
 
 The [ascii-sharks reference](https://github.com/stackedlol/ascii-sharks)
 draws ASCII fish and sharks on a **Canvas 2D cell grid** with a TypeScript
 engine; it does not use Svelte, GSAP, or Three.js. Adapt its visual principles
 of recognizable glyph silhouettes, restrained color, and layered movement.
 Draw original butterflies and write independent motion code. If any upstream
-code or art is copied instead, retain its MIT license and record provenance in
-the repository's third-party notices.
+code or art is copied instead, retain its MIT license, record provenance in the
+repository's third-party notices, and rewrite copied code to the repository's
+functional rules: no classes, prototypes, or `this`.
 
 ## Existing project boundaries
 
@@ -149,11 +150,13 @@ the design uses the existing docs layout rather than an assumed route API.
       and complete mount/unmount cleanup.
 - [ ] Add the pause/resume control and keyboard/focus behavior if automatic
       motion lasts longer than five seconds.
-- [ ] Test pure position/count logic only where it carries behavior; inspect
-      visual and keyboard behavior in the browser.
+- [ ] Test pure position/count logic only where it carries behavior, under
+      `tests/<category>/` and importing from `vite-plus/test`; inspect visual
+      and keyboard behavior in the browser.
 
 **Exit:** The isolated component is readable, static without JavaScript,
-motion-safe, and independently checkable through `@farben/ui#check`.
+motion-safe, type-checks through `@farben/ui#check`, and has recorded browser
+evidence for reduced motion and no JavaScript.
 
 ### M2: Integrate uWebZockets
 
