@@ -141,15 +141,17 @@ shadcn-svelte primitives. The package deliberately exports `.js`-suffixed
 aliases because the shadcn CLI writes internal imports such as
 `@farben/ui/utils.js`.
 
-Add components from inside the package:
+Add a component only when no existing primitive fits. Install from inside the
+package with the pinned local CLI; never re-add or update an existing component:
 
 ```sh
 cd packages/ui
-pnpm dlx shadcn-svelte@latest add <component>
+pnpm exec shadcn-svelte add <component>
 ```
 
-A shared component is justified only when at least two apps use it. App-specific
-composition stays in the app.
+A standard registry primitive may be installed when no existing primitive fits,
+even if one app uses it first. A custom shared component is justified only when
+at least two apps use it. App-specific composition stays in the app.
 
 ## Ownership boundaries
 

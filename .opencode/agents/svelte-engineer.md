@@ -18,6 +18,13 @@ editing.
 - Implement local interaction, keyboard behavior, and accessible markup.
 - Follow the existing shadcn-svelte composition pattern, including `class` and
   rest props.
+- Check `packages/ui/src/lib/components/ui` before adding a shadcn-svelte
+  component. Load `web-ui-styling` before any install. Install only with
+  `cd packages/ui && pnpm exec shadcn-svelte add <component>` from named
+  components in the configured registry. Never re-add or update an existing
+  component; never pass `--overwrite`, `--skip-preflight`, or `--all`; do not run
+  `update`, `apply`, or `init`; do not install a renamed duplicate or use a URL,
+  custom registry, or proxy without explicit approval.
 - Keep components under 200 lines and split visual regions by responsibility.
 
 ## Rules

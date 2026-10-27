@@ -92,8 +92,11 @@ Blume owns routing, search, and generated output. Do not hand-roll those.
 ## UI Workflow
 
 1. Start from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
-2. Compose with Tailwind utilities and existing shadcn-svelte primitives.
-3. Add a shared component only when at least two apps use it.
+2. Compose with Tailwind utilities and existing shadcn-svelte primitives. Check
+   `packages/ui/src/lib/components/ui` before installing one.
+3. Add a registry primitive when no existing primitive fits. Add a custom shared
+   component only when at least two apps use it. Install from inside `packages/ui`
+   with the local CLI, and never re-add or update an existing component.
 4. Keep interaction inside a Svelte island; keep static content in MDX or Astro.
 5. Add labels, focus states, keyboard behavior, and reduced-motion handling.
 6. Verify the shared package type check and every consuming app build.

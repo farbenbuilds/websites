@@ -57,7 +57,7 @@ pnpm exec vp run -r build                 # build all workspace members
 
 ## Shared UI
 
-`packages/ui` (`@farben/ui`) holds the [shadcn-svelte](https://www.shadcn-svelte.com) components every app reuses. Components are consumed as source — there is no build step — so apps compile them with their own Svelte tooling:
+`packages/ui` (`@farben/ui`) holds the shared [shadcn-svelte](https://www.shadcn-svelte.com) components. Components are consumed as source — there is no build step — so apps compile them with their own Svelte tooling:
 
 ```svelte
 import { Button } from "@farben/ui/components/ui/button";
@@ -70,12 +70,23 @@ The package ships the shadcn design tokens in `src/lib/styles/theme.css` (`@farb
 @source "../../packages/ui/src";
 ```
 
-Add components with the [shadcn-svelte CLI](https://www.shadcn-svelte.com/docs/cli) from inside the package; `components.json` maps the CLI's aliases onto the package's own export paths (that is also why the `exports` map has `.js`-suffixed entries — the CLI writes internal imports such as `@farben/ui/utils.js`):
+Add a registry primitive only when no existing primitive fits. Install from
+inside the package with the pinned local
+[shadcn-svelte CLI](https://www.shadcn-svelte.com/docs/cli); never re-add or
+update an existing component:
 
 ```bash
 cd packages/ui
-pnpm dlx shadcn-svelte@latest add <component>
+pnpm exec shadcn-svelte add <component>
 ```
+
+`components.json` maps the CLI aliases onto the package's own export paths; that
+is why the `exports` map has `.js`-suffixed entries, because the CLI writes
+internal imports such as `@farben/ui/utils.js`.
+
+A standard registry primitive may be installed when no existing primitive fits,
+even if one app uses it first. A custom shared component still needs at least two
+consumers. App-specific composition stays in the app.
 
 ## Contributing
 

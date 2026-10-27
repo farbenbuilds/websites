@@ -25,7 +25,7 @@ in `packages/ui/src/lib/styles/theme.css` before proposing a visual change.
 - No hard-coded palette when a semantic token exists.
 - No `<style>` block, inline style shortcut, or `!important`.
 - No animation that competes with reading or ignores reduced motion.
-- No new shared component unless at least two apps use it.
+- No custom shared component unless at least two apps use it. A standard registry primitive may be installed when no existing primitive fits; never re-add an existing component.
 - No component file over 200 lines.
 - Do not change copy or content structure without `docs-writer`.
 

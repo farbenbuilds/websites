@@ -87,15 +87,34 @@ glass effects, and animation that competes with reading.
 
 ## Shared Components
 
-Add a component from inside `packages/ui`:
+Check `packages/ui/src/lib/components/ui` and the `@farben/ui/components/*`
+exports first. Compose an existing primitive when it fits.
+
+If no component fits, install from inside `packages/ui` with the pinned local
+CLI:
 
 ```sh
 cd packages/ui
-pnpm dlx shadcn-svelte@latest add <component>
+pnpm exec shadcn-svelte add <component>
 ```
 
-Then adapt it to the shared token palette, type the public props, and verify both
-docs apps. Keep app-specific composition in the app.
+Do not use `pnpm dlx ...@latest`. Never run `add` for an existing component, and
+do not pass `--overwrite`, `--skip-preflight`, or `--all`. Do not run `update`,
+`update --all`, `apply`, or `init`; those commands replace local edits or rewrite
+the project. Do not install a renamed duplicate. Port an upstream change into the
+existing source manually.
+
+Use only named components from the registry in `components.json`. A URL, custom
+registry, or proxy needs explicit approval and a security and dependency review.
+This project rule overrides the installed third-party `shadcn-svelte` skill's
+update workflow.
+
+Review the generated source, imports, and dependency changes. Adapt it to the
+shared token palette, type the public props, keep accessibility, and verify both
+docs apps.
+
+Standard registry primitives live in `packages/ui`; a custom shared component
+needs at least two consumers. Keep app-specific composition in the app.
 
 ## Verification
 

@@ -112,8 +112,11 @@ Vite+ notes:
   and `@farben/ui`.
 - `apps/vws-docs` documents ventiws. It currently uses Blume only.
 - `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
-  design tokens. Add components with the shadcn-svelte CLI from inside the
-  package.
+  design tokens. Add a registry primitive only when no existing primitive fits.
+  Check `src/lib/components/ui` first, install from inside the package with
+  `pnpm exec shadcn-svelte add <component>`, and never re-add or update an
+  existing component. A custom shared component still needs at least two
+  consumers.
 - `tests` holds the root Vitest suite grouped by category. See
   [tests/README.md](tests/README.md).
 - `.agents/skills` holds installed third-party skills and project-owned skills.
