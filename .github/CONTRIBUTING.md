@@ -88,8 +88,12 @@ contract, an accessibility review, and both docs builds when shared UI changes.
 ## Interface Changes
 
 - Start from the shared tokens in `packages/ui/src/lib/styles/theme.css`.
-- Use Tailwind utilities and existing shadcn-svelte primitives.
-- Add a shared component only when at least two apps use it.
+- Use Tailwind utilities and existing shadcn-svelte primitives. Check
+  `packages/ui/src/lib/components/ui` before installing a new component.
+- Add a registry primitive when no existing primitive fits. Add a custom shared
+  component only when at least two apps use it. Install from inside `packages/ui`
+  with `pnpm exec shadcn-svelte add <component>`; never re-add or update an
+  existing component.
 - Keep static content in MDX or Astro and interaction in a Svelte island.
 - Include labels, focus states, keyboard behavior, and reduced-motion handling.
 - Verify the shared package type check and every consuming app build.

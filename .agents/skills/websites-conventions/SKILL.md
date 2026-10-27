@@ -37,6 +37,11 @@ the working checklist.
   such as `GET`.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See `tests/README.md`.
 - No second formatter, linter, package manager, or test runner.
+- Check `packages/ui/src/lib/components/ui` before installing a shadcn-svelte
+  component. Never re-run `add`, `add --all`, `update`, `apply`, or `init` for an
+  existing component, and never install a renamed duplicate or an unapproved
+  URL or custom registry. See
+  [CODING_CONVENTION.md](../../../CODING_CONVENTION.md) section 7.
 - Do not weaken a gate to pass a change.
 
 ## Layer Check
@@ -51,8 +56,9 @@ the working checklist.
 | Tooling | Vite+, Nix, scripts, CI | Product behavior |
 
 Dependencies point downward. A domain module never imports a component or a
-page. A shared component lives in `packages/ui` only when at least two apps use
-it.
+page. A custom shared component lives in `packages/ui` only when at least two
+apps use it. A standard shadcn-svelte registry primitive may be installed when
+no existing primitive fits, even if one app uses it first.
 
 ## Functional Pattern
 

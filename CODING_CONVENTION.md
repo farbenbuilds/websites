@@ -81,7 +81,10 @@ violates it is rejected in review, not negotiated in a pull request.
 Dependencies point downward through this table. A presentation component may
 import a domain function; a domain module must not import a component, a page,
 or a framework runtime. Keep shared code in `packages/ui` or a dedicated
-package only when at least two apps use it.
+package only when at least two apps use it. A standard shadcn-svelte registry
+primitive is the exception: install it in `packages/ui` when no existing
+primitive fits, because `packages/ui` is the only configured registry project.
+Custom shared code still needs two consumers.
 
 ## 5. File Size and Structure
 
@@ -128,6 +131,41 @@ package only when at least two apps use it.
   content belongs in MDX or Astro markup.
 - Blume owns documentation routing, search, `llms.txt`, and build output. Do
   not hand-roll replacements for features it already provides.
+
+### Shared UI components
+
+`@farben/ui` owns the shared shadcn-svelte source. Reach for it before writing a
+new primitive.
+
+- Check `packages/ui/src/lib/components/ui` and the `@farben/ui/components/*`
+  exports before installing anything. Reuse or compose an existing component
+  when it fits.
+- Install only from inside `packages/ui` with the pinned local CLI:
+
+  ```sh
+  cd packages/ui
+  pnpm exec shadcn-svelte add <component>
+  ```
+
+  Do not use `pnpm dlx ...@latest`; it can fetch a newer CLI than the one pinned
+  by `packages/ui/package.json` and the lockfile, changing generated source and
+  dependencies.
+
+- Install only named components from the registry configured in
+  `packages/ui/components.json`. Do not pass a URL, a custom registry, or a proxy
+  without explicit approval and a security and dependency review.
+- Never run `add` for a component that already exists. Do not pass
+  `--overwrite`, `--skip-preflight`, or `--all`, and do not install a renamed
+  duplicate. Do not run `update`, `update --all`, `apply`, or `init` in this
+  repository; those commands replace local edits or rewrite the project. Port an
+  upstream change into the existing source manually.
+- Review the generated source, imports, and dependency changes before committing.
+  Adapt it to the shared tokens, type the public props, keep accessibility, and
+  run `pnpm exec vp run @farben/ui#check` plus every consuming app build.
+- A standard registry primitive may be installed when no existing primitive fits,
+  even if one app uses it first; `packages/ui` is the only configured registry
+  project. A custom shared component still needs at least two consumers.
+  App-specific composition stays in the app.
 
 ## 8. Documentation
 
