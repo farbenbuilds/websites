@@ -6,23 +6,19 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@astrojs/svelte": ^9.1.0
-  "@threlte/core": ^8.6.1
-  "@types/node": ^26
-  "@types/three": ^0.186.0
-  blume: ^2.2.4
+  "@astrojs/svelte": ^9.1.1
+  blume: ^2.2.6
   gsap: ^3.15.0
   lefthook: ^2.2.2
-  oxfmt: 0.73.0
-  oxlint: 1.88.0
-  svelte: ^5.57.2
-  takumi-js: ^2.17.0
-  three: ^0.186.1
+  oxfmt: 0.75.0
+  oxlint: 1.89.0
+  svelte: ^5.57.3
+  takumi-js: ^2.17.1
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
   typescript: ^6.0.3
-  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
-  vite-plus: 1.3.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
 
 # The glibc and musl dev shells share this checkout's node_modules. Install
 # both libc variants so a checkout installed under one shell still has the
@@ -61,5 +57,25 @@ peerDependencyRules:
 runtimeOnFail: ignore
 pmOnFail: ignore
 minimumReleaseAgeExclude:
-  - blume@2.2.4
-  - "@lucide/svelte@1.59.0"
+  - "@lucide/svelte@1.62.0"
+  - "@oxfmt/binding-android-arm-eabi@0.75.0"
+  - "@oxfmt/binding-android-arm64@0.75.0"
+  - "@oxfmt/binding-darwin-arm64@0.75.0"
+  - "@oxfmt/binding-darwin-x64@0.75.0"
+  - "@oxfmt/binding-freebsd-x64@0.75.0"
+  - "@oxfmt/binding-linux-arm-gnueabihf@0.75.0"
+  - "@oxfmt/binding-linux-arm-musleabihf@0.75.0"
+  - "@oxfmt/binding-linux-arm64-gnu@0.75.0"
+  - "@oxfmt/binding-linux-arm64-musl@0.75.0"
+  - "@oxfmt/binding-linux-ppc64-gnu@0.75.0"
+  - "@oxfmt/binding-linux-riscv64-gnu@0.75.0"
+  - "@oxfmt/binding-linux-riscv64-musl@0.75.0"
+  - "@oxfmt/binding-linux-s390x-gnu@0.75.0"
+  - "@oxfmt/binding-linux-x64-gnu@0.75.0"
+  - "@oxfmt/binding-linux-x64-musl@0.75.0"
+  - "@oxfmt/binding-openharmony-arm64@0.75.0"
+  - "@oxfmt/binding-win32-arm64-msvc@0.75.0"
+  - "@oxfmt/binding-win32-ia32-msvc@0.75.0"
+  - "@oxfmt/binding-win32-x64-msvc@0.75.0"
+  - oxfmt@0.75.0
+  - svelte@5.57.3

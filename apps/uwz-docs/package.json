@@ -15,14 +15,11 @@
   "dependencies": {
     "@astrojs/svelte": "catalog:",
     "@farben/ui": "workspace:*",
-    "@threlte/core": "catalog:",
     "blume": "catalog:",
     "gsap": "catalog:",
-    "svelte": "catalog:",
-    "three": "catalog:"
+    "svelte": "catalog:"
   },
   "devDependencies": {
-    "@types/three": "catalog:",
     "takumi-js": "catalog:"
   }
 }

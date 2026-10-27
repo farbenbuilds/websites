@@ -22,8 +22,8 @@ docs site.
 ## Toolchain
 
 Vite+ (`vp`) is the unified toolchain: Vite, Rolldown, Vitest, Oxlint, Oxfmt,
-and the task runner. Node.js 22.19 or newer and pnpm 12.4.2 are pinned by
-`package.json`, `pnpm-workspace.yaml`, and the Nix flake.
+and the task runner. Node.js 22.19 or newer and pnpm 12.4.2 are specified by
+`package.json`, the Nix flake, and the CI workflows.
 
 Use the project-local CLI through pnpm on every host:
 
