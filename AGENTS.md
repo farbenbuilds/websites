@@ -3,11 +3,14 @@
 ## Project
 
 Farben's official web presence: a pnpm monorepo for the documentation hub, the
-landing and branding page, and the merchandise shop. Today the repository ships
-two Blume documentation sites and a shared Svelte component package.
+marketing and branding site, and the merchandise shop. Today the repository ships
+two Blume documentation sites and a shared Svelte component package. The
+marketing site and shop are not initialized, and their frameworks are undecided.
+The docs home pages live inside the two docs apps; the marketing site is a
+separate app.
 
-This is a documentation-first, static-web codebase. Treat content, presentation,
-and tooling as separate products with separate owners.
+Today this is a documentation-first, static-web codebase. Treat content,
+presentation, and tooling as separate products with separate owners.
 
 ## Documentation Map
 
@@ -41,8 +44,11 @@ rules agents most often break:
 - A source file targets 150 to 200 lines and must not exceed 200 lines. Split
   by responsibility into a named sibling module before the limit. Never create
   a `part-2` file.
-- Svelte 5 runes only. No legacy reactive syntax, no `<style>` blocks. Use
-  Tailwind utilities and `@farben/ui/theme.css` tokens.
+- For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
+  legacy reactive syntax, no `<style>` blocks. Use Tailwind utilities and
+  `@farben/ui/theme.css` tokens. A future app on another framework follows its
+  own framework conventions while keeping the accessibility, testing, and
+  ownership rules.
 - TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
   silence a real uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the
@@ -111,6 +117,9 @@ Vite+ notes:
 - `apps/uwz-docs` documents uWebZockets. It uses Blume, Astro, Svelte islands,
   and `@farben/ui`.
 - `apps/vws-docs` documents ventiws. It currently uses Blume only.
+- `apps/` contains only those two documentation apps today. A future marketing
+  or shop app may use another framework; do not assume Blume, Astro, Svelte, or
+  `@farben/ui`, and do not add it without a separate plan.
 - `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
   design tokens. Add a registry primitive only when no existing primitive fits.
   Check `src/lib/components/ui` first, install from inside the package with

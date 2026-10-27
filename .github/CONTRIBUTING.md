@@ -38,6 +38,8 @@ bindings on musl hosts.
 
 - `apps/uwz-docs`: uWebZockets documentation, Blume, Astro, Svelte islands.
 - `apps/vws-docs`: ventiws documentation, Blume.
+- `apps/` currently contains only those two docs apps. A future marketing or
+  shop app may use another framework and needs its own plan.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte components and theme tokens.
 - `tests/<category>`: root Vitest suites grouped by test category.
 - `.agents/skills`, `.opencode/skills`: agent skills, including the
@@ -87,6 +89,10 @@ contract, an accessibility review, and both docs builds when shared UI changes.
 
 ## Interface Changes
 
+These rules cover the current docs apps. A future app on another framework
+follows its own framework conventions with the same accessibility and evidence
+requirements.
+
 - Start from the shared tokens in `packages/ui/src/lib/styles/theme.css`.
 - Use Tailwind utilities and existing shadcn-svelte primitives. Check
   `packages/ui/src/lib/components/ui` before installing a new component.
@@ -109,7 +115,9 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
 - Keep content, presentation, styling, domain, integration, and tooling separate.
 - Source files target 150 to 200 lines and never exceed 200. Split by
   responsibility into a named sibling module.
-- Svelte 5 runes only. No `<style>` blocks.
+- For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
+  `<style>` blocks. A future app on another framework follows its own
+  conventions.
 - TypeScript strict. No `any`, unchecked casts, or non-null assertions used to
   silence uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory.

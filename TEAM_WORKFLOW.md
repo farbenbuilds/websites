@@ -113,6 +113,11 @@ suppress a finding, reclassify a failure, or weaken a check to close the phase.
 | Dependency or toolchain update          | Developer         | verification, security-reviewer | `pnpm ready`, lockfile review, advisory check           |
 | Security-sensitive surface              | Architect         | security-reviewer, verification | Threat model, validation tests, explicit review         |
 
+This table covers the two current Blume docs apps. A new marketing or shop app on
+another framework is an architecture decision with its own stack specialist and
+verification plan; do not route it through `astro-blume` or `svelte-engineer` by
+default.
+
 ## 4. Parallelism
 
 - Read-only exploration and specialist reviews may run in parallel.

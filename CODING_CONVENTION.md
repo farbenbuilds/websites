@@ -28,8 +28,10 @@ violates it is rejected in review, not negotiated in a pull request.
 
 ## 2. Language and Naming
 
-- TypeScript everywhere on the web surface. Apps use Astro and Svelte 5;
-  documentation uses Blume and MDX.
+- TypeScript everywhere on the web surface. The current docs apps use Blume and
+  MDX; `uwz-docs` also uses Astro, Svelte 5, and `@farben/ui`, while `vws-docs`
+  is Blume-only today. A future app may choose another framework; the rules in
+  this document still apply.
 - Use `type` rather than `interface` for object shapes and unions. Use
   `import type` for type-only imports.
 - File names are kebab-case for TypeScript, CSS, Markdown, Svelte, and Astro.
@@ -69,14 +71,14 @@ violates it is rejected in review, not negotiated in a pull request.
 
 ## 4. Separation of Concerns
 
-| Layer        | Owns                                         | Does not own                       |
-| ------------ | -------------------------------------------- | ---------------------------------- |
-| Content      | MDX pages, frontmatter, navigation copy      | Layout behavior, runtime state     |
-| Presentation | Svelte components, islands, slots            | Data fetching, build configuration |
-| Styling      | Design tokens, Tailwind utilities, theme CSS | Business logic, content            |
-| Domain       | Pure TypeScript functions and types in `lib` | DOM access, network calls          |
-| Integration  | Astro pages, Blume config, adapters          | Visual design, copy                |
-| Tooling      | Vite+, Nix, CI, scripts                      | Product behavior                   |
+| Layer        | Owns                                            | Does not own                       |
+| ------------ | ----------------------------------------------- | ---------------------------------- |
+| Content      | MDX pages, frontmatter, navigation copy         | Layout behavior, runtime state     |
+| Presentation | Svelte components, islands, slots               | Data fetching, build configuration |
+| Styling      | Design tokens, Tailwind utilities, theme CSS    | Business logic, content            |
+| Domain       | Pure TypeScript functions and types in `lib`    | DOM access, network calls          |
+| Integration  | Astro pages, Blume config, adapters (docs apps) | Visual design, copy                |
+| Tooling      | Vite+, Nix, CI, scripts                         | Product behavior                   |
 
 Dependencies point downward through this table. A presentation component may
 import a domain function; a domain module must not import a component, a page,
@@ -115,6 +117,10 @@ Custom shared code still needs two consumers.
   symbol; use a package entry point only for a deliberate public surface.
 
 ## 7. Svelte and Astro
+
+These rules cover the current documentation apps. A future app on another
+framework follows the same ownership, accessibility, testing, and verification
+rules with its own framework conventions.
 
 - Use Svelte 5 runes only: `$props`, `$state`, `$derived`, `$effect`, and
   `$bindable`. Do not use legacy `export let`, reactive `$:`, or slot syntax.

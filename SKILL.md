@@ -25,8 +25,12 @@ project skill for a single surface:
 - `apps/uwz-docs`: uWebZockets documentation. Blume, Astro, Svelte islands,
   `@farben/ui`.
 - `apps/vws-docs`: ventiws documentation. Blume.
+- `apps/` currently contains only those two documentation apps. The marketing
+  and branding site and the merchandise shop are not initialized; their
+  frameworks are undecided and may not use Blume or Svelte.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte source components and theme
-  tokens.
+  tokens. A future app on another framework can share tokens, not the Svelte
+  components.
 - Toolchain: Vite+ through pnpm, Node.js 22.19 or newer, pnpm 12.4.2, Nix flake
   with glibc and musl shells.
 
@@ -67,7 +71,9 @@ bindings on musl systems.
   and tooling stay in their layer.
 - Source files target 150 to 200 lines and never exceed 200. Split by
   responsibility into a named sibling module.
-- Svelte 5 runes only. No `<style>` blocks. Tailwind utilities and shared tokens.
+- For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
+  `<style>` blocks, Tailwind utilities, and shared tokens. A future app on
+  another framework follows its own conventions.
 - TypeScript strict. No `any` and no unchecked casts.
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
@@ -90,6 +96,10 @@ The full document is [CODING_CONVENTION.md](CODING_CONVENTION.md).
 Blume owns routing, search, and generated output. Do not hand-roll those.
 
 ## UI Workflow
+
+These steps cover the current docs apps. A future app on another framework
+follows its own framework conventions with the same accessibility and evidence
+requirements.
 
 1. Start from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
 2. Compose with Tailwind utilities and existing shadcn-svelte primitives. Check

@@ -3,17 +3,17 @@
 Farben's official web presence — everything we publish on the web lives in this monorepo:
 
 - **docs** — the documentation hub for Farben's projects, starting with [uWebZockets](https://github.com/farbenbuilds/uWebZockets) and [ventiws](https://github.com/farbenbuilds/ventiws)
-- **landing** — Farben's landing and branding page
-- **shop** — merchandise e-commerce shop
+- **marketing** — Farben's marketing and branding site, planned
+- **shop** — merchandise e-commerce shop, planned
 
-Both apps have landed: `apps/uwz-docs` is the [uWebZockets](https://github.com/farbenbuilds/uWebZockets) documentation site, and `apps/vws-docs` prepares the [ventiws](https://github.com/farbenbuilds/ventiws) docs — both built with [Blume](https://useblume.dev) from the Markdown in their `docs/` folders.
+Today `apps/` contains only the two documentation sites: `apps/uwz-docs` for [uWebZockets](https://github.com/farbenbuilds/uWebZockets) and `apps/vws-docs` for [ventiws](https://github.com/farbenbuilds/ventiws), both built with [Blume](https://useblume.dev) from the Markdown in their `docs/` folders. The docs home pages live at `/` and `/vi/` inside those apps. The marketing site and merchandise shop are not initialized yet; their frameworks are undecided and may not use Blume, Astro, or Svelte.
 
 ## Stack
 
 - [Vite+](https://viteplus.dev) (`vp`) — the unified toolchain: Vite, Rolldown, Vitest, [Oxlint](https://oxc.rs/docs/guide/usage/linter) for linting, [Oxfmt](https://oxc.rs/docs/guide/usage/formatter) for formatting, and task running
 - [Lefthook](https://lefthook.dev) pre-commit hooks, Oxlint anti-slop rules, and a root Vitest suite
 - Documentation sites use [Blume](https://useblume.dev) — Markdown in `docs/`, Astro-generated output, plus search, `llms.txt`, and an MCP server out of the box
-- TypeScript everywhere; apps are expected to lean on Astro and Svelte
+- The current docs apps use TypeScript and Blume. `uwz-docs` adds Astro, Svelte 5 islands, and `@farben/ui`; `vws-docs` is Blume-only today. A future app may choose another framework and owns its build configuration
 - pnpm workspaces (`apps/*`, `packages/*`, `tools/*`)
 
 ## Development
@@ -57,7 +57,7 @@ pnpm exec vp run -r build                 # build all workspace members
 
 ## Shared UI
 
-`packages/ui` (`@farben/ui`) holds the shared [shadcn-svelte](https://www.shadcn-svelte.com) components. Components are consumed as source — there is no build step — so apps compile them with their own Svelte tooling:
+`packages/ui` (`@farben/ui`) holds shared [shadcn-svelte](https://www.shadcn-svelte.com) components for the docs apps that use Svelte. `apps/uwz-docs` consumes the package today; `apps/vws-docs` is Blume-only. A future app on another framework can reuse token values, not the Svelte components. Components are consumed as source — there is no build step — so Svelte hosts compile them with their own tooling:
 
 ```svelte
 import { Button } from "@farben/ui/components/ui/button";
