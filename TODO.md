@@ -20,7 +20,7 @@ fonts, accents, copy, artwork, and component code.
 | Blume remains the documentation framework                  | Decided. Do not eject or hand-edit generated output.         |
 | Vize supplies the visual grammar                           | Decided. Do not copy its code, palette, identity, or assets. |
 | Landing pages use Blume's `mode: custom`                   | Decided. Author the page heading in MDX.                     |
-| The butterfly hero uses Svelte, GSAP, and CSS              | Decided. No Three.js, Threlte, WebGL, or Canvas renderer.    |
+| The butterfly field uses Svelte, Canvas 2D, and CSS        | Decided. Dense field; no Three.js, Threlte, or WebGL.        |
 | Both sites share one editorial grammar                     | Decided. Keep each site's accent and paper temperature.      |
 | Blume keeps routing, search, i18n, and generated discovery | Decided. Restyle only the presentation boundary.             |
 
@@ -30,16 +30,25 @@ shared.
 
 ### Hero technology decision
 
-The butterflies are flat groups of monospace characters. Svelte can render them
-as text, Tailwind can place and color their wrappers, and GSAP can move those
-wrappers with transforms. Three.js and Threlte would add a scene, camera,
-renderer, and WebGL lifecycle without contributing to a two-dimensional result,
-so neither belongs in the dependency set.
+The earlier plan assumed three to five DOM text blocks. The intended hero is a
+dense ASCII field, closer to the
+[ascii-sharks reference](https://github.com/stackedlol/ascii-sharks): its landing
+scene runs 85 to 340 small fish plus four large sharks on a Canvas 2D cell grid.
+Replacing those fish and sharks with a butterfly population at that density makes
+one DOM node per glyph the wrong renderer.
 
-The [ascii-sharks reference](https://github.com/stackedlol/ascii-sharks) draws
-ASCII fish on a Canvas 2D cell grid with a TypeScript engine. It is a reference
-for recognizable silhouettes, restrained color, and layered movement, not code
-to copy. Draw original butterflies and write independent motion code.
+Use Svelte for the component lifecycle, a Canvas 2D context for the field, and
+CSS for the surrounding hero. The canvas draws monospace glyphs into a cell grid;
+the simulation handles drift, wing phase, depth, and wrapping. Three.js, Threlte,
+and WebGL are unnecessary for a two-dimensional cell field. GSAP is not the right
+driver for a cell simulation, so it does not own the hero loop.
+
+Canvas cannot render without JavaScript, so keep a server-rendered static ASCII
+arrangement behind it. The canvas replaces the static art only after hydration; if
+the canvas fails or the reader has no JavaScript, the static art remains. Draw
+original butterflies and write independent simulation code. Adapt ascii-sharks'
+engineering principles, such as a fixed timestep, capped device pixel ratio,
+offscreen pausing, and a reduced-motion still frame, not its classes or code.
 
 ## Goal and non-goals
 
@@ -79,9 +88,10 @@ Ox Content's default theme in `docs/vite.config.ts`, then overrides it in
 | Motion     | Short 0.15-0.3s color and opacity transitions; a fixed full-page ambient WebGL canvas.                                                 |
 
 The reference is useful because the composition is disciplined: one accent,
-few surfaces, one rule weight, and metadata that is visibly secondary. The
-canvas, the hidden header, and the bottom mobile action bar are not part of the
-grammar we need.
+few surfaces, one rule weight, and metadata that is visibly secondary. Vize's
+full-page WebGL canvas, hidden header, and bottom mobile action bar are not part
+of the grammar we need. The butterfly field is a bounded Canvas 2D hero, not a
+page-wide background.
 
 ### Adopt, adapt, reject
 
@@ -97,7 +107,7 @@ grammar we need.
 | 100vh entry page                           | Adapt into a custom-mode landing page whose first action remains visible at 320x568 without scrolling.                  |
 | Hidden header until scroll                 | Reject. Documentation navigation must stay available without a scroll script.                                           |
 | Bottom mobile action bar                   | Reject. Blume's built-in drawer, search, and theme controls cover the need; M1 verifies them.                           |
-| Fixed full-page ambient canvas             | Reject. The butterfly scene is the only ambient motion.                                                                 |
+| Fixed full-page ambient WebGL canvas       | Reject. Use a bounded Canvas 2D butterfly field inside the hero; no page-wide canvas.                                   |
 | Vize palette, Helvetica, name, logo, copy  | Reject. Keep Google Sans Flex, Be Vietnam Pro, JetBrains Mono, and Farben's butterfly mark.                             |
 
 ## Design grammar
@@ -149,6 +159,10 @@ Rules:
   rather than raising the contrast of every rule.
 - Do not use color alone to mark state. Pair it with weight, a rule, an icon,
   or text.
+- Expose `--farben-field-paper`, `--farben-field-ink`,
+  `--farben-field-muted`, and `--farben-field-accent` in each app. The shared
+  field receives those values through a typed palette and never reads
+  `--blume-*` directly.
 
 ### Type
 
@@ -272,12 +286,14 @@ The landing page has five regions:
    scrolling.
 4. Two actions: Getting Started as the ink-filled primary link, GitHub as the
    bordered secondary link.
-5. The butterfly field as a bounded decorative region beside or behind the
+5. A dense Canvas 2D butterfly field in a bounded decorative region beside the
    text, never over the heading, paragraph, or actions.
 
 On desktop, use an asymmetric composition: text in roughly a 5/12 column and
-art in a 7/12 field that may bleed to the right edge. On mobile, stack the text
-first and place a smaller art band after it; never put art behind the summary.
+the canvas in a 7/12 field that may bleed to the right edge. On mobile, stack the
+text first and place a shorter canvas band after it; never put art behind the
+summary. A paper scrim may sit between the canvas and the text, but no glyph may
+cross the text exclusion area.
 
 Below the hero:
 
@@ -296,74 +312,112 @@ Below the hero:
 - Keep the English and Vietnamese pages equivalent. Translate labels; do not
   translate product names or code identifiers.
 
-Do not add a second h1, a 100vh lock, a full-screen canvas, or a card grid.
+Do not add a second h1, a 100vh lock, a page-wide canvas, or a card grid.
 The page should read as an editorial front page, not a marketing splash.
 
 ## Butterfly hero contract
 
 The hero is decoration with a job: give each site a quiet, recognizable identity
-without competing with documentation.
+without competing with documentation. It is a dense field, not a sparse accent.
 
-- Use three to five original butterfly glyph designs, drawn as monospace text
-  with preserved spaces and line breaks. Inspect them at real mobile and desktop
-  sizes. Each design is one accessible-decorative unit.
+### Field and sprites
+
+- Render a dense Canvas 2D cell field, not one DOM node per glyph. Use three to
+  five original butterfly designs at two or three scales, repeated with depth,
+  opacity, and wing phase.
+- Start around 80 to 160 small and midground butterflies plus three or four large
+  foreground butterflies on a desktop hero. Start around 24 to 48 plus one or
+  two large ones at 320px. Treat these as tuning targets and adjust from measured
+  frame time and visual review.
+- Draw monospace glyphs into a cell grid sized to the mono font. Pre-render each
+  butterfly design and scale into an offscreen canvas, then draw instances with
+  `drawImage`; do not call `fillText` per glyph per frame. Rebuild the sprite
+  cache when the palette, font, or DPR changes, or draw sprites as masks and tint
+  them at draw time. Keep each sprite recognizable at its rendered size, and
+  inspect the grid at 1x and 2x device pixel ratio.
 - uWebZockets uses orange, amber, and yellow wing accents over the warm neutral
   surface. ventiws uses blue, green, and teal accents over the cool neutral
   surface. Use hue or brightness variation within the site palette, not a
-  rainbow. Set palettes at the host layer, never inside shared motion logic.
-- Use a calm print composition inspired by Japanese print and garden
-  composition: generous space, asymmetric balance, fine rules, crisp mono
-  glyphs, and selective color. Avoid decorative Japanese text, cultural
-  symbols, or imagery that suggests an unverified product connection.
+  rainbow. Set palettes at the host layer, never inside the shared field logic.
+- Use a calm editorial print composition: generous space, asymmetric balance,
+  fine rules, crisp mono glyphs, and selective color. Avoid decorative cultural
+  text, symbols, or imagery that suggests an unverified product connection.
 - Keep the heading, summary, and links as semantic MDX or HTML. Treat the
   butterfly field as decoration, never as the only way to convey information.
   Do not put decorative glyphs into headings or link names.
-- Concentrate the scene in a bounded hero region. Keep a clear exclusion area
-  around the title, summary, actions, navigation, search, and code.
-- Reduce the count on narrow screens. Never place glyphs over reading text.
-- Derive the surfaces and glyph colors from the host theme tokens. Confirm the
-  hero works with the existing theme toggle, and do not replace documentation
-  body typography solely to create the effect.
-- Render a stable static arrangement server-side. The page must remain readable
-  and useful when JavaScript is unavailable, and the CSS static state must stay
-  visible if animation setup fails.
-- Mark the artwork `aria-hidden="true"` and `pointer-events-none`. Keep the
-  pause control outside that subtree with an accessible name and visible focus.
-- Respect `prefers-reduced-motion: reduce` before starting any tween, and react
-  when the preference changes. If motion lasts more than five seconds alongside
-  content, provide a keyboard-operable pause and resume control and persist its
-  state for the page visit.
-- Start scoped GSAP tweens on mount, using `gsap.matchMedia()` for viewport and
-  reduced-motion conditions. Select only elements inside the component root.
-  Pause on `visibilitychange` and when the hero leaves the viewport through an
-  `IntersectionObserver`; resume only when motion is enabled. Disconnect the
-  observers, revert the media query, and kill the tweens on unmount.
-- Animate transform and, sparingly, opacity. Do not animate text content or
-  layout properties. Do not add scroll listeners or use page-wide selectors.
-- Keep the initial element count and positions stable so hydration does not
-  shift the scene.
-- This plan renders the butterflies as DOM text. Do not switch to Canvas or
-  WebGL inside this slice. If measured DOM density fails the performance budget,
-  return to the architect with measurements and a new plan that keeps a static
-  text fallback.
+- Bound the canvas to the hero region and keep a hard exclusion area around the
+  title, summary, actions, navigation, search, and code. A paper scrim may sit
+  between the canvas and the text. Never draw glyphs over reading text.
+- Reduce the density, not just the canvas size, on narrow screens.
+
+### Rendering and motion
+
+- Read the host `--farben-field-*` palette aliases for paper, ink, muted, and
+  accent on mount and when the theme attribute changes through a
+  `MutationObserver`. The shared code does not read `--blume-*` directly. Update
+  the palette, rebuild any tinted sprite cache, and redraw the current frame;
+  draw a still only when reduced motion is active or the field is paused.
+- Wait up to two seconds for the mono face with `document.fonts.load` before the
+  first draw. If it fails, draw with the system mono fallback and redraw when the
+  face loads. Recompute the cell grid and rebuild the sprite cache after the font
+  is ready. Canvas text can start before a webfont is ready, and a late font swap
+  would change the cell metrics.
+- Render the full first-frame composition as one server-rendered `<pre>`, not one
+  node per glyph. Constrain it to the same hero art box with overflow hidden and
+  no layout shift. Keep it in the DOM behind the canvas; hide it only after the
+  first successful canvas frame, and restore it if the canvas context is lost.
+  The static arrangement is decorative and `aria-hidden` too. The page must
+  remain readable with no JavaScript or a failed canvas.
+- Cap the fallback markup at 32KB and record its node count and HTML size. A
+  single `<pre>` is the fallback; a reduced still is only an option under reduced
+  motion, not the default no-JavaScript art.
+- Mark the canvas `aria-hidden="true"` and `pointer-events-none`. Keep the pause
+  control outside that subtree with an accessible name and visible focus.
+- Respect `prefers-reduced-motion: reduce`: keep the static arrangement, or
+  advance the simulation to a settled state and crossfade to one still frame
+  instead of starting the loop. React when the preference changes.
+- If motion lasts more than five seconds alongside content, provide a
+  keyboard-operable pause and resume control and persist its state for the page
+  visit. Pausing stops the loop without hiding the still field.
+- Use one fixed-timestep `requestAnimationFrame` loop, starting at 1/60s with at
+  most four steps per frame. Cap the device pixel ratio at 2 and recompute it on
+  resize; rebuild the cell grid and sprite cache when it changes. Pause on
+  `visibilitychange` and when the hero leaves the viewport through an
+  `IntersectionObserver`. Resume only when the document is visible, the hero is
+  intersecting, the reader has not paused the field, and reduced motion is off.
+- Recompute the cell grid and density from a `ResizeObserver`. Do not add scroll
+  listeners or a page-wide canvas.
+- Keep the loop bounded to the component. Disconnect observers, cancel the
+  animation frame, and release buffers on unmount.
+- Do not use GSAP for the field or the hero. Both apps still declare GSAP from
+  the earlier plan, but the hero no longer uses it; remove it separately if no
+  other code imports it. The canvas loop owns the butterfly motion.
+- Leave pointer interaction out of the first version. If it is added later, keep
+  it calm, test it on touch, and do not turn the hero into a game.
+- Profile with the browser performance panel at 4x CPU slowdown. Avoid per-frame
+  allocations, reuse typed arrays, and lower density before adding a second
+  canvas or WebGL.
+- Draw original butterflies. If upstream art or code is copied, retain its
+  license, record provenance, and rewrite the code to the repository's
+  functional rules.
 
 ## Implementation architecture
 
-| Layer                | Responsibility                                                             | Candidate files                                                                                 | Status   |
-| -------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------- |
-| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume  | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export                   | New      |
-| Shared hero          | Render original glyphs, typed palette and density, static fallback         | `packages/ui/src/lib/components/butterfly-hero/butterfly-hero.svelte` and named sibling modules | New      |
-| Shared glyph data    | Plain frames, positions, and deterministic motion parameters               | Sibling data module under `packages/ui/src/lib/components/butterfly-hero/`                      | New      |
-| Shared motion        | Scoped GSAP timelines, media-query and visibility cleanup                  | Sibling motion module under `packages/ui/src/lib/components/butterfly-hero/`                    | New      |
-| Landing colophon     | Static per-app footer with copyright and links                             | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                                 | New      |
-| Site tokens          | Import shared tokens, map shadcn variables, set site accent and background | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                                        | Mixed    |
-| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors          | `apps/*/styles/blume-chrome.css`                                                                | New      |
-| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination  | `apps/*/styles/blume-content.css`                                                               | New      |
-| Site config          | Radius, background, footer content, GitHub links                           | `apps/*/blume.config.ts`                                                                        | Existing |
-| Site landing content | Custom-mode hero, numbered index, example, colophon                        | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                             | Existing |
-| Site registry        | Register hero and colophon for MDX                                         | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                                | Mixed    |
-| Package dependencies | Declare the existing GSAP catalog entry because the shared hero imports it | `packages/ui/package.json`, lockfile                                                            | Existing |
-| Site dependency      | Add the shared package to ventiws; no new runtime packages                 | `apps/vws-docs/package.json`, lockfile                                                          | Existing |
+| Layer                | Responsibility                                                                            | Candidate files                                                                      | Status   |
+| -------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
+| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                 | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export        | New      |
+| Shared hero          | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback          | `packages/ui/src/lib/components/butterfly-hero/butterfly-hero.svelte` and `index.ts` | New      |
+| Shared field         | Species sprites, deterministic spawn, drift, and wing-phase parameters as plain data      | `butterfly-data.ts`, `butterfly-field.ts` under the same component folder            | New      |
+| Shared renderer      | Canvas 2D cell grid, DPR handling, font readiness, theme colors, still frame              | `butterfly-renderer.ts` under the same component folder                              | New      |
+| Shared loop          | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup | `butterfly-loop.ts` under the same component folder                                  | New      |
+| Landing colophon     | Static per-app footer with copyright and links                                            | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
+| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                      | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                             | Mixed    |
+| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                         | `apps/*/styles/blume-chrome.css`                                                     | New      |
+| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                 | `apps/*/styles/blume-content.css`                                                    | New      |
+| Site config          | Radius, background, footer content, GitHub links                                          | `apps/*/blume.config.ts`                                                             | Existing |
+| Site landing content | Custom-mode hero, numbered index, example, colophon                                       | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
+| Site registry        | Register hero and colophon for MDX                                                        | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                     | Mixed    |
+| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                    | `apps/vws-docs/package.json`, lockfile                                               | Existing |
 
 Boundaries:
 
@@ -374,12 +428,14 @@ Boundaries:
 - Shared primitives live in `@farben/ui`; app-local components own site-specific
   links and Blume selectors. Keep the landing colophon and docs footer
   destinations in sync with a parity check.
+- The shared field and renderer receive a typed palette resolved from
+  `--farben-field-*` aliases. Only the app `theme.css` maps those aliases to
+  Blume tokens; shared code never reads `--blume-*` directly.
 - Do not add a new third-party runtime dependency. Add the existing
-  `@farben/ui` workspace package to ventiws, and declare the existing `gsap`
-  catalog entry in `packages/ui` because the shared hero imports it. Both apps
-  already declare Svelte and GSAP.
-- Do not edit `.blume/` or `dist/`. No `part-2` files; split styles by
-  responsibility.
+  `@farben/ui` workspace package to ventiws. The hero uses the browser Canvas 2D
+  API; no renderer package or GSAP dependency is added to `packages/ui`.
+- Do not edit `.blume/` or `dist/`. No `part-2` files; split field, renderer, and
+  loop modules by responsibility.
 
 Register the hero through Blume's `defineComponents` descriptor. Prefer
 `client: "visible"` when the hero sits in the first viewport and the static
@@ -467,40 +523,52 @@ heading, no missing action, and no broken locale or discovery output.
 
 ### M4: Butterfly hero component
 
-- [ ] Draw three to five original silhouettes as plain text data and inspect
-      spacing at real mobile and desktop sizes.
-- [ ] Implement the typed shared Svelte component and the pure data helpers.
-      Declare the existing `gsap` catalog entry in `packages/ui/package.json`
-      before the component imports it. Keep every source file at or below 200
-      lines; split by responsibility.
-- [ ] Render stable initial positions and a static no-JavaScript arrangement.
-- [ ] Add scoped GSAP drift and flutter, responsive counts, a reduced-motion
-      branch, and complete mount, media-query, viewport, visibility, and unmount
-      cleanup.
-- [ ] Add the pause and resume control with localized labels, visible focus, and
-      persisted state for the page visit.
-- [ ] Test only the pure position and count logic under `tests/<category>/`,
-      importing from `vite-plus/test`. Inspect motion and keyboard behavior in
-      the browser.
+- [ ] Draw three to five original butterfly silhouettes as ASCII sprites and
+      inspect them in the cell grid at 1x and 2x device pixel ratio. Record the
+      sprite dimensions and the smallest legible scale.
+- [ ] Implement the typed shared Svelte component plus the pure field and data
+      helpers. Keep the renderer and loop effectful at the component edge. Keep
+      every source file at or below 200 lines and split by responsibility. Do not
+      add GSAP to the field.
+- [ ] Build the Canvas 2D renderer with a capped DPR, mono-font readiness, a
+      cell grid and offscreen sprite cache that rebuild on palette, font, or DPR
+      change, the host palette aliases, and a first frame derived from the same
+      seed as the static fallback.
+- [ ] Add the fixed-timestep loop, density targets, drift, wing phase, wrapping,
+      a reduced-motion still frame, pause and resume, resize, visibility, and
+      intersection observers, and complete unmount cleanup.
+- [ ] Render the full first-frame composition as one server-rendered `<pre>`,
+      constrained to the art box and capped at 32KB, and restore it if the canvas
+      context is lost. Record its node count and HTML size.
+- [ ] Verify the static-to-canvas handoff does not pop, resume happens only when
+      the field is visible, not paused, and motion is enabled, and the sprite
+      cache rebuilds after a palette, font, or DPR change.
+- [ ] Test only the pure spawn, wrap, density, and seed logic under
+      `tests/<category>/`, importing from `vite-plus/test`. Inspect no-JavaScript,
+      reduced-motion, DPR, and font-fallback behavior in the browser.
 
-**Exit:** The isolated component is readable, static without JavaScript,
-motion-safe, type-checks through `@farben/ui#check`, and has browser evidence
-for reduced motion and no JavaScript.
+**Exit:** The isolated field is dense, readable, static without JavaScript,
+motion-safe, type-checks through `@farben/ui#check`, hands off without a visible
+pop, and has browser evidence for reduced motion, no JavaScript, pause/resume,
+and both pixel ratios.
 
 ### M5: Integrate and tune both sites
 
 - [ ] Register the hero in both `components.ts` files with the verified
       hydration directive and place it on all four home routes with the site
       palette and localized control labels.
-- [ ] Tune count, placement, and exclusion zones at 320px, 768px, and desktop.
-      Keep the art away from the title, summary, actions, navigation, and code.
+- [ ] Tune density, cell size, DPR, placement, and exclusion zones at 320px,
+      768px, and desktop. Keep every glyph away from the title, summary, actions,
+      navigation, and code.
 - [ ] Verify English and Vietnamese copy, links, navigation, search, theme
       toggle, generated routes, and `llms.txt` after both builds.
-- [ ] Profile the hero on a lower-end mobile device. Reduce count or motion if
-      frame rate suffers; do not change the renderer in this slice.
+- [ ] Profile the field on a lower-end mobile device at 4x CPU slowdown. Lower
+      density or cell resolution if frame time suffers; do not add WebGL or a
+      second canvas.
 
-**Exit:** Both sites use the shared motion behavior with their own palette, and
-normal documentation interaction still works in both locales.
+**Exit:** Both sites use the shared field behavior with their own palette,
+frame time stays within the agreed budget, and normal documentation interaction
+still works in both locales.
 
 ### M6: Review and release
 
@@ -508,8 +576,13 @@ normal documentation interaction still works in both locales.
       theme. Check text overlap, clipping, visible actions, and rule alignment.
 - [ ] Use the keyboard only to reach links, theme toggle, search, locale menu,
       navigation, and the pause control. Check focus order and visible focus.
-- [ ] Test reduced motion, no JavaScript, tab visibility, scroll out and back,
-      repeated mount and unmount, and a 320px viewport.
+- [ ] Test reduced motion, no JavaScript, the static-to-canvas handoff, fallback
+      node count, canvas context loss, a failed or slow font load, theme-toggle
+      redraw, sprite-cache rebuild, pause and resume, tab visibility, scroll out
+      and back, repeated mount and unmount, DPR 1, 2, and a mid-session change,
+      and a 320px viewport.
+- [ ] Profile the field with the browser performance panel and record frame time,
+      long tasks, and the effect of the density caps.
 - [ ] Check contrast, target sizes, and the decorative glyphs' effect on text
       contrast. Confirm no information is conveyed by color alone.
 - [ ] Run the full repository gate, review the diff for generated output,
@@ -537,12 +610,17 @@ and the shared package passes the repository gate.
 - Motion is limited to the butterfly scene and short control transitions. Respect
   `prefers-reduced-motion` and provide the pause control required by WCAG 2.2.2.
 - Pause or stop the hero when the tab is hidden or the hero scrolls out of view.
-  Clean up observers, listeners, and tweens on unmount.
-- Do not add WebGL, a physics loop, or a page-wide animation frame.
-- No new fonts or dependencies. Keep the hero DOM small and the static state
-  cheap. Profile before increasing count.
+  Clean up observers, listeners, and animation frames on unmount.
+- Use one Canvas 2D loop, bounded to the hero. Do not add WebGL, a second loop,
+  or a page-wide canvas. The canvas never receives focus.
+- No new fonts or dependencies. Keep the canvas draw cost bounded, reuse
+  buffers, and profile before increasing density.
+- Target 60fps on a mid-tier desktop and hold at least 30fps at the mobile
+  density under 4x CPU slowdown. Reduce density or cell resolution before adding
+  a second canvas.
 - Keep the page useful without JavaScript: links, headings, the summary, the
-  example, and the header controls must all render.
+  example, the header controls, and the static butterfly arrangement must all
+  render.
 
 ## Verification and evidence
 
@@ -575,7 +653,7 @@ matrix is:
 | Landing pages      | 320x568, 768, 1280+ | Light, dark | en, vi  | First action, one h1, no overlap, colophon       |
 | Docs chrome        | 320, 768, 1280+     | Light, dark | en, vi  | Keyboard, focus, drawer, search, theme, contrast |
 | Content components | 320, 768, 1280+     | Light, dark | en, vi  | Overflow, copy, tabs, tables, pagination         |
-| Butterfly hero     | 320, 768, 1280+     | Light, dark | en, vi  | Reduced motion, no JS, pause, tab visibility     |
+| Butterfly field    | 320, 768, 1280+     | Light, dark | en, vi  | No JS, reduced motion, pause, DPR, frame time    |
 
 Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
 
@@ -602,16 +680,25 @@ Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
   explains server rendering and client hydration of Svelte islands.
 - [Svelte lifecycle hooks](https://svelte.dev/docs/svelte/lifecycle-hooks)
   documents mount and teardown boundaries.
-- [GSAP matchMedia](https://gsap.com/docs/v3/GSAP/gsap.matchMedia/) documents
-  responsive conditions and automatic animation reversion.
+- [MDN Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
+  documents the 2D context used for the field.
+- [MDN requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame)
+  and [devicePixelRatio](https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio)
+  document the loop and the capped backing-store scale.
+- [MDN FontFaceSet.load](https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/load)
+  documents the mono-font readiness check before the first draw.
+- [MDN ResizeObserver](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver)
+  and [IntersectionObserver](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver)
+  document the grid and viewport pause boundaries.
 - [WCAG 2.2.2 Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html)
   defines the control requirement for ongoing automatic motion.
 - [WCAG 2.2 target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
   and [focus appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html)
   define the control geometry and focus checks.
-- [ascii-sharks](https://github.com/stackedlol/ascii-sharks) and its
-  [engine source](https://raw.githubusercontent.com/stackedlol/ascii-sharks/main/src/engine.ts)
-  are the motion and glyph reference for the butterfly scene.
+- [ascii-sharks](https://github.com/stackedlol/ascii-sharks), its
+  [engine](https://raw.githubusercontent.com/stackedlol/ascii-sharks/main/src/engine.ts),
+  and its [cell renderer](https://raw.githubusercontent.com/stackedlol/ascii-sharks/main/src/renderer.ts)
+  are the density and engineering reference for the butterfly field.
 - Vize is MIT licensed, but no Vize code, CSS, artwork, copy, or identity is
   copied. If a rule is adapted beyond generic layout grammar, record its source
   in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and retain the license.
