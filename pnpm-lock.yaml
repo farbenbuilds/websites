@@ -27,6 +27,9 @@ catalogs:
     svelte:
       specifier: ^5.57.3
       version: 5.57.3
+    takumi-js:
+      specifier: ^2.17.1
+      version: 2.17.1
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -64,13 +67,17 @@ importers:
         version: link:../../packages/ui
       blume:
         specifier: 'catalog:'
-        version: 2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1)
+        version: 2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(astro@7.4.2(@types/node@22.20.5)(@vercel/functions@3.10.3(ws@8.22.0))(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1)
       gsap:
         specifier: 'catalog:'
         version: 3.15.0
       svelte:
         specifier: 'catalog:'
         version: 5.57.3
+    devDependencies:
+      takumi-js:
+        specifier: 'catalog:'
+        version: 2.17.1(csstype@3.2.3)(react@19.3.1)
 
   apps/vws-docs:
     dependencies:
@@ -79,13 +86,17 @@ importers:
         version: 9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(astro@7.4.2(@types/node@22.20.5)(@vercel/functions@3.10.3(ws@8.22.0))(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1)
       blume:
         specifier: 'catalog:'
-        version: 2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1)
+        version: 2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(astro@7.4.2(@types/node@22.20.5)(@vercel/functions@3.10.3(ws@8.22.0))(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1)
       gsap:
         specifier: 'catalog:'
         version: 3.15.0
       svelte:
         specifier: 'catalog:'
         version: 5.57.3
+    devDependencies:
+      takumi-js:
+        specifier: 'catalog:'
+        version: 2.17.1(csstype@3.2.3)(react@19.3.1)
 
   packages/ui:
     dependencies:
@@ -6887,7 +6898,7 @@ snapshots:
     dependencies:
       file-uri-to-path: 1.0.0
 
-  blume@2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1):
+  blume@2.2.6(@astrojs/svelte@9.1.1(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(astro@7.4.2(@types/node@22.20.5)(@vercel/functions@3.10.3(ws@8.22.0))(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(jiti@2.7.0)(svelte@5.57.3)(typescript@6.0.3)(yaml@2.9.1))(@emnapi/runtime@1.11.3)(@shikijs/themes@4.5.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(@vercel/functions@3.10.3(ws@8.22.0))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.30(typescript@6.0.3))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.1))(@volar/typescript@2.4.30(typescript@6.0.3))(csstype@3.2.3)(prettier@3.9.10)(svelte@5.57.3)(ws@8.22.0)(yaml@2.9.1):
     dependencies:
       '@astrojs/check': 0.9.12(@emnapi/runtime@1.11.3)(prettier@3.9.10)(typescript@6.0.3)
       '@astrojs/markdown-satteri': 0.4.5

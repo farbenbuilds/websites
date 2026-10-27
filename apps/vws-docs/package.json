@@ -17,5 +17,8 @@
     "blume": "catalog:",
     "gsap": "catalog:",
     "svelte": "catalog:"
+  },
+  "devDependencies": {
+    "takumi-js": "catalog:"
   }
 }

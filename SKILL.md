@@ -27,7 +27,7 @@ project skill for a single surface:
 - `apps/vws-docs`: ventiws documentation. Blume.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte source components and theme
   tokens.
-- Toolchain: Vite+ through pnpm, Node.js 22.19 or newer, pnpm 12.15.0, Nix flake
+- Toolchain: Vite+ through pnpm, Node.js 22.19 or newer, pnpm 12.4.2, Nix flake
   with glibc and musl shells.
 
 ## Commands
