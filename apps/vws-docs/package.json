@@ -14,14 +14,8 @@
   },
   "dependencies": {
     "@astrojs/svelte": "catalog:",
-    "@threlte/core": "catalog:",
     "blume": "catalog:",
     "gsap": "catalog:",
-    "svelte": "catalog:",
-    "three": "catalog:"
-  },
-  "devDependencies": {
-    "@types/three": "catalog:",
-    "takumi-js": "catalog:"
+    "svelte": "catalog:"
   }
 }

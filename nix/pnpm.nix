@@ -5,7 +5,7 @@
   fetchurl,
   autoPatchelfHook,
   makeWrapper,
-  version ? "12.4.2",
+  version ? "12.15.0",
 }: let
   platform = stdenvNoCC.hostPlatform;
 
@@ -21,12 +21,12 @@
     + lib.optionalString (platform.isLinux && platform.isMusl) "-musl";
 
   hashes = {
-    linux-x64 = "sha256-zh7WkP6cLwkdcmfhr76TgKuwi7V36VNI/aGUpBFH0uw=";
-    linux-x64-musl = "sha256-WsIvbR2nVkgkkKELO+G5KaYvoQIqWwNLN4Vvq2CcvWw=";
-    linux-arm64 = "sha256-3Eop2YSO8AW+w9NtSaroSxFew7GMEQo6fzPDf3/VIL8=";
-    linux-arm64-musl = "sha256-v3WXgSyBQDDnWcIGkdq4ihsnH0lVdv28Ta5WhFg2cQU=";
-    darwin-x64 = "sha256-X6PRmtGmN9QUvDWIcwZm+UdkKtowe/Uu7jmXGS8RXXU=";
-    darwin-arm64 = "sha256-Wq6VqV8KmPk3Le59F5c4YBH6ZXGwa4JVTHx4R9IBMI4=";
+    linux-x64 = "sha256-VbXtAJK9ERdsFmlZjiMa5S587axZ3m79DUFXMPN9BZg=";
+    linux-x64-musl = "sha256-0zgCzJh9z74CqZFHN2S6Ja0bI0QYniCXolcLrtZvAIo=";
+    linux-arm64 = "sha256-186TosfYR9OjS9P1WbYMFPV4sTIMF8w1KixcX9+VYRc=";
+    linux-arm64-musl = "sha256-EYjvile/xXhvP3OamAZyQuUxpGNuP1Lp6d3HVWTqgE0=";
+    darwin-x64 = "sha256-LXszaIRXSu6KdlvuSFkSEunK9Pz5hfsyeViMH7c/tH8=";
+    darwin-arm64 = "sha256-akGih3dz6X8ZgyBnGHzG/ILhhtiiz5H+xLTBpfvW7yc=";
   };
 in
   stdenvNoCC.mkDerivation {

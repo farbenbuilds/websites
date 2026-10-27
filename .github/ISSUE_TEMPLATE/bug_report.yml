@@ -67,7 +67,7 @@ body:
     attributes:
       label: Environment
       description: Browser, operating system, Node.js version, pnpm version, and whether Nix is active.
-      placeholder: Firefox 128, NixOS x86_64, Node.js 24, pnpm 12.4.2, nix develop
+      placeholder: Firefox 128, NixOS x86_64, Node.js 24, pnpm 12.15.0, nix develop
     validations:
       required: false
   - type: textarea
