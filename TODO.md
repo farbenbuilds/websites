@@ -2,7 +2,7 @@
 
 This is the implementation plan for the uWebZockets and ventiws documentation
 sites. It covers two coupled tracks: an editorial design system for the site
-chrome, content components, and landing pages, with the visual grammar of
+chrome, content components, and documentation home pages, with the visual grammar of
 [vizejs.dev](https://vizejs.dev/) as its reference; and the already-decided ASCII
 butterfly heroes for the home pages. All boxes below describe future work; this
 document does not implement either track.
@@ -13,16 +13,44 @@ Adopt the grammar: paper surfaces, hairline rules, square geometry, display
 type, mono metadata, numbered indexes, and quiet chrome. Keep Farben's own
 fonts, accents, copy, artwork, and component code.
 
+## Scope: current apps and future apps
+
+`apps/` currently contains two applications, both Blume documentation sites:
+
+| Path                 | Status          | Framework                    | Covered by this plan |
+| -------------------- | --------------- | ---------------------------- | -------------------- |
+| `apps/uwz-docs`      | Exists          | Blume, Astro, Svelte islands | Yes                  |
+| `apps/vws-docs`      | Exists          | Blume, Svelte available      | Yes                  |
+| Future marketing app | Not initialized | Undecided                    | No                   |
+| Future shop app      | Not initialized | Undecided                    | No                   |
+
+This plan covers the two existing docs apps and their localized home pages:
+two apps times English and Vietnamese locales, four routes in total. It does not
+initialize the marketing site, the merchandise shop, or any third app, and it does
+not choose their framework. A future app may use another framework, a different
+rendering model, or no shared UI package. If one is added, it gets its own
+`apps/<name>` workspace member, framework, and build configuration. Reuse the
+editorial grammar and tokens where they fit; do not assume Blume, Astro, Svelte,
+or `@farben/ui` for a future app.
+
+Throughout this plan, "docs home page" means `/` or `/vi/` inside an existing
+docs app. It does not mean a separate marketing or branding site.
+
+`packages/ui` is currently a Svelte and shadcn-svelte package. A future app on
+another framework can share design tokens and CSS decisions, but it cannot consume
+the Svelte components directly. Adding a framework-specific shared package is a
+separate decision with its own plan.
+
 ## Status and decisions
 
-| Decision                                                   | Status                                                       |
-| ---------------------------------------------------------- | ------------------------------------------------------------ |
-| Blume remains the documentation framework                  | Decided. Do not eject or hand-edit generated output.         |
-| Vize supplies the visual grammar                           | Decided. Do not copy its code, palette, identity, or assets. |
-| Landing pages use Blume's `mode: custom`                   | Decided. Author the page heading in MDX.                     |
-| The butterfly field uses Svelte, Canvas 2D, and CSS        | Decided. Dense field; no Three.js, Threlte, or WebGL.        |
-| Both sites share one editorial grammar                     | Decided. Keep each site's accent and paper temperature.      |
-| Blume keeps routing, search, i18n, and generated discovery | Decided. Restyle only the presentation boundary.             |
+| Decision                                              | Status                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| Blume remains the framework for the two docs apps     | Decided. Do not eject or hand-edit generated output.                        |
+| Vize supplies the visual grammar                      | Decided. Do not copy its code, palette, identity, or assets.                |
+| Docs home pages use Blume's `mode: custom`            | Decided. Only the two existing Blume apps; not a future framework decision. |
+| The butterfly field uses Svelte, Canvas 2D, and CSS   | Decided. Dense field; no Three.js, Threlte, or WebGL.                       |
+| Both docs sites share one editorial grammar           | Decided. Keep each site's accent and paper temperature.                     |
+| Blume keeps docs routing, search, i18n, and discovery | Decided. Restyle only the presentation boundary.                            |
 
 uWebZockets keeps its orange accent over warm paper. ventiws keeps its teal
 accent over cool paper. The layout, type, rules, and component grammar are
@@ -32,7 +60,7 @@ shared.
 
 The earlier plan assumed three to five DOM text blocks. The intended hero is a
 dense ASCII field, closer to the
-[ascii-sharks reference](https://github.com/stackedlol/ascii-sharks): its landing
+[ascii-sharks reference](https://github.com/stackedlol/ascii-sharks): its home
 scene runs 85 to 340 small fish plus four large sharks on a Canvas 2D cell grid.
 Replacing those fish and sharks with a butterfly population at that density makes
 one DOM node per glyph the wrong renderer.
@@ -52,15 +80,19 @@ offscreen pausing, and a reduced-motion still frame, not its classes or code.
 
 ## Goal and non-goals
 
-The goal is that the four home routes and both documentation sets read as one
-publication: a warm paper surface, ink-like text, square controls, fine rules,
-mono labels, one accent per site, and a poster-scale landing hero that does not
-push the first useful link out of a mobile viewport. The second goal is that the
-butterfly scenes remain decorative, accessible, and cheap to render.
+The goal is that the four localized docs home routes, two apps times two locales,
+and both documentation sets read as one publication: a warm paper surface,
+ink-like text, square controls, fine rules, mono labels, one accent per site, and
+a poster-scale docs home hero that does not push the first useful link out of a
+mobile viewport. The second goal is that the butterfly scenes remain decorative,
+accessible, and cheap to render.
 
 Non-goals for this plan:
 
-- Do not build the landing, shop, or marketing site outside these docs apps.
+- Do not initialize the marketing site, merchandise shop, or any third app, and
+  do not choose their framework, rendering model, or shared UI package.
+- Do not make `@farben/ui` or Blume a requirement for a future app. Share tokens
+  and editorial grammar only where the chosen framework can consume them.
 - Do not add a new third-party font, UI framework, CSS framework, or motion
   dependency.
 - Do not replace Blume's search, localization, navigation, or generated
@@ -100,11 +132,11 @@ page-wide background.
 | Warm paper and ink surfaces                | Adopt as one structure with two temperatures: warm for uWebZockets, cool for ventiws. Verify contrast in both modes.    |
 | Zero radius and 1px rules                  | Adopt through `theme.radius: "none"` and a zero `--radius` mapping.                                                     |
 | Mono uppercase labels and index numbers    | Adopt for labels, index numbers, keyboard hints, and footer metadata. Never use mono for body copy.                     |
-| Poster display type with negative tracking | Adapt to a clamp on the landing page and a 2rem heading in docs; never use a 20vw title inside a reading page.          |
-| Numbered two-column feature index          | Adopt on the landing page in place of a card grid.                                                                      |
+| Poster display type with negative tracking | Adapt to a clamp on the docs home page and a 2rem heading in docs; never use a 20vw title inside a reading page.        |
+| Numbered two-column feature index          | Adopt on the docs home page in place of a card grid.                                                                    |
 | Transparent sidebar with hairline groups   | Adopt at the token and selector layer while keeping Blume's layout and focus behavior.                                  |
 | Compact header controls                    | Adopt the density and square geometry, but keep Blume's 64px sticky header and its built-in search and drawer behavior. |
-| 100vh entry page                           | Adapt into a custom-mode landing page whose first action remains visible at 320x568 without scrolling.                  |
+| 100vh entry page                           | Adapt into a custom-mode docs home page whose first action remains visible at 320x568 without scrolling.                |
 | Hidden header until scroll                 | Reject. Documentation navigation must stay available without a scroll script.                                           |
 | Bottom mobile action bar                   | Reject. Blume's built-in drawer, search, and theme controls cover the need; M1 verifies them.                           |
 | Fixed full-page ambient WebGL canvas       | Reject. Use a bounded Canvas 2D butterfly field inside the hero; no page-wide canvas.                                   |
@@ -143,7 +175,7 @@ Rules:
 - Keep Blume's 4rem header, 17.5rem rails, and 42rem prose measure. The
   editorial feel comes from type, rules, and square geometry, not from forcing
   Vize's grid.
-- Use the accent for interactive meaning, not large fills. A primary landing
+- Use the accent for interactive meaning, not large fills. A primary docs home
   call to action uses ink fill with paper text; a secondary action uses a 1px
   border. The one-accent rule governs chrome and interactive states. The hero
   may use a bounded analogous family around the site accent, such as
@@ -166,15 +198,15 @@ Rules:
 
 ### Type
 
-| Role     | Family           | Size, weight, tracking                                | Use                                       |
-| -------- | ---------------- | ----------------------------------------------------- | ----------------------------------------- |
-| Display  | Google Sans Flex | Landing `clamp(2.75rem, 9vw, 5.5rem)`, 600, `-0.05em` | Landing h1 only                           |
-| Display  | Google Sans Flex | Docs h1 `2rem`, 600, `-0.04em`, 1.15 line height      | Page title                                |
-| Display  | Google Sans Flex | h2 `1.375rem`, 600, `-0.02em`; h3 `1.125rem`, 600     | Section hierarchy; h2 gets a 1px rule     |
-| Body     | Be Vietnam Pro   | `1rem`, 400, 1.7 line height                          | Prose, controls, navigation               |
-| Small    | Be Vietnam Pro   | `0.875rem`, 400, 1.55 line height                     | Card copy, captions, footer links         |
-| Label    | JetBrains Mono   | `0.68rem`, 600, `0.12em`, uppercase                   | Section labels, kbd hints                 |
-| Metadata | JetBrains Mono   | `0.64rem`, 500, `0.08em`                              | Index numbers, rail headings, footer meta |
+| Role     | Family           | Size, weight, tracking                                  | Use                                       |
+| -------- | ---------------- | ------------------------------------------------------- | ----------------------------------------- |
+| Display  | Google Sans Flex | Docs home `clamp(2.75rem, 9vw, 5.5rem)`, 600, `-0.05em` | Docs home h1 only                         |
+| Display  | Google Sans Flex | Docs h1 `2rem`, 600, `-0.04em`, 1.15 line height        | Page title                                |
+| Display  | Google Sans Flex | h2 `1.375rem`, 600, `-0.02em`; h3 `1.125rem`, 600       | Section hierarchy; h2 gets a 1px rule     |
+| Body     | Be Vietnam Pro   | `1rem`, 400, 1.7 line height                            | Prose, controls, navigation               |
+| Small    | Be Vietnam Pro   | `0.875rem`, 400, 1.55 line height                       | Card copy, captions, footer links         |
+| Label    | JetBrains Mono   | `0.68rem`, 600, `0.12em`, uppercase                     | Section labels, kbd hints                 |
+| Metadata | JetBrains Mono   | `0.64rem`, 500, `0.08em`                                | Index numbers, rail headings, footer meta |
 
 Do not set body copy in mono. Do not use wide tracking on sentences. Keep
 localized labels short because uppercase and tracking can slow Vietnamese
@@ -187,9 +219,9 @@ diacritic reading.
   sections, and the footer; do not box every element.
 - Controls are square. Use 36px icon buttons on desktop and 44px touch targets
   on coarse pointers. Never go below the 24px WCAG 2.2 target minimum.
-- Landing sections use generous vertical padding, around 3.5rem to 5.75rem.
+- Docs home sections use generous vertical padding, around 3.5rem to 5.75rem.
   Docs sections stay compact enough to read continuously.
-- Landing content is capped around 1120px. Docs content keeps Blume's
+- Docs home content is capped around 1120px. Docs content keeps Blume's
   `--blume-content-width`.
 - No shadows. A dialog may use a 1px border and a solid paper surface instead.
 
@@ -214,7 +246,7 @@ diacritic reading.
 | Breadcrumbs and pagination    | Blume        | Link semantics and order                                             | Hairline top rule, mono direction labels, bare links with arrows                      |
 | Feedback                      | Blume        | Rating behavior and comments                                         | Square buttons, hairline top rule                                                     |
 | Footer                        | Blume config | Repository, social, and consent links                                | Colophon row, copyright, two or three links, small mono type, 70% opacity             |
-| Landing colophon              | App          | Links and copyright from the landing content                         | Same visual grammar as the footer; used only where custom mode drops Blume's footer   |
+| Docs home colophon            | App          | Links and copyright from the docs home content                       | Same visual grammar as the footer; used only where custom mode drops Blume's footer   |
 
 Header decisions:
 
@@ -243,8 +275,8 @@ Footer decisions:
 - Add a license link only when the product repository publishes its own license
   file. Do not imply a product license from the monorepo's MIT license.
 - If a consent link exists, keep it.
-- Blume's custom page mode drops the footer. The landing pages therefore need
-  the app-local landing colophon described later in this plan; docs pages keep
+- Blume's custom page mode drops the footer. The docs home pages therefore need
+  the app-local docs home colophon described later in this plan; docs pages keep
   the built-in footer.
 
 ## Component contract
@@ -272,13 +304,13 @@ Implementation rules:
 - Keep each stylesheet under 200 lines. Split chrome selectors from article
   component selectors before the limit.
 
-## Landing page contract
+## Documentation home page contract
 
 Every home route uses `mode: custom` in frontmatter. Blume then renders the
 header only; the page owns its heading, layout, and page end. The frontmatter
 `title` and `description` still supply navigation, SEO, and generated metadata.
 
-The landing page has five regions:
+The docs home page has five regions:
 
 1. A short mono eyebrow, localized and factual. No decorative Japanese text.
 2. The product name as the only h1, at the display clamp above.
@@ -306,7 +338,7 @@ Below the hero:
   as complete when the copy says it is still being written.
 - Keep the existing complete-example code block and the explanation that
   follows it. Put it on the paper surface with a hairline rule and no card.
-- End with the landing colophon: copyright, source, and documentation links, plus
+- End with the docs home colophon: copyright, source, and documentation links, plus
   a license link only when the product repository publishes one. It must match
   the docs footer visually and use the same destinations.
 - Keep the English and Vietnamese pages equivalent. Translate labels; do not
@@ -403,6 +435,10 @@ without competing with documentation. It is a dense field, not a sparse accent.
 
 ## Implementation architecture
 
+Every `apps/*` path in this table belongs to the two existing docs apps. The
+table does not reserve paths or architecture for the future marketing or shop
+apps.
+
 | Layer                | Responsibility                                                                            | Candidate files                                                                      | Status   |
 | -------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
 | Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                 | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export        | New      |
@@ -410,12 +446,12 @@ without competing with documentation. It is a dense field, not a sparse accent.
 | Shared field         | Species sprites, deterministic spawn, drift, and wing-phase parameters as plain data      | `butterfly-data.ts`, `butterfly-field.ts` under the same component folder            | New      |
 | Shared renderer      | Canvas 2D cell grid, DPR handling, font readiness, theme colors, still frame              | `butterfly-renderer.ts` under the same component folder                              | New      |
 | Shared loop          | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup | `butterfly-loop.ts` under the same component folder                                  | New      |
-| Landing colophon     | Static per-app footer with copyright and links                                            | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
+| Docs home colophon   | Static per-app footer with copyright and links                                            | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
 | Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                      | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                             | Mixed    |
 | Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                         | `apps/*/styles/blume-chrome.css`                                                     | New      |
 | Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                 | `apps/*/styles/blume-content.css`                                                    | New      |
 | Site config          | Radius, background, footer content, GitHub links                                          | `apps/*/blume.config.ts`                                                             | Existing |
-| Site landing content | Custom-mode hero, numbered index, example, colophon                                       | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
+| Docs home content    | Custom-mode hero, numbered index, example, colophon                                       | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
 | Site registry        | Register hero and colophon for MDX                                                        | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                     | Mixed    |
 | Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                    | `apps/vws-docs/package.json`, lockfile                                               | Existing |
 
@@ -426,7 +462,7 @@ Boundaries:
 - Blume-specific selectors stay in the apps. Do not put `data-blume-*` rules in
   `packages/ui`.
 - Shared primitives live in `@farben/ui`; app-local components own site-specific
-  links and Blume selectors. Keep the landing colophon and docs footer
+  links and Blume selectors. Keep the docs home colophon and docs footer
   destinations in sync with a parity check.
 - The shared field and renderer receive a typed palette resolved from
   `--farben-field-*` aliases. Only the app `theme.css` maps those aliases to
@@ -503,11 +539,11 @@ Blume behavior is unchanged, and keyboard and contrast checks have evidence.
 **Exit:** A page using the full component set has consistent editorial styling,
 no horizontal overflow, no lost keyboard behavior, and recorded captures.
 
-### M3: Landing structure and colophon
+### M3: Docs home structure and colophon
 
-- [ ] Set `mode: custom` on all four home pages and author the eyebrow, h1,
-      summary, and actions in MDX. Keep frontmatter `title` and `description`
-      accurate for navigation and SEO.
+- [ ] Set `mode: custom` on all four localized docs home pages and author the
+      eyebrow, h1, summary, and actions in MDX. Keep frontmatter `title` and
+      `description` accurate for navigation and SEO.
 - [ ] Replace the home `CardGroup` with the numbered index. Keep the existing
       product facts, example, and Getting Started and GitHub destinations.
 - [ ] Add the app-local colophon component, register it, and place it at the end
@@ -518,8 +554,8 @@ no horizontal overflow, no lost keyboard behavior, and recorded captures.
 - [ ] Check the generated route, page title, description, search entry, and
       Markdown twin after the build.
 
-**Exit:** All four home routes read as editorial front pages with no duplicate
-heading, no missing action, and no broken locale or discovery output.
+**Exit:** All four localized docs home routes read as editorial front pages with
+no duplicate heading, no missing action, and no broken locale or discovery output.
 
 ### M4: Butterfly hero component
 
@@ -555,8 +591,8 @@ and both pixel ratios.
 ### M5: Integrate and tune both sites
 
 - [ ] Register the hero in both `components.ts` files with the verified
-      hydration directive and place it on all four home routes with the site
-      palette and localized control labels.
+      hydration directive and place it on all four localized docs home routes
+      with the site palette and localized control labels.
 - [ ] Tune density, cell size, DPR, placement, and exclusion zones at 320px,
       768px, and desktop. Keep every glyph away from the title, summary, actions,
       navigation, and code.
@@ -598,8 +634,8 @@ and the shared package passes the repository gate.
 - Every interactive element is reachable by keyboard and has a visible focus
   state. Icon-only controls have accessible names.
 - Keep Blume's search focus handling, Escape behavior, and focus return intact.
-  Do not trap focus in the landing page.
-- Keep a skip link and a logical heading order. The landing page has one h1.
+  Do not trap focus in the docs home page.
+- Keep a skip link and a logical heading order. The docs home page has one h1.
 - Set `scroll-padding-top` so anchored headings are not hidden under the sticky
   header.
 - Meet WCAG 2.2 AA contrast for text, controls, borders, and focus in both
@@ -650,7 +686,7 @@ matrix is:
 
 | Surface            | Viewports           | Themes      | Locales | Checks                                           |
 | ------------------ | ------------------- | ----------- | ------- | ------------------------------------------------ |
-| Landing pages      | 320x568, 768, 1280+ | Light, dark | en, vi  | First action, one h1, no overlap, colophon       |
+| Docs home pages    | 320x568, 768, 1280+ | Light, dark | en, vi  | First action, one h1, no overlap, colophon       |
 | Docs chrome        | 320, 768, 1280+     | Light, dark | en, vi  | Keyboard, focus, drawer, search, theme, contrast |
 | Content components | 320, 768, 1280+     | Light, dark | en, vi  | Overflow, copy, tabs, tables, pagination         |
 | Butterfly field    | 320, 768, 1280+     | Light, dark | en, vi  | No JS, reduced motion, pause, DPR, frame time    |
