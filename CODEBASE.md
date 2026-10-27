@@ -3,9 +3,10 @@
 ## Scope
 
 This repository is Farben's public web presence. It currently ships two
-documentation sites and a shared Svelte component package, and it is structured
-to add the landing page and merchandise shop without creating a second build
-system.
+documentation sites and a shared Svelte component package. The marketing and
+branding site and the merchandise shop are not initialized; their frameworks are
+undecided, and they may not use Blume, Astro, or Svelte. Each future app gets its
+own workspace member, framework, build configuration, and security review.
 
 - `apps/uwz-docs` documents uWebZockets.
 - `apps/vws-docs` documents ventiws.
