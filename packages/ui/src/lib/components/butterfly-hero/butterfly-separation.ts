@@ -55,7 +55,7 @@ function separateSpecimenPair(a: Specimen, b: Specimen): void {
 
   if (distance >= minimum || distance < 0.0001) return;
 
-  const push = Math.min(4, minimum - distance);
+  const push = Math.min(1.6, (minimum - distance) * 0.55);
   const nx = dx / distance;
   const ny = dy / distance;
 
@@ -66,11 +66,10 @@ function separateSpecimenPair(a: Specimen, b: Specimen): void {
 function clampToField(field: FieldState): void {
   for (const specimen of field.specimens) {
     const marginX = Math.min(specimen.scale * 1.2 + 1, field.width * 0.4);
-    const marginY = Math.min(specimen.scale * 1.2 + 1, field.height * 0.4);
     specimen.x = clamp(specimen.x, marginX, field.width - marginX);
 
-    const top = marginY;
-    const bottom = field.height - marginY;
+    const top = -specimen.scale * 1.2;
+    const bottom = field.height + specimen.scale * 1.2;
 
     if (specimen.y < top) specimen.y = bottom;
     else if (specimen.y > bottom) specimen.y = top;

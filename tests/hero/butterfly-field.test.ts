@@ -67,8 +67,8 @@ describe("butterfly field", () => {
       expect(Number.isFinite(specimen.y)).toBe(true);
       expect(specimen.x).toBeGreaterThanOrEqual(0);
       expect(specimen.x).toBeLessThanOrEqual(120);
-      expect(specimen.y).toBeGreaterThanOrEqual(0);
-      expect(specimen.y).toBeLessThanOrEqual(60);
+      expect(specimen.y).toBeGreaterThanOrEqual(-specimen.scale * 1.2);
+      expect(specimen.y).toBeLessThanOrEqual(60 + specimen.scale * 1.2);
       expect(Math.sin(specimen.heading)).toBeLessThanOrEqual(0);
     }
 

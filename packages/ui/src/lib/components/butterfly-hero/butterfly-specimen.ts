@@ -101,6 +101,18 @@ export function drawSpecimens(
     const rowEnd = Math.min(surface.rows - 1, Math.ceil((centerY + extentY) / cellHeight));
     const pose = createSpecimenPose(specimen.phase, specimen.yaw);
     const grainSeed = specimen.id * 131 + specimen.species * 17;
+    const fade = specimen.scale * 1.2;
+
+    const edgeAlpha = Math.min(
+      1,
+      Math.max(0, (specimen.y + fade) / fade),
+      Math.max(
+        0,
+        (surface.rows * cellHeight + fade - specimen.y * cellHeight) / (fade * cellHeight),
+      ),
+    );
+
+    if (edgeAlpha <= 0.01) continue;
 
     for (let row = rowStart; row <= rowEnd; row++) {
       for (let column = colStart; column <= colEnd; column++) {
@@ -130,7 +142,7 @@ export function drawSpecimens(
               ? colors.edge[level]
               : colors.wing[level];
 
-        context.globalAlpha = body ? 1 : 0.9 + specimen.depth * 0.08;
+        context.globalAlpha = (body ? 1 : 0.9 + specimen.depth * 0.08) * edgeAlpha;
         context.fillStyle = tile ?? colors.body;
         context.fillRect(x, y, cellWidth, cellHeight);
         context.globalAlpha = 1;
@@ -142,7 +154,8 @@ export function drawSpecimens(
 
         const role = roleFor(sample);
 
-        context.globalAlpha = body ? 0.95 : strong ? 0.78 + specimen.depth * 0.16 : 0.24;
+        context.globalAlpha =
+          (body ? 0.95 : strong ? 0.78 + specimen.depth * 0.16 : 0.24) * edgeAlpha;
         context.fillStyle = strong ? colors.glyphs[role] : colors.ink;
         context.fillText(glyph, x + cellWidth / 2, y + cellHeight / 2);
         context.globalAlpha = 1;
