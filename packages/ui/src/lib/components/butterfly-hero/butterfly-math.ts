@@ -24,10 +24,6 @@ export function hash2(a: number, b: number, seed: number): number {
   return (h >>> 0) / 4294967295;
 }
 
-export function hash3(a: number, b: number, c: number): number {
-  return hash2(a, b, c);
-}
-
 export function createRng(seed: number): Rng {
   return { state: seed >>> 0 };
 }
