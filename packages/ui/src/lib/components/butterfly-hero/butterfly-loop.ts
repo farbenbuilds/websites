@@ -22,7 +22,7 @@ import {
   type FieldRenderer,
 } from "./butterfly-renderer";
 import { clamp } from "./butterfly-math";
-import { depositDrafts, measureAvoidBoxes } from "./butterfly-loop-support";
+import { depositDrafts, measureAvoidBoxes, selectAvoidBoxes } from "./butterfly-loop-support";
 
 export type ButterflyLoopOptions = {
   readonly canvas: HTMLCanvasElement;
@@ -145,7 +145,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
     dimBoxes = measureAvoidBoxes(renderer);
 
-    if (field) field.excluded = dimBoxes.slice();
+    if (field) field.excluded = selectAvoidBoxes(field, dimBoxes);
   }
 
   function drawStill(): void {
@@ -166,7 +166,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   function drawFrame(): void {
     if (!field || !atmosphere || destroyed) return;
     ensureAtlas(renderer);
-    drawField(renderer, field, atmosphere, { dimBoxes });
+    drawField(renderer, field, atmosphere);
 
     if (!ready) {
       ready = true;
@@ -218,7 +218,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
       if (frameCount % AVOID_REFRESH_FRAMES === 0) {
         dimBoxes = measureAvoidBoxes(renderer);
-        field.excluded = dimBoxes.slice();
+        field.excluded = selectAvoidBoxes(field, dimBoxes);
       }
     }
 

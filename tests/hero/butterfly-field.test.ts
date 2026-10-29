@@ -12,7 +12,7 @@ function field() {
     width: 80,
     height: 40,
     midgroundCount: 24,
-    specimenCount: 2,
+    specimenCount: 5,
     seed: 424242,
   });
 }
@@ -30,7 +30,7 @@ describe("butterfly field", () => {
     );
   });
 
-  it("caps specimens at four and uses the compact density on narrow fields", () => {
+  it("keeps five specimens and reduces the compact background field", () => {
     const compact = densityFor(40, 24);
     const wide = densityFor(90, 40);
 
@@ -42,13 +42,13 @@ describe("butterfly field", () => {
       seed: 7,
     });
 
-    expect(compact.specimens).toBe(1);
-    expect(compact.midground).toBeGreaterThanOrEqual(24);
-    expect(compact.midground).toBeLessThanOrEqual(52);
-    expect(wide.specimens).toBeGreaterThanOrEqual(2);
-    expect(wide.midground).toBeGreaterThanOrEqual(80);
-    expect(wide.midground).toBeLessThanOrEqual(140);
-    expect(capped.specimens).toHaveLength(4);
+    expect(compact.specimens).toBe(5);
+    expect(compact.midground).toBeGreaterThanOrEqual(8);
+    expect(compact.midground).toBeLessThanOrEqual(14);
+    expect(wide.specimens).toBe(5);
+    expect(wide.midground).toBeGreaterThanOrEqual(12);
+    expect(wide.midground).toBeLessThanOrEqual(22);
+    expect(capped.specimens).toHaveLength(5);
   });
 
   it("merges avoidance boxes closer than the gap and keeps distant boxes apart", () => {
@@ -65,7 +65,7 @@ describe("butterfly field", () => {
     expect(merged[0]).toMatchObject({ x: 0, y: 0, width: 24, height: 10 });
   });
 
-  it("keeps every position finite and inside the wrap margin after many steps", () => {
+  it("keeps every position finite and inside the field after many steps", () => {
     const state = field();
 
     for (let index = 0; index < 600; index++) {
@@ -77,10 +77,22 @@ describe("butterfly field", () => {
     for (const specimen of state.specimens) {
       expect(Number.isFinite(specimen.x)).toBe(true);
       expect(Number.isFinite(specimen.y)).toBe(true);
-      expect(specimen.x).toBeGreaterThanOrEqual(-8);
-      expect(specimen.x).toBeLessThanOrEqual(88);
-      expect(specimen.y).toBeGreaterThanOrEqual(-8);
-      expect(specimen.y).toBeLessThanOrEqual(48);
+      expect(specimen.x).toBeGreaterThanOrEqual(0);
+      expect(specimen.x).toBeLessThanOrEqual(80);
+      expect(specimen.y).toBeGreaterThanOrEqual(0);
+      expect(specimen.y).toBeLessThanOrEqual(40);
+      expect(Math.sin(specimen.heading)).toBeLessThanOrEqual(0.33);
+    }
+
+    for (let i = 0; i < state.specimens.length; i++) {
+      for (let j = i + 1; j < state.specimens.length; j++) {
+        const a = state.specimens[i];
+        const b = state.specimens[j];
+
+        if (!a || !b) continue;
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        expect(distance).toBeGreaterThan((a.scale + b.scale) * 1);
+      }
     }
 
     for (const butterfly of state.midground) {

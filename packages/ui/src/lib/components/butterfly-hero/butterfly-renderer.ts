@@ -1,6 +1,6 @@
 import { PHASE_COUNT } from "./butterfly-data";
 import { draftAt, type Atmosphere } from "./butterfly-atmosphere";
-import type { AvoidBox, FieldState } from "./butterfly-field";
+import type { FieldState } from "./butterfly-field";
 import { midgroundAlpha } from "./butterfly-glyphs";
 import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape";
 import { buildSpriteAtlas, drawSprite, paletteKey, type SpriteAtlas } from "./butterfly-sprites";
@@ -23,11 +23,9 @@ export type FieldRenderer = {
   palette: ButterflyPalette;
   atlas: SpriteAtlas | null;
   atlasKey: string;
+  matrix: HTMLCanvasElement | null;
+  matrixKey: string;
   readonly colors: Map<number, SpecimenColors>;
-};
-
-export type DrawOptions = {
-  readonly dimBoxes: readonly AvoidBox[];
 };
 
 // Hosts own the field palette; this neutral fallback only covers missing tokens.
@@ -59,6 +57,8 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
     palette: FALLBACK_PALETTE,
     atlas: null,
     atlasKey: "",
+    matrix: null,
+    matrixKey: "",
     colors: new Map(),
   };
 }
@@ -141,11 +141,57 @@ export function ensureAtlas(renderer: FieldRenderer): SpriteAtlas {
   return renderer.atlas;
 }
 
+function ensureMatrix(renderer: FieldRenderer): HTMLCanvasElement {
+  const key = `${paletteKey(renderer.palette)}|${renderer.cellWidth}|${renderer.cellHeight}|${renderer.dpr}`;
+
+  if (renderer.matrix && renderer.matrixKey === key) return renderer.matrix;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(renderer.width * renderer.dpr);
+  canvas.height = Math.round(renderer.height * renderer.dpr);
+  const context = canvas.getContext("2d");
+
+  if (context) {
+    context.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
+    context.fillStyle = rgba(renderer.palette.muted, 0.22);
+
+    for (let row = 0; row < renderer.rows; row++) {
+      for (let column = 0; column < renderer.cols; column++) {
+        context.fillRect(
+          Math.round((column + 0.5) * renderer.cellWidth),
+          Math.round((row + 0.5) * renderer.cellHeight),
+          1,
+          1,
+        );
+      }
+    }
+  }
+
+  renderer.matrix = canvas;
+  renderer.matrixKey = key;
+
+  return canvas;
+}
+
+function drawMatrix(renderer: FieldRenderer): void {
+  const matrix = ensureMatrix(renderer);
+  renderer.context.drawImage(
+    matrix,
+    0,
+    0,
+    matrix.width,
+    matrix.height,
+    0,
+    0,
+    renderer.width,
+    renderer.height,
+  );
+}
+
 export function drawField(
   renderer: FieldRenderer,
   field: FieldState,
   atmosphere: Atmosphere,
-  options: DrawOptions,
 ): void {
   const { context } = renderer;
 
@@ -156,6 +202,7 @@ export function drawField(
   context.textAlign = "center";
   context.textBaseline = "middle";
 
+  drawMatrix(renderer);
   drawAir(renderer, atmosphere);
   drawMidground(renderer, field, true, atmosphere);
   drawMidground(renderer, field, false, atmosphere);
@@ -163,7 +210,6 @@ export function drawField(
   drawSpecimens(renderer, field, "tile", renderer.colors);
   drawSpecimens(renderer, field, "glyph", renderer.colors);
   drawPollen(renderer, atmosphere);
-  drawDimming(renderer, options.dimBoxes);
 }
 
 function drawAir(renderer: FieldRenderer, atmosphere: Atmosphere): void {
@@ -206,7 +252,7 @@ function drawMidground(
 
     const alpha =
       midgroundAlpha(butterfly.depth) *
-      (far ? 0.72 : 1) *
+      (far ? 0.92 : 1) *
       (0.92 + draftAt(atmosphere, butterfly.x, butterfly.y) * 0.08);
 
     drawSprite(
@@ -259,22 +305,5 @@ function drawPollen(renderer: FieldRenderer, atmosphere: Atmosphere): void {
       mote.x * cellWidth + cellWidth / 2,
       mote.y * cellHeight + cellHeight / 2,
     );
-  }
-}
-
-function drawDimming(renderer: FieldRenderer, boxes: readonly AvoidBox[]): void {
-  if (boxes.length === 0) return;
-  const { context, cellWidth, cellHeight, palette } = renderer;
-
-  for (const box of boxes) {
-    for (let ring = 3; ring >= 0; ring--) {
-      context.fillStyle = rgba(palette.paper, ring === 0 ? 0.82 : 0.08);
-      context.fillRect(
-        (box.x - ring) * cellWidth,
-        (box.y - ring) * cellHeight,
-        (box.width + ring * 2) * cellWidth,
-        (box.height + ring * 2) * cellHeight,
-      );
-    }
   }
 }

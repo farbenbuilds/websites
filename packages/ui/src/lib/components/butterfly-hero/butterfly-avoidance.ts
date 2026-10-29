@@ -90,7 +90,16 @@ export function steerFromBoxes(
     const strength = 1 - distance / margin;
 
     if (distance < 0.001) {
-      out.y -= (box.height + margin) * strength;
+      const left = x - box.x;
+      const right = box.x + box.width - x;
+      const top = y - box.y;
+      const bottom = box.y + box.height - y;
+      const nearest = Math.min(left, right, top, bottom);
+
+      if (nearest === left) out.x -= strength;
+      else if (nearest === right) out.x += strength;
+      else if (nearest === top) out.y -= strength;
+      else out.y += strength;
       continue;
     }
 

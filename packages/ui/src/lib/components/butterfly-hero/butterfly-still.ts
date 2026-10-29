@@ -25,10 +25,13 @@ export function generateStill(seed: number): string {
   const rng = createRng(seed);
   const scratch = createAnatomyScratch();
 
-  drawSpecimen(grid, scratch, seed, 0, STILL_COLS * 0.7, STILL_ROWS * 0.34, 10.4, rng);
-  drawSpecimen(grid, scratch, seed, 2, STILL_COLS * 0.28, STILL_ROWS * 0.7, 8.8, rng);
+  drawSpecimen(grid, scratch, seed, 0, STILL_COLS * 0.72, STILL_ROWS * 0.3, 9.2, rng);
+  drawSpecimen(grid, scratch, seed, 2, STILL_COLS * 0.25, STILL_ROWS * 0.7, 8.4, rng);
+  drawSpecimen(grid, scratch, seed, 1, STILL_COLS * 0.2, STILL_ROWS * 0.22, 6.6, rng);
+  drawSpecimen(grid, scratch, seed, 3, STILL_COLS * 0.8, STILL_ROWS * 0.72, 6.6, rng);
+  drawSpecimen(grid, scratch, seed, 4, STILL_COLS * 0.5, STILL_ROWS * 0.48, 6, rng);
 
-  for (let index = 0; index < 18; index++) {
+  for (let index = 0; index < 10; index++) {
     drawSpecimen(
       grid,
       scratch,
@@ -41,7 +44,7 @@ export function generateStill(seed: number): string {
     );
   }
 
-  for (let index = 0; index < 46; index++) {
+  for (let index = 0; index < 30; index++) {
     const column = Math.floor(nextRandom(rng) * STILL_COLS);
     const row = Math.floor(nextRandom(rng) * STILL_ROWS);
 

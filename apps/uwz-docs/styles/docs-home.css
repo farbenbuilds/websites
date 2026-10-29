@@ -1,93 +1,186 @@
 /*
- * Custom-mode docs home: poster hero, numbered index, example, colophon.
+ * Custom-mode docs home: full-screen butterfly hero and editorial sections.
  *
- * The copy column stays semantic MDX. The shared butterfly field owns only the
- * decorative art box, so no glyph can be laid out over reading text.
+ * The hero owns the viewport. Content below it stays on the paper measure.
  */
 
 .docs-home {
-  width: min(100% - 2.5rem, 70rem);
-  margin-inline: auto;
-  padding-block-end: 3rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html:has(.docs-home) {
+  scroll-behavior: smooth;
+}
+
+html:has(.docs-home-hero) #blume-content {
+  padding: 0;
 }
 
 .docs-home-hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: clamp(1rem, 3vw, 3.5rem);
-  align-items: end;
-  min-height: clamp(30rem, 74vh, 46rem);
-  padding-block: 2rem 3rem;
+  place-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: clamp(4.5rem, 10vh, 7rem) clamp(1.25rem, 4vw, 3rem) clamp(9rem, 18vh, 12rem);
+  background: #080604;
+  color: #fff6df;
+}
+
+.docs-home-hero .butterfly-hero {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  min-height: 0;
+  margin: 0;
+  --farben-field-paper: #080604;
+  --farben-field-ink: #fff6df;
+  --farben-field-muted: #8f6d2a;
+  --farben-field-accent: #ffb300;
+}
+
+.docs-home-hero .butterfly-hero-still:not(.is-hidden) {
+  color: #e9c66b;
+  font-size: clamp(0.5rem, 2vw, 1.1rem);
+  opacity: 0.6;
 }
 
 .docs-home-hero-copy {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  align-items: flex-start;
-  padding-block-end: 0.5rem;
+  align-items: center;
+  gap: 1.15rem;
+  width: min(100%, 46rem);
+  text-align: center;
+}
+
+.docs-home-mark {
+  width: clamp(3.5rem, 7vw, 5rem);
+  height: auto;
+}
+
+html .prose .docs-home-mark {
+  margin: 0;
 }
 
 .docs-home-eyebrow {
-  color: var(--blume-muted-foreground);
+  display: inline-block;
+  padding: 0.1em 0.35em;
+  background: #080604;
+  color: #e2bf68;
 }
 
 .docs-home-title {
+  display: inline-block;
   margin: 0;
-  color: var(--blume-foreground);
+  padding: 0.04em 0.12em;
+  background: #080604;
+  color: #fff6df;
+  white-space: nowrap;
   font-family: var(--blume-font-display);
-  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
+  font-size: clamp(2.5rem, 9vw, 7rem);
   font-weight: 600;
-  letter-spacing: -0.05em;
-  line-height: 0.92;
+  letter-spacing: -0.055em;
+  line-height: 0.9;
 }
 
 html .prose .docs-home-title {
-  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
-  line-height: 0.92;
+  margin: 0;
+  font-size: clamp(2.5rem, 9vw, 7rem);
+  line-height: 0.9;
 }
 
-html .prose .editorial-action {
-  color: var(--blume-foreground);
-  text-decoration: none;
-}
-
-html .prose .editorial-action-primary {
-  color: var(--blume-background);
-}
-
-html .prose .editorial-action-primary:hover {
-  color: var(--blume-background);
-}
-
-html .prose .editorial-action-secondary {
-  color: var(--blume-foreground);
-}
-
-html .prose .editorial-index-link {
-  color: var(--blume-foreground);
-  text-decoration: none;
-}
-
-html .prose .docs-home-colophon a {
-  color: inherit;
+html .prose .docs-home-eyebrow {
+  margin: 0;
 }
 
 .docs-home-summary {
-  max-width: 36ch;
+  max-width: 40ch;
   margin: 0;
-  color: var(--blume-muted-foreground);
+  color: #d8c59a;
   font-family: var(--blume-font-body);
-  font-size: 1.0625rem;
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
   line-height: 1.7;
 }
 
-.docs-home-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  padding-block-start: 0.4rem;
+.docs-home-summary-text {
+  padding: 0.12em 0.3em;
+  background: #080604;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+html .prose .docs-home-summary {
+  margin: 0;
+}
+
+.docs-home-scroll {
+  position: absolute;
+  bottom: clamp(1.5rem, 4vh, 2.5rem);
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  width: 2.75rem;
+  padding: 0.9rem 0.4rem;
+  border: 1px solid color-mix(in srgb, #ffb300 60%, transparent);
+  border-radius: 999px;
+  background: #080604;
+  color: #fff6df;
+  font-family: var(--blume-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.docs-home-scroll-label {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+html .prose .docs-home-summary code {
+  border-color: color-mix(in srgb, #ffb300 45%, transparent);
+  background: transparent;
+  color: #ffcf66;
+}
+
+.docs-home-scroll-mark {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.docs-home-scroll:hover,
+.docs-home-scroll:focus-visible {
+  border-color: #ffb300;
+  color: #ffb300;
+}
+
+.docs-home-hero .butterfly-hero .editorial-square {
+  border-color: #8f6d2a;
+  background: #080604;
+  color: #e9c66b;
+}
+
+.docs-home-hero .butterfly-hero .editorial-square:hover {
+  border-color: #ffb300;
+  color: #ffb300;
 }
 
 .docs-home-hero-copy > * {
@@ -106,13 +199,9 @@ html .prose .docs-home-colophon a {
   animation-delay: 180ms;
 }
 
-.docs-home .butterfly-hero {
-  align-self: stretch;
-  min-height: 30rem;
-  margin-block-start: -2rem;
-}
-
 .docs-home-section {
+  width: min(100% - 2.5rem, 70rem);
+  margin-inline: auto;
   border-top: 1px solid var(--blume-border);
   padding-block: clamp(2.5rem, 5vw, 4.25rem);
 }
@@ -166,7 +255,8 @@ html .prose .docs-home-colophon a {
 }
 
 .docs-home [data-blume-callout] {
-  max-width: 42rem;
+  width: min(100% - 2.5rem, 42rem);
+  margin-inline: auto;
   margin-block-start: 2.5rem;
 }
 
@@ -176,6 +266,8 @@ html .prose .docs-home-colophon a {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem 2rem;
+  width: min(100% - 2.5rem, 70rem);
+  margin-inline: auto;
   border-top: 1px solid var(--blume-border);
   margin-block-start: 2rem;
   padding-block: 1.5rem 0.5rem;
@@ -213,7 +305,7 @@ html .prose .docs-home-colophon a {
 @keyframes docs-home-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
 
   to {
@@ -224,53 +316,67 @@ html .prose .docs-home-colophon a {
 
 @media (max-width: 56rem) {
   .docs-home-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.25rem;
-    min-height: 0;
-    padding-block: 1.5rem 0;
+    padding-block: 2.5rem 7rem;
   }
 
   .docs-home-hero-copy {
-    order: 1;
-    gap: 0.9rem;
-    padding-block-end: 0;
+    gap: 0.7rem;
   }
 
-  .docs-home .butterfly-hero {
-    order: 2;
-    min-height: 15rem;
-    height: 15rem;
-    margin-block-start: 0;
+  .docs-home-mark {
+    width: 3rem;
   }
 
   .docs-home-title {
-    font-size: clamp(2.25rem, 12vw, 4rem);
+    font-size: clamp(2rem, 10vw, 3.25rem);
   }
 
   .docs-home-summary {
-    font-size: 1rem;
+    max-width: 34ch;
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  .docs-home-section {
+    width: min(100% - 2rem, 70rem);
+  }
+
+  .docs-home [data-blume-callout],
+  .docs-home-colophon {
+    width: min(100% - 2rem, 70rem);
   }
 }
 
 @media (max-width: 26rem) {
-  .docs-home {
-    width: min(100% - 1.5rem, 70rem);
+  .docs-home-hero {
+    align-items: start;
+    padding-block: 2rem 7rem;
   }
 
-  .docs-home-actions {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
+  .docs-home-mark {
+    width: 3.25rem;
   }
 
-  .docs-home-actions .editorial-action {
-    width: 100%;
+  .docs-home-title {
+    font-size: clamp(2.15rem, 12vw, 3.25rem);
+  }
+
+  .docs-home-scroll {
+    bottom: 1.15rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:has(.docs-home) {
+    scroll-behavior: auto;
+  }
+
   .docs-home-hero-copy > * {
     animation: none;
+  }
+
+  .docs-home-scroll {
+    transition: none;
   }
 }
 

@@ -8,8 +8,8 @@ import {
   specimenHalfSpan,
   type AnatomyScratch,
 } from "./butterfly-shape";
-import { inkFor, washColor } from "./butterfly-sprites";
-import { mixRgb, rgb, type ButterflyPalette } from "./butterfly-palette";
+import { inkFor } from "./butterfly-sprites";
+import { butterflyWingColor, mixRgb, rgb, type ButterflyPalette } from "./butterfly-palette";
 
 export type SpecimenSurface = {
   readonly context: CanvasRenderingContext2D;
@@ -49,13 +49,12 @@ function createSpecimenColors(palette: ButterflyPalette, species: SpeciesSpec): 
 
   for (let level = 0; level < SHADE_LEVELS; level++) {
     const shade = (level + 0.5) / SHADE_LEVELS;
-    const base = washColor(palette, species.accentMix, shade);
-    const foreColor = mixRgb(base, palette.accent, 0.15);
-    const hindColor = mixRgb(base, palette.ink, 0.12);
+    const foreColor = butterflyWingColor(palette, species.accentMix, shade, false);
+    const hindColor = butterflyWingColor(palette, species.accentMix, shade, true);
     fore.push(rgb(foreColor));
     hind.push(rgb(hindColor));
-    edgeFore.push(rgb(mixRgb(foreColor, palette.ink, 0.42)));
-    edgeHind.push(rgb(mixRgb(hindColor, palette.ink, 0.42)));
+    edgeFore.push(rgb(mixRgb(foreColor, palette.ink, 0.3)));
+    edgeHind.push(rgb(mixRgb(hindColor, palette.ink, 0.3)));
   }
 
   return {
@@ -177,7 +176,7 @@ export function drawSpecimens(
               ? 0.22 + coverage * 0.12
               : sample.eyespot > 0
                 ? 0.52
-                : 0.42 + coverage * 0.2 + specimen.depth * 0.15;
+                : 0.84 + coverage * 0.12 + specimen.depth * 0.04;
 
           context.globalAlpha = alpha;
           context.fillStyle = tile ?? colors.ink;

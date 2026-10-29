@@ -31,7 +31,7 @@ export type SpeciesSpec = {
 };
 
 export const PHASE_COUNT = 3;
-export const SPECIMEN_MAX = 4;
+export const SPECIMEN_MAX = 5;
 
 export const WING_RAMP = ".:-=+*#%@";
 export const BODY_RAMP = ":=+*#@";

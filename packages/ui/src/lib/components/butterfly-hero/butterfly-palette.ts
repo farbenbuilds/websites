@@ -21,6 +21,19 @@ export function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   };
 }
 
+export function butterflyWingColor(
+  palette: ButterflyPalette,
+  speciesAccent: number,
+  shade: number,
+  hind: boolean,
+): Rgb {
+  const warm = mixRgb(palette.paper, palette.accent, 0.64 + speciesAccent * 0.26);
+  const highlight = mixRgb(palette.accent, palette.ink, 0.42);
+  const base = mixRgb(warm, highlight, 0.32 + shade * 0.4);
+
+  return hind ? mixRgb(base, highlight, 0.28) : mixRgb(base, palette.accent, 0.12);
+}
+
 export function rgba(color: Rgb, alpha: number): string {
   const safe = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
 

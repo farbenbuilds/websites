@@ -5,38 +5,43 @@ mode: custom
 ---
 
 <div class="docs-home">
-  <section class="docs-home-hero" aria-labelledby="uwz-title">
-    <div class="docs-home-hero-copy" data-butterfly-avoid>
-      <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
-      <h1 class="docs-home-title" id="uwz-title">µWebZockets</h1>
-      <p class="docs-home-summary">
-        {"A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through one type-safe "}
+  <HeroChrome />
+  <noscript>
+    <style>{`html:has(.docs-home-hero) [data-blume-header] { position: sticky; visibility: visible; opacity: 1; transform: none; pointer-events: auto; }`}</style>
+  </noscript>
+
+<section class="docs-home-hero" aria-labelledby="uwz-title">
+  <ButterflyHero locale="en" />
+  <div class="docs-home-hero-copy" data-butterfly-avoid>
+    <img class="docs-home-mark" src="/icon.svg" alt="" width="72" height="72" aria-hidden="true" />
+    <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
+    <h1 class="docs-home-title" id="uwz-title">
+      µWebZockets
+    </h1>
+    <p class="docs-home-summary">
+      <span class="docs-home-summary-text">
+        {
+          "A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through one type-safe "
+        }
         <code>Request</code>
         {"/"}
         <code>Response</code>
         {" API."}
-      </p>
-      <div class="docs-home-actions">
-        <a class="editorial-action editorial-action-primary" href="/getting-started">
-          {"Getting Started "}
-          <span aria-hidden="true">{"->"}</span>
-        </a>
-        <a
-          class="editorial-action editorial-action-secondary"
-          href="https://github.com/farbenbuilds/uWebZockets"
-          target="_blank"
-          rel="noreferrer"
-          aria-describedby="blume-new-tab-hint"
-        >
-          {"View on GitHub "}
-          <span aria-hidden="true">{"->"}</span>
-        </a>
-      </div>
-    </div>
-    <ButterflyHero locale="en" />
-  </section>
+      </span>
+    </p>
+  </div>
+  <a
+    class="docs-home-scroll"
+    href="#docs-home-main"
+    aria-label="Scroll to the documentation index"
+    data-butterfly-avoid
+  >
+    <span class="docs-home-scroll-label">Scroll</span>
+    <span class="docs-home-scroll-mark" aria-hidden="true"></span>
+  </a>
+</section>
 
-<section class="docs-home-section" aria-labelledby="index-heading">
+<section class="docs-home-section" id="docs-home-main" aria-labelledby="index-heading">
   <h2 class="editorial-label" id="index-heading">
     {"Index"}
   </h2>

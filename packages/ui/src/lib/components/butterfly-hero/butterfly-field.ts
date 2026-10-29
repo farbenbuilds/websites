@@ -5,8 +5,16 @@ import {
   type AvoidBox,
   type Steering,
 } from "./butterfly-avoidance";
+import { separateField } from "./butterfly-separation";
 import { specimenHalfSpan } from "./butterfly-shape";
-import { clamp, createRng, nextRandom, randomBetween, wrap } from "./butterfly-math";
+import {
+  angleDelta,
+  clamp,
+  createRng,
+  nextRandom,
+  normalizeAngle,
+  randomBetween,
+} from "./butterfly-math";
 
 export { mergeAvoidBoxes } from "./butterfly-avoidance";
 
@@ -23,8 +31,6 @@ export type Specimen = {
   species: number;
   x: number;
   y: number;
-  homeX: number;
-  homeY: number;
   heading: number;
   speed: number;
   phase: number;
@@ -52,6 +58,9 @@ export type Midground = {
   depth: number;
   frame: number;
   drift: number;
+  wander: number;
+  wanderTarget: number;
+  wanderTimer: number;
 };
 
 export type FieldState = {
@@ -81,64 +90,66 @@ export type Density = {
   readonly specimens: number;
 };
 
-const SPECIMEN_DEPTH_MIN = 0.72;
+const SPECIMEN_DEPTH_MIN = 0.82;
 const SPECIMEN_DEPTH_MAX = 1;
 const MIDGROUND_DEPTH_MIN = 0.28;
-const MIDGROUND_DEPTH_MAX = 0.74;
+const MIDGROUND_DEPTH_MAX = 0.72;
+const MAX_DIVE = 0.32;
+const MIDGROUND_MAX_DIVE = 0.45;
 
 export function densityFor(width: number, height: number): Density {
   const area = Math.max(1, width * height);
-  const compact = width < 58 || height < 26;
+  const compact = width < 58 || height < 32;
 
   const midground = compact
-    ? clamp(Math.round(area / 26), 24, 48)
-    : clamp(Math.round(area / 48), 80, 120);
+    ? clamp(Math.round(area / 180), 8, 14)
+    : clamp(Math.round(area / 360), 12, 22);
 
-  const specimens = compact ? 1 : width > 100 ? 3 : 2;
-
-  return { midground, specimens: Math.min(specimens, SPECIMEN_MAX) };
+  return { midground, specimens: SPECIMEN_MAX };
 }
 
-const SPECIMEN_SPECIES_FOR_COUNT: readonly number[] = [0, 2, 1, 3];
+const SPECIMEN_SPECIES_FOR_COUNT: readonly number[] = [0, 2, 1, 3, 4];
 
 const SPECIMEN_SLOTS: readonly { readonly x: number; readonly y: number }[] = [
-  { x: 0.64, y: 0.3 },
-  { x: 0.22, y: 0.68 },
-  { x: 0.48, y: 0.52 },
-  { x: 0.8, y: 0.76 },
+  { x: 0.25, y: 0.24 },
+  { x: 0.75, y: 0.24 },
+  { x: 0.16, y: 0.55 },
+  { x: 0.84, y: 0.55 },
+  { x: 0.16, y: 0.82 },
 ];
 
-const DEFAULT_SLOT = { x: 0.5, y: 0.42 };
+const COMPACT_SPECIMEN_SLOTS: readonly {
+  readonly x: number;
+  readonly y: number;
+}[] = [
+  { x: 0.2, y: 0.66 },
+  { x: 0.5, y: 0.66 },
+  { x: 0.8, y: 0.66 },
+  { x: 0.3, y: 0.88 },
+  { x: 0.7, y: 0.88 },
+];
 
 function createSpecimen(field: FieldState, index: number): Specimen {
   const speciesIndex = SPECIMEN_SPECIES_FOR_COUNT[index % SPECIMEN_SPECIES_FOR_COUNT.length] ?? 0;
   const species = speciesAt(speciesIndex);
   const halfSpan = Math.max(specimenHalfSpan(species), 0.8);
-  const compact = field.width < 58 || field.height < 26;
-  const spanFraction = compact ? 0.42 : index === 0 ? 0.26 : index === 1 ? 0.22 : 0.16;
+  const compact = field.width < 58 || field.height < 32;
+  const spanFraction = compact ? 0.14 : 0.12;
   const scaleX = (field.width * spanFraction) / halfSpan;
   const scaleY = (field.height * 0.82) / (species.antennaReach + species.abdomenLength + 0.2);
   const scale = clamp(Math.min(scaleX, scaleY), 4.5, 30);
-
-  const slot = compact
-    ? DEFAULT_SLOT
-    : (SPECIMEN_SLOTS[index % SPECIMEN_SLOTS.length] ?? DEFAULT_SLOT);
-
-  const jitterX = randomBetween(field.rng, -1.2, 1.2);
-  const jitterY = randomBetween(field.rng, -1.2, 1.2);
+  const slots = compact ? COMPACT_SPECIMEN_SLOTS : SPECIMEN_SLOTS;
+  const slot = slots[index % slots.length] ?? { x: 0.5, y: 0.5 };
 
   return {
     id: index + 1,
     species: speciesIndex,
-    x: clamp(field.width * slot.x + jitterX, 2, field.width - 2),
-    y: clamp(field.height * slot.y + jitterY, 2, field.height - 2),
-    homeX: clamp(field.width * slot.x, 2, field.width - 2),
-    homeY: clamp(field.height * slot.y, 2, field.height - 2),
-    heading:
-      index === 0 ? randomBetween(field.rng, -0.24, -0.06) : randomBetween(field.rng, 0.08, 0.3),
-    speed: randomBetween(field.rng, 0.28, 0.65),
+    x: clamp(field.width * slot.x, 2, field.width - 2),
+    y: clamp(field.height * slot.y, 2, field.height - 2),
+    heading: randomBetween(field.rng, -Math.PI, 0.2),
+    speed: randomBetween(field.rng, 0.45, 0.9),
     phase: randomBetween(field.rng, 0, Math.PI * 2),
-    flapRate: randomBetween(field.rng, 8, 13),
+    flapRate: randomBetween(field.rng, 6, 11),
     scale,
     depth: randomBetween(field.rng, SPECIMEN_DEPTH_MIN, SPECIMEN_DEPTH_MAX),
     yaw: randomBetween(field.rng, -0.42, 0.42),
@@ -160,13 +171,16 @@ function createMidground(field: FieldState, index: number, x: number, y: number)
     x,
     y,
     heading: randomBetween(field.rng, -Math.PI, Math.PI),
-    speed: randomBetween(field.rng, 0.35, 1.1),
+    speed: randomBetween(field.rng, 0.25, 0.7),
     phase: randomBetween(field.rng, 0, Math.PI * 2),
-    flapRate: randomBetween(field.rng, 6, 15),
-    scale: 0.55 + depth * 0.45,
+    flapRate: randomBetween(field.rng, 4, 11),
+    scale: field.width < 58 ? 0.42 + depth * 0.3 : 0.6 + depth * 0.45,
     depth,
     frame: Math.floor(nextRandom(field.rng) * 3),
-    drift: randomBetween(field.rng, 0.2, 1.1),
+    drift: randomBetween(field.rng, 0.15, 0.8),
+    wander: randomBetween(field.rng, -0.8, 0.8),
+    wanderTarget: randomBetween(field.rng, -2, 2),
+    wanderTimer: randomBetween(field.rng, 1.2, 4.5),
   };
 }
 
@@ -218,8 +232,6 @@ export function resizeField(field: FieldState, width: number, height: number): v
   for (const specimen of field.specimens) {
     specimen.x *= scaleX;
     specimen.y *= scaleY;
-    specimen.homeX *= scaleX;
-    specimen.homeY *= scaleY;
     specimen.scale *= Math.min(scaleX, scaleY);
   }
 
@@ -227,6 +239,25 @@ export function resizeField(field: FieldState, width: number, height: number): v
     butterfly.x *= scaleX;
     butterfly.y *= scaleY;
   }
+}
+
+function edgeWeight(value: number, size: number, margin: number): number {
+  if (value < margin) return (margin - value) / Math.max(margin, 1);
+
+  if (value > size - margin) return (value - (size - margin)) / Math.max(margin, 1);
+
+  return 0;
+}
+
+function limitDive(heading: number, maxDown: number): number {
+  const normal = normalizeAngle(heading);
+  const down = Math.sin(normal);
+
+  if (down <= maxDown) return normal;
+
+  const horizontal = Math.cos(normal) >= 0 ? 1 : -1;
+
+  return horizontal > 0 ? Math.asin(maxDown) : Math.PI - Math.asin(maxDown);
 }
 
 function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
@@ -266,37 +297,43 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
 
   steerFromBoxes(field.excluded, specimen.x, specimen.y, 4, boxes);
 
-  const edge =
-    specimen.x < 5
-      ? 1
-      : specimen.x > field.width - 5
-        ? -1
-        : specimen.y < 5
-          ? 1
-          : specimen.y > field.height - 5
-            ? -1
-            : 0;
+  const marginX = Math.min(specimen.scale * 1.3 + 2, field.width * 0.35);
+  const marginY = Math.min(specimen.scale * 1.05 + 2, field.height * 0.35);
+
+  const edge = Math.max(
+    edgeWeight(specimen.x, field.width, marginX),
+    edgeWeight(specimen.y, field.height, marginY),
+  );
+
+  const centerTurn = angleDelta(
+    Math.atan2(field.height / 2 - specimen.y, field.width / 2 - specimen.x),
+    specimen.heading,
+  );
 
   const steer =
-    Math.sin(field.time * 0.34 + specimen.id * 1.7) * 0.22 +
-    boxes.x * 1.4 +
-    breeze.x * 1.8 +
-    edge * 0.5;
+    Math.sin(field.time * 0.28 + specimen.id * 1.7) * 0.16 +
+    centerTurn * edge * 1.8 +
+    boxes.x * 1.1 +
+    breeze.x * 1.4;
 
-  specimen.turn += (steer - specimen.turn) * Math.min(1, dt * 2.2);
-  specimen.heading += specimen.turn * dt;
+  specimen.turn = clamp(specimen.turn + (steer - specimen.turn) * Math.min(1, dt * 1.6), -2.2, 2.2);
+  specimen.heading = limitDive(specimen.heading + specimen.turn * dt, MAX_DIVE);
 
-  const pace = specimen.speed * (flapping ? 1.16 : 0.72);
+  const pace = specimen.speed * (flapping ? 1.12 : 0.74);
   specimen.x += Math.cos(specimen.heading) * pace * dt;
-  specimen.y += Math.sin(specimen.heading) * pace * dt + boxes.y * dt * 0.6;
-
-  const margin = 8;
-  specimen.x = wrap(specimen.x + margin, field.width + margin * 2) - margin;
-  specimen.y = wrap(specimen.y + margin, field.height + margin * 2) - margin;
+  specimen.y += Math.sin(specimen.heading) * pace * dt + boxes.y * dt * 0.2;
 }
 
 function stepMidground(field: FieldState, butterfly: Midground, dt: number): void {
   butterfly.phase += butterfly.flapRate * dt;
+  butterfly.wanderTimer -= dt;
+
+  if (butterfly.wanderTimer <= 0) {
+    butterfly.wanderTimer = randomBetween(field.rng, 1.2, 4.5);
+    butterfly.wanderTarget = randomBetween(field.rng, -2.2, 2.2);
+  }
+
+  butterfly.wander += (butterfly.wanderTarget - butterfly.wander) * Math.min(1, dt * 0.7);
 
   const breeze = field.breezeSteer;
   const boxes = field.boxSteer;
@@ -309,16 +346,27 @@ function stepMidground(field: FieldState, butterfly: Midground, dt: number): voi
   }
 
   steerFromBoxes(field.excluded, butterfly.x, butterfly.y, 3, boxes);
-  butterfly.heading +=
-    Math.sin(field.time * 0.22 + butterfly.id * 0.7) * butterfly.drift * 0.35 * dt +
-    boxes.x * dt * 1.2 +
-    breeze.x * dt * 2.2;
-  butterfly.x += Math.cos(butterfly.heading) * butterfly.speed * dt;
-  butterfly.y += Math.sin(butterfly.heading) * butterfly.speed * dt + boxes.y * dt * 0.5;
 
-  const margin = 4;
-  butterfly.x = wrap(butterfly.x + margin, field.width + margin * 2) - margin;
-  butterfly.y = wrap(butterfly.y + margin, field.height + margin * 2) - margin;
+  const edge = Math.max(
+    edgeWeight(butterfly.x, field.width, 3),
+    edgeWeight(butterfly.y, field.height, 3),
+  );
+
+  const centerTurn = angleDelta(
+    Math.atan2(field.height / 2 - butterfly.y, field.width / 2 - butterfly.x),
+    butterfly.heading,
+  );
+
+  const turn =
+    butterfly.wander * butterfly.drift +
+    Math.sin(field.time * 0.18 + butterfly.id * 0.7) * 0.18 +
+    centerTurn * edge * 2.2 +
+    boxes.x * 0.9 +
+    breeze.x * 1.6;
+
+  butterfly.heading = limitDive(butterfly.heading + turn * dt, MIDGROUND_MAX_DIVE);
+  butterfly.x += Math.cos(butterfly.heading) * butterfly.speed * dt;
+  butterfly.y += Math.sin(butterfly.heading) * butterfly.speed * dt + boxes.y * dt * 0.2;
 }
 
 export function stepField(field: FieldState, dt: number): void {
@@ -329,9 +377,11 @@ export function stepField(field: FieldState, dt: number): void {
   }
 
   for (const butterfly of field.midground) {
-    butterfly.frame = Math.floor(field.time * 6 + butterfly.id) % 3;
+    butterfly.frame = Math.floor(field.time * 5 + butterfly.id) % 3;
     stepMidground(field, butterfly, dt);
   }
+
+  separateField(field);
 }
 
 export function setPointer(field: FieldState, x: number, y: number, active: boolean): void {

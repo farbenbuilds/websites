@@ -6,7 +6,7 @@ import {
   sampleAnatomy,
   type AnatomyScratch,
 } from "./butterfly-shape";
-import { mixRgb, rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
+import { butterflyWingColor, mixRgb, rgba, type ButterflyPalette } from "./butterfly-palette";
 
 export type SpriteFrame = {
   readonly x: number;
@@ -86,12 +86,6 @@ export function inkFor(
   if (part === "antenna") return rgba(palette.ink, 0.5);
 
   return rgba(palette.ink, 0.58);
-}
-
-export function washColor(palette: ButterflyPalette, speciesAccent: number, shade: number): Rgb {
-  const base = mixRgb(palette.paper, palette.accent, 0.18 + speciesAccent * 0.42);
-
-  return mixRgb(base, palette.ink, (1 - shade) * 0.26);
 }
 
 export function buildSpriteAtlas(
@@ -184,10 +178,16 @@ function drawSpriteFrame(
 
       const x = originX + column * cellWidth;
       const y = originY + row * cellHeight;
-      const base = washColor(palette, species.accentMix, sample.shade);
-      const wing = sample.part === "hind" ? mixRgb(base, palette.ink, 0.12) : base;
-      const tile = sample.edge > 0.6 ? mixRgb(wing, palette.ink, 0.42) : wing;
-      context.fillStyle = sample.part === "body" ? rgba(palette.ink, 0.55) : rgba(tile, 0.82);
+
+      const wing = butterflyWingColor(
+        palette,
+        species.accentMix,
+        sample.shade,
+        sample.part === "hind",
+      );
+
+      const tile = sample.edge > 0.6 ? mixRgb(wing, palette.ink, 0.3) : wing;
+      context.fillStyle = sample.part === "body" ? rgba(palette.ink, 0.55) : rgba(tile, 0.94);
       context.fillRect(x, y, cellWidth, cellHeight);
 
       const glyph = glyphFor(sample, species.glyphBias + speciesIndex);

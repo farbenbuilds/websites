@@ -57,7 +57,7 @@ export function roleFor(sample: AnatomySample): InkRole {
 }
 
 export function midgroundAlpha(depth: number): number {
-  return 0.35 + depth * 0.5;
+  return 0.86 + depth * 0.12;
 }
 
 export function showsGlyph(sample: AnatomySample, grainThreshold: number): boolean {

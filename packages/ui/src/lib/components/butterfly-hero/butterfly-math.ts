@@ -36,6 +36,16 @@ export function randomBetween(rng: Rng, min: number, max: number): number {
   return min + nextRandom(rng) * (max - min);
 }
 
+export function normalizeAngle(angle: number): number {
+  let normalized = angle % (Math.PI * 2);
+
+  if (normalized > Math.PI) normalized -= Math.PI * 2;
+
+  if (normalized < -Math.PI) normalized += Math.PI * 2;
+
+  return normalized;
+}
+
 export function angleDelta(a: number, b: number): number {
   let delta = a - b;
 

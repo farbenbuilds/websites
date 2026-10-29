@@ -5,38 +5,43 @@ mode: custom
 ---
 
 <div class="docs-home">
-  <section class="docs-home-hero" aria-labelledby="uwz-title">
-    <div class="docs-home-hero-copy" data-butterfly-avoid>
-      <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
-      <h1 class="docs-home-title" id="uwz-title">µWebZockets</h1>
-      <p class="docs-home-summary">
-        {"Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API type-safe "}
+  <HeroChrome />
+  <noscript>
+    <style>{`html:has(.docs-home-hero) [data-blume-header] { position: sticky; visibility: visible; opacity: 1; transform: none; pointer-events: auto; }`}</style>
+  </noscript>
+
+<section class="docs-home-hero" aria-labelledby="uwz-title">
+  <ButterflyHero locale="vi" seed={20261030} />
+  <div class="docs-home-hero-copy" data-butterfly-avoid>
+    <img class="docs-home-mark" src="/icon.svg" alt="" width="72" height="72" aria-hidden="true" />
+    <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
+    <h1 class="docs-home-title" id="uwz-title">
+      µWebZockets
+    </h1>
+    <p class="docs-home-summary">
+      <span class="docs-home-summary-text">
+        {
+          "Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API type-safe "
+        }
         <code>Request</code>
         {"/"}
         <code>Response</code>
         {" duy nhất."}
-      </p>
-      <div class="docs-home-actions">
-        <a class="editorial-action editorial-action-primary" href="/vi/getting-started">
-          {"Bắt đầu "}
-          <span aria-hidden="true">{"->"}</span>
-        </a>
-        <a
-          class="editorial-action editorial-action-secondary"
-          href="https://github.com/farbenbuilds/uWebZockets"
-          target="_blank"
-          rel="noreferrer"
-          aria-describedby="blume-new-tab-hint"
-        >
-          {"Xem trên GitHub "}
-          <span aria-hidden="true">{"->"}</span>
-        </a>
-      </div>
-    </div>
-    <ButterflyHero locale="vi" seed={20261030} />
-  </section>
+      </span>
+    </p>
+  </div>
+  <a
+    class="docs-home-scroll"
+    href="#docs-home-main"
+    aria-label="Cuộn đến mục lục tài liệu"
+    data-butterfly-avoid
+  >
+    <span class="docs-home-scroll-label">Cuộn</span>
+    <span class="docs-home-scroll-mark" aria-hidden="true"></span>
+  </a>
+</section>
 
-<section class="docs-home-section" aria-labelledby="index-heading">
+<section class="docs-home-section" id="docs-home-main" aria-labelledby="index-heading">
   <h2 class="editorial-label" id="index-heading">
     {"Mục lục"}
   </h2>

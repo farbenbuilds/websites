@@ -5,6 +5,12 @@ import type { FieldRenderer } from "./butterfly-renderer";
 
 const AVOID_GAP = 160;
 
+export function selectAvoidBoxes(field: FieldState, boxes: readonly AvoidBox[]): AvoidBox[] {
+  const area = field.width * field.height;
+
+  return boxes.filter((box) => box.width * box.height < area * 0.5);
+}
+
 export function depositDrafts(field: FieldState, atmosphere: Atmosphere): void {
   for (const specimen of field.specimens) {
     depositDraft(
