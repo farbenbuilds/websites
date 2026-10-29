@@ -6,10 +6,6 @@ export function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
-export function mix(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
 export function smoothstep(edge0: number, edge1: number, value: number): number {
   const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
 

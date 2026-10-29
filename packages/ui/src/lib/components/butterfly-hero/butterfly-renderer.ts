@@ -5,7 +5,7 @@ import { midgroundAlpha } from "./butterfly-glyphs";
 import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape";
 import { buildSpriteAtlas, drawSprite, paletteKey, type SpriteAtlas } from "./butterfly-sprites";
 import { rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
-import { drawSpecimens } from "./butterfly-specimen";
+import { drawSpecimens, type SpecimenColors } from "./butterfly-specimen";
 
 export type FieldRenderer = {
   readonly canvas: HTMLCanvasElement;
@@ -23,6 +23,7 @@ export type FieldRenderer = {
   palette: ButterflyPalette;
   atlas: SpriteAtlas | null;
   atlasKey: string;
+  readonly colors: Map<number, SpecimenColors>;
 };
 
 export type DrawOptions = {
@@ -34,7 +35,7 @@ const FALLBACK_PALETTE: ButterflyPalette = {
   paper: { r: 255, g: 255, b: 255 },
   ink: { r: 17, g: 17, b: 17 },
   muted: { r: 102, g: 102, b: 102 },
-  accent: { r: 166, g: 70, b: 0 },
+  accent: { r: 128, g: 128, b: 128 },
 };
 
 export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null {
@@ -58,6 +59,7 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
     palette: FALLBACK_PALETTE,
     atlas: null,
     atlasKey: "",
+    colors: new Map(),
   };
 }
 
@@ -158,8 +160,8 @@ export function drawField(
   drawMidground(renderer, field, true, atmosphere);
   drawMidground(renderer, field, false, atmosphere);
   drawTraces(renderer, atmosphere);
-  drawSpecimens(renderer, field, "tile");
-  drawSpecimens(renderer, field, "glyph");
+  drawSpecimens(renderer, field, "tile", renderer.colors);
+  drawSpecimens(renderer, field, "glyph", renderer.colors);
   drawPollen(renderer, atmosphere);
   drawDimming(renderer, options.dimBoxes);
 }

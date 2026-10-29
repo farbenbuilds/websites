@@ -25,7 +25,7 @@ export type SpecimenSurface = {
 
 const SHADE_LEVELS = 8;
 
-type SpecimenColors = {
+export type SpecimenColors = {
   readonly fore: readonly string[];
   readonly hind: readonly string[];
   readonly edgeFore: readonly string[];
@@ -83,13 +83,15 @@ export function drawSpecimens(
   surface: SpecimenSurface,
   field: FieldState,
   pass: "tile" | "glyph",
+  cache: Map<number, SpecimenColors>,
 ): void {
   const { context, cellWidth, cellHeight, palette } = surface;
   context.font = `600 ${Math.round(cellHeight * 0.76)}px ${surface.fontFamily}`;
 
   for (const specimen of field.specimens) {
     const species = speciesAt(specimen.species);
-    const colors = createSpecimenColors(palette, species);
+    const colors = cache.get(specimen.species) ?? createSpecimenColors(palette, species);
+    cache.set(specimen.species, colors);
     const scalePx = specimen.scale * cellWidth;
     const cos = Math.cos(specimen.heading);
     const sin = Math.sin(specimen.heading);

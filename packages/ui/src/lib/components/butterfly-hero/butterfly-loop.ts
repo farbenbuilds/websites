@@ -116,6 +116,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
       field.specimens.length < density.specimens ||
       field.midground.length < density.midground
     ) {
+      const previous = field;
       field = createField({
         width: renderer.cols,
         height: renderer.rows,
@@ -123,7 +124,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
         specimenCount: density.specimens,
         seed: options.seed,
       });
-      stillSimulated = false;
+      stillSimulated = previous !== null && reducedMotion.matches;
     } else {
       resizeField(field, renderer.cols, renderer.rows);
       field.specimens.length = Math.min(field.specimens.length, density.specimens);
@@ -273,6 +274,8 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   function applyFont(): void {
     if (destroyed) return;
+    renderer.atlas = null;
+    renderer.atlasKey = "";
     measure();
 
     if (reducedMotion.matches) drawStill();

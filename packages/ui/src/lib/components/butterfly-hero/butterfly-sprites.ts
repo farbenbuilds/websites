@@ -94,10 +94,6 @@ export function washColor(palette: ButterflyPalette, speciesAccent: number, shad
   return mixRgb(base, palette.ink, (1 - shade) * 0.26);
 }
 
-export function washFor(palette: ButterflyPalette, speciesAccent: number, shade: number): string {
-  return rgba(washColor(palette, speciesAccent, shade), 0.78);
-}
-
 export function buildSpriteAtlas(
   palette: ButterflyPalette,
   dpr: number,
