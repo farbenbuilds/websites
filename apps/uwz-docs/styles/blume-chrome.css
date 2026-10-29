@@ -34,7 +34,9 @@ html [data-blume-header] summary {
   text-transform: uppercase;
 }
 
-html [data-blume-header] a[href="/"] {
+html [data-blume-header] a[href="/"],
+html [data-blume-header] a[href="/vi"],
+html [data-blume-header] a[href="/vi/"] {
   font-family: var(--blume-font-display);
   font-size: 1rem;
   font-weight: 600;

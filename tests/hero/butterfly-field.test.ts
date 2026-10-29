@@ -43,8 +43,10 @@ describe("butterfly field", () => {
     });
 
     expect(compact.specimens).toBe(1);
+    expect(compact.midground).toBeGreaterThanOrEqual(24);
     expect(compact.midground).toBeLessThanOrEqual(52);
     expect(wide.specimens).toBeGreaterThanOrEqual(2);
+    expect(wide.midground).toBeGreaterThanOrEqual(80);
     expect(wide.midground).toBeLessThanOrEqual(140);
     expect(capped.specimens).toHaveLength(4);
   });

@@ -41,8 +41,12 @@ export function resolveLocale(pathname: string): SiteLocale {
 }
 
 export function localizeHref(href: string, locale: SiteLocale): string {
-  if (href.startsWith("http://") || href.startsWith("https://")) {
+  if (href.startsWith("https://")) {
     return href;
+  }
+
+  if (href.startsWith("//") || !href.startsWith("/")) {
+    return "/";
   }
 
   if (locale === "en") {

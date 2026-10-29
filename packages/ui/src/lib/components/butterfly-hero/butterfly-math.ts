@@ -60,11 +60,3 @@ export function wrap(value: number, limit: number): number {
 
   return wrapped < 0 ? wrapped + limit : wrapped;
 }
-
-export function softLimit(value: number, limit: number, margin: number): number {
-  if (value < margin) return (margin - value) / margin;
-
-  if (value > limit - margin) return (value - (limit - margin)) / margin;
-
-  return 0;
-}

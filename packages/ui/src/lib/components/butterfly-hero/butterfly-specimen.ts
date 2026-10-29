@@ -1,6 +1,6 @@
-import { EDGE_RAMP, speciesAt } from "./butterfly-data";
+import { EDGE_RAMP, speciesAt, type SpeciesSpec } from "./butterfly-data";
 import type { FieldState } from "./butterfly-field";
-import { glyphFor, roleFor, showsGlyph } from "./butterfly-glyphs";
+import { glyphFor, roleFor, showsGlyph, type InkRole } from "./butterfly-glyphs";
 import {
   createSpecimenPose,
   isInside,
@@ -9,7 +9,7 @@ import {
   type AnatomyScratch,
 } from "./butterfly-shape";
 import { inkFor, washColor } from "./butterfly-sprites";
-import { mixRgb, rgba, type ButterflyPalette } from "./butterfly-palette";
+import { mixRgb, rgb, type ButterflyPalette } from "./butterfly-palette";
 
 export type SpecimenSurface = {
   readonly context: CanvasRenderingContext2D;
@@ -23,6 +23,62 @@ export type SpecimenSurface = {
   readonly fontFamily: string;
 };
 
+const SHADE_LEVELS = 8;
+
+type SpecimenColors = {
+  readonly fore: readonly string[];
+  readonly hind: readonly string[];
+  readonly edgeFore: readonly string[];
+  readonly edgeHind: readonly string[];
+  readonly partial: string;
+  readonly ink: string;
+  readonly accent: string;
+  readonly mutedGlyph: string;
+  readonly glyphs: Readonly<Record<InkRole, string>>;
+};
+
+function shadeLevel(shade: number): number {
+  return Math.max(0, Math.min(SHADE_LEVELS - 1, Math.floor(shade * SHADE_LEVELS)));
+}
+
+function createSpecimenColors(palette: ButterflyPalette, species: SpeciesSpec): SpecimenColors {
+  const fore: string[] = [];
+  const hind: string[] = [];
+  const edgeFore: string[] = [];
+  const edgeHind: string[] = [];
+
+  for (let level = 0; level < SHADE_LEVELS; level++) {
+    const shade = (level + 0.5) / SHADE_LEVELS;
+    const base = washColor(palette, species.accentMix, shade);
+    const foreColor = mixRgb(base, palette.accent, 0.15);
+    const hindColor = mixRgb(base, palette.ink, 0.12);
+    fore.push(rgb(foreColor));
+    hind.push(rgb(hindColor));
+    edgeFore.push(rgb(mixRgb(foreColor, palette.ink, 0.42)));
+    edgeHind.push(rgb(mixRgb(hindColor, palette.ink, 0.42)));
+  }
+
+  return {
+    fore,
+    hind,
+    edgeFore,
+    edgeHind,
+    partial: rgb(palette.muted),
+    ink: rgb(palette.ink),
+    accent: rgb(palette.accent),
+    mutedGlyph: rgb(palette.muted),
+    glyphs: {
+      wing: inkFor(palette, "wing"),
+      edge: inkFor(palette, "edge"),
+      vein: inkFor(palette, "vein"),
+      band: inkFor(palette, "band"),
+      eyespot: inkFor(palette, "eyespot"),
+      body: inkFor(palette, "body"),
+      antenna: inkFor(palette, "antenna"),
+    },
+  };
+}
+
 export function drawSpecimens(
   surface: SpecimenSurface,
   field: FieldState,
@@ -33,6 +89,7 @@ export function drawSpecimens(
 
   for (const specimen of field.specimens) {
     const species = speciesAt(specimen.species);
+    const colors = createSpecimenColors(palette, species);
     const scalePx = specimen.scale * cellWidth;
     const cos = Math.cos(specimen.heading);
     const sin = Math.sin(specimen.heading);
@@ -96,31 +153,40 @@ export function drawSpecimens(
         const y = row * cellHeight;
 
         if (pass === "tile") {
-          const shade = sample.hit ? sample.shade : 0.48;
-          const base = washColor(palette, species.accentMix, shade);
+          const level = shadeLevel(sample.hit ? sample.shade : 0.48);
 
-          const wash =
-            sample.part === "hind"
-              ? mixRgb(base, palette.ink, 0.12)
-              : mixRgb(base, palette.accent, 0.15);
-
-          context.fillStyle = !sample.hit
-            ? rgba(palette.muted, 0.08 + coverage * 0.1)
+          const tile = !sample.hit
+            ? colors.partial
             : sample.part === "body" || sample.part === "antenna"
-              ? rgba(palette.ink, 0.22 + coverage * 0.12)
+              ? colors.ink
               : sample.eyespot > 0
-                ? rgba(palette.accent, 0.52)
-                : rgba(
-                    sample.edge > 0.6 ? mixRgb(wash, palette.ink, 0.42) : wash,
-                    0.42 + coverage * 0.2 + specimen.depth * 0.15,
-                  );
+                ? colors.accent
+                : sample.edge > 0.6
+                  ? sample.part === "hind"
+                    ? (colors.edgeHind[level] ?? colors.hind[level])
+                    : (colors.edgeFore[level] ?? colors.fore[level])
+                  : sample.part === "hind"
+                    ? colors.hind[level]
+                    : colors.fore[level];
+
+          const alpha = !sample.hit
+            ? 0.08 + coverage * 0.1
+            : sample.part === "body" || sample.part === "antenna"
+              ? 0.22 + coverage * 0.12
+              : sample.eyespot > 0
+                ? 0.52
+                : 0.42 + coverage * 0.2 + specimen.depth * 0.15;
+
+          context.globalAlpha = alpha;
+          context.fillStyle = tile ?? colors.ink;
           context.fillRect(x, y, cellWidth, cellHeight);
+          context.globalAlpha = 1;
           continue;
         }
 
         if (!sample.hit) {
           context.globalAlpha = 0.28 + coverage * 0.22;
-          context.fillStyle = rgba(palette.muted, 0.9);
+          context.fillStyle = colors.mutedGlyph;
           context.fillText(
             EDGE_RAMP[Math.min(EDGE_RAMP.length - 1, Math.floor(coverage * 5))] ?? ".",
             x + cellWidth / 2,
@@ -136,7 +202,7 @@ export function drawSpecimens(
         if (!strong) {
           if (sample.grain < 0.5) continue;
           context.globalAlpha = 0.16 + sample.grain * 0.12;
-          context.fillStyle = rgba(palette.ink, 0.9);
+          context.fillStyle = colors.ink;
           context.fillText(glyph, x + cellWidth / 2, y + cellHeight / 2);
           context.globalAlpha = 1;
           continue;
@@ -144,7 +210,7 @@ export function drawSpecimens(
 
         const role = roleFor(sample);
         context.globalAlpha = (0.72 + specimen.depth * 0.28) * (sample.edge > 0.55 ? 0.78 : 1);
-        context.fillStyle = inkFor(palette, role);
+        context.fillStyle = colors.glyphs[role];
         context.fillText(glyph, x + cellWidth / 2, y + cellHeight / 2);
         context.globalAlpha = 1;
       }

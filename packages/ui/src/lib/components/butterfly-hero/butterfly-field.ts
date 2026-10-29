@@ -1,4 +1,4 @@
-import { MIDGROUND_SPECIES, speciesAt } from "./butterfly-data";
+import { MIDGROUND_SPECIES, SPECIMEN_MAX, speciesAt } from "./butterfly-data";
 import {
   steerFromBoxes,
   steerFromPointer,
@@ -6,7 +6,7 @@ import {
   type Steering,
 } from "./butterfly-avoidance";
 import { specimenHalfSpan } from "./butterfly-shape";
-import { clamp, createRng, hash3, nextRandom, randomBetween, wrap } from "./butterfly-math";
+import { clamp, createRng, nextRandom, randomBetween, wrap } from "./butterfly-math";
 
 export { mergeAvoidBoxes } from "./butterfly-avoidance";
 
@@ -91,12 +91,12 @@ export function densityFor(width: number, height: number): Density {
   const compact = width < 58 || height < 26;
 
   const midground = compact
-    ? clamp(Math.round(area / 30), 18, 30)
-    : clamp(Math.round(area / 54), 44, 64);
+    ? clamp(Math.round(area / 26), 24, 48)
+    : clamp(Math.round(area / 48), 80, 120);
 
   const specimens = compact ? 1 : width > 100 ? 3 : 2;
 
-  return { midground, specimens: Math.min(specimens, 4) };
+  return { midground, specimens: Math.min(specimens, SPECIMEN_MAX) };
 }
 
 const SPECIMEN_SPECIES_FOR_COUNT: readonly number[] = [0, 2, 1, 3];
@@ -187,7 +187,7 @@ export function createField(options: FieldOptions): FieldState {
     seed: options.seed,
   };
 
-  const count = Math.min(options.specimenCount, 4);
+  const count = Math.min(options.specimenCount, SPECIMEN_MAX);
 
   for (let i = 0; i < count; i++) {
     field.specimens.push(createSpecimen(field, i));
@@ -338,8 +338,4 @@ export function setPointer(field: FieldState, x: number, y: number, active: bool
   field.pointer.x = x;
   field.pointer.y = y;
   field.pointer.active = active;
-}
-
-export function seedFor(width: number, height: number, seed: number): number {
-  return (hash3(Math.round(width), Math.round(height), seed) * 4294967295) >>> 0;
 }

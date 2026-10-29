@@ -1,4 +1,4 @@
-import { BODY_RAMP, EDGE_RAMP, WING_RAMP, type SpeciesSpec } from "./butterfly-data";
+import { BODY_RAMP, EDGE_RAMP, WING_RAMP } from "./butterfly-data";
 import type { AnatomySample } from "./butterfly-shape";
 
 export type InkRole = "wing" | "edge" | "vein" | "band" | "eyespot" | "body" | "antenna";
@@ -54,10 +54,6 @@ export function roleFor(sample: AnatomySample): InkRole {
   if (sample.band > 0) return "band";
 
   return "wing";
-}
-
-export function specimenAlpha(species: SpeciesSpec, depth: number): number {
-  return Math.min(1, 0.55 + depth * 0.45 + species.accentMix * 0.08);
 }
 
 export function midgroundAlpha(depth: number): number {

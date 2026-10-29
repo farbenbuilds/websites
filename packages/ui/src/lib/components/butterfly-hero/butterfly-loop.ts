@@ -1,7 +1,5 @@
 import {
   createAtmosphere,
-  depositDraft,
-  emitTrace,
   resizeAtmosphere,
   stepAtmosphere,
   type Atmosphere,
@@ -9,7 +7,6 @@ import {
 import {
   createField,
   densityFor,
-  mergeAvoidBoxes,
   resizeField,
   setPointer,
   stepField,
@@ -25,6 +22,7 @@ import {
   type FieldRenderer,
 } from "./butterfly-renderer";
 import { clamp } from "./butterfly-math";
+import { depositDrafts, measureAvoidBoxes } from "./butterfly-loop-support";
 
 export type ButterflyLoopOptions = {
   readonly canvas: HTMLCanvasElement;
@@ -36,14 +34,12 @@ export type ButterflyLoopOptions = {
 
 export type ButterflyLoop = {
   setPaused: (paused: boolean) => void;
-  redraw: () => void;
   destroy: () => void;
 };
 
 const STEP = 1 / 60;
 const MAX_STEPS = 4;
 const MAX_DELTA = 0.1;
-const AVOID_GAP = 160;
 const AVOID_REFRESH_FRAMES = 30;
 const FONT_TIMEOUT_MS = 2000;
 
@@ -55,7 +51,6 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
     return {
       setPaused: () => undefined,
-      redraw: () => undefined,
       destroy: () => undefined,
     };
   }
@@ -73,6 +68,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   let paused = false;
   let ready = false;
   let destroyed = false;
+  let stillSimulated = false;
   let fontTimer = 0;
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -97,8 +93,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     renderer.palette = readHostPalette(options.hero);
     ensureAtlas(renderer);
 
-    if (reducedMotion.matches) drawStill();
-    else drawFrame();
+    drawFrame();
   });
 
   function measure(): void {
@@ -128,6 +123,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
         specimenCount: density.specimens,
         seed: options.seed,
       });
+      stillSimulated = false;
     } else {
       resizeField(field, renderer.cols, renderer.rows);
       field.specimens.length = Math.min(field.specimens.length, density.specimens);
@@ -154,9 +150,13 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   function drawStill(): void {
     if (!field || !atmosphere || destroyed) return;
 
-    for (let index = 0; index < 240; index++) {
-      stepField(field, STEP);
-      stepAtmosphere(atmosphere, STEP);
+    if (!stillSimulated) {
+      for (let index = 0; index < 240; index++) {
+        stepField(field, STEP);
+        stepAtmosphere(atmosphere, STEP);
+      }
+
+      stillSimulated = true;
     }
 
     drawFrame();
@@ -174,7 +174,10 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   }
 
   function schedule(): void {
-    if (destroyed || paused || !visible || reducedMotion.matches) return;
+    if (destroyed || paused || !visible || document.hidden || reducedMotion.matches) {
+      return;
+    }
+
     cancel();
     lastTime = performance.now();
     accumulator = 0;
@@ -189,7 +192,10 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   }
 
   function frame(now: number): void {
-    if (destroyed || paused || !visible || reducedMotion.matches) return;
+    if (destroyed || paused || !visible || document.hidden || reducedMotion.matches) {
+      return;
+    }
+
     const delta = clamp((now - lastTime) / 1000, 0, MAX_DELTA);
     lastTime = now;
     accumulator += delta;
@@ -223,8 +229,11 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   function onMotionPreference(): void {
     if (reducedMotion.matches) {
       cancel();
+
+      if (field && field.time > 0) stillSimulated = true;
       drawStill();
-    } else if (!paused && visible) {
+    } else if (!paused && visible && !document.hidden) {
+      stillSimulated = false;
       schedule();
     }
   }
@@ -262,25 +271,40 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     }
   }
 
+  function applyFont(): void {
+    if (destroyed) return;
+    measure();
+
+    if (reducedMotion.matches) drawStill();
+    else drawFrame();
+  }
+
   function loadFont(): void {
     const family = getComputedStyle(options.canvas).fontFamily;
 
     if (!document.fonts || !family) return;
     const load = document.fonts.load(`600 16px ${family}`);
 
+    load
+      .then(() => {
+        if (fontTimer) {
+          window.clearTimeout(fontTimer);
+          fontTimer = 0;
+        }
+
+        applyFont();
+      })
+      .catch(() => undefined);
+
     const timeout = new Promise<void>((resolve) => {
       fontTimer = window.setTimeout(resolve, FONT_TIMEOUT_MS);
     });
 
-    void Promise.race([load.then(() => undefined), timeout])
-      .then(() => {
-        if (destroyed) return;
-        measure();
-
-        if (reducedMotion.matches) drawStill();
-        else drawFrame();
-      })
-      .catch(() => undefined);
+    void timeout.then(() => {
+      if (!fontTimer) return;
+      fontTimer = 0;
+      applyFont();
+    });
   }
 
   resizeObserver.observe(options.canvas);
@@ -312,13 +336,9 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
       if (paused) {
         cancel();
         drawFrame();
-      } else if (visible && !reducedMotion.matches) {
+      } else if (visible && !document.hidden && !reducedMotion.matches) {
         schedule();
       }
-    },
-    redraw: () => {
-      measure();
-      drawFrame();
     },
     destroy: () => {
       destroyed = true;
@@ -336,48 +356,4 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
       options.canvas.removeEventListener("contextrestored", onContextRestored);
     },
   };
-}
-
-function depositDrafts(field: FieldState, atmosphere: Atmosphere): void {
-  for (const specimen of field.specimens) {
-    depositDraft(
-      atmosphere,
-      specimen.x,
-      specimen.y,
-      0.05 + (specimen.state === "flap" ? 0.04 : 0),
-      2,
-    );
-
-    if (Math.floor(field.time * 3 + specimen.id) % 7 === 0) {
-      emitTrace(atmosphere, specimen.x, specimen.y, specimen.heading);
-    }
-  }
-
-  for (const butterfly of field.midground) {
-    depositDraft(atmosphere, butterfly.x, butterfly.y, 0.012, 1);
-  }
-}
-
-function measureAvoidBoxes(renderer: FieldRenderer): AvoidBox[] {
-  const canvasRect = renderer.canvas.getBoundingClientRect();
-
-  if (canvasRect.width < 1 || canvasRect.height < 1) return [];
-  const boxes: AvoidBox[] = [];
-
-  for (const element of document.querySelectorAll("[data-butterfly-avoid]")) {
-    const rect = element.getBoundingClientRect();
-
-    if (rect.width < 1 || rect.height < 1) continue;
-    const x = (rect.left - canvasRect.left) / renderer.cellWidth;
-    const y = (rect.top - canvasRect.top) / renderer.cellHeight;
-    const width = rect.width / renderer.cellWidth;
-    const height = rect.height / renderer.cellHeight;
-
-    if (x + width < 0 || y + height < 0) continue;
-
-    if (x > renderer.cols || y > renderer.rows) continue;
-    boxes.push({ x, y, width, height });
-  }
-
-  return mergeAvoidBoxes(boxes, Math.round(AVOID_GAP / Math.max(renderer.cellWidth, 1)));
 }

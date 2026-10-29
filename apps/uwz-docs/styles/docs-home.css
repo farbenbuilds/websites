@@ -125,7 +125,7 @@ html .prose .docs-home-colophon a {
   margin-block-end: 0.5rem;
 }
 
-.docs-home-index .editorial-index-link:last-child {
+.docs-home-index .editorial-index-item:last-child > .editorial-index-link {
   border-bottom: 1px solid var(--blume-border);
 }
 

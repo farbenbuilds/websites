@@ -27,7 +27,6 @@ export type SpeciesSpec = {
   readonly veinCount: number;
   readonly eyespot: EyespotSpec;
   readonly accentMix: number;
-  readonly inkMix: number;
   readonly glyphBias: number;
 };
 
@@ -37,7 +36,6 @@ export const SPECIMEN_MAX = 4;
 export const WING_RAMP = ".:-=+*#%@";
 export const BODY_RAMP = ":=+*#@";
 export const EDGE_RAMP = ".'`,;:";
-export const MOTES = ".,'`";
 
 export const SPECIES: readonly SpeciesSpec[] = [
   {
@@ -70,7 +68,6 @@ export const SPECIES: readonly SpeciesSpec[] = [
     veinCount: 7,
     eyespot: { x: 0.74, y: 0.4, radius: 0.085 },
     accentMix: 0.2,
-    inkMix: 0.62,
     glyphBias: 0,
   },
   {
@@ -103,7 +100,6 @@ export const SPECIES: readonly SpeciesSpec[] = [
     veinCount: 8,
     eyespot: { x: 0.7, y: 0.42, radius: 0.095 },
     accentMix: 0.28,
-    inkMix: 0.54,
     glyphBias: 1,
   },
   {
@@ -136,7 +132,6 @@ export const SPECIES: readonly SpeciesSpec[] = [
     veinCount: 6,
     eyespot: { x: 0.78, y: 0.38, radius: 0.07 },
     accentMix: 0.34,
-    inkMix: 0.7,
     glyphBias: 2,
   },
   {
@@ -169,7 +164,6 @@ export const SPECIES: readonly SpeciesSpec[] = [
     veinCount: 9,
     eyespot: { x: 0.64, y: 0.36, radius: 0.075 },
     accentMix: 0.16,
-    inkMix: 0.48,
     glyphBias: 3,
   },
   {
@@ -202,12 +196,10 @@ export const SPECIES: readonly SpeciesSpec[] = [
     veinCount: 7,
     eyespot: { x: 0.72, y: 0.44, radius: 0.08 },
     accentMix: 0.12,
-    inkMix: 0.58,
     glyphBias: 4,
   },
 ];
 
-export const SPECIMEN_SPECIES: readonly number[] = [0, 1, 2, 3];
 export const MIDGROUND_SPECIES: readonly number[] = [0, 1, 2, 3, 4];
 
 export function speciesAt(index: number): SpeciesSpec {

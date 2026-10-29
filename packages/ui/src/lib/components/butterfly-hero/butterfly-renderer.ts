@@ -29,11 +29,12 @@ export type DrawOptions = {
   readonly dimBoxes: readonly AvoidBox[];
 };
 
+// Hosts own the field palette; this neutral fallback only covers missing tokens.
 const FALLBACK_PALETTE: ButterflyPalette = {
-  paper: { r: 244, g: 240, b: 230 },
-  ink: { r: 23, g: 21, b: 18 },
-  muted: { r: 95, g: 90, b: 82 },
-  accent: { r: 180, g: 83, b: 9 },
+  paper: { r: 255, g: 255, b: 255 },
+  ink: { r: 17, g: 17, b: 17 },
+  muted: { r: 102, g: 102, b: 102 },
+  accent: { r: 166, g: 70, b: 0 },
 };
 
 export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null {
