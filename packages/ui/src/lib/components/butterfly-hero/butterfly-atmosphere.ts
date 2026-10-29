@@ -21,6 +21,16 @@ export type AirTrace = {
   glyph: string;
 };
 
+export type WingBreeze = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  glyph: string;
+};
+
 export type Atmosphere = {
   width: number;
   height: number;
@@ -28,6 +38,7 @@ export type Atmosphere = {
   draftTmp: Float32Array;
   pollen: Pollen[];
   traces: AirTrace[];
+  breeze: WingBreeze[];
   rng: Rng;
   time: number;
 };
@@ -41,6 +52,8 @@ export type AtmosphereOptions = {
 };
 
 const TRACE_GLYPHS = [".", "'", "`", "-", ","];
+const BREEZE_GLYPHS = [",", "'", "`"];
+const BREEZE_POOL = 64;
 
 export function createAtmosphere(options: AtmosphereOptions): Atmosphere {
   const width = Math.max(1, Math.round(options.width));
@@ -55,6 +68,15 @@ export function createAtmosphere(options: AtmosphereOptions): Atmosphere {
     draftTmp: new Float32Array(count),
     pollen: [],
     traces: [],
+    breeze: Array.from({ length: BREEZE_POOL }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      maxLife: 1,
+      glyph: ",",
+    })),
     rng,
     time: 0,
   };
@@ -116,6 +138,10 @@ export function resizeAtmosphere(atmosphere: Atmosphere, width: number, height: 
     trace.x = wrap(trace.x, nextWidth);
     trace.y = wrap(trace.y, nextHeight);
   }
+
+  for (const breeze of atmosphere.breeze) {
+    breeze.life = 0;
+  }
 }
 
 export function depositDraft(
@@ -142,6 +168,25 @@ export function depositDraft(
       atmosphere.draft[index] = Math.min(1.8, value + amount * (1 - distance / (radius + 1)));
     }
   }
+}
+
+export function emitBreeze(
+  atmosphere: Atmosphere,
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+): void {
+  const slot = atmosphere.breeze.find((breeze) => breeze.life <= 0);
+
+  if (!slot) return;
+  slot.x = x;
+  slot.y = y;
+  slot.vx = vx;
+  slot.vy = vy;
+  slot.maxLife = randomBetween(atmosphere.rng, 0.45, 0.85);
+  slot.life = slot.maxLife;
+  slot.glyph = BREEZE_GLYPHS[Math.floor(nextRandom(atmosphere.rng) * BREEZE_GLYPHS.length)] ?? ",";
 }
 
 export function emitTrace(atmosphere: Atmosphere, x: number, y: number, heading: number): void {
@@ -171,6 +216,16 @@ export function stepAtmosphere(atmosphere: Atmosphere, dt: number): void {
     mote.y += (mote.vy + windY + Math.sin(mote.phase) * 0.05) * dt;
     mote.x = wrap(mote.x, atmosphere.width);
     mote.y = wrap(mote.y, atmosphere.height);
+  }
+
+  for (const breeze of atmosphere.breeze) {
+    if (breeze.life <= 0) continue;
+    breeze.life -= dt;
+    breeze.x += breeze.vx * dt;
+    breeze.y += breeze.vy * dt;
+    const drag = Math.exp(-dt * 2.4);
+    breeze.vx *= drag;
+    breeze.vy *= drag;
   }
 
   for (const trace of atmosphere.traces) {

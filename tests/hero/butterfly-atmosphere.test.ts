@@ -4,6 +4,7 @@ import {
   createAtmosphere,
   depositDraft,
   draftAt,
+  emitBreeze,
   emitTrace,
   stepAtmosphere,
 } from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-atmosphere.ts";
@@ -26,6 +27,7 @@ describe("butterfly atmosphere", () => {
     expect(state.draftTmp).toHaveLength(40 * 24);
     expect(state.pollen).toHaveLength(18);
     expect(state.traces).toHaveLength(6);
+    expect(state.breeze).toHaveLength(64);
   });
 
   it("deposits wingbeat energy that diffuses and decays", () => {
@@ -40,6 +42,21 @@ describe("butterfly atmosphere", () => {
 
     expect(draftAt(state, 12, 8)).toBeLessThan(peak);
     expect(draftAt(state, 12, 8)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("gives each wingbeat a short gray breeze puff that decays", () => {
+    const state = atmosphere();
+    emitBreeze(state, 20, 12, 1, -0.2);
+
+    const active = state.breeze.find((puff) => puff.life > 0);
+    expect(active).toBeDefined();
+    expect(active?.life).toBeGreaterThan(0);
+
+    for (let index = 0; index < 120; index++) {
+      stepAtmosphere(state, 1 / 60);
+    }
+
+    expect(state.breeze.filter((puff) => puff.life > 0)).toHaveLength(0);
   });
 
   it("keeps pollen and traces inside the field and recycles expired traces", () => {

@@ -1,7 +1,7 @@
 import { draftAt, type Atmosphere } from "./butterfly-atmosphere";
 import type { FieldState } from "./butterfly-field";
 import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape";
-import { rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
+import { butterflyBreezeColor, rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
 import { drawSpecimens, type SpecimenColors } from "./butterfly-specimen";
 
 export type FieldRenderer = {
@@ -202,6 +202,7 @@ export function drawField(
   drawAir(renderer, atmosphere);
   drawTraces(renderer, atmosphere);
   drawSpecimens(renderer, field, renderer.colors);
+  drawBreeze(renderer, atmosphere);
   drawPollen(renderer, atmosphere);
 }
 
@@ -224,6 +225,29 @@ function drawAir(renderer: FieldRenderer, atmosphere: Atmosphere): void {
         glyph,
         column * cellWidth + cellWidth / 2,
         row * cellHeight + cellHeight / 2,
+      );
+    }
+  }
+}
+
+function drawBreeze(renderer: FieldRenderer, atmosphere: Atmosphere): void {
+  const { context, cellWidth, cellHeight, palette } = renderer;
+  context.font = `500 ${Math.round(cellHeight * 0.75)}px ${renderer.fontFamily}`;
+  const color = butterflyBreezeColor(palette);
+
+  for (const breeze of atmosphere.breeze) {
+    if (breeze.life <= 0) continue;
+    const progress = breeze.life / Math.max(breeze.maxLife, 0.001);
+    const speed = Math.hypot(breeze.vx, breeze.vy) || 1;
+    const nx = breeze.vx / speed;
+    const ny = breeze.vy / speed;
+
+    for (let step = 0; step < 3; step++) {
+      context.fillStyle = rgba(color, 0.62 * progress * (1 - step * 0.3));
+      context.fillText(
+        breeze.glyph,
+        (breeze.x - nx * step * 0.3) * cellWidth + cellWidth / 2,
+        (breeze.y - ny * step * 0.3) * cellHeight + cellHeight / 2,
       );
     }
   }

@@ -38,6 +38,10 @@ export function butterflyBodyColor(palette: ButterflyPalette): Rgb {
   return mixRgb(palette.accent, palette.paper, 0.16);
 }
 
+export function butterflyBreezeColor(palette: ButterflyPalette): Rgb {
+  return mixRgb(palette.ink, palette.paper, 0.25);
+}
+
 export function inkFor(palette: ButterflyPalette, part: InkRole): string {
   if (part === "eyespot") return rgba(palette.accent, 0.95);
 

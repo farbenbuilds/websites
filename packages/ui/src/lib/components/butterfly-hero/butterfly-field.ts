@@ -27,6 +27,7 @@ export type Specimen = {
   state: "flap" | "glide";
   stateTimer: number;
   turn: number;
+  breezePulse: number;
 };
 
 export type FieldState = {
@@ -98,6 +99,7 @@ function createSpecimen(field: FieldState, index: number): Specimen {
     state: "flap",
     stateTimer: randomBetween(field.rng, 0.8, 2.2),
     turn: 0,
+    breezePulse: 0,
   };
 }
 
@@ -172,7 +174,12 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
   }
 
   const flapping = specimen.state === "flap";
+  const beatBefore = Math.floor(specimen.phase / Math.PI);
   specimen.phase += specimen.flapRate * dt * (flapping ? 1 : 0.12);
+
+  if (flapping && Math.floor(specimen.phase / Math.PI) !== beatBefore) {
+    specimen.breezePulse += 1;
+  }
 
   specimen.yawTimer -= dt;
 
