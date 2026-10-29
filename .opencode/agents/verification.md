@@ -16,7 +16,7 @@ failures, and `nix-best-practices` for toolchain failures. Read
 
 - Run the narrowest relevant check while a slice is in progress.
 - Run `pnpm ready` before the final verdict.
-- Audit changed source files against the 200-line limit.
+- Audit changed source files against the 400-line limit.
 - Confirm regression coverage for behavior changes.
 - Report exact commands, working directories, and outcomes.
 - Separate failures owned by the slice from failures outside it.

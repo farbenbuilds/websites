@@ -59,7 +59,7 @@ pnpm format:check                       # verify formatting
 pnpm typecheck                          # every workspace check
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
-pnpm check:size                         # enforce the 200-line source limit
+pnpm check:size                         # enforce the 400-line source limit
 pnpm exec vp run -r test                # every workspace test
 pnpm exec vp run -r build               # every workspace build
 pnpm exec vp run uwz-docs#check
@@ -113,7 +113,7 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
 - Comments only for a non-obvious why. No commented-out code or `TODO` markers.
 - Functional programming over OOP. No classes, prototypes, or `this`.
 - Keep content, presentation, styling, domain, integration, and tooling separate.
-- Source files target 150 to 200 lines and never exceed 200. Split by
+- Source files target 150 to 400 lines and never exceed 400. Split by
   responsibility into a named sibling module.
 - For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
   `<style>` blocks. A future app on another framework follows its own
@@ -162,7 +162,7 @@ A pull request description includes:
 GitHub Actions uses path filters so a change runs only the checks it can affect:
 
 - `Lint` runs for source, documentation, configuration, and the files checked by
-  the 200-line limit.
+  the 400-line limit.
 - `Test` runs for application, package, test, script, and tooling changes.
 - `Build` runs for application, package, and build configuration changes.
 

@@ -41,7 +41,7 @@ rules agents most often break:
   transformations are pure, and effects stay at the edges.
 - Separation of concerns is mandatory. Content, presentation, styling, domain
   logic, integration, and tooling do not leak into each other.
-- A source file targets 150 to 200 lines and must not exceed 200 lines. Split
+- A source file targets 150 to 400 lines and must not exceed 400 lines. Split
   by responsibility into a named sibling module before the limit. Never create
   a `part-2` file.
 - For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
@@ -79,7 +79,7 @@ pnpm format:check                       # verify formatting without writing
 pnpm typecheck                          # every workspace check task
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
-pnpm check:size                         # enforce the 200-line source limit
+pnpm check:size                         # enforce the 400-line source limit
 pnpm exec vp run -r test                # every workspace test task
 pnpm exec vp run -r build               # every workspace build
 pnpm dev:uwz                            # uWebZockets docs dev server

@@ -167,7 +167,7 @@ Escalate to the root agent when:
 
 - Two project documents disagree.
 - A change needs a new dependency, a new trust boundary, or a new public API.
-- A source file would exceed 200 lines after the assigned change.
+- A source file would exceed 400 lines after the assigned change.
 - A check fails for reasons outside the slice.
 - A specialist and a core role disagree on ownership.
 

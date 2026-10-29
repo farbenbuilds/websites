@@ -29,7 +29,7 @@ editing.
 - Do not add Astro integrations without a stated need and a build check.
 - Do not change prose structure without `docs-writer`.
 - Do not change visual design without `ui-stylist`.
-- Keep configuration files within the 200-line limit.
+- Keep configuration files within the 400-line limit.
 
 ## Output
 

@@ -4,7 +4,7 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 Read AGENTS.md, CODING_CONVENTION.md, TEAM_WORKFLOW.md, and the owning module before editing. Load .agents/skills/websites-conventions/SKILL.md, agent-team-orchestration, pragmatic-functional-programming, ponytail, and typescript-best-practices. Add typescript-advanced-types, install-anti-slop, vite, and vitest for tooling work; svelte-core-bestpractices, svelte5-best-practices, shadcn-svelte, tailwind-design-system, and ui-ux-pro-max for UI work; docs-site-authoring, blume, astro, and technical-documentation for docs work. Implement only the slice assigned by the architect.
 
-Keep content, presentation, styling, domain, integration, and tooling in their layers. Keep every source file at or below 200 lines and split by responsibility before the limit. Add or update tests and documentation for changed behavior. Run the narrowest relevant check while iterating.
+Keep content, presentation, styling, domain, integration, and tooling in their layers. Keep every source file at or below 400 lines and split by responsibility before the limit. Add or update tests and documentation for changed behavior. Run the narrowest relevant check while iterating.
 
 Consult docs-writer for documentation structure and prose, ui-stylist for visual hierarchy and accessibility, astro-blume for Blume and Astro integration, svelte-engineer for Svelte components and islands, verification for test and build strategy, and security-reviewer for trust boundaries and dependency risk. Return a new concern to the architect instead of expanding scope.
 

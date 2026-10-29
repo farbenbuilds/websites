@@ -25,7 +25,7 @@ editing.
   component; never pass `--overwrite`, `--skip-preflight`, or `--all`; do not run
   `update`, `apply`, or `init`; do not install a renamed duplicate or use a URL,
   custom registry, or proxy without explicit approval.
-- Keep components under 200 lines and split visual regions by responsibility.
+- Keep components under 400 lines and split visual regions by responsibility.
 
 ## Rules
 

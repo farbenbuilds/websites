@@ -24,7 +24,7 @@ Load `websites-conventions`, `agent-team-orchestration`,
 - Implement only the slice assigned by the architect.
 - Keep content, presentation, styling, domain, integration, and tooling in their
   layers.
-- Keep every source file at or below 200 lines. Split by responsibility before
+- Keep every source file at or below 400 lines. Split by responsibility before
   the limit.
 - Add or update tests and documentation for changed behavior.
 - Run the narrowest relevant check while iterating.

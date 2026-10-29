@@ -136,7 +136,7 @@ authorization.
 ## Escalation
 
 Return to the root agent when requirements conflict, a new dependency or trust
-boundary appears, a file would exceed 200 lines, a check fails outside the
+boundary appears, a file would exceed 400 lines, a check fails outside the
 slice, or two agents disagree on ownership. The root agent resolves with the
 user when scope, risk, cost, or public behavior changes.
 

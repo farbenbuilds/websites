@@ -18,7 +18,7 @@ violates it is rejected in review, not negotiated in a pull request.
   prototypes, `this`, inheritance, mixins, or behavior bound to hidden state.
 - Separation of concerns is mandatory. Each module has one reason to change and
   one layer of responsibility.
-- A source file targets 150 to 200 lines and must not exceed 200 lines. Split
+- A source file targets 150 to 400 lines and must not exceed 400 lines. Split
   before the limit by extracting a named responsibility into a sibling module;
   do not create a `part-2` dumping ground.
 - Never weaken a lint rule, type check, test, build step, accessibility
@@ -90,7 +90,7 @@ Custom shared code still needs two consumers.
 
 ## 5. File Size and Structure
 
-- Target 150 to 200 lines per source file. A file at 200 lines is a signal to
+- Target 150 to 400 lines per source file. A file at 400 lines is a signal to
   split, not a target to fill.
 - Split by responsibility: one module for parsing, one for formatting, one for
   rendering, one for orchestration. Name the extracted file after the
@@ -193,14 +193,14 @@ new primitive.
 - Formatter settings live in `.oxfmtrc.json`: semicolons on, double quotes, and
   trailing commas for all multiline constructs.
 - Linter settings live in `.oxlintrc.json`: kebab-case filenames, camelCase
-  functions, the 200-line limit, strict TypeScript rules, project rules, and the
+  functions, the 400-line limit, strict TypeScript rules, project rules, and the
   vendored anti-slop rules.
 - The anti-slop plugin is vendored under `tools/oxlint/anti-slop/`. Update it
   through the `install-anti-slop` skill, not by editing rule files in place.
 - `lefthook` runs lint, format, size, typecheck, and tests before a commit. Do
   not bypass the hook with `--no-verify`.
 - Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
-  full workspace gate. `pnpm check:size` enforces the 200-line source limit.
+  full workspace gate. `pnpm check:size` enforces the 400-line source limit.
 - Vitest tests live under `tests/<category>/<subject>.test.ts` and use
   `vite-plus/test`. The category groups related tests; the file names the
   behavior. See [tests/README.md](tests/README.md). Run them with
