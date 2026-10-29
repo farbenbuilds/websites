@@ -69,7 +69,7 @@ bindings on musl systems.
   inheritance.
 - Separation of concerns: content, presentation, styling, domain, integration,
   and tooling stay in their layer.
-- Source files target 150 to 200 lines and never exceed 200. Split by
+- Source files target 150 to 400 lines and never exceed 400. Split by
   responsibility into a named sibling module.
 - For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
   `<style>` blocks, Tailwind utilities, and shared tokens. A future app on

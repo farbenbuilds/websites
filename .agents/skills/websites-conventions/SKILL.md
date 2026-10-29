@@ -1,6 +1,6 @@
 ---
 name: Websites Conventions
-description: Apply Farben's websites engineering contract for TypeScript, Svelte, Astro, docs, comments, functional style, separation of concerns, and the 200-line source limit.
+description: Apply Farben's websites engineering contract for TypeScript, Svelte, Astro, docs, comments, functional style, separation of concerns, and the 400-line source limit.
 ---
 
 # Websites Conventions
@@ -14,7 +14,7 @@ the working checklist.
 1. Read the owning app or package, not only the file you plan to change.
 2. Identify the layer: content, presentation, styling, domain, integration, or
    tooling.
-3. Check the current file length. If the change pushes it past 200 lines, split
+3. Check the current file length. If the change pushes it past 400 lines, split
    by responsibility before adding behavior.
 4. Load the narrower skill for the surface: `docs-site-authoring`,
    `web-ui-styling`, `verification-and-release`, or `web-security-review`.
@@ -29,7 +29,7 @@ the working checklist.
 - No commented-out code and no `TODO`, `FIXME`, `XXX`, or `HACK`.
 - No `any`, unchecked casts, or non-null assertions used to silence uncertainty.
 - No `<style>` blocks in Svelte. No legacy Svelte syntax.
-- No file over 200 lines. No `part-2` files.
+- No file over 400 lines. No `part-2` files.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt settings
   live in `.oxfmtrc.json`.
 - Files are kebab-case, including Svelte and Astro files; component identifiers
@@ -89,7 +89,7 @@ at route, lifecycle, or build boundaries.
 
 ## File Split Pattern
 
-When a file approaches 200 lines, extract the responsibility that changes for a
+When a file approaches 400 lines, extract the responsibility that changes for a
 different reason:
 
 ```text
@@ -126,7 +126,7 @@ Report the exact command and result. If a command could not run, say so.
 ## Review Checklist
 
 - The change is in the correct layer.
-- No file exceeds 200 lines.
+- No file exceeds 400 lines.
 - No emoji, dead code, or unexplained marker was added.
 - Comments explain only a non-obvious why.
 - Types are explicit and external input is validated.

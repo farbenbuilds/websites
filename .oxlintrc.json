@@ -34,7 +34,7 @@
     "farben/no-oop": "error",
     "eqeqeq": ["error", "always"],
     "import/no-default-export": "error",
-    "max-lines": ["error", { "max": 200 }],
+    "max-lines": ["error", { "max": 400 }],
     "no-else-return": "error",
     "no-var": "error",
     "prefer-const": "error",

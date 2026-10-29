@@ -8,7 +8,7 @@ body:
         ## Feature Request
         Thank you for improving Farben's websites.
 
-        Features must respect the repository contract: static-first delivery, accessible interfaces, functional TypeScript, separation of concerns, and the 200-line source limit. Read [CODING_CONVENTION.md](https://github.com/farbenbuilds/websites/blob/main/CODING_CONVENTION.md) before proposing implementation details.
+        Features must respect the repository contract: static-first delivery, accessible interfaces, functional TypeScript, separation of concerns, and the 400-line source limit. Read [CODING_CONVENTION.md](https://github.com/farbenbuilds/websites/blob/main/CODING_CONVENTION.md) before proposing implementation details.
   - type: input
     id: summary
     attributes:

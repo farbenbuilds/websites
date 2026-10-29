@@ -406,7 +406,7 @@ Implementation rules:
   documented source override.
 - Component styling must not change markup semantics, focus order, or keyboard
   behavior.
-- Keep each stylesheet under 200 lines. Split chrome selectors from article
+- Keep each stylesheet under 400 lines. Split chrome selectors from article
   component selectors before the limit.
 
 ## Documentation home page contract
@@ -635,7 +635,7 @@ Boundaries:
   API; no renderer package or GSAP dependency is added to `packages/ui`.
 - Do not edit `.blume/` or `dist/`. No `part-2` files; split anatomy, sprites,
   atmosphere, field, renderer, and loop modules by responsibility before any
-  reaches 200 lines.
+  reaches 400 lines.
 
 Register the hero through Blume's `defineComponents` descriptor. Prefer
 `client: "visible"` when the hero sits in the first viewport and the static
@@ -730,7 +730,7 @@ no duplicate heading, no missing action, and no broken locale or discovery outpu
       smallest size that should become a mote instead.
 - [ ] Implement the pure species, anatomy, field, and atmosphere modules first,
       with no DOM or Canvas import. Keep the renderer and loop effectful at the
-      component edge. Keep every source file at or below 200 lines and split by
+      component edge. Keep every source file at or below 400 lines and split by
       responsibility. Do not add GSAP to the field.
 - [ ] Build the offscreen sprite atlas for small and midground butterflies. Cache
       palette, font, and DPR variants; rebuild on change; tint masks at draw time

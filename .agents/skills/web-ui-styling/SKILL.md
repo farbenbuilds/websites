@@ -62,7 +62,7 @@ glass effects, and animation that competes with reading.
 - Bind `ref` only when the parent needs it.
 - A component that fetches data, formats content, and renders is three modules.
   Extract the pure logic.
-- A component file over 200 lines is a design smell even when it is mostly
+- A component file over 400 lines is a design smell even when it is mostly
   markup. Split the visual regions.
 
 ## Accessibility
@@ -134,5 +134,5 @@ and the keyboard and contrast checks performed.
 - The layout works at 320px and at desktop width.
 - Focus, labels, contrast, and reduced motion are handled.
 - No `<style>` block, inline style shortcut, or `!important` was added.
-- No component exceeds 200 lines.
+- No component exceeds 400 lines.
 - Both docs builds pass when shared UI changes.

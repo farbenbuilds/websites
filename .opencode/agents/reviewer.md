@@ -39,7 +39,7 @@ Review in this order:
 
 1. Correctness and regressions.
 2. Ownership and separation of concerns.
-3. The 200-line source limit.
+3. The 400-line source limit.
 4. Security, privacy, and accessibility.
 5. Test and build evidence.
 6. Documentation accuracy.

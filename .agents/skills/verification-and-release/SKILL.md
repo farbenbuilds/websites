@@ -71,7 +71,7 @@ was skipped and what remains unverified. Never write "should pass".
 
 ## File-Size Audit
 
-A source file over 200 lines blocks review. Run:
+A source file over 400 lines blocks review. Run:
 
 ```sh
 pnpm check:size

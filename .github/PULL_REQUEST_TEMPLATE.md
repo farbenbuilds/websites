@@ -14,7 +14,7 @@ Describe the change and why it should be merged.
 ## Checklist
 
 - [ ] I read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODING_CONVENTION.md](../CODING_CONVENTION.md).
-- [ ] The change respects separation of concerns and the 200-line source limit.
+- [ ] The change respects separation of concerns and the 400-line source limit.
 - [ ] No emoji, dead code, commented-out code, or unexplained marker was added.
 - [ ] Svelte changes use runes only and contain no `<style>` block.
 - [ ] I ran `pnpm ready`, or the narrowest relevant subset, and recorded the exact commands.
