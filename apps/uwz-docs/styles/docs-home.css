@@ -196,6 +196,8 @@ html .prose .docs-home-colophon a {
 }
 
 .docs-home-colophon a {
+  display: inline-block;
+  padding-block: 0.3rem;
   color: inherit;
   text-decoration-line: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);

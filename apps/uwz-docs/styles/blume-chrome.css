@@ -205,6 +205,8 @@ html [data-blume-footer] {
 }
 
 html [data-blume-footer] a {
+  display: inline-block;
+  padding-block: 0.3rem;
   color: var(--blume-muted-foreground);
   text-underline-offset: 0.22em;
 }
