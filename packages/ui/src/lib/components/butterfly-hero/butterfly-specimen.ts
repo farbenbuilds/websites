@@ -1,20 +1,26 @@
-import { EDGE_RAMP, speciesAt, type SpeciesSpec } from "./butterfly-data";
+import { speciesAt, type SpeciesSpec } from "./butterfly-data";
 import type { FieldState } from "./butterfly-field";
-import { glyphFor, roleFor, showsGlyph, type InkRole } from "./butterfly-glyphs";
+import { glyphFor, roleFor, showsGlyph } from "./butterfly-glyphs";
 import {
   createSpecimenPose,
-  isInside,
   sampleAnatomy,
+  specimenHalfHeight,
   specimenHalfSpan,
   type AnatomyScratch,
 } from "./butterfly-shape";
-import { inkFor } from "./butterfly-sprites";
-import { butterflyWingColor, mixRgb, rgb, type ButterflyPalette } from "./butterfly-palette";
+import {
+  butterflyBodyColor,
+  butterflyWingColor,
+  inkFor,
+  mixRgb,
+  rgb,
+  type ButterflyPalette,
+  type InkRole,
+} from "./butterfly-palette";
 
 export type SpecimenSurface = {
   readonly context: CanvasRenderingContext2D;
   readonly detail: AnatomyScratch;
-  readonly coverage: AnatomyScratch;
   readonly cellWidth: number;
   readonly cellHeight: number;
   readonly cols: number;
@@ -26,14 +32,11 @@ export type SpecimenSurface = {
 const SHADE_LEVELS = 8;
 
 export type SpecimenColors = {
-  readonly fore: readonly string[];
-  readonly hind: readonly string[];
-  readonly edgeFore: readonly string[];
-  readonly edgeHind: readonly string[];
-  readonly partial: string;
+  readonly wing: readonly string[];
+  readonly edge: readonly string[];
+  readonly body: string;
   readonly ink: string;
   readonly accent: string;
-  readonly mutedGlyph: string;
   readonly glyphs: Readonly<Record<InkRole, string>>;
 };
 
@@ -42,30 +45,22 @@ function shadeLevel(shade: number): number {
 }
 
 function createSpecimenColors(palette: ButterflyPalette, species: SpeciesSpec): SpecimenColors {
-  const fore: string[] = [];
-  const hind: string[] = [];
-  const edgeFore: string[] = [];
-  const edgeHind: string[] = [];
+  const wing: string[] = [];
+  const edge: string[] = [];
 
   for (let level = 0; level < SHADE_LEVELS; level++) {
     const shade = (level + 0.5) / SHADE_LEVELS;
-    const foreColor = butterflyWingColor(palette, species.accentMix, shade, false);
-    const hindColor = butterflyWingColor(palette, species.accentMix, shade, true);
-    fore.push(rgb(foreColor));
-    hind.push(rgb(hindColor));
-    edgeFore.push(rgb(mixRgb(foreColor, palette.ink, 0.3)));
-    edgeHind.push(rgb(mixRgb(hindColor, palette.ink, 0.3)));
+    const wingColor = butterflyWingColor(palette, species.accentMix, shade);
+    wing.push(rgb(wingColor));
+    edge.push(rgb(mixRgb(wingColor, palette.paper, 0.38)));
   }
 
   return {
-    fore,
-    hind,
-    edgeFore,
-    edgeHind,
-    partial: rgb(palette.muted),
+    wing,
+    edge,
+    body: rgb(butterflyBodyColor(palette)),
     ink: rgb(palette.ink),
     accent: rgb(palette.accent),
-    mutedGlyph: rgb(palette.muted),
     glyphs: {
       wing: inkFor(palette, "wing"),
       edge: inkFor(palette, "edge"),
@@ -81,7 +76,6 @@ function createSpecimenColors(palette: ButterflyPalette, species: SpeciesSpec): 
 export function drawSpecimens(
   surface: SpecimenSurface,
   field: FieldState,
-  pass: "tile" | "glyph",
   cache: Map<number, SpecimenColors>,
 ): void {
   const { context, cellWidth, cellHeight, palette } = surface;
@@ -95,7 +89,7 @@ export function drawSpecimens(
     const cos = Math.cos(specimen.heading);
     const sin = Math.sin(specimen.heading);
     const horizontal = (specimenHalfSpan(species) + 0.12) * scalePx;
-    const vertical = (Math.max(species.antennaReach, species.abdomenLength) + 0.18) * scalePx;
+    const vertical = (specimenHalfHeight(species) + 0.18) * scalePx;
     const extentX = Math.abs(cos) * horizontal + Math.abs(sin) * vertical;
     const extentY = Math.abs(sin) * horizontal + Math.abs(cos) * vertical;
     const centerX = specimen.x * cellWidth;
@@ -106,8 +100,6 @@ export function drawSpecimens(
     const rowEnd = Math.min(surface.rows - 1, Math.ceil((centerY + extentY) / cellHeight));
     const pose = createSpecimenPose(specimen.phase, specimen.yaw);
     const grainSeed = specimen.id * 131 + specimen.species * 17;
-    const subX = (cellWidth * 0.32) / scalePx;
-    const subY = (cellHeight * 0.32) / scalePx;
 
     for (let row = rowStart; row <= rowEnd; row++) {
       for (let column = colStart; column <= colEnd; column++) {
@@ -116,102 +108,41 @@ export function drawSpecimens(
         const localX = (cos * worldX + sin * worldY) / scalePx;
         const localY = (-sin * worldX + cos * worldY) / scalePx;
 
-        if (localX > 1.4 || localX < -1.4 || localY > 0.9 || localY < -0.95) {
+        if (localX > 1.35 || localX < -1.35 || localY > 0.95 || localY < -0.95) {
           continue;
         }
 
         const sample = sampleAnatomy(species, localX, localY, pose, grainSeed, surface.detail);
 
-        let coverage: number;
-
-        if (sample.hit && sample.edge < 0.2) {
-          coverage = 1;
-        } else {
-          let hits = sample.hit ? 1 : 0;
-
-          if (isInside(species, localX - subX, localY - subY, pose, surface.coverage)) {
-            hits++;
-          }
-
-          if (isInside(species, localX + subX, localY - subY, pose, surface.coverage)) {
-            hits++;
-          }
-
-          if (isInside(species, localX - subX, localY + subY, pose, surface.coverage)) {
-            hits++;
-          }
-
-          if (isInside(species, localX + subX, localY + subY, pose, surface.coverage)) {
-            hits++;
-          }
-
-          coverage = hits / 5;
-        }
-
-        if (!sample.hit && coverage < 0.34) continue;
+        if (!sample.hit) continue;
 
         const x = column * cellWidth;
         const y = row * cellHeight;
+        const body = sample.part === "body" || sample.part === "antenna";
+        const level = shadeLevel(sample.shade);
 
-        if (pass === "tile") {
-          const level = shadeLevel(sample.hit ? sample.shade : 0.48);
+        const tile = body
+          ? colors.body
+          : sample.eyespot > 0
+            ? colors.accent
+            : sample.edge > 0.6
+              ? colors.edge[level]
+              : colors.wing[level];
 
-          const tile = !sample.hit
-            ? colors.partial
-            : sample.part === "body" || sample.part === "antenna"
-              ? colors.ink
-              : sample.eyespot > 0
-                ? colors.accent
-                : sample.edge > 0.6
-                  ? sample.part === "hind"
-                    ? (colors.edgeHind[level] ?? colors.hind[level])
-                    : (colors.edgeFore[level] ?? colors.fore[level])
-                  : sample.part === "hind"
-                    ? colors.hind[level]
-                    : colors.fore[level];
-
-          const alpha = !sample.hit
-            ? 0.08 + coverage * 0.1
-            : sample.part === "body" || sample.part === "antenna"
-              ? 0.22 + coverage * 0.12
-              : sample.eyespot > 0
-                ? 0.52
-                : 0.84 + coverage * 0.12 + specimen.depth * 0.04;
-
-          context.globalAlpha = alpha;
-          context.fillStyle = tile ?? colors.ink;
-          context.fillRect(x, y, cellWidth, cellHeight);
-          context.globalAlpha = 1;
-          continue;
-        }
-
-        if (!sample.hit) {
-          context.globalAlpha = 0.28 + coverage * 0.22;
-          context.fillStyle = colors.mutedGlyph;
-          context.fillText(
-            EDGE_RAMP[Math.min(EDGE_RAMP.length - 1, Math.floor(coverage * 5))] ?? ".",
-            x + cellWidth / 2,
-            y + cellHeight / 2,
-          );
-          context.globalAlpha = 1;
-          continue;
-        }
+        context.globalAlpha = body ? 1 : 0.9 + specimen.depth * 0.08;
+        context.fillStyle = tile ?? colors.body;
+        context.fillRect(x, y, cellWidth, cellHeight);
+        context.globalAlpha = 1;
 
         const glyph = glyphFor(sample, species.glyphBias + specimen.id);
         const strong = showsGlyph(sample, 0.55);
 
-        if (!strong) {
-          if (sample.grain < 0.5) continue;
-          context.globalAlpha = 0.16 + sample.grain * 0.12;
-          context.fillStyle = colors.ink;
-          context.fillText(glyph, x + cellWidth / 2, y + cellHeight / 2);
-          context.globalAlpha = 1;
-          continue;
-        }
+        if (!strong && sample.grain < 0.5) continue;
 
         const role = roleFor(sample);
-        context.globalAlpha = (0.72 + specimen.depth * 0.28) * (sample.edge > 0.55 ? 0.78 : 1);
-        context.fillStyle = colors.glyphs[role];
+
+        context.globalAlpha = body ? 0.95 : strong ? 0.78 + specimen.depth * 0.16 : 0.24;
+        context.fillStyle = strong ? colors.glyphs[role] : colors.ink;
         context.fillText(glyph, x + cellWidth / 2, y + cellHeight / 2);
         context.globalAlpha = 1;
       }

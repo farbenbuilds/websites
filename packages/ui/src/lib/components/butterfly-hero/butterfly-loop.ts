@@ -4,30 +4,29 @@ import {
   stepAtmosphere,
   type Atmosphere,
 } from "./butterfly-atmosphere";
+import { SPECIMEN_MAX } from "./butterfly-data";
 import {
   createField,
-  densityFor,
   resizeField,
   setPointer,
   stepField,
-  type AvoidBox,
   type FieldState,
 } from "./butterfly-field";
 import {
   createRenderer,
   drawField,
-  ensureAtlas,
   readHostPalette,
   resizeRenderer,
   type FieldRenderer,
 } from "./butterfly-renderer";
 import { clamp } from "./butterfly-math";
-import { depositDrafts, measureAvoidBoxes, selectAvoidBoxes } from "./butterfly-loop-support";
+import { depositDrafts } from "./butterfly-drafts";
 
 export type ButterflyLoopOptions = {
   readonly canvas: HTMLCanvasElement;
   readonly hero: HTMLElement;
   readonly seed: number;
+  readonly specimenCount: number;
   readonly onReady: () => void;
   readonly onFailure: () => void;
 };
@@ -38,10 +37,12 @@ export type ButterflyLoop = {
 };
 
 const STEP = 1 / 60;
+const FRAME_INTERVAL = 1000 / 30;
 const MAX_STEPS = 4;
 const MAX_DELTA = 0.1;
-const AVOID_REFRESH_FRAMES = 30;
 const FONT_TIMEOUT_MS = 2000;
+const POLLEN_COUNT = 8;
+const TRACE_COUNT = 8;
 
 export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoop {
   const created = createRenderer(options.canvas);
@@ -56,14 +57,14 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   }
 
   const renderer: FieldRenderer = created;
+  const specimenCount = clamp(Math.round(options.specimenCount), 1, SPECIMEN_MAX);
 
   let field: FieldState | null = null;
   let atmosphere: Atmosphere | null = null;
-  let dimBoxes: readonly AvoidBox[] = [];
   let frameHandle = 0;
   let lastTime = 0;
+  let lastDraw = 0;
   let accumulator = 0;
-  let frameCount = 0;
   let visible = true;
   let paused = false;
   let ready = false;
@@ -91,8 +92,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   const themeObserver = new MutationObserver(() => {
     renderer.palette = readHostPalette(options.hero);
-    ensureAtlas(renderer);
-
+    renderer.colors.clear();
     drawFrame();
   });
 
@@ -103,56 +103,43 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     if (rect.width < 1 || rect.height < 1) return;
 
     const dpr = window.devicePixelRatio || 1;
-
     const fontFamily = getComputedStyle(options.canvas).fontFamily || "ui-monospace, monospace";
 
     renderer.palette = readHostPalette(options.hero);
+    renderer.colors.clear();
     resizeRenderer(renderer, rect.width, rect.height, dpr, fontFamily);
 
-    const density = densityFor(renderer.cols, renderer.rows);
-
-    if (
-      !field ||
-      field.specimens.length < density.specimens ||
-      field.midground.length < density.midground
-    ) {
+    if (!field || field.specimens.length !== specimenCount) {
       const previous = field;
       field = createField({
         width: renderer.cols,
         height: renderer.rows,
-        midgroundCount: density.midground,
-        specimenCount: density.specimens,
+        specimenCount,
         seed: options.seed,
       });
       stillSimulated = previous !== null && reducedMotion.matches;
     } else {
       resizeField(field, renderer.cols, renderer.rows);
-      field.specimens.length = Math.min(field.specimens.length, density.specimens);
-      field.midground.length = Math.min(field.midground.length, density.midground);
     }
 
     if (!atmosphere) {
       atmosphere = createAtmosphere({
         width: renderer.cols,
         height: renderer.rows,
-        pollenCount: Math.round(density.midground * 0.45),
-        traceCount: 18,
+        pollenCount: POLLEN_COUNT,
+        traceCount: TRACE_COUNT,
         seed: options.seed + 17,
       });
     } else {
       resizeAtmosphere(atmosphere, renderer.cols, renderer.rows);
     }
-
-    dimBoxes = measureAvoidBoxes(renderer);
-
-    if (field) field.excluded = selectAvoidBoxes(field, dimBoxes);
   }
 
   function drawStill(): void {
     if (!field || !atmosphere || destroyed) return;
 
     if (!stillSimulated) {
-      for (let index = 0; index < 240; index++) {
+      for (let index = 0; index < 180; index++) {
         stepField(field, STEP);
         stepAtmosphere(atmosphere, STEP);
       }
@@ -165,7 +152,6 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   function drawFrame(): void {
     if (!field || !atmosphere || destroyed) return;
-    ensureAtlas(renderer);
     drawField(renderer, field, atmosphere);
 
     if (!ready) {
@@ -181,6 +167,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
     cancel();
     lastTime = performance.now();
+    lastDraw = 0;
     accumulator = 0;
     frameHandle = requestAnimationFrame(frame);
   }
@@ -197,8 +184,15 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
       return;
     }
 
+    if (now - lastDraw < FRAME_INTERVAL) {
+      frameHandle = requestAnimationFrame(frame);
+
+      return;
+    }
+
     const delta = clamp((now - lastTime) / 1000, 0, MAX_DELTA);
     lastTime = now;
+    lastDraw = now;
     accumulator += delta;
 
     let steps = 0;
@@ -213,17 +207,9 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
     if (steps === MAX_STEPS) accumulator = 0;
 
-    if (field && atmosphere) {
-      depositDrafts(field, atmosphere);
-
-      if (frameCount % AVOID_REFRESH_FRAMES === 0) {
-        dimBoxes = measureAvoidBoxes(renderer);
-        field.excluded = selectAvoidBoxes(field, dimBoxes);
-      }
-    }
+    if (field && atmosphere) depositDrafts(field, atmosphere);
 
     drawFrame();
-    frameCount++;
     frameHandle = requestAnimationFrame(frame);
   }
 
@@ -274,8 +260,6 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   function applyFont(): void {
     if (destroyed) return;
-    renderer.atlas = null;
-    renderer.atlasKey = "";
     measure();
 
     if (reducedMotion.matches) drawStill();

@@ -5,11 +5,12 @@ import {
   createAnatomyScratch,
   createSpecimenPose,
   sampleAnatomy,
+  specimenHalfHeight,
   specimenHalfSpan,
 } from "./butterfly-shape";
 
-const STILL_COLS = 66;
-const STILL_ROWS = 28;
+const STILL_COLS = 64;
+const STILL_ROWS = 30;
 const POLLEN = ".,'`";
 
 type StillCell = {
@@ -17,34 +18,39 @@ type StillCell = {
   rank: number;
 };
 
-export function generateStill(seed: number): string {
+export function generateStill(seed: number, specimenCount = 5): string {
   const grid: StillCell[][] = Array.from({ length: STILL_ROWS }, () =>
     Array.from({ length: STILL_COLS }, () => ({ glyph: " ", rank: 0 })),
   );
 
   const rng = createRng(seed);
   const scratch = createAnatomyScratch();
+  const count = Math.max(1, Math.min(5, Math.round(specimenCount)));
 
-  drawSpecimen(grid, scratch, seed, 0, STILL_COLS * 0.72, STILL_ROWS * 0.3, 9.2, rng);
-  drawSpecimen(grid, scratch, seed, 2, STILL_COLS * 0.25, STILL_ROWS * 0.7, 8.4, rng);
-  drawSpecimen(grid, scratch, seed, 1, STILL_COLS * 0.2, STILL_ROWS * 0.22, 6.6, rng);
-  drawSpecimen(grid, scratch, seed, 3, STILL_COLS * 0.8, STILL_ROWS * 0.72, 6.6, rng);
-  drawSpecimen(grid, scratch, seed, 4, STILL_COLS * 0.5, STILL_ROWS * 0.48, 6, rng);
+  const placements = [
+    { x: 0.7, y: 0.38, scale: 7.4 },
+    { x: 0.28, y: 0.58, scale: 6.4 },
+    { x: 0.5, y: 0.82, scale: 5.6 },
+    { x: 0.18, y: 0.26, scale: 5.2 },
+    { x: 0.82, y: 0.72, scale: 4.9 },
+  ] as const;
 
-  for (let index = 0; index < 10; index++) {
+  for (let index = 0; index < count; index++) {
+    const placement = placements[index] ?? placements[0];
+
     drawSpecimen(
       grid,
       scratch,
-      seed + index * 13,
-      index % 5,
-      randomBetween(rng, 4, STILL_COLS - 4),
-      randomBetween(rng, 3, STILL_ROWS - 3),
-      randomBetween(rng, 1.9, 2.8),
+      seed,
+      index,
+      STILL_COLS * placement.x,
+      STILL_ROWS * placement.y,
+      placement.scale,
       rng,
     );
   }
 
-  for (let index = 0; index < 30; index++) {
+  for (let index = 0; index < 22; index++) {
     const column = Math.floor(nextRandom(rng) * STILL_COLS);
     const row = Math.floor(nextRandom(rng) * STILL_ROWS);
 
@@ -79,10 +85,10 @@ function drawSpecimen(
 ): void {
   const species = speciesAt(speciesIndex);
   const halfSpan = specimenHalfSpan(species);
-  const reach = (halfSpan + species.antennaReach + 0.2) * scale;
-  const heading = randomBetween(rng, -0.45, 0.45);
+  const reach = (Math.max(halfSpan, specimenHalfHeight(species)) + 0.2) * scale;
+  const heading = randomBetween(rng, -0.3, 0.3);
   const phase = randomBetween(rng, 0, Math.PI * 2);
-  const yaw = randomBetween(rng, -0.5, 0.5);
+  const yaw = randomBetween(rng, -0.35, 0.35);
   const cos = Math.cos(heading);
   const sin = Math.sin(heading);
   const pose = createSpecimenPose(phase, yaw);

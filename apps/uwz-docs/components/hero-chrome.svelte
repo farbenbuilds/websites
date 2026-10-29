@@ -1,4 +1,5 @@
 <script lang="ts">
+  import gsap from "gsap";
   import { onMount } from "svelte";
 
   onMount(() => {
@@ -29,8 +30,66 @@
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
 
+    const motion = gsap.matchMedia();
+
+    motion.add(
+      "(prefers-reduced-motion: no-preference)",
+      () => {
+        const logo = hero.querySelector<HTMLElement>("[data-hero-float]");
+        const dot = hero.querySelector<HTMLElement>(".docs-home-scroll-dot");
+        const halo = hero.querySelector<HTMLElement>(".docs-home-scroll-halo");
+        const tweens: ReturnType<typeof gsap.to>[] = [];
+
+        if (logo) {
+          tweens.push(
+            gsap.to(logo, {
+              y: -5,
+              duration: 3.2,
+              ease: "sine.inOut",
+              repeat: -1,
+              yoyo: true,
+            }),
+          );
+        }
+
+        if (dot) {
+          tweens.push(
+            gsap.to(dot, {
+              y: 7,
+              duration: 1.25,
+              ease: "sine.inOut",
+              repeat: -1,
+              yoyo: true,
+            }),
+          );
+        }
+
+        if (halo) {
+          tweens.push(
+            gsap.fromTo(
+              halo,
+              { opacity: 0.35, scale: 0.88 },
+              {
+                opacity: 0,
+                scale: 1.22,
+                duration: 1.8,
+                ease: "power1.out",
+                repeat: -1,
+              },
+            ),
+          );
+        }
+
+        return () => {
+          for (const tween of tweens) tween.kill();
+        };
+      },
+      hero,
+    );
+
     return () => {
       cancelAnimationFrame(frame);
+      motion.revert();
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       root.removeAttribute("data-uwz-hero");
@@ -38,4 +97,3 @@
     };
   });
 </script>
-

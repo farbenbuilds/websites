@@ -8,7 +8,7 @@ export default defineComponents({
   mdx: {
     ButterflyHero: { component: ButterflyHero, client: "visible" },
     CopyCommand: { component: CopyCommand, client: "visible" },
-    HeroChrome: { component: HeroChrome, client: "load" },
+    HeroChrome: { component: HeroChrome, client: "only" },
     SiteColophon: "./components/site-colophon.astro",
   },
 });

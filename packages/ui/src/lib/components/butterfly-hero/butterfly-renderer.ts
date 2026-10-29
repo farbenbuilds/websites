@@ -1,9 +1,6 @@
-import { PHASE_COUNT } from "./butterfly-data";
 import { draftAt, type Atmosphere } from "./butterfly-atmosphere";
 import type { FieldState } from "./butterfly-field";
-import { midgroundAlpha } from "./butterfly-glyphs";
 import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape";
-import { buildSpriteAtlas, drawSprite, paletteKey, type SpriteAtlas } from "./butterfly-sprites";
 import { rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
 import { drawSpecimens, type SpecimenColors } from "./butterfly-specimen";
 
@@ -11,7 +8,6 @@ export type FieldRenderer = {
   readonly canvas: HTMLCanvasElement;
   readonly context: CanvasRenderingContext2D;
   readonly detail: AnatomyScratch;
-  readonly coverage: AnatomyScratch;
   width: number;
   height: number;
   dpr: number;
@@ -21,8 +17,6 @@ export type FieldRenderer = {
   rows: number;
   fontFamily: string;
   palette: ButterflyPalette;
-  atlas: SpriteAtlas | null;
-  atlasKey: string;
   matrix: HTMLCanvasElement | null;
   matrixKey: string;
   readonly colors: Map<number, SpecimenColors>;
@@ -45,7 +39,6 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
     canvas,
     context,
     detail: createAnatomyScratch(),
-    coverage: createAnatomyScratch(),
     width: 0,
     height: 0,
     dpr: 1,
@@ -55,8 +48,6 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
     rows: 0,
     fontFamily: "ui-monospace, monospace",
     palette: FALLBACK_PALETTE,
-    atlas: null,
-    atlasKey: "",
     matrix: null,
     matrixKey: "",
     colors: new Map(),
@@ -113,7 +104,7 @@ export function resizeRenderer(
   fontFamily: string,
 ): void {
   if (cssWidth < 1 || cssHeight < 1) return;
-  const safeDpr = Math.min(Math.max(dpr, 1), 2);
+  const safeDpr = Math.min(Math.max(dpr, 1), 1.5);
   renderer.width = cssWidth;
   renderer.height = cssHeight;
   renderer.dpr = safeDpr;
@@ -128,21 +119,26 @@ export function resizeRenderer(
   renderer.context.setTransform(safeDpr, 0, 0, safeDpr, 0, 0);
 }
 
-export function ensureAtlas(renderer: FieldRenderer): SpriteAtlas {
-  const key = `${paletteKey(renderer.palette)}|${renderer.dpr}|${renderer.fontFamily}`;
-
-  if (renderer.atlas && renderer.atlasKey === key) {
-    return renderer.atlas;
-  }
-
-  renderer.atlas = buildSpriteAtlas(renderer.palette, renderer.dpr, renderer.fontFamily);
-  renderer.atlasKey = key;
-
-  return renderer.atlas;
-}
-
 function ensureMatrix(renderer: FieldRenderer): HTMLCanvasElement {
-  const key = `${paletteKey(renderer.palette)}|${renderer.cellWidth}|${renderer.cellHeight}|${renderer.dpr}`;
+  const { palette } = renderer;
+
+  const key = [
+    palette.paper.r,
+    palette.paper.g,
+    palette.paper.b,
+    palette.ink.r,
+    palette.ink.g,
+    palette.ink.b,
+    palette.muted.r,
+    palette.muted.g,
+    palette.muted.b,
+    palette.accent.r,
+    palette.accent.g,
+    palette.accent.b,
+    renderer.cellWidth,
+    renderer.cellHeight,
+    renderer.dpr,
+  ].join(":");
 
   if (renderer.matrix && renderer.matrixKey === key) return renderer.matrix;
 
@@ -204,11 +200,8 @@ export function drawField(
 
   drawMatrix(renderer);
   drawAir(renderer, atmosphere);
-  drawMidground(renderer, field, true, atmosphere);
-  drawMidground(renderer, field, false, atmosphere);
   drawTraces(renderer, atmosphere);
-  drawSpecimens(renderer, field, "tile", renderer.colors);
-  drawSpecimens(renderer, field, "glyph", renderer.colors);
+  drawSpecimens(renderer, field, renderer.colors);
   drawPollen(renderer, atmosphere);
 }
 
@@ -216,55 +209,23 @@ function drawAir(renderer: FieldRenderer, atmosphere: Atmosphere): void {
   const { context, cols, rows, cellWidth, cellHeight, palette } = renderer;
   context.font = `500 ${Math.round(cellHeight * 0.58)}px ${renderer.fontFamily}`;
 
-  for (let level = 0; level < 3; level++) {
-    const min = 0.1 + level * 0.16;
-    const max = min + 0.16;
-    context.fillStyle = rgba(palette.muted, 0.06 + level * 0.045);
+  const faint = rgba(palette.muted, 0.06);
+  const light = rgba(palette.muted, 0.1);
+  const strong = rgba(palette.muted, 0.14);
 
-    for (let row = 0; row < rows; row++) {
-      for (let column = 0; column < cols; column++) {
-        const value = draftAt(atmosphere, column, row);
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < cols; column++) {
+      const value = draftAt(atmosphere, column, row);
 
-        if (value < min || value >= max) continue;
-        const glyph = level === 0 ? "." : level === 1 ? "'" : ":";
-        context.fillText(
-          glyph,
-          column * cellWidth + cellWidth / 2,
-          row * cellHeight + cellHeight / 2,
-        );
-      }
+      if (value < 0.1) continue;
+      const glyph = value < 0.26 ? "." : value < 0.42 ? "'" : ":";
+      context.fillStyle = value < 0.26 ? faint : value < 0.42 ? light : strong;
+      context.fillText(
+        glyph,
+        column * cellWidth + cellWidth / 2,
+        row * cellHeight + cellHeight / 2,
+      );
     }
-  }
-}
-
-function drawMidground(
-  renderer: FieldRenderer,
-  field: FieldState,
-  far: boolean,
-  atmosphere: Atmosphere,
-): void {
-  const atlas = ensureAtlas(renderer);
-  const { context, cellWidth, cellHeight } = renderer;
-
-  for (const butterfly of field.midground) {
-    if (butterfly.depth < 0.45 !== far) continue;
-    const phaseIndex = butterfly.frame % PHASE_COUNT;
-
-    const alpha =
-      midgroundAlpha(butterfly.depth) *
-      (far ? 0.92 : 1) *
-      (0.92 + draftAt(atmosphere, butterfly.x, butterfly.y) * 0.08);
-
-    drawSprite(
-      context,
-      atlas,
-      butterfly.species,
-      phaseIndex,
-      butterfly.x * cellWidth,
-      butterfly.y * cellHeight,
-      butterfly.scale * (cellWidth / 8),
-      alpha,
-    );
   }
 }
 

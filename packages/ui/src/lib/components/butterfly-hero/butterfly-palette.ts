@@ -11,6 +11,8 @@ export type ButterflyPalette = {
   readonly accent: Rgb;
 };
 
+export type InkRole = "wing" | "edge" | "vein" | "band" | "eyespot" | "body" | "antenna";
+
 export function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   const amount = t < 0 ? 0 : t > 1 ? 1 : t;
 
@@ -25,13 +27,31 @@ export function butterflyWingColor(
   palette: ButterflyPalette,
   speciesAccent: number,
   shade: number,
-  hind: boolean,
 ): Rgb {
-  const warm = mixRgb(palette.paper, palette.accent, 0.64 + speciesAccent * 0.26);
-  const highlight = mixRgb(palette.accent, palette.ink, 0.42);
-  const base = mixRgb(warm, highlight, 0.32 + shade * 0.4);
+  const warm = mixRgb(palette.paper, palette.accent, 0.82 + speciesAccent * 0.12);
+  const highlight = mixRgb(palette.accent, palette.ink, 0.38);
 
-  return hind ? mixRgb(base, highlight, 0.28) : mixRgb(base, palette.accent, 0.12);
+  return mixRgb(warm, highlight, 0.55 + shade * 0.3);
+}
+
+export function butterflyBodyColor(palette: ButterflyPalette): Rgb {
+  return mixRgb(palette.accent, palette.paper, 0.16);
+}
+
+export function inkFor(palette: ButterflyPalette, part: InkRole): string {
+  if (part === "eyespot") return rgba(palette.accent, 0.95);
+
+  if (part === "edge") return rgba(palette.ink, 0.48);
+
+  if (part === "vein") return rgba(palette.ink, 0.58);
+
+  if (part === "band") return rgba(palette.accent, 0.7);
+
+  if (part === "body") return rgba(palette.paper, 0.9);
+
+  if (part === "antenna") return rgba(palette.accent, 0.85);
+
+  return rgba(palette.ink, 0.7);
 }
 
 export function rgba(color: Rgb, alpha: number): string {
@@ -42,23 +62,4 @@ export function rgba(color: Rgb, alpha: number): string {
 
 export function rgb(color: Rgb): string {
   return `rgb(${color.r}, ${color.g}, ${color.b})`;
-}
-
-export function relativeLuminance(color: Rgb): number {
-  const channel = (value: number): number => {
-    const scaled = value / 255;
-
-    return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
-  };
-
-  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
-}
-
-export function contrastRatio(a: Rgb, b: Rgb): number {
-  const first = relativeLuminance(a);
-  const second = relativeLuminance(b);
-  const lighter = Math.max(first, second);
-  const darker = Math.min(first, second);
-
-  return (lighter + 0.05) / (darker + 0.05);
 }

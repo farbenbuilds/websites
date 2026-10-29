@@ -7,6 +7,7 @@
   type ButterflyHeroProps = {
     locale?: "en" | "vi";
     seed?: number;
+    specimenCount?: number;
   };
 
   const COPY = {
@@ -26,7 +27,7 @@
 
   const PAUSE_KEY = "farben-butterfly-paused";
 
-  let { locale = "en", seed = 20261029 }: ButterflyHeroProps = $props();
+  let { locale = "en", seed = 20261029, specimenCount = 5 }: ButterflyHeroProps = $props();
   let root: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let loop: ButterflyLoop | null = null;
@@ -36,7 +37,7 @@
   let motionAllowed = $state(true);
 
   const copy = $derived(COPY[locale] ?? COPY.en);
-  const still = $derived(generateStill(seed));
+  const still = $derived(generateStill(seed, specimenCount));
 
   function togglePause(): void {
     paused = !paused;
@@ -69,6 +70,7 @@
       canvas,
       hero: root,
       seed,
+      specimenCount: Math.max(1, Math.min(5, Math.round(specimenCount))),
       onReady: () => {
         ready = true;
         failed = false;
@@ -88,7 +90,7 @@
   });
 </script>
 
-<div class="butterfly-hero" bind:this={root} data-butterfly-field>
+<div class="butterfly-hero" bind:this={root}>
   <div class="butterfly-hero-art" aria-hidden="true">
     <pre class="butterfly-hero-still" class:is-hidden={ready && !failed}>{still}</pre>
     <canvas

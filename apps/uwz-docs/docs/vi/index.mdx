@@ -1,6 +1,6 @@
 ---
 title: Giới thiệu
-description: µWebZockets là framework máy chủ zero-allocation, shared-nothing cho Zig — HTTP, WebSocket và JSON-RPC qua một API type-safe duy nhất.
+description: µWebZockets là framework máy chủ zero-allocation, shared-nothing cho Zig — HTTP, WebSocket và RPC qua một API type-safe duy nhất.
 mode: custom
 ---
 
@@ -12,32 +12,53 @@ mode: custom
 
 <section class="docs-home-hero" aria-labelledby="uwz-title">
   <ButterflyHero locale="vi" seed={20261030} />
-  <div class="docs-home-hero-copy" data-butterfly-avoid>
-    <img class="docs-home-mark" src="/icon.svg" alt="" width="72" height="72" aria-hidden="true" />
-    <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
-    <h1 class="docs-home-title" id="uwz-title">
-      µWebZockets
-    </h1>
+  <div class="docs-home-hero-copy">
+    <p class="docs-home-eyebrow editorial-label">{"Zig / HTTP / WebSocket / RPC"}</p>
+    <div class="docs-home-title-row">
+      <img
+        class="docs-home-mark"
+        src="/icon.svg"
+        alt=""
+        width="72"
+        height="72"
+        aria-hidden="true"
+        data-hero-float
+      />
+      <h1 class="docs-home-title" id="uwz-title">
+        µWebZockets
+      </h1>
+    </div>
     <p class="docs-home-summary">
-      <span class="docs-home-summary-text">
-        {
-          "Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API type-safe "
-        }
-        <code>Request</code>
-        {"/"}
-        <code>Response</code>
-        {" duy nhất."}
-      </span>
+      {
+        "Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và RPC qua một API type-safe "
+      }
+      <code>Request</code>
+      {"/"}
+      <code>Response</code>
+      {" duy nhất."}
     </p>
+    <div class="docs-home-actions">
+      <a class="editorial-action editorial-action-primary" href="/vi/getting-started">
+        {"Bắt đầu "}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+      <a
+        class="editorial-action editorial-action-secondary"
+        href="https://github.com/farbenbuilds/uWebZockets"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        {"Xem trên GitHub "}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+    </div>
   </div>
-  <a
-    class="docs-home-scroll"
-    href="#docs-home-main"
-    aria-label="Cuộn đến mục lục tài liệu"
-    data-butterfly-avoid
-  >
-    <span class="docs-home-scroll-label">Cuộn</span>
-    <span class="docs-home-scroll-mark" aria-hidden="true"></span>
+  <a class="docs-home-scroll" href="#docs-home-main" aria-label="Cuộn đến mục lục tài liệu">
+    <span class="docs-home-scroll-halo" aria-hidden="true"></span>
+    <span class="docs-home-scroll-mouse" aria-hidden="true">
+      <span class="docs-home-scroll-dot"></span>
+    </span>
   </a>
 </section>
 
@@ -166,7 +187,7 @@ mode: custom
     ```
 
     Cùng một module mang phần còn lại của bộ công cụ: `app.ws(...)` cho
-    WebSocket, `app.rpc(...)` cho JSON-RPC, `app.static(...)` cho tài nguyên
+    WebSocket, `app.rpc(...)` cho RPC, `app.static(...)` cho tài nguyên
     tĩnh, `build_cluster` cho worker thread-per-core, `init_https_ephemeral`
     cho HTTPS không cần tệp chứng chỉ, cùng `listen_udp` và `init_http3` cho
     HTTP/3.

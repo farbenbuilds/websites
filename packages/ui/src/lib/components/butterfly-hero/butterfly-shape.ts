@@ -1,12 +1,11 @@
-import type { SpeciesSpec, WingSpec } from "./butterfly-data";
-import { angleDelta, clamp, hash2, smoothstep } from "./butterfly-math";
+import type { SpeciesSpec, WingPoint, WingSpec } from "./butterfly-data";
+import { clamp, hash2 } from "./butterfly-math";
 
 export type AnatomyPart = "none" | "body" | "antenna" | "fore" | "hind";
 
 export type AnatomySample = {
   hit: boolean;
   part: AnatomyPart;
-  coverage: number;
   shade: number;
   edge: number;
   vein: number;
@@ -36,16 +35,16 @@ export type SpecimenPose = {
 };
 
 export function createSpecimenPose(phase: number, yaw: number): SpecimenPose {
-  const flapRight = 0.22 + 0.78 * Math.abs(Math.cos(phase));
-  const flapLeft = 0.22 + 0.78 * Math.abs(Math.cos(phase + 0.35));
+  const flapRight = 0.4 + 0.6 * Math.abs(Math.cos(phase));
+  const flapLeft = 0.4 + 0.6 * Math.abs(Math.cos(phase + 0.35));
   const yawAmount = Math.abs(yaw);
   const nearSide = yaw >= 0 ? 1 : -1;
 
   return {
-    foldRight: flapRight * (nearSide === 1 ? 1 + yawAmount * 0.3 : 1 - yawAmount * 0.36),
-    foldLeft: flapLeft * (nearSide === -1 ? 1 + yawAmount * 0.3 : 1 - yawAmount * 0.36),
-    yShiftRight: (nearSide === 1 ? -0.06 : 0.06) * yawAmount,
-    yShiftLeft: (nearSide === -1 ? -0.06 : 0.06) * yawAmount,
+    foldRight: flapRight * (nearSide === 1 ? 1 + yawAmount * 0.2 : 1 - yawAmount * 0.24),
+    foldLeft: flapLeft * (nearSide === -1 ? 1 + yawAmount * 0.2 : 1 - yawAmount * 0.24),
+    yShiftRight: (nearSide === 1 ? -0.04 : 0.04) * yawAmount,
+    yShiftLeft: (nearSide === -1 ? -0.04 : 0.04) * yawAmount,
   };
 }
 
@@ -61,7 +60,6 @@ export function createAnatomyScratch(): AnatomyScratch {
     sample: {
       hit: false,
       part: "none",
-      coverage: 0,
       shade: 0,
       edge: 0,
       vein: 0,
@@ -76,13 +74,62 @@ export function createAnatomyScratch(): AnatomyScratch {
 function resetAnatomySample(sample: AnatomySample): void {
   sample.hit = false;
   sample.part = "none";
-  sample.coverage = 0;
   sample.shade = 0;
   sample.edge = 0;
   sample.vein = 0;
   sample.band = 0;
   sample.eyespot = 0;
   sample.grain = 0;
+}
+
+function pointInPolygon(points: readonly WingPoint[], x: number, y: number): boolean {
+  let inside = false;
+
+  for (let index = 0, previous = points.length - 1; index < points.length; previous = index++) {
+    const a = points[index];
+    const b = points[previous];
+
+    if (!a || !b) continue;
+    const crosses = a.y > y !== b.y > y;
+    const edgeX = ((b.x - a.x) * (y - a.y)) / (b.y - a.y || 0.0001) + a.x;
+
+    if (crosses && x < edgeX) inside = !inside;
+  }
+
+  return inside;
+}
+
+function segmentDistance(x: number, y: number, a: WingPoint, b: WingPoint): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = dx * dx + dy * dy;
+  const t = length < 0.0001 ? 0 : clamp(((x - a.x) * dx + (y - a.y) * dy) / length, 0, 1);
+
+  return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy));
+}
+
+function wingEdgeDistance(points: readonly WingPoint[], x: number, y: number): number {
+  let closest = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < points.length; index++) {
+    const a = points[index];
+    const b = points[(index + 1) % points.length];
+
+    if (!a || !b) continue;
+    closest = Math.min(closest, segmentDistance(x, y, a, b));
+  }
+
+  return closest;
+}
+
+function wingReach(wing: WingSpec): number {
+  let reach = 0;
+
+  for (const point of wing.points) {
+    if (point.x > reach) reach = point.x;
+  }
+
+  return Math.max(reach, 0.1);
 }
 
 function sampleWing(
@@ -100,32 +147,26 @@ function sampleWing(
 
   const fold = side > 0 ? pose.foldRight : pose.foldLeft;
   const wx = outward / fold;
-  const wy = y - wing.cy + (side > 0 ? pose.yShiftRight : pose.yShiftLeft);
+  const wy = y + (side > 0 ? pose.yShiftRight : pose.yShiftLeft);
 
-  const nx = (wx - wing.cx) / wing.rx;
-  const ny = wy / wing.ry;
-  const radius = Math.sqrt(nx * nx + ny * ny);
+  if (!pointInPolygon(wing.points, wx, wy)) return false;
 
-  if (radius < 0.0001) return false;
-
-  const theta = Math.atan2(ny, nx);
-  const tipDelta = angleDelta(theta, wing.tipAngle);
-  const tip = wing.tipReach / (1 + tipDelta * tipDelta * 9);
-  const scallop = triangleWave((wing.lobes * theta) / (Math.PI * 2)) * 2 - 1;
-  const edgeRadius = 1 + wing.scallop * scallop + tip;
-  const ratio = radius / edgeRadius;
+  const distance = wingEdgeDistance(wing.points, wx, wy);
+  const reach = wingReach(wing);
+  const theta = Math.atan2(wy, wx);
   const veinWave = triangleWave((theta * species.veinCount) / (Math.PI * 2) + 0.1) * 2 - 1;
+  const radius = Math.hypot(wx, wy * 0.8);
 
   const bandWave =
     triangleWave(radius * species.bandCount * 0.5 + species.bandPhase / (Math.PI * 2)) * 2 - 1;
 
-  out.edge = smoothstep(0.86, 1, ratio);
-  out.shade = clamp(0.64 + 0.36 * (1 - ratio) + 0.08 * (ny / radius), 0, 1);
+  out.edge = clamp(1 - distance / 0.075, 0, 1);
+  out.shade = clamp(0.55 + 0.45 * (wx / reach) + 0.05 * wy, 0, 1);
   out.vein = radius > 0.16 && Math.abs(veinWave) < 0.13 ? 1 : 0;
   out.band = radius > 0.18 && Math.abs(bandWave) < 0.16 ? 1 : 0;
-  out.inside = ratio <= 1;
+  out.inside = true;
 
-  return out.inside;
+  return true;
 }
 
 function inBody(species: SpeciesSpec, x: number, y: number): boolean {
@@ -172,30 +213,6 @@ function inAntenna(species: SpeciesSpec, x: number, y: number): boolean {
   return closest < 0.022;
 }
 
-export function isInside(
-  species: SpeciesSpec,
-  x: number,
-  y: number,
-  pose: SpecimenPose,
-  scratch: AnatomyScratch,
-): boolean {
-  if (inBody(species, x, y)) return true;
-
-  const side = x < 0 ? -1 : 1;
-
-  if (x * side > 0.55 && Math.abs(y - 0.02) < 0.065) return false;
-
-  if (sampleWing(species.fore, species, side, x, y, pose, scratch.wing)) {
-    return true;
-  }
-
-  if (sampleWing(species.hind, species, side, x, y, pose, scratch.wing)) {
-    return true;
-  }
-
-  return inAntenna(species, x, y);
-}
-
 export function sampleAnatomy(
   species: SpeciesSpec,
   x: number,
@@ -213,32 +230,22 @@ export function sampleAnatomy(
     const t = clamp((y - start) / (end - start), 0, 1);
     out.hit = true;
     out.part = "body";
-    out.coverage = 1;
     out.shade = 0.9 - t * 0.42;
-    out.edge = 0;
     out.grain = hash2(Math.round(x * 32), Math.round(y * 32), grainSeed + species.glyphBias * 17);
 
     return out;
   }
 
   const side = x < 0 ? -1 : 1;
-  const outward = x * side;
-
-  if (outward > 0.55 && Math.abs(y - 0.02) < 0.065) return out;
 
   if (sampleWing(species.fore, species, side, x, y, pose, scratch.wing)) {
     out.hit = true;
     out.part = "fore";
-    out.coverage = 1;
     out.shade = scratch.wing.shade;
     out.edge = scratch.wing.edge;
     out.vein = scratch.wing.vein;
     out.band = scratch.wing.band;
-    out.grain = hash2(
-      Math.round(outward * 30),
-      Math.round(y * 30),
-      grainSeed + species.glyphBias * 31,
-    );
+    out.grain = hash2(Math.round(x * 30), Math.round(y * 30), grainSeed + species.glyphBias * 31);
 
     return out;
   }
@@ -246,20 +253,15 @@ export function sampleAnatomy(
   if (sampleWing(species.hind, species, side, x, y, pose, scratch.wing)) {
     out.hit = true;
     out.part = "hind";
-    out.coverage = 1;
     out.shade = scratch.wing.shade;
     out.edge = scratch.wing.edge;
     out.vein = scratch.wing.vein;
     out.band = scratch.wing.band;
 
-    const eyeDistance = Math.hypot(outward - species.eyespot.x, y - species.eyespot.y);
+    const eyeDistance = Math.hypot(Math.abs(x) - species.eyespot.x, y - species.eyespot.y);
 
     out.eyespot = eyeDistance < species.eyespot.radius ? 1 : 0;
-    out.grain = hash2(
-      Math.round(outward * 30),
-      Math.round(y * 30),
-      grainSeed + species.glyphBias * 47,
-    );
+    out.grain = hash2(Math.round(x * 30), Math.round(y * 30), grainSeed + species.glyphBias * 47);
 
     return out;
   }
@@ -267,7 +269,6 @@ export function sampleAnatomy(
   if (inAntenna(species, x, y)) {
     out.hit = true;
     out.part = "antenna";
-    out.coverage = 1;
     out.shade = 0.55;
     out.edge = 1;
     out.grain = hash2(Math.round(x * 32), Math.round(y * 32), grainSeed);
@@ -279,5 +280,17 @@ export function sampleAnatomy(
 }
 
 export function specimenHalfSpan(species: SpeciesSpec): number {
-  return Math.max(species.fore.cx + species.fore.rx, species.hind.cx + species.hind.rx);
+  return Math.max(wingReach(species.fore), wingReach(species.hind));
+}
+
+export function specimenHalfHeight(species: SpeciesSpec): number {
+  let reach = Math.max(species.antennaReach, species.abdomenLength);
+
+  for (const wing of [species.fore, species.hind]) {
+    for (const point of wing.points) {
+      if (Math.abs(point.y) > reach) reach = Math.abs(point.y);
+    }
+  }
+
+  return reach;
 }

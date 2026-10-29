@@ -1,7 +1,6 @@
 import { BODY_RAMP, EDGE_RAMP, WING_RAMP } from "./butterfly-data";
+import type { InkRole } from "./butterfly-palette";
 import type { AnatomySample } from "./butterfly-shape";
-
-export type InkRole = "wing" | "edge" | "vein" | "band" | "eyespot" | "body" | "antenna";
 
 export function glyphFor(sample: AnatomySample, glyphBias: number): string {
   if (!sample.hit) return " ";
@@ -54,10 +53,6 @@ export function roleFor(sample: AnatomySample): InkRole {
   if (sample.band > 0) return "band";
 
   return "wing";
-}
-
-export function midgroundAlpha(depth: number): number {
-  return 0.86 + depth * 0.12;
 }
 
 export function showsGlyph(sample: AnatomySample, grainThreshold: number): boolean {

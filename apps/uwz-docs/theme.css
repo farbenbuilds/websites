@@ -14,6 +14,7 @@
 @import "../../../styles/blume-chrome.css";
 @import "../../../styles/blume-content.css";
 @import "../../../styles/docs-home.css";
+@import "../../../styles/docs-home-sections.css";
 
 :root {
   --blume-background: #f4f0e6;

@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: µWebZockets is a zero-allocation, shared-nothing server framework for Zig — HTTP, WebSocket, and JSON-RPC from one type-safe API.
+description: µWebZockets is a zero-allocation, shared-nothing server framework for Zig — HTTP, WebSocket, and RPC from one type-safe API.
 mode: custom
 ---
 
@@ -12,32 +12,53 @@ mode: custom
 
 <section class="docs-home-hero" aria-labelledby="uwz-title">
   <ButterflyHero locale="en" />
-  <div class="docs-home-hero-copy" data-butterfly-avoid>
-    <img class="docs-home-mark" src="/icon.svg" alt="" width="72" height="72" aria-hidden="true" />
-    <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
-    <h1 class="docs-home-title" id="uwz-title">
-      µWebZockets
-    </h1>
+  <div class="docs-home-hero-copy">
+    <p class="docs-home-eyebrow editorial-label">{"Zig / HTTP / WebSocket / RPC"}</p>
+    <div class="docs-home-title-row">
+      <img
+        class="docs-home-mark"
+        src="/icon.svg"
+        alt=""
+        width="72"
+        height="72"
+        aria-hidden="true"
+        data-hero-float
+      />
+      <h1 class="docs-home-title" id="uwz-title">
+        µWebZockets
+      </h1>
+    </div>
     <p class="docs-home-summary">
-      <span class="docs-home-summary-text">
-        {
-          "A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through one type-safe "
-        }
-        <code>Request</code>
-        {"/"}
-        <code>Response</code>
-        {" API."}
-      </span>
+      {
+        "A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and RPC through one type-safe "
+      }
+      <code>Request</code>
+      {"/"}
+      <code>Response</code>
+      {" API."}
     </p>
+    <div class="docs-home-actions">
+      <a class="editorial-action editorial-action-primary" href="/getting-started">
+        {"Getting Started "}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+      <a
+        class="editorial-action editorial-action-secondary"
+        href="https://github.com/farbenbuilds/uWebZockets"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        {"View on GitHub "}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+    </div>
   </div>
-  <a
-    class="docs-home-scroll"
-    href="#docs-home-main"
-    aria-label="Scroll to the documentation index"
-    data-butterfly-avoid
-  >
-    <span class="docs-home-scroll-label">Scroll</span>
-    <span class="docs-home-scroll-mark" aria-hidden="true"></span>
+  <a class="docs-home-scroll" href="#docs-home-main" aria-label="Scroll to the documentation index">
+    <span class="docs-home-scroll-halo" aria-hidden="true"></span>
+    <span class="docs-home-scroll-mouse" aria-hidden="true">
+      <span class="docs-home-scroll-dot"></span>
+    </span>
   </a>
 </section>
 
@@ -166,7 +187,7 @@ mode: custom
     ```
 
     The same module carries the rest of the battery: `app.ws(...)` for WebSocket,
-    `app.rpc(...)` for JSON-RPC, `app.static(...)` for assets, `build_cluster`
+    `app.rpc(...)` for RPC, `app.static(...)` for assets, `build_cluster`
     for thread-per-core workers, `init_https_ephemeral` for HTTPS with no
     certificate files, and `listen_udp` plus `init_http3` for HTTP/3.
 
