@@ -1,11 +1,15 @@
-# Editorial documentation design and ASCII butterfly heroes
+# Editorial documentation design and living ASCII butterfly heroes
 
 This is the implementation plan for the uWebZockets and ventiws documentation
 sites. It covers two coupled tracks: an editorial design system for the site
-chrome, content components, and documentation home pages, with the visual grammar of
-[vizejs.dev](https://vizejs.dev/) as its reference; and the already-decided ASCII
-butterfly heroes for the home pages. All boxes below describe future work; this
-document does not implement either track.
+chrome, content components, and documentation home pages, with the visual grammar
+of [vizejs.dev](https://vizejs.dev/) as its reference; and the already-decided
+ASCII butterfly heroes for the home pages. The hero also adopts the animation and
+material grammar of the ASCII koi pond on [daoho.dev](https://www.daoho.dev/),
+studied in its [public repository](https://github.com/Dao-Ho/portfolio). The
+ascii-sharks field remains the density and engineering base; the koi pond supplies
+the material, atmosphere, and choreography that make it feel alive. All boxes
+below describe future work; this document does not implement either track.
 
 Vize is a visual reference, not a source to copy. Its documentation theme is
 built for Ox Content and Vue, while these sites use Blume, Astro, and Svelte.
@@ -43,18 +47,21 @@ separate decision with its own plan.
 
 ## Status and decisions
 
-| Decision                                              | Status                                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Blume remains the framework for the two docs apps     | Decided. Do not eject or hand-edit generated output.                        |
-| Vize supplies the visual grammar                      | Decided. Do not copy its code, palette, identity, or assets.                |
-| Docs home pages use Blume's `mode: custom`            | Decided. Only the two existing Blume apps; not a future framework decision. |
-| The butterfly field uses Svelte, Canvas 2D, and CSS   | Decided. Dense field; no Three.js, Threlte, or WebGL.                       |
-| Both docs sites share one editorial grammar           | Decided. Keep each site's accent and paper temperature.                     |
-| Blume keeps docs routing, search, i18n, and discovery | Decided. Restyle only the presentation boundary.                            |
+| Decision                                              | Status                                                                       |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Blume remains the framework for the two docs apps     | Decided. Do not eject or hand-edit generated output.                         |
+| Vize supplies the visual grammar                      | Decided. Do not copy its code, palette, identity, or assets.                 |
+| Dao Ho's koi pond supplies the hero animation grammar | Decided. Study only. The repository has no license, so do not copy anything. |
+| Docs home pages use Blume's `mode: custom`            | Decided. Only the two existing Blume apps; not a future framework decision.  |
+| The butterfly field uses Svelte, Canvas 2D, and CSS   | Decided. Dense field; no Three.js, Threlte, or WebGL.                        |
+| Large specimens rasterize procedurally into cells     | Decided. Small and midground butterflies use a cached sprite atlas.          |
+| Both docs sites share one editorial grammar           | Decided. Keep each site's accent and paper temperature.                      |
+| Blume keeps docs routing, search, i18n, and discovery | Decided. Restyle only the presentation boundary.                             |
 
 uWebZockets keeps its orange accent over warm paper. ventiws keeps its teal
 accent over cool paper. The layout, type, rules, and component grammar are
-shared.
+shared. The hero keeps the same two-temperature structure while adopting one
+animation grammar.
 
 ### Hero technology decision
 
@@ -65,18 +72,35 @@ scene runs 85 to 340 small fish plus four large sharks on a Canvas 2D cell grid.
 Replacing those fish and sharks with a butterfly population at that density makes
 one DOM node per glyph the wrong renderer.
 
+The animation target is not a decorative sprinkle. The koi pond on
+[daoho.dev](https://www.daoho.dev/) is a single-screen ASCII habitat: a
+full-viewport Canvas 2D cell field in which a few large, procedurally outlined koi
+carry the subject, many smaller details carry depth, and wake, ripples, shadow,
+food, and bite flashes make the field feel inhabited. The butterfly hero adopts
+that material and motion grammar at documentation scale. Two to four poster-scale
+specimen butterflies are rasterized procedurally into cells with real wing
+anatomy, veins, and eyespots. A dense midground of smaller butterflies comes from
+a cached sprite atlas. A quiet atmosphere of drifting pollen, wingbeat downdraft,
+and fading air traces gives the field weather. The hero remains a bounded region,
+not a page-wide canvas, but inside that frame it should read as one continuous
+living illustration rather than a repeated icon pattern.
+
 Use Svelte for the component lifecycle, a Canvas 2D context for the field, and
 CSS for the surrounding hero. The canvas draws monospace glyphs into a cell grid;
-the simulation handles drift, wing phase, depth, and wrapping. Three.js, Threlte,
-and WebGL are unnecessary for a two-dimensional cell field. GSAP is not the right
-driver for a cell simulation, so it does not own the hero loop.
+the simulation handles drift, wing phase, depth, body-space texture, and wrapping.
+Three.js, Threlte, and WebGL are unnecessary for a two-dimensional cell field.
+GSAP is not the right driver for a cell simulation, so it does not own the hero
+loop.
 
 Canvas cannot render without JavaScript, so keep a server-rendered static ASCII
 arrangement behind it. The canvas replaces the static art only after hydration; if
 the canvas fails or the reader has no JavaScript, the static art remains. Draw
-original butterflies and write independent simulation code. Adapt ascii-sharks'
-engineering principles, such as a fixed timestep, capped device pixel ratio,
-offscreen pausing, and a reduced-motion still frame, not its classes or code.
+original butterflies and write independent simulation code. Adapt the engineering
+principles shared by ascii-sharks and the koi pond, such as a fixed timestep,
+capped device pixel ratio, content avoidance, offscreen pausing, one coherent
+still frame under reduced motion, and cleanup on unmount, not their classes or
+code. The koi pond repository publishes no license file, so treat it as all
+rights reserved and copy nothing from it.
 
 ## Goal and non-goals
 
@@ -98,6 +122,12 @@ Non-goals for this plan:
 - Do not replace Blume's search, localization, navigation, or generated
   `llms.txt` and `llms-full.txt` output.
 - Do not clone Vize's layout pixel for pixel or reuse its palette and assets.
+- Do not reproduce a koi pond, koi, water, feeding behavior, or the koi pond's
+  palette, fonts, copy, code, or artwork.
+- Do not copy or adapt code from Dao Ho's portfolio. The repository publishes no
+  license file, so it is a study reference only.
+- Do not turn the hero into a game, a full-page canvas, or a click-to-feed
+  interaction.
 - Do not implement the design or hero in the pull request that lands this
   document.
 
@@ -141,6 +171,72 @@ page-wide background.
 | Bottom mobile action bar                   | Reject. Blume's built-in drawer, search, and theme controls cover the need; M1 verifies them.                           |
 | Fixed full-page ambient WebGL canvas       | Reject. Use a bounded Canvas 2D butterfly field inside the hero; no page-wide canvas.                                   |
 | Vize palette, Helvetica, name, logo, copy  | Reject. Keep Google Sans Flex, Be Vietnam Pro, JetBrains Mono, and Farben's butterfly mark.                             |
+
+## Reference study: Dao Ho koi pond
+
+Checked on 2026-10-29 against the live site and the repository at commit
+`914651c`. The home page is one single-screen scene: a full-viewport Canvas 2D
+ASCII koi pond behind a small monospace prose block, a centered one-line nav, and
+a theme toggle. The field is the hero, and the text behaves like a caption to it.
+
+The repository has no license file and no license metadata. Treat it as all
+rights reserved. This study records observable behavior and animation principles
+only; it does not grant permission to copy code, artwork, palettes, fonts, or
+copy.
+
+| Surface              | Observed behavior                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stage                | `100dvh`, no scroll, canvas `absolute inset-0`, text and nav above it, prose bottom-aligned with wide gutters. Dark is the default theme.                                                                                                        |
+| Cell grid            | Near-square cells about 8 to 12px wide and 2px taller, roughly 125 columns. Per-cell typed buffers hold glyph, color, alpha, tile color, tile alpha, and a text-dimming multiplier.                                                              |
+| Anatomy              | Koi are procedural, not sprites: a 20-node spine, analytic body half-width, fanned tail, pectoral fins, eye, and barbels. Cell coverage is sampled at the center and four sub-points.                                                            |
+| Material             | Every cell can carry a tinted tile and a glyph. Tiles are mixed toward the page background, shaded by body curvature, and etched with a density-ranked glyph. Red patches run a multi-stop color ramp with a travelling sheen.                   |
+| Body-locked texture  | Markings, scale grain, and glints are keyed to body coordinates and koi id, so the pattern rides with the skin instead of shimmering through the grid.                                                                                           |
+| Water                | Layered systems make the pond feel inhabited: a blurred wake-energy field deposited by tails and the pointer, expanding ASCII ripple rings, a depth-offset shadow, and short-lived pellets and bite flashes.                                     |
+| Behavior             | Koi wander, burst and coast with tail beats, drift between depth layers, turn curious near the pointer, flee a fast swipe, and race toward food dropped by a click. Chasing raises speed, turn rate, and body wave amplitude together.           |
+| Composition          | One large subject group, a few young fish for scale, and a field of small effects. No cards or colored panels in the stage; the only chrome is a small mono nav and hover cards.                                                                 |
+| Text hierarchy       | Monospace throughout at 13 to 15px. A 0.6-opacity quote with a blinking caret, a 0.2s-delayed fade-in for the prose, and opacity steps at 0.6, 0.4, and 0.32 for metadata and socials.                                                           |
+| Content safety       | Nodes marked for avoidance are measured every 30 frames, nearby boxes merge at a 160px gap, koi steer around them, and cells under text dim to 0.15.                                                                                             |
+| Interaction feedback | Hovering a citation dims the rest of the prose with `:has`, underlines firm from 35% to full foreground, and a source card enters in 0.12s.                                                                                                      |
+| Loop and resilience  | Fixed 1/60s step, at most four steps per frame, delta clamped to 0.1s. DPR capped at 2. Reduced motion pre-simulates four seconds and holds one frame. Resize and intersection observers schedule work; every listener and observer is released. |
+| Theme                | Two palette objects, one per mode, swapped through the renderer; the stage transitions its colors in 300ms while controls use 150ms.                                                                                                             |
+
+### Why it looks alive
+
+1. Scale contrast. Two or three large bodies carry the subject while dozens of
+   small marks carry depth. The eye reads anatomy first and texture second.
+2. Material honesty. Tiles and glyphs are composed like ink on paper. The field
+   is not a wall of characters, and it is not a smooth illustration with ASCII
+   decoration on top.
+3. Body-locked detail. Markings, grain, and glints belong to the creature. The
+   grid never crawls underneath them.
+4. Rhythm. Burst-and-coast tail beats, depth changes, curiosity, and startle give
+   the motion a pulse. A constant speed with a constant sine wave would read as a
+   screensaver.
+5. Memory. The wake field diffuses and decays, so the scene retains a short
+   history of movement. Motion leaves a trace instead of disappearing.
+6. Inverted hierarchy. The art is large and the prose is small. The typography is
+   confident enough to step back.
+7. Restraint. Two neutral surfaces, one accent, one glyph family, one cell grid.
+   The home chrome is mostly borderless. Hover cards add a quiet shadow, which
+   Farben does not adopt.
+
+### What the butterfly hero adopts
+
+| Koi pond move                         | Farben decision                                                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Large procedural subjects             | Adopt for two to four foreground specimen butterflies with real wing outlines, veins, antennae, and eyespots.                            |
+| Tinted cell tiles plus glyphs         | Adopt with original butterfly anatomy and Farben palettes. Tiles carry wing color; glyphs carry veins, edges, and body texture.          |
+| Body-locked markings and glints       | Adopt. Key wing bands, eyespots, and vein detail to body coordinates so they do not shimmer.                                             |
+| A layered living field                | Adapt water to air: a diffusing wingbeat downdraft field, drifting pollen, and short-lived air traces. No water, ripples, food, or fish. |
+| Burst-and-coast behavior              | Adopt as flap-and-glide cycles, with depth, phase, and scale variation so the field never visibly loops.                                 |
+| Pointer curiosity and feeding         | Adapt to a calm breeze only. A nearby pointer lifts and parts the field; no click, no feeding, no touch capture, no gameplay.            |
+| Content avoidance and dimming         | Adopt. Measure hero content boxes, merge nearby boxes, steer around them, and dim cells under text.                                      |
+| Mono caption prose over a large field | Adapt. Keep the editorial display h1 and readable body copy, but bottom-align the hero text and let the field rise above and beside it.  |
+| Full-page canvas and no-scroll stage  | Reject. The docs hero stays bounded and the first useful action stays visible at 320x568.                                                |
+| Koi pond palette, fonts, and copy     | Reject. Keep Farben's tokens, fonts, copy, and butterfly identity.                                                                       |
+| Click-to-feed interaction             | Reject. A documentation home page must not become a toy or hide navigation behind pointer play.                                          |
+| Blinking caret and native transitions | Reject in docs chrome. Keep motion inside the hero and short control transitions.                                                        |
+| Repository code and artwork           | Reject. The repository is unlicensed. Reimplement the behavior from written principles and original geometry.                            |
 
 ## Design grammar
 
@@ -229,10 +325,19 @@ diacritic reading.
 
 - Controls transition color, background, border, and transform in 120-180ms.
   Do not animate layout properties.
+- The docs home copy may enter once on load with a 240-360ms opacity and 4-8px
+  translate fade. Stagger the eyebrow, heading, summary, and actions by no more
+  than 80ms. Do not add scroll-triggered reveals.
+- Do not add a blinking caret, a typewriter effect, a marquee, a parallax layer,
+  or a cursor-following ornament outside the hero field.
 - Focus is a visible 2px accent ring with a 2px offset. Do not remove an outline
   without a replacement.
 - Hover shifts text to foreground and background to muted; active rows add
   weight. Disabled controls use reduced opacity plus a cursor change.
+- A citation or inline link may dim its surrounding text only when the
+  destination is a supplement to the sentence, not when the sentence depends on
+  the linked words. Keep the dimming at or above 32% foreground and restore it on
+  Escape, blur, and pointer leave.
 - Every non-essential transition has a `prefers-reduced-motion: reduce` path.
 
 ## Site chrome contract
@@ -318,14 +423,18 @@ The docs home page has five regions:
    scrolling.
 4. Two actions: Getting Started as the ink-filled primary link, GitHub as the
    bordered secondary link.
-5. A dense Canvas 2D butterfly field in a bounded decorative region beside the
-   text, never over the heading, paragraph, or actions.
+5. A dense Canvas 2D butterfly field in a bounded decorative region beside or
+   behind the text, never over the heading, paragraph, or actions.
 
-On desktop, use an asymmetric composition: text in roughly a 5/12 column and
-the canvas in a 7/12 field that may bleed to the right edge. On mobile, stack the
-text first and place a shorter canvas band after it; never put art behind the
-summary. A paper scrim may sit between the canvas and the text, but no glyph may
-cross the text exclusion area.
+On desktop, use an asymmetric composition: text bottom-aligned in roughly a 5/12
+column, with the canvas in a 7/12 field that bleeds to the right and top edges of
+the hero. The field should feel like a plate printed on the page, not a widget in
+a box. On mobile, stack the text first and place a shorter canvas band after it;
+never put art behind the summary. A paper scrim may sit between the canvas and the
+text, but no glyph may cross the text exclusion area. The hero carries the
+reference's inverted hierarchy at documentation scale: the field is large and the
+metadata is small, while the h1 stays a real display heading and the first action
+stays above the fold.
 
 Below the hero:
 
@@ -350,49 +459,86 @@ The page should read as an editorial front page, not a marketing splash.
 ## Butterfly hero contract
 
 The hero is decoration with a job: give each site a quiet, recognizable identity
-without competing with documentation. It is a dense field, not a sparse accent.
+without competing with documentation. It should read as one living printed plate:
+two to four large specimen butterflies, a dense midground population, and
+drifting air share one cell grid. The reference is the koi pond's sense of
+habitat, material, and rhythm, not its fish, water, palette, or code. It is a
+dense field, not a sparse accent.
 
 ### Field and sprites
 
-- Render a dense Canvas 2D cell field, not one DOM node per glyph. Use three to
-  five original butterfly designs at two or three scales, repeated with depth,
-  opacity, and wing phase.
-- Start around 80 to 160 small and midground butterflies plus three or four large
-  foreground butterflies on a desktop hero. Start around 24 to 48 plus one or
-  two large ones at 320px. Treat these as tuning targets and adjust from measured
-  frame time and visual review.
-- Draw monospace glyphs into a cell grid sized to the mono font. Pre-render each
-  butterfly design and scale into an offscreen canvas, then draw instances with
-  `drawImage`; do not call `fillText` per glyph per frame. Rebuild the sprite
-  cache when the palette, font, or DPR changes, or draw sprites as masks and tint
-  them at draw time. Keep each sprite recognizable at its rendered size, and
-  inspect the grid at 1x and 2x device pixel ratio.
+- Use a hybrid renderer. Render every butterfly into a Canvas 2D cell grid, but
+  split the population by size. Two to four foreground specimen butterflies are
+  rasterized procedurally per frame. The 80 to 160 small and midground
+  butterflies are pre-rendered sprites drawn with `drawImage`. At 320px start
+  with 24 to 48 small butterflies plus one specimen, then tune from measured
+  frame time. The specimen count is a hard cap, not a tuning variable.
+- Size the cell grid from the mono face. Start near 8 to 12px wide with a cell
+  2px taller than it is wide. Derive the column count from the measured canvas,
+  not from breakpoints; expect roughly 60 to 110 columns on desktop and 35 to 60
+  on a narrow hero.
+- Draw original butterfly anatomy for the specimens: a spine, thorax, abdomen,
+  antennae, forewing, hindwing, wing margin, veins, and an eyespot. Use analytic
+  wing outlines and sample cell coverage at the center plus four sub-points, like
+  a tiny rasterizer. Do not trace a photograph or copy a reference sprite.
+- Use the koi pond's tile-plus-glyph material. A wing cell may carry a tinted
+  tile for the wing wash and a glyph for the vein, margin, or texture. Cells near
+  the edge get partial alpha and sparse glyphs. The field should read as ink and
+  pigment, not as a wall of characters.
+- Pre-render each midground species at three wing phases and two or three scales
+  into an offscreen atlas. Rebuild the atlas when the palette, mono face, or DPR
+  changes, or tint mask sprites at draw time. Keep each silhouette legible at its
+  smallest rendered size and inspect the atlas at 1x and 2x DPR. A sprite smaller
+  than roughly 6 by 4 cells is a dot, not a butterfly; use a mote instead.
+- Lock pattern detail to body coordinates. Wing bands, eyespots, veins, and grain
+  must ride with the wing through the flap cycle, keyed by body position and
+  instance id. Never let a random per-frame hash shimmer across the texture.
+- Build depth from alpha, glyph density, and scale, not from blur, shadow, or
+  color temperature. Foreground specimens keep full contrast. Midground
+  butterflies sit around 40 to 70% and the far field around 20 to 35%, with
+  sparser glyphs as they recede.
 - uWebZockets uses orange, amber, and yellow wing accents over the warm neutral
   surface. ventiws uses blue, green, and teal accents over the cool neutral
-  surface. Use hue or brightness variation within the site palette, not a
-  rainbow. Set palettes at the host layer, never inside the shared field logic.
+  surface. Keep the site accent for eyespots, pollen highlights, and the
+  brightest wing edge. Use hue or brightness variation within the site palette,
+  not a rainbow. Set palettes at the host layer, never inside shared field logic.
+- Give the field weather. A diffusing wingbeat downdraft field, drifting pollen
+  motes, and short fading air traces make the scene feel inhabited. This replaces
+  the pond's water, wake, ripples, and food; do not draw water, bubbles, ripples,
+  pellets, or fish.
 - Use a calm editorial print composition: generous space, asymmetric balance,
   fine rules, crisp mono glyphs, and selective color. Avoid decorative cultural
-  text, symbols, or imagery that suggests an unverified product connection.
+  text, symbols, or imagery that suggests an unverified product connection. The
+  field must not spell readable words.
 - Keep the heading, summary, and links as semantic MDX or HTML. Treat the
   butterfly field as decoration, never as the only way to convey information.
   Do not put decorative glyphs into headings or link names.
 - Bound the canvas to the hero region and keep a hard exclusion area around the
   title, summary, actions, navigation, search, and code. A paper scrim may sit
   between the canvas and the text. Never draw glyphs over reading text.
-- Reduce the density, not just the canvas size, on narrow screens.
+- Reduce density, not just canvas size, on narrow screens.
 
 ### Rendering and motion
 
+- Compose in a fixed layer order: air field, far butterflies, midground
+  butterflies, air traces, specimen tiles, specimen glyphs, pollen highlights,
+  then the text-dimming pass. Draw only occupied cells; never loop over every
+  possible glyph string each frame.
+- Measure content safety from the DOM. Mark the hero title, summary, actions,
+  and any other protected block with a field-avoid hook, measure their boxes on
+  resize and every 30 frames, and merge boxes closer than about 160px so
+  butterflies are not squeezed into a slot between them. Steer the field around
+  the merged boxes with a soft repulsion and dim cells under text to about 0.15
+  with a smoothstep falloff over four cells.
 - Read the host `--farben-field-*` palette aliases for paper, ink, muted, and
   accent on mount and when the theme attribute changes through a
   `MutationObserver`. The shared code does not read `--blume-*` directly. Update
-  the palette, rebuild any tinted sprite cache, and redraw the current frame;
-  draw a still only when reduced motion is active or the field is paused.
+  the palette, rebuild the sprite atlas, and redraw the current frame; draw a
+  still only when reduced motion is active or the field is paused.
 - Wait up to two seconds for the mono face with `document.fonts.load` before the
   first draw. If it fails, draw with the system mono fallback and redraw when the
-  face loads. Recompute the cell grid and rebuild the sprite cache after the font
-  is ready. Canvas text can start before a webfont is ready, and a late font swap
+  face loads. Recompute the cell grid and rebuild the atlas after the font is
+  ready. Canvas text can start before a webfont is ready, and a late font swap
   would change the cell metrics.
 - Render the full first-frame composition as one server-rendered `<pre>`, not one
   node per glyph. Constrain it to the same hero art box with overflow hidden and
@@ -405,33 +551,43 @@ without competing with documentation. It is a dense field, not a sparse accent.
   motion, not the default no-JavaScript art.
 - Mark the canvas `aria-hidden="true"` and `pointer-events-none`. Keep the pause
   control outside that subtree with an accessible name and visible focus.
-- Respect `prefers-reduced-motion: reduce`: keep the static arrangement, or
-  advance the simulation to a settled state and crossfade to one still frame
-  instead of starting the loop. React when the preference changes.
+- Respect `prefers-reduced-motion: reduce`: pre-simulate about four seconds so the
+  butterflies spread and settle, then hold one coherent frame. Do not start the
+  loop. React when the preference changes.
+- Give the motion a rhythm. Each butterfly flaps and glides on its own cycle, with
+  a short burst of wingbeats followed by a longer glide. Vary phase, scale, depth,
+  heading, and speed. A foreground specimen may settle for a few seconds, hold
+  its wings closed, then leave. The field must never visibly loop or beat in
+  unison.
 - If motion lasts more than five seconds alongside content, provide a
   keyboard-operable pause and resume control and persist its state for the page
   visit. Pausing stops the loop without hiding the still field.
 - Use one fixed-timestep `requestAnimationFrame` loop, starting at 1/60s with at
-  most four steps per frame. Cap the device pixel ratio at 2 and recompute it on
-  resize; rebuild the cell grid and sprite cache when it changes. Pause on
-  `visibilitychange` and when the hero leaves the viewport through an
-  `IntersectionObserver`. Resume only when the document is visible, the hero is
-  intersecting, the reader has not paused the field, and reduced motion is off.
+  most four steps per frame and a delta clamp of 0.1s. Cap the device pixel ratio
+  at 2 and recompute it on resize; rebuild the cell grid and sprite atlas when it
+  changes. Pause on `visibilitychange` and when the hero leaves the viewport
+  through an `IntersectionObserver`. Resume only when the document is visible,
+  the hero is intersecting, the reader has not paused the field, and reduced
+  motion is off.
 - Recompute the cell grid and density from a `ResizeObserver`. Do not add scroll
   listeners or a page-wide canvas.
 - Keep the loop bounded to the component. Disconnect observers, cancel the
-  animation frame, and release buffers on unmount.
+  animation frame, and release typed buffers on unmount.
+- A pointer may act as a soft breeze, not a game. Within about 180px, lift and
+  part nearby butterflies and carry a little pollen. Do not capture the pointer,
+  block text selection, react on touch, or respond to clicks. Ship the field
+  without pointer reaction if it distracts, and keep it fully alive without a
+  pointer.
 - Do not use GSAP for the field or the hero. Both apps still declare GSAP from
   the earlier plan, but the hero no longer uses it; remove it separately if no
   other code imports it. The canvas loop owns the butterfly motion.
-- Leave pointer interaction out of the first version. If it is added later, keep
-  it calm, test it on touch, and do not turn the hero into a game.
 - Profile with the browser performance panel at 4x CPU slowdown. Avoid per-frame
-  allocations, reuse typed arrays, and lower density before adding a second
-  canvas or WebGL.
-- Draw original butterflies. If upstream art or code is copied, retain its
-  license, record provenance, and rewrite the code to the repository's
-  functional rules.
+  allocations, reuse typed arrays, and lower sprite density before lowering the
+  cell resolution. Do not add a second canvas or WebGL.
+- Draw original butterflies. Do not copy the koi pond's code, artwork, palette,
+  or copy. If any upstream art or code is used in a later change, retain its
+  license, record provenance, and rewrite the code to the repository's functional
+  rules.
 
 ## Implementation architecture
 
@@ -439,21 +595,25 @@ Every `apps/*` path in this table belongs to the two existing docs apps. The
 table does not reserve paths or architecture for the future marketing or shop
 apps.
 
-| Layer                | Responsibility                                                                            | Candidate files                                                                      | Status   |
-| -------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
-| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                 | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export        | New      |
-| Shared hero          | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback          | `packages/ui/src/lib/components/butterfly-hero/butterfly-hero.svelte` and `index.ts` | New      |
-| Shared field         | Species sprites, deterministic spawn, drift, and wing-phase parameters as plain data      | `butterfly-data.ts`, `butterfly-field.ts` under the same component folder            | New      |
-| Shared renderer      | Canvas 2D cell grid, DPR handling, font readiness, theme colors, still frame              | `butterfly-renderer.ts` under the same component folder                              | New      |
-| Shared loop          | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup | `butterfly-loop.ts` under the same component folder                                  | New      |
-| Docs home colophon   | Static per-app footer with copyright and links                                            | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
-| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                      | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                             | Mixed    |
-| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                         | `apps/*/styles/blume-chrome.css`                                                     | New      |
-| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                 | `apps/*/styles/blume-content.css`                                                    | New      |
-| Site config          | Radius, background, footer content, GitHub links                                          | `apps/*/blume.config.ts`                                                             | Existing |
-| Docs home content    | Custom-mode hero, numbered index, example, colophon                                       | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
-| Site registry        | Register hero and colophon for MDX                                                        | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                     | Mixed    |
-| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                    | `apps/vws-docs/package.json`, lockfile                                               | Existing |
+| Layer                | Responsibility                                                                               | Candidate files                                                                      | Status   |
+| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
+| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export        | New      |
+| Shared hero          | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `packages/ui/src/lib/components/butterfly-hero/butterfly-hero.svelte` and `index.ts` | New      |
+| Shared species       | Species definitions, palettes, wing-phase frames, scale steps, deterministic ids             | `butterfly-data.ts` under the same component folder                                  | New      |
+| Shared anatomy       | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                                 | New      |
+| Shared field         | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                                 | New      |
+| Shared sprites       | Offscreen sprite atlas, palette, font, and DPR cache, tint and draw helpers                  | `butterfly-sprites.ts` under the same component folder                               | New      |
+| Shared atmosphere    | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                            | New      |
+| Shared renderer      | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                              | New      |
+| Shared loop          | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                                  | New      |
+| Docs home colophon   | Static per-app footer with copyright and links                                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
+| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                             | Mixed    |
+| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                     | New      |
+| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                                    | New      |
+| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                             | Existing |
+| Docs home content    | Custom-mode hero, numbered index, example, colophon                                          | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
+| Site registry        | Register hero and colophon for MDX                                                           | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                     | Mixed    |
+| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                               | Existing |
 
 Boundaries:
 
@@ -467,11 +627,15 @@ Boundaries:
 - The shared field and renderer receive a typed palette resolved from
   `--farben-field-*` aliases. Only the app `theme.css` maps those aliases to
   Blume tokens; shared code never reads `--blume-*` directly.
+- The anatomy, field, and atmosphere modules stay pure and data-driven. DOM,
+  Canvas, observers, and the clock live in the Svelte component and the loop
+  module. The renderer owns only Canvas context state and typed cell buffers.
 - Do not add a new third-party runtime dependency. Add the existing
   `@farben/ui` workspace package to ventiws. The hero uses the browser Canvas 2D
   API; no renderer package or GSAP dependency is added to `packages/ui`.
-- Do not edit `.blume/` or `dist/`. No `part-2` files; split field, renderer, and
-  loop modules by responsibility.
+- Do not edit `.blume/` or `dist/`. No `part-2` files; split anatomy, sprites,
+  atmosphere, field, renderer, and loop modules by responsibility before any
+  reaches 200 lines.
 
 Register the hero through Blume's `defineComponents` descriptor. Prefer
 `client: "visible"` when the hero sits in the first viewport and the static
@@ -559,52 +723,79 @@ no duplicate heading, no missing action, and no broken locale or discovery outpu
 
 ### M4: Butterfly hero component
 
-- [ ] Draw three to five original butterfly silhouettes as ASCII sprites and
-      inspect them in the cell grid at 1x and 2x device pixel ratio. Record the
-      sprite dimensions and the smallest legible scale.
-- [ ] Implement the typed shared Svelte component plus the pure field and data
-      helpers. Keep the renderer and loop effectful at the component edge. Keep
-      every source file at or below 200 lines and split by responsibility. Do not
-      add GSAP to the field.
-- [ ] Build the Canvas 2D renderer with a capped DPR, mono-font readiness, a
-      cell grid and offscreen sprite cache that rebuild on palette, font, or DPR
-      change, the host palette aliases, and a first frame derived from the same
-      seed as the static fallback.
-- [ ] Add the fixed-timestep loop, density targets, drift, wing phase, wrapping,
-      a reduced-motion still frame, pause and resume, resize, visibility, and
-      intersection observers, and complete unmount cleanup.
+- [ ] Draw three to five original butterfly species and inspect them in the cell
+      grid at 1x and 2x device pixel ratio. For each species, define the body,
+      antennae, forewing, hindwing, margin, veins, and any eyespot, plus three
+      wing phases. Record the dimensions, the smallest legible scale, and the
+      smallest size that should become a mote instead.
+- [ ] Implement the pure species, anatomy, field, and atmosphere modules first,
+      with no DOM or Canvas import. Keep the renderer and loop effectful at the
+      component edge. Keep every source file at or below 200 lines and split by
+      responsibility. Do not add GSAP to the field.
+- [ ] Build the offscreen sprite atlas for small and midground butterflies. Cache
+      palette, font, and DPR variants; rebuild on change; tint masks at draw time
+      where that is cheaper than rebuilding. Measure atlas size and draw cost.
+- [ ] Build the procedural specimen rasterizer: analytic wing outlines, center
+      plus four sub-points, partial coverage at edges, tinted wing tiles, vein
+      and margin glyphs, and body-locked bands and eyespots. Cap it at four
+      specimens and confirm the texture does not shimmer through the flap.
+- [ ] Build the Canvas 2D renderer with the fixed layer order, a capped DPR, mono
+      font readiness, the host palette aliases, the text-dimming pass, and a first
+      frame derived from the same seed as the static fallback.
+- [ ] Add the wingbeat downdraft field, pollen motes, and air traces. Keep them
+      lower contrast than the butterflies. Confirm no frame reads as water,
+      bubbles, ripples, or a particle screensaver.
+- [ ] Add the fixed-timestep loop, flap-and-glide states, depth, wrapping,
+      content avoidance, density targets, a reduced-motion pre-roll and still
+      frame, pause and resume, resize, visibility, and intersection observers,
+      and complete unmount cleanup.
+- [ ] Implement the optional pointer breeze only after the static and
+      reduced-motion paths pass. Confirm it does not capture the pointer, block
+      selection, react on touch, or respond to clicks.
 - [ ] Render the full first-frame composition as one server-rendered `<pre>`,
       constrained to the art box and capped at 32KB, and restore it if the canvas
       context is lost. Record its node count and HTML size.
 - [ ] Verify the static-to-canvas handoff does not pop, resume happens only when
       the field is visible, not paused, and motion is enabled, and the sprite
-      cache rebuilds after a palette, font, or DPR change.
-- [ ] Test only the pure spawn, wrap, density, and seed logic under
-      `tests/<category>/`, importing from `vite-plus/test`. Inspect no-JavaScript,
-      reduced-motion, DPR, and font-fallback behavior in the browser.
+      atlas rebuilds after a palette, font, or DPR change.
+- [ ] Test only the pure spawn, wrap, density, seed, avoidance, and atmosphere
+      logic under `tests/<category>/`, importing from `vite-plus/test`. Inspect
+      no-JavaScript, reduced-motion, DPR, font fallback, and pointer behavior in
+      the browser.
 
-**Exit:** The isolated field is dense, readable, static without JavaScript,
-motion-safe, type-checks through `@farben/ui#check`, hands off without a visible
-pop, and has browser evidence for reduced motion, no JavaScript, pause/resume,
-and both pixel ratios.
+**Exit:** The isolated field reads as one living print, is dense and readable,
+stays static without JavaScript, is motion-safe, type-checks through
+`@farben/ui#check`, hands off without a visible pop, and has browser evidence for
+reduced motion, no JavaScript, pause and resume, pointer breeze, and both pixel
+ratios.
 
 ### M5: Integrate and tune both sites
 
 - [ ] Register the hero in both `components.ts` files with the verified
       hydration directive and place it on all four localized docs home routes
       with the site palette and localized control labels.
-- [ ] Tune density, cell size, DPR, placement, and exclusion zones at 320px,
-      768px, and desktop. Keep every glyph away from the title, summary, actions,
+- [ ] Tune species mix, the number of visible specimens up to the cap, sprite
+      density, cell size, DPR, placement, and the field bleed at 320px, 768px,
+      and desktop. Keep every glyph away from the title, summary, actions,
       navigation, and code.
+- [ ] Bottom-align the hero text, stagger the copy entrance by no more than 80ms,
+      and verify that the first action remains visible at 320x568 without
+      scrolling.
+- [ ] Check both palettes against the editorial surfaces: the field must stay
+      inside its hero family, keep the site accent readable, and never reduce the
+      contrast of nearby text.
+- [ ] Review the flap-and-glide rhythm at normal speed. Remove unison, visible
+      loops, constant-speed drift, and any specimen that reads as a static icon.
 - [ ] Verify English and Vietnamese copy, links, navigation, search, theme
       toggle, generated routes, and `llms.txt` after both builds.
 - [ ] Profile the field on a lower-end mobile device at 4x CPU slowdown. Lower
-      density or cell resolution if frame time suffers; do not add WebGL or a
+      sprite density before lowering the cell resolution; do not add WebGL or a
       second canvas.
 
-**Exit:** Both sites use the shared field behavior with their own palette,
-frame time stays within the agreed budget, and normal documentation interaction
-still works in both locales.
+**Exit:** Both sites use the shared field behavior with their own palette, the
+hero reads as a living print rather than a repeated sprite pattern, frame time
+stays within the agreed budget, and normal documentation interaction still works
+in both locales.
 
 ### M6: Review and release
 
@@ -614,13 +805,19 @@ still works in both locales.
       navigation, and the pause control. Check focus order and visible focus.
 - [ ] Test reduced motion, no JavaScript, the static-to-canvas handoff, fallback
       node count, canvas context loss, a failed or slow font load, theme-toggle
-      redraw, sprite-cache rebuild, pause and resume, tab visibility, scroll out
+      redraw, sprite-atlas rebuild, pause and resume, tab visibility, scroll out
       and back, repeated mount and unmount, DPR 1, 2, and a mid-session change,
-      and a 320px viewport.
+      pointer breeze on and off, text selection over the hero, and a 320px
+      viewport.
+- [ ] Watch the field for at least a minute and confirm there is no unison flap,
+      no visible loop, no strobing, and no butterfly that collapses into a
+      static icon.
 - [ ] Profile the field with the browser performance panel and record frame time,
-      long tasks, and the effect of the density caps.
+      long tasks, specimen raster cost, sprite draw count, and the effect of the
+      density caps.
 - [ ] Check contrast, target sizes, and the decorative glyphs' effect on text
-      contrast. Confirm no information is conveyed by color alone.
+      contrast. Confirm no information is conveyed by color alone and no glyph
+      crosses a protected text box.
 - [ ] Run the full repository gate, review the diff for generated output,
       unexpected dependencies, copied source, and unrelated changes.
 - [ ] Record exact commands and outcomes in the pull request. Do not claim an
@@ -647,13 +844,22 @@ and the shared package passes the repository gate.
   `prefers-reduced-motion` and provide the pause control required by WCAG 2.2.2.
 - Pause or stop the hero when the tab is hidden or the hero scrolls out of view.
   Clean up observers, listeners, and animation frames on unmount.
+- Do not strobe. Keep alpha and color changes below the WCAG flash threshold and
+  never pulse the whole field. Pollen and glints are small, sparse, and slow.
+- The pointer breeze is supplementary. The field must be complete, alive, and
+  legible without a pointer, and the breeze must never capture the pointer,
+  prevent text selection, or run on touch.
+- Text safety is absolute. The field dims under measured text boxes, never the
+  other way around, and no glyph may cross the title, summary, actions,
+  navigation, or code.
 - Use one Canvas 2D loop, bounded to the hero. Do not add WebGL, a second loop,
   or a page-wide canvas. The canvas never receives focus.
-- No new fonts or dependencies. Keep the canvas draw cost bounded, reuse
-  buffers, and profile before increasing density.
+- No new fonts or dependencies. Keep the canvas draw cost bounded: cap
+  procedural specimens at four, iterate only occupied cells, reuse typed buffers,
+  and profile before increasing density.
 - Target 60fps on a mid-tier desktop and hold at least 30fps at the mobile
-  density under 4x CPU slowdown. Reduce density or cell resolution before adding
-  a second canvas.
+  density under 4x CPU slowdown. Reduce sprite density before lowering the cell
+  resolution, and lower the cell resolution before adding a second canvas.
 - Keep the page useful without JavaScript: links, headings, the summary, the
   example, the header controls, and the static butterfly arrangement must all
   render.
@@ -735,9 +941,29 @@ Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
   [engine](https://raw.githubusercontent.com/stackedlol/ascii-sharks/main/src/engine.ts),
   and its [cell renderer](https://raw.githubusercontent.com/stackedlol/ascii-sharks/main/src/renderer.ts)
   are the density and engineering reference for the butterfly field.
+- [daoho.dev](https://www.daoho.dev/) and the
+  [Dao-Ho/portfolio repository](https://github.com/Dao-Ho/portfolio) at commit
+  `914651c` are the animation and material study for the butterfly hero. The
+  relevant source files are
+  [koi-pond.tsx](https://github.com/Dao-Ho/portfolio/blob/main/src/app/components/koi-pond/koi-pond.tsx)
+  for lifecycle and interaction,
+  [world.ts](https://github.com/Dao-Ho/portfolio/blob/main/src/app/components/koi-pond/world.ts)
+  for behavior and fluids,
+  [renderer.ts](https://github.com/Dao-Ho/portfolio/blob/main/src/app/components/koi-pond/renderer.ts)
+  for cell tiles, glyphs, and wakes, and
+  [shape.ts](https://github.com/Dao-Ho/portfolio/blob/main/src/app/components/koi-pond/shape.ts)
+  for procedural anatomy. The
+  [front page](https://github.com/Dao-Ho/portfolio/blob/main/src/app/components/front-page.tsx)
+  and [globals.css](https://github.com/Dao-Ho/portfolio/blob/main/src/app/globals.css)
+  show the caption-scale typography and entrance timing.
 - Vize is MIT licensed, but no Vize code, CSS, artwork, copy, or identity is
   copied. If a rule is adapted beyond generic layout grammar, record its source
   in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and retain the license.
+- Dao-Ho/portfolio publishes no license file and no license metadata. It is
+  all rights reserved by default. Do not copy or adapt its code, artwork,
+  palettes, fonts, or copy, and do not add a third-party notice that implies a
+  license that does not exist. The hero is an independent implementation of
+  written animation principles.
 - If any upstream code or artwork is copied instead of independently written,
   retain its license, record provenance in the third-party notices, and rewrite
   copied code to the repository's functional rules: no classes, prototypes, or
