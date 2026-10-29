@@ -10,8 +10,9 @@ function emitWingBreeze(atmosphere: Atmosphere, specimen: Specimen): void {
     species.fore.points[0] ?? { x: 0.8, y: -0.4 },
   );
 
-  const cos = Math.cos(specimen.heading);
-  const sin = Math.sin(specimen.heading);
+  const angle = specimen.heading + Math.PI / 2;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
 
   for (const side of [-1, 1]) {
     const localX = side * apex.x * 0.98;

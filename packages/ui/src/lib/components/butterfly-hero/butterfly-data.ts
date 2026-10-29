@@ -28,7 +28,7 @@ export type SpeciesSpec = {
   readonly glyphBias: number;
 };
 
-export const SPECIMEN_MAX = 5;
+export const SPECIMEN_MAX = 8;
 
 export const WING_RAMP = ".:-=+*#%@";
 export const BODY_RAMP = ":=+*#@";

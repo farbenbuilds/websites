@@ -1,6 +1,6 @@
 import { SPECIES, SPECIMEN_MAX, speciesAt } from "./butterfly-data";
 import { steerFromPointer, type Steering } from "./butterfly-breeze";
-import { separateField } from "./butterfly-separation";
+import { separateField, separationSteer } from "./butterfly-separation";
 import { specimenHalfHeight, specimenHalfSpan } from "./butterfly-shape";
 import { angleDelta, clamp, createRng, normalizeAngle, randomBetween } from "./butterfly-math";
 
@@ -28,6 +28,8 @@ export type Specimen = {
   stateTimer: number;
   turn: number;
   breezePulse: number;
+  targetX: number;
+  targetXTimer: number;
 };
 
 export type FieldState = {
@@ -49,24 +51,31 @@ export type FieldOptions = {
 
 const SPECIMEN_DEPTH_MIN = 0.86;
 const SPECIMEN_DEPTH_MAX = 1;
-const MAX_DIVE = 0.3;
 const BIG_COUNT = 3;
+const MEDIUM_COUNT = 4;
 const MEDIUM_SCALE = 0.7;
+const SMALL_SCALE = 0.48;
 
 const WIDE_SLOTS: readonly { readonly x: number; readonly y: number }[] = [
-  { x: 0.18, y: 0.24 },
-  { x: 0.72, y: 0.28 },
-  { x: 0.46, y: 0.66 },
-  { x: 0.2, y: 0.72 },
-  { x: 0.82, y: 0.7 },
+  { x: 0.14, y: 0.22 },
+  { x: 0.64, y: 0.2 },
+  { x: 0.42, y: 0.56 },
+  { x: 0.18, y: 0.58 },
+  { x: 0.86, y: 0.3 },
+  { x: 0.66, y: 0.62 },
+  { x: 0.38, y: 0.82 },
+  { x: 0.88, y: 0.78 },
 ];
 
 const COMPACT_SLOTS: readonly { readonly x: number; readonly y: number }[] = [
-  { x: 0.22, y: 0.55 },
-  { x: 0.78, y: 0.58 },
-  { x: 0.5, y: 0.8 },
-  { x: 0.25, y: 0.86 },
-  { x: 0.75, y: 0.88 },
+  { x: 0.2, y: 0.35 },
+  { x: 0.55, y: 0.28 },
+  { x: 0.82, y: 0.42 },
+  { x: 0.28, y: 0.62 },
+  { x: 0.6, y: 0.6 },
+  { x: 0.85, y: 0.72 },
+  { x: 0.18, y: 0.82 },
+  { x: 0.55, y: 0.86 },
 ];
 
 function createSpecimen(field: FieldState, index: number): Specimen {
@@ -78,7 +87,14 @@ function createSpecimen(field: FieldState, index: number): Specimen {
   const scaleX = (field.width * spanFraction) / halfSpan;
   const scaleY = (field.height * 0.7) / (specimenHalfHeight(species) * 2);
   const baseScale = clamp(Math.min(scaleX, scaleY), 3.2, 22);
-  const scale = index < BIG_COUNT ? baseScale : baseScale * MEDIUM_SCALE;
+
+  const scale =
+    index < BIG_COUNT
+      ? baseScale
+      : index < BIG_COUNT + MEDIUM_COUNT
+        ? baseScale * MEDIUM_SCALE
+        : baseScale * SMALL_SCALE;
+
   const slots = compact ? COMPACT_SLOTS : WIDE_SLOTS;
   const slot = slots[index % slots.length] ?? { x: 0.5, y: 0.5 };
 
@@ -87,7 +103,7 @@ function createSpecimen(field: FieldState, index: number): Specimen {
     species: speciesIndex,
     x: clamp(field.width * slot.x, 2, field.width - 2),
     y: clamp(field.height * slot.y, 2, field.height - 2),
-    heading: randomBetween(field.rng, -Math.PI, 0.2),
+    heading: randomBetween(field.rng, -Math.PI, 0),
     speed: randomBetween(field.rng, 0.55, 0.95),
     phase: randomBetween(field.rng, 0, Math.PI * 2),
     flapRate: randomBetween(field.rng, 5, 9),
@@ -100,6 +116,8 @@ function createSpecimen(field: FieldState, index: number): Specimen {
     stateTimer: randomBetween(field.rng, 0.8, 2.2),
     turn: 0,
     breezePulse: 0,
+    targetX: randomBetween(field.rng, field.width * 0.15, field.width * 0.85),
+    targetXTimer: randomBetween(field.rng, 2.5, 6),
   };
 }
 
@@ -137,6 +155,7 @@ export function resizeField(field: FieldState, width: number, height: number): v
   for (const specimen of field.specimens) {
     specimen.x *= scaleX;
     specimen.y *= scaleY;
+    specimen.targetX *= scaleX;
     specimen.scale = clamp(specimen.scale * scale, 2.2, 22);
   }
 }
@@ -149,15 +168,12 @@ function edgeWeight(value: number, size: number, margin: number): number {
   return 0;
 }
 
-function limitDive(heading: number, maxDown: number): number {
+function limitUpward(heading: number): number {
   const normal = normalizeAngle(heading);
-  const down = Math.sin(normal);
 
-  if (down <= maxDown) return normal;
+  if (normal <= 0) return normal;
 
-  const horizontal = Math.cos(normal) >= 0 ? 1 : -1;
-
-  return horizontal > 0 ? Math.asin(maxDown) : Math.PI - Math.asin(maxDown);
+  return Math.cos(normal) >= 0 ? 0 : -Math.PI;
 }
 
 function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
@@ -190,6 +206,13 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
 
   specimen.yaw += (specimen.yawTarget - specimen.yaw) * Math.min(1, dt * 1.4);
 
+  specimen.targetXTimer -= dt;
+
+  if (specimen.targetXTimer <= 0) {
+    specimen.targetXTimer = randomBetween(field.rng, 2.5, 6);
+    specimen.targetX = randomBetween(field.rng, field.width * 0.12, field.width * 0.88);
+  }
+
   const breeze = field.breezeSteer;
 
   if (field.pointer.active) {
@@ -197,6 +220,17 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
   } else {
     breeze.x = 0;
   }
+
+  const neighbor = separationSteer(field, specimen);
+
+  const neighborTurn =
+    neighbor.x === 0 && neighbor.y === 0
+      ? 0
+      : angleDelta(Math.atan2(neighbor.y, neighbor.x), specimen.heading) *
+        Math.min(1, Math.hypot(neighbor.x, neighbor.y)) *
+        2.6;
+
+  const targetTurn = angleDelta(specimen.targetX >= specimen.x ? 0 : Math.PI, specimen.heading);
 
   const marginX = Math.min(specimen.scale * 1.3 + 2, field.width * 0.35);
   const marginY = Math.min(specimen.scale * 1.05 + 2, field.height * 0.35);
@@ -214,10 +248,12 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
   const steer =
     Math.sin(field.time * 0.28 + specimen.id * 1.7) * 0.16 +
     centerTurn * edge * 1.8 +
+    neighborTurn +
+    targetTurn * 0.32 +
     breeze.x * 1.4;
 
   specimen.turn = clamp(specimen.turn + (steer - specimen.turn) * Math.min(1, dt * 1.6), -2.2, 2.2);
-  specimen.heading = limitDive(specimen.heading + specimen.turn * dt, MAX_DIVE);
+  specimen.heading = limitUpward(specimen.heading + specimen.turn * dt);
 
   const pace = specimen.speed * (flapping ? 1.12 : 0.74);
   specimen.x += Math.cos(specimen.heading) * pace * dt;

@@ -86,8 +86,9 @@ export function drawSpecimens(
     const colors = cache.get(specimen.species) ?? createSpecimenColors(palette, species);
     cache.set(specimen.species, colors);
     const scalePx = specimen.scale * cellWidth;
-    const cos = Math.cos(specimen.heading);
-    const sin = Math.sin(specimen.heading);
+    const angle = specimen.heading + Math.PI / 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
     const horizontal = (specimenHalfSpan(species) + 0.12) * scalePx;
     const vertical = (specimenHalfHeight(species) + 0.18) * scalePx;
     const extentX = Math.abs(cos) * horizontal + Math.abs(sin) * vertical;

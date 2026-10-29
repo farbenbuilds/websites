@@ -1,20 +1,50 @@
 import type { FieldState, Specimen } from "./butterfly-field";
-import { angleDelta, clamp } from "./butterfly-math";
+import { clamp } from "./butterfly-math";
 
 const SPECIMEN_RADIUS = 1.25;
+const MIN_GAP = 1.2;
+
+export type SeparationSteer = {
+  x: number;
+  y: number;
+};
 
 function specimenRadius(specimen: Specimen): number {
-  return specimen.scale * SPECIMEN_RADIUS;
+  return specimen.scale * SPECIMEN_RADIUS + MIN_GAP;
+}
+
+export function separationSteer(field: FieldState, specimen: Specimen): SeparationSteer {
+  let x = 0;
+  let y = 0;
+
+  for (const other of field.specimens) {
+    if (other === specimen) continue;
+
+    const dx = specimen.x - other.x;
+    const dy = specimen.y - other.y;
+    const distance = Math.hypot(dx, dy);
+    const minimum = specimenRadius(specimen) + specimenRadius(other);
+    const influence = minimum * 1.8;
+
+    if (distance >= influence) continue;
+
+    if (distance < 0.0001) {
+      x += 1;
+      continue;
+    }
+
+    const weight = (1 - distance / influence) ** 2;
+
+    x += (dx / distance) * weight;
+    y += (dy / distance) * weight;
+  }
+
+  return { x, y };
 }
 
 function pushSpecimen(specimen: Specimen, x: number, y: number): void {
   specimen.x += x;
   specimen.y += y;
-
-  if (x === 0 && y === 0) return;
-
-  const away = Math.atan2(-y, -x);
-  specimen.turn = clamp(specimen.turn + angleDelta(away, specimen.heading) * 0.08, -2.2, 2.2);
 }
 
 function separateSpecimenPair(a: Specimen, b: Specimen): void {
@@ -25,7 +55,7 @@ function separateSpecimenPair(a: Specimen, b: Specimen): void {
 
   if (distance >= minimum || distance < 0.0001) return;
 
-  const push = Math.min(1.2, (minimum - distance) * 0.5);
+  const push = Math.min(4, minimum - distance);
   const nx = dx / distance;
   const ny = dy / distance;
 
@@ -38,12 +68,19 @@ function clampToField(field: FieldState): void {
     const marginX = Math.min(specimen.scale * 1.2 + 1, field.width * 0.4);
     const marginY = Math.min(specimen.scale * 1.2 + 1, field.height * 0.4);
     specimen.x = clamp(specimen.x, marginX, field.width - marginX);
-    specimen.y = clamp(specimen.y, marginY, field.height - marginY);
+
+    const top = marginY;
+    const bottom = field.height - marginY;
+
+    if (specimen.y < top) specimen.y = bottom;
+    else if (specimen.y > bottom) specimen.y = top;
   }
 }
 
 export function separateField(field: FieldState): void {
-  for (let pass = 0; pass < 2; pass++) {
+  clampToField(field);
+
+  for (let pass = 0; pass < 6; pass++) {
     for (let i = 0; i < field.specimens.length; i++) {
       for (let j = i + 1; j < field.specimens.length; j++) {
         const a = field.specimens[i];

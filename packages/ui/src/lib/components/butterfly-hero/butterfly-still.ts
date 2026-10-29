@@ -18,14 +18,14 @@ type StillCell = {
   rank: number;
 };
 
-export function generateStill(seed: number, specimenCount = 5): string {
+export function generateStill(seed: number, specimenCount = 8): string {
   const grid: StillCell[][] = Array.from({ length: STILL_ROWS }, () =>
     Array.from({ length: STILL_COLS }, () => ({ glyph: " ", rank: 0 })),
   );
 
   const rng = createRng(seed);
   const scratch = createAnatomyScratch();
-  const count = Math.max(1, Math.min(5, Math.round(specimenCount)));
+  const count = Math.max(1, Math.min(8, Math.round(specimenCount)));
 
   const placements = [
     { x: 0.7, y: 0.38, scale: 7.4 },
@@ -33,6 +33,9 @@ export function generateStill(seed: number, specimenCount = 5): string {
     { x: 0.5, y: 0.82, scale: 5.6 },
     { x: 0.18, y: 0.26, scale: 5.2 },
     { x: 0.82, y: 0.72, scale: 4.9 },
+    { x: 0.82, y: 0.24, scale: 4.6 },
+    { x: 0.12, y: 0.66, scale: 4.4 },
+    { x: 0.5, y: 0.48, scale: 3.2 },
   ] as const;
 
   for (let index = 0; index < count; index++) {
@@ -86,7 +89,7 @@ function drawSpecimen(
   const species = speciesAt(speciesIndex);
   const halfSpan = specimenHalfSpan(species);
   const reach = (Math.max(halfSpan, specimenHalfHeight(species)) + 0.2) * scale;
-  const heading = randomBetween(rng, -0.3, 0.3);
+  const heading = randomBetween(rng, -0.3, 0.3) + Math.PI / 2;
   const phase = randomBetween(rng, 0, Math.PI * 2);
   const yaw = randomBetween(rng, -0.35, 0.35);
   const cos = Math.cos(heading);

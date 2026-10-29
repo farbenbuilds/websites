@@ -27,7 +27,7 @@
 
   const PAUSE_KEY = "farben-butterfly-paused";
 
-  let { locale = "en", seed = 20261029, specimenCount = 5 }: ButterflyHeroProps = $props();
+  let { locale = "en", seed = 20261029, specimenCount = 8 }: ButterflyHeroProps = $props();
   let root: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let loop: ButterflyLoop | null = null;
@@ -70,7 +70,7 @@
       canvas,
       hero: root,
       seed,
-      specimenCount: Math.max(1, Math.min(5, Math.round(specimenCount))),
+      specimenCount: Math.max(1, Math.min(8, Math.round(specimenCount))),
       onReady: () => {
         ready = true;
         failed = false;
