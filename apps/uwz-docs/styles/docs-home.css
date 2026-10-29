@@ -1,0 +1,283 @@
+/*
+ * Custom-mode docs home: poster hero, numbered index, example, colophon.
+ *
+ * The copy column stays semantic MDX. The shared butterfly field owns only the
+ * decorative art box, so no glyph can be laid out over reading text.
+ */
+
+.docs-home {
+  width: min(100% - 2.5rem, 70rem);
+  margin-inline: auto;
+  padding-block-end: 3rem;
+}
+
+.docs-home-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(1rem, 3vw, 3.5rem);
+  align-items: end;
+  min-height: clamp(30rem, 74vh, 46rem);
+  padding-block: 2rem 3rem;
+}
+
+.docs-home-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  align-items: flex-start;
+  padding-block-end: 0.5rem;
+}
+
+.docs-home-eyebrow {
+  color: var(--blume-muted-foreground);
+}
+
+.docs-home-title {
+  margin: 0;
+  color: var(--blume-foreground);
+  font-family: var(--blume-font-display);
+  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 0.92;
+}
+
+html .prose .docs-home-title {
+  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
+  line-height: 0.92;
+}
+
+html .prose .editorial-action {
+  color: var(--blume-foreground);
+  text-decoration: none;
+}
+
+html .prose .editorial-action-primary {
+  color: var(--blume-background);
+}
+
+html .prose .editorial-action-primary:hover {
+  color: var(--blume-background);
+}
+
+html .prose .editorial-action-secondary {
+  color: var(--blume-foreground);
+}
+
+html .prose .editorial-index-link {
+  color: var(--blume-foreground);
+  text-decoration: none;
+}
+
+html .prose .docs-home-colophon a {
+  color: inherit;
+}
+
+.docs-home-summary {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-body);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+
+.docs-home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-block-start: 0.4rem;
+}
+
+.docs-home-hero-copy > * {
+  animation: docs-home-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.docs-home-hero-copy > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.docs-home-hero-copy > :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.docs-home-hero-copy > :nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.docs-home .butterfly-hero {
+  align-self: stretch;
+  min-height: 30rem;
+  margin-block-start: -2rem;
+}
+
+.docs-home-section {
+  border-top: 1px solid var(--blume-border);
+  padding-block: clamp(2.5rem, 5vw, 4.25rem);
+}
+
+.docs-home-section > .editorial-label {
+  margin-block-end: 1.25rem;
+}
+
+.docs-home-index {
+  margin-block-end: 0.5rem;
+}
+
+.docs-home-index .editorial-index-link:last-child {
+  border-bottom: 1px solid var(--blume-border);
+}
+
+.docs-home-facts {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 52rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-home-facts li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.75rem;
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-body);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.docs-home-facts li::before {
+  content: "—";
+  color: var(--blume-border);
+  font-family: var(--blume-font-mono);
+  font-size: 0.75rem;
+  line-height: 2.05;
+}
+
+.docs-home-facts strong {
+  color: var(--blume-foreground);
+  font-weight: 600;
+}
+
+.docs-home-facts li > p {
+  margin: 0;
+}
+
+.docs-home [data-blume-callout] {
+  max-width: 42rem;
+  margin-block-start: 2.5rem;
+}
+
+.docs-home-colophon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  border-top: 1px solid var(--blume-border);
+  margin-block-start: 2rem;
+  padding-block: 1.5rem 0.5rem;
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+.docs-home-colophon-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-home-colophon a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.docs-home-colophon a:hover {
+  color: var(--blume-foreground);
+  text-decoration-color: currentColor;
+}
+
+@keyframes docs-home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 56rem) {
+  .docs-home-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    min-height: 0;
+    padding-block: 1.5rem 0;
+  }
+
+  .docs-home-hero-copy {
+    order: 1;
+    gap: 0.9rem;
+    padding-block-end: 0;
+  }
+
+  .docs-home .butterfly-hero {
+    order: 2;
+    min-height: 15rem;
+    height: 15rem;
+    margin-block-start: 0;
+  }
+
+  .docs-home-title {
+    font-size: clamp(2.25rem, 12vw, 4rem);
+  }
+
+  .docs-home-summary {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 26rem) {
+  .docs-home {
+    width: min(100% - 1.5rem, 70rem);
+  }
+
+  .docs-home-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .docs-home-actions .editorial-action {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-home-hero-copy > * {
+    animation: none;
+  }
+}
+
+html .prose pre.butterfly-hero-still {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 0;
+  padding: 1rem;
+  overflow: hidden;
+}

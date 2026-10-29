@@ -1,5 +1,7 @@
 import { defineConfig } from "blume";
 
+import { SITE_LINKS, siteCopyright } from "./site-links.ts";
+
 export default defineConfig({
   title: "µWebZockets",
   description:
@@ -19,6 +21,11 @@ export default defineConfig({
   },
   theme: {
     accent: "orange",
+    radius: "none",
+    background: {
+      light: "#f4f0e6",
+      dark: "#161513",
+    },
     fonts: {
       display: {
         name: "Google Sans Flex",
@@ -34,11 +41,7 @@ export default defineConfig({
     },
   },
   footer: {
-    links: [
-      {
-        label: { en: "µWebZockets on GitHub", vi: "µWebZockets trên GitHub" },
-        href: "https://github.com/farbenbuilds/uWebZockets",
-      },
-    ],
+    copyright: siteCopyright(),
+    links: SITE_LINKS.map(({ label, href }) => ({ label, href })),
   },
 });

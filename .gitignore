@@ -18,6 +18,7 @@ node_modules
 dist
 dist-ssr
 .blume
+.blume-verify
 *.local
 
 # graphify local output

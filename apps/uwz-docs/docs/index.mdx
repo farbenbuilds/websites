@@ -1,53 +1,176 @@
 ---
 title: Introduction
 description: µWebZockets is a zero-allocation, shared-nothing server framework for Zig — HTTP, WebSocket, and JSON-RPC from one type-safe API.
+mode: custom
 ---
 
-**µWebZockets** is a server framework for [Zig 0.16.0](https://ziglang.org) that serves HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through a single type-safe `Request`/`Response` API. Requests are parsed, routed, and answered from bounded slabs that are allocated once at startup, owned by one thread each, and reused without locking.
+<div class="docs-home">
+  <section class="docs-home-hero" aria-labelledby="uwz-title">
+    <div class="docs-home-hero-copy" data-butterfly-avoid>
+      <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
+      <h1 class="docs-home-title" id="uwz-title">µWebZockets</h1>
+      <p class="docs-home-summary">
+        {"A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC through one type-safe "}
+        <code>Request</code>
+        {"/"}
+        <code>Response</code>
+        {" API."}
+      </p>
+      <div class="docs-home-actions">
+        <a class="editorial-action editorial-action-primary" href="/getting-started">
+          {"Getting Started "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+        <a
+          class="editorial-action editorial-action-secondary"
+          href="https://github.com/farbenbuilds/uWebZockets"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"View on GitHub "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
+    </div>
+    <ButterflyHero locale="en" />
+  </section>
 
-<CardGroup cols={2}>
-  <Card title="Getting Started" href="/getting-started" icon="rocket">
-    Run the hello world example and add µWebZockets to your own project.
-  </Card>
-  <Card
-    title="uWebZockets on GitHub"
-    href="https://github.com/farbenbuilds/uWebZockets"
-    icon="github"
-  >
-    Source, releases, and the issue tracker.
-  </Card>
-</CardGroup>
+<section class="docs-home-section" aria-labelledby="index-heading">
+  <h2 class="editorial-label" id="index-heading">
+    Index
+  </h2>
+  <ol class="editorial-index docs-home-index">
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="/getting-started">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Getting Started</span>
+          <span class="editorial-index-text">
+            {"Run the hello world server and add µWebZockets to a Zig project."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Source repository</span>
+          <span class="editorial-index-text">
+            {"Releases, the issue tracker, and the product documentation."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Zero allocation</span>
+          <span class="editorial-index-text">
+            {"Bounded startup slabs and explicit capacity limits on every request path."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/architecture.md"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Shared-nothing workers</span>
+          <span class="editorial-index-text">
+            {"One event loop, slab set, and pinned physical core per worker."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+  </ol>
+</section>
 
-## Highlights
+<section class="docs-home-section" aria-labelledby="highlights">
+  <h2 class="editorial-label" id="highlights">
+    Highlights
+  </h2>
+  <ul class="docs-home-facts">
+    <li>
+      <strong>Data-oriented.</strong> Struct-of-arrays pools, parallel router arrays, and
+      compile-time capacities make exhaustion explicit.
+    </li>
+    <li>
+      <strong>Readable types.</strong> Named callback, event, and override types instead of inline
+      anonymous structs.
+    </li>
+    <li>
+      <strong>Cross-platform.</strong> Linux and macOS on x86_64 and aarch64 are supported and
+      tested; Windows is compile-checked only.
+    </li>
+  </ul>
+</section>
 
-- **Zero allocation** — no request, parse, route, or write path allocates.
-- **Shared-nothing** — every worker runs its own event loop, slab set, and pinned physical core, coordinated only through lock-free rings.
-- **Data-oriented** — struct-of-arrays pools, parallel router arrays, and compile-time capacities that make exhaustion explicit.
-- **Readable types** — named callback, event, and override types instead of inline anonymous structs.
-- **Cross-platform** — Linux and macOS on x86_64 and aarch64 are supported and tested; Windows is compile-checked only.
+  <section class="docs-home-section" aria-labelledby="a-complete-server">
+    <p class="editorial-label">Example</p>
+    <h2 id="a-complete-server">A complete server</h2>
 
-## A complete server
+    ```zig
+    const std = @import("std");
+    const uz = @import("uWebZockets");
 
-```zig
-const std = @import("std");
-const uz = @import("uWebZockets");
+    fn hello(_: *uz.Request, res: *uz.Response) void {
+        res.text("hello from uWebZockets") catch {};
+    }
 
-fn hello(_: *uz.Request, res: *uz.Response) void {
-    res.text("hello from uWebZockets") catch {};
-}
+    pub fn main(init: std.process.Init) !void {
+        var app = try uz.App(128).init(init.io);
+        defer app.deinit();
 
-pub fn main(init: std.process.Init) !void {
-    var app = try uz.App(128).init(init.io);
-    defer app.deinit();
+        _ = try app.get("/", hello);
+        try app.listen("0.0.0.0", 3000);
+        try app.run();
+    }
+    ```
 
-    _ = try app.get("/", hello);
-    try app.listen("0.0.0.0", 3000);
-    try app.run();
-}
-```
+    The same module carries the rest of the battery: `app.ws(...)` for WebSocket,
+    `app.rpc(...)` for JSON-RPC, `app.static(...)` for assets, `build_cluster`
+    for thread-per-core workers, `init_https_ephemeral` for HTTPS with no
+    certificate files, and `listen_udp` plus `init_http3` for HTTP/3.
 
-The same module carries the rest of the battery: `app.ws(...)` for WebSocket, `app.rpc(...)` for JSON-RPC, `app.static(...)` for assets, `build_cluster` for thread-per-core workers, `init_https_ephemeral` for HTTPS with no certificate files, and `listen_udp` plus `init_http3` for HTTP/3.
+  </section>
 
-:::note
-This documentation site is being written. [Getting Started](/getting-started) is ready today; the rest of the guides are on the way.
-:::
+<Callout type="note">
+  This documentation site is being written. [Getting Started](/getting-started) is ready today; the
+  rest of the guides are on the way.
+</Callout>
+
+  <SiteColophon locale="en" />
+</div>

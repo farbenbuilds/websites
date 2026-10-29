@@ -71,6 +71,7 @@
     ".windsurf/**",
     "tools/oxlint/anti-slop/**",
     ".blume/**",
+    ".blume-verify/**",
     "dist/**",
     "**/dist/**",
     "node_modules/**"

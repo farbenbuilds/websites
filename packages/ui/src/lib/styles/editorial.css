@@ -1,0 +1,302 @@
+/*
+ * Neutral editorial primitives shared by Farben docs sites.
+ *
+ * Hosts map the --editorial-* aliases to their own theme tokens; this file
+ * never reads a framework token directly. Radius is deliberately zero.
+ */
+
+:root {
+  --editorial-font-display: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+  --editorial-font-body: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+  --editorial-font-label: var(--font-mono, ui-monospace, monospace);
+  --editorial-ink: currentColor;
+  --editorial-muted: currentColor;
+  --editorial-paper: transparent;
+  --editorial-accent: currentColor;
+  --editorial-rule: currentColor;
+  --editorial-rule-strong: currentColor;
+  --editorial-radius: 0;
+  --editorial-target: 2.25rem;
+  --editorial-target-coarse: 2.75rem;
+  --editorial-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.editorial-label {
+  margin: 0;
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.editorial-meta {
+  margin: 0;
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+}
+
+.editorial-rule {
+  border: 0;
+  border-top: 1px solid var(--editorial-rule);
+  margin: 0;
+}
+
+.editorial-index {
+  counter-reset: editorial-index;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.editorial-index-item {
+  counter-increment: editorial-index;
+  margin: 0;
+  padding: 0;
+}
+
+.editorial-index-link {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  gap: 0.35rem 1.25rem;
+  align-items: baseline;
+  border-top: 1px solid var(--editorial-rule);
+  border-radius: 0;
+  color: var(--editorial-ink);
+  padding: 1.15rem 0.25rem 1.15rem 0;
+  text-decoration: none;
+  transition:
+    background-color 140ms var(--editorial-ease),
+    color 140ms var(--editorial-ease);
+}
+
+.editorial-index-link:hover {
+  background-color: color-mix(in srgb, var(--editorial-muted) 42%, transparent);
+  color: var(--editorial-ink);
+}
+
+.editorial-index-link:focus-visible {
+  outline: 2px solid var(--editorial-accent);
+  outline-offset: 2px;
+}
+
+.editorial-index-number {
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.6;
+}
+
+.editorial-index-number::before {
+  content: counter(editorial-index, decimal-leading-zero);
+}
+
+.editorial-index-body {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.editorial-index-title {
+  color: var(--editorial-ink);
+  font-family: var(--editorial-font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.editorial-index-text {
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-body);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  max-width: 44ch;
+}
+
+.editorial-index-arrow {
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.9rem;
+  transition:
+    color 140ms var(--editorial-ease),
+    transform 140ms var(--editorial-ease);
+}
+
+.editorial-index-link:hover .editorial-index-arrow,
+.editorial-index-link:focus-visible .editorial-index-arrow {
+  color: var(--editorial-accent);
+  transform: translateX(0.2rem);
+}
+
+.editorial-square {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--editorial-target);
+  min-height: var(--editorial-target);
+  border: 1px solid var(--editorial-rule-strong);
+  border-radius: var(--editorial-radius);
+  background: transparent;
+  color: var(--editorial-ink);
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--editorial-ease),
+    border-color 140ms var(--editorial-ease),
+    color 140ms var(--editorial-ease);
+}
+
+.editorial-square:hover {
+  border-color: var(--editorial-ink);
+  background-color: var(--editorial-muted);
+}
+
+.editorial-square:focus-visible {
+  outline: 2px solid var(--editorial-accent);
+  outline-offset: 2px;
+}
+
+.editorial-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--editorial-ink);
+  border-radius: var(--editorial-radius);
+  padding: 0.65rem 1.05rem;
+  font-family: var(--editorial-font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background-color 140ms var(--editorial-ease),
+    border-color 140ms var(--editorial-ease),
+    color 140ms var(--editorial-ease);
+}
+
+.editorial-action-primary {
+  background: var(--editorial-ink);
+  color: var(--editorial-paper);
+}
+
+.editorial-action-primary:hover {
+  background: color-mix(in srgb, var(--editorial-ink) 86%, var(--editorial-accent));
+  color: var(--editorial-paper);
+}
+
+.editorial-action-secondary {
+  background: transparent;
+  border-color: var(--editorial-rule-strong);
+  color: var(--editorial-ink);
+}
+
+.editorial-action-secondary:hover {
+  border-color: var(--editorial-ink);
+  background: var(--editorial-muted);
+  color: var(--editorial-ink);
+}
+
+.editorial-action:focus-visible {
+  outline: 2px solid var(--editorial-accent);
+  outline-offset: 2px;
+}
+
+.editorial-link {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  transition:
+    color 140ms var(--editorial-ease),
+    text-decoration-color 140ms var(--editorial-ease);
+}
+
+.editorial-link:hover {
+  color: var(--editorial-accent);
+  text-decoration-color: currentColor;
+}
+
+.editorial-link:focus-visible {
+  outline: 2px solid var(--editorial-accent);
+  outline-offset: 2px;
+}
+
+.editorial-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--editorial-rule-strong);
+  border-radius: 0;
+  padding: 0.15rem 0.4rem;
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.editorial-kbd {
+  border: 1px solid var(--editorial-rule);
+  border-radius: 0;
+  padding: 0.1rem 0.3rem;
+  color: var(--editorial-muted);
+  font-family: var(--editorial-font-label);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.editorial-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (pointer: coarse) {
+  .editorial-square {
+    min-width: var(--editorial-target-coarse);
+    min-height: var(--editorial-target-coarse);
+  }
+}
+
+@media (max-width: 40rem) {
+  .editorial-index-link {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    gap: 0.3rem 0.8rem;
+    padding-block: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editorial-index-link,
+  .editorial-index-arrow,
+  .editorial-square,
+  .editorial-action,
+  .editorial-link {
+    transition: none;
+  }
+
+  .editorial-index-link:hover .editorial-index-arrow,
+  .editorial-index-link:focus-visible .editorial-index-arrow {
+    transform: none;
+  }
+}

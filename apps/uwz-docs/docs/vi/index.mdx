@@ -1,53 +1,177 @@
 ---
 title: Giới thiệu
 description: µWebZockets là framework máy chủ zero-allocation, shared-nothing cho Zig — HTTP, WebSocket và JSON-RPC qua một API type-safe duy nhất.
+mode: custom
 ---
 
-**µWebZockets** là framework máy chủ cho [Zig 0.16.0](https://ziglang.org), phục vụ HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API `Request`/`Response` type-safe duy nhất. Các yêu cầu được phân tích, định tuyến và phản hồi từ những slab có giới hạn, được cấp phát một lần khi khởi động, mỗi luồng sở hữu một slab riêng và tái sử dụng mà không cần khóa.
+<div class="docs-home">
+  <section class="docs-home-hero" aria-labelledby="uwz-title">
+    <div class="docs-home-hero-copy" data-butterfly-avoid>
+      <p class="docs-home-eyebrow editorial-label">{"Zig 0.16.0 / HTTP / WebSocket / JSON-RPC"}</p>
+      <h1 class="docs-home-title" id="uwz-title">µWebZockets</h1>
+      <p class="docs-home-summary">
+        {"Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và JSON-RPC qua một API type-safe "}
+        <code>Request</code>
+        {"/"}
+        <code>Response</code>
+        {" duy nhất."}
+      </p>
+      <div class="docs-home-actions">
+        <a class="editorial-action editorial-action-primary" href="/vi/getting-started">
+          {"Bắt đầu "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+        <a
+          class="editorial-action editorial-action-secondary"
+          href="https://github.com/farbenbuilds/uWebZockets"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"Xem trên GitHub "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
+    </div>
+    <ButterflyHero locale="vi" seed={20261030} />
+  </section>
 
-<CardGroup cols={2}>
-  <Card title="Bắt đầu" href="/getting-started" icon="rocket">
-    Chạy ví dụ hello world và thêm µWebZockets vào dự án của bạn.
-  </Card>
-  <Card
-    title="uWebZockets trên GitHub"
-    href="https://github.com/farbenbuilds/uWebZockets"
-    icon="github"
-  >
-    Mã nguồn, bản phát hành và nơi theo dõi issue.
-  </Card>
-</CardGroup>
+<section class="docs-home-section" aria-labelledby="index-heading">
+  <h2 class="editorial-label" id="index-heading">
+    Mục lục
+  </h2>
+  <ol class="editorial-index docs-home-index">
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="/vi/getting-started">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Bắt đầu</span>
+          <span class="editorial-index-text">
+            {"Chạy máy chủ hello world và thêm µWebZockets vào dự án Zig."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Mã nguồn</span>
+          <span class="editorial-index-text">
+            {"Bản phát hành, nơi theo dõi issue và tài liệu sản phẩm."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Zero allocation</span>
+          <span class="editorial-index-text">
+            {"Slab khởi động có giới hạn và giới hạn dung lượng tường minh trên mọi đường xử lý."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a
+        class="editorial-index-link"
+        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/architecture.md"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">Worker shared-nothing</span>
+          <span class="editorial-index-text">
+            {"Một event loop, bộ slab và lõi vật lý được ghim cho mỗi worker."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          -&gt;
+        </span>
+      </a>
+    </li>
+  </ol>
+</section>
 
-## Điểm nổi bật [#highlights]
+<section class="docs-home-section" aria-labelledby="highlights">
+  <h2 class="editorial-label" id="highlights">
+    Điểm nổi bật
+  </h2>
+  <ul class="docs-home-facts">
+    <li>
+      <strong>Định hướng dữ liệu.</strong> Pool struct-of-arrays, mảng router song song và dung
+      lượng xác định lúc biên dịch khiến việc cạn tài nguyên trở nên tường minh.
+    </li>
+    <li>
+      <strong>Kiểu dễ đọc.</strong> Các kiểu callback, event và override có tên thay cho struct ẩn
+      danh nội tuyến.
+    </li>
+    <li>
+      <strong>Đa nền tảng.</strong> Hỗ trợ và kiểm thử trên Linux và macOS x86_64/aarch64; Windows
+      mới chỉ được kiểm tra biên dịch.
+    </li>
+  </ul>
+</section>
 
-- **Zero allocation** — không có đường xử lý yêu cầu, phân tích, định tuyến hay ghi nào cấp phát bộ nhớ.
-- **Shared-nothing** — mỗi worker chạy event loop, bộ slab và lõi vật lý được ghim riêng, chỉ phối hợp qua các ring không khóa.
-- **Định hướng dữ liệu** — pool struct-of-arrays, mảng router song song và dung lượng xác định lúc biên dịch, khiến việc cạn tài nguyên trở nên tường minh.
-- **Kiểu dễ đọc** — các kiểu callback, event và override có tên thay cho struct ẩn danh nội tuyến.
-- **Đa nền tảng** — hỗ trợ và kiểm thử trên Linux và macOS x86_64/aarch64; Windows mới chỉ được kiểm tra biên dịch.
+  <section class="docs-home-section" aria-labelledby="a-complete-server">
+    <p class="editorial-label">Ví dụ</p>
+    <h2 id="a-complete-server">Một máy chủ hoàn chỉnh</h2>
 
-## Một máy chủ hoàn chỉnh [#a-complete-server]
+    ```zig
+    const std = @import("std");
+    const uz = @import("uWebZockets");
 
-```zig
-const std = @import("std");
-const uz = @import("uWebZockets");
+    fn hello(_: *uz.Request, res: *uz.Response) void {
+        res.text("hello from uWebZockets") catch {};
+    }
 
-fn hello(_: *uz.Request, res: *uz.Response) void {
-    res.text("hello from uWebZockets") catch {};
-}
+    pub fn main(init: std.process.Init) !void {
+        var app = try uz.App(128).init(init.io);
+        defer app.deinit();
 
-pub fn main(init: std.process.Init) !void {
-    var app = try uz.App(128).init(init.io);
-    defer app.deinit();
+        _ = try app.get("/", hello);
+        try app.listen("0.0.0.0", 3000);
+        try app.run();
+    }
+    ```
 
-    _ = try app.get("/", hello);
-    try app.listen("0.0.0.0", 3000);
-    try app.run();
-}
-```
+    Cùng một module mang phần còn lại của bộ công cụ: `app.ws(...)` cho
+    WebSocket, `app.rpc(...)` cho JSON-RPC, `app.static(...)` cho tài nguyên
+    tĩnh, `build_cluster` cho worker thread-per-core, `init_https_ephemeral`
+    cho HTTPS không cần tệp chứng chỉ, cùng `listen_udp` và `init_http3` cho
+    HTTP/3.
 
-Cùng một module mang phần còn lại của bộ công cụ: `app.ws(...)` cho WebSocket, `app.rpc(...)` cho JSON-RPC, `app.static(...)` cho tài nguyên tĩnh, `build_cluster` cho worker thread-per-core, `init_https_ephemeral` cho HTTPS không cần tệp chứng chỉ, cùng `listen_udp` và `init_http3` cho HTTP/3.
+  </section>
 
-:::note
-Trang tài liệu này đang được viết. [Bắt đầu](/getting-started) đã sẵn sàng; các hướng dẫn còn lại sẽ được bổ sung.
-:::
+<Callout type="note">
+  Trang tài liệu này đang được viết. [Bắt đầu](/vi/getting-started) đã sẵn sàng; các hướng dẫn còn
+  lại sẽ được bổ sung.
+</Callout>
+
+  <SiteColophon locale="vi" />
+</div>
