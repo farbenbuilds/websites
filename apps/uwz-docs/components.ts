@@ -7,8 +7,8 @@ import HeroChrome from "./components/hero-chrome.svelte";
 export default defineComponents({
   mdx: {
     ButterflyHero: { component: ButterflyHero, client: "visible" },
-    CopyCommand: { component: CopyCommand, client: "visible" },
     HeroChrome: { component: HeroChrome, client: "only" },
+    CopyCommand: { component: CopyCommand, client: "visible" },
     SiteColophon: "./components/site-colophon.astro",
   },
 });

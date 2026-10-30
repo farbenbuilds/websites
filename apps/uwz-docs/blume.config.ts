@@ -1,6 +1,8 @@
-import { defineConfig } from "blume";
+import { defineConfig, type ComponentMarkdown } from "blume";
 
 import { SITE_LINKS, siteCopyright } from "./site-links.ts";
+
+const omitDecorative: ComponentMarkdown = () => "";
 
 export default defineConfig({
   title: "µWebZockets",
@@ -18,6 +20,12 @@ export default defineConfig({
       { code: "en", label: "English" },
       { code: "vi", label: "Tiếng Việt" },
     ],
+  },
+  agents: {
+    markdownComponents: {
+      ButterflyHero: omitDecorative,
+      HeroChrome: omitDecorative,
+    },
   },
   theme: {
     accent: "orange",

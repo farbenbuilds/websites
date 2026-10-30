@@ -24,13 +24,14 @@
   margin: 0;
   padding: 1rem;
   overflow: hidden;
-  color: var(--editorial-ink);
-  font-family: var(--editorial-font-label);
-  font-size: clamp(0.3rem, 1.5vw, 0.95rem);
-  line-height: 1;
-  white-space: pre;
   opacity: 0.64;
   transition: opacity 240ms ease;
+}
+
+.butterfly-hero-still img {
+  width: min(34rem, 74vw);
+  height: auto;
+  image-rendering: pixelated;
 }
 
 .butterfly-hero-still.is-hidden {

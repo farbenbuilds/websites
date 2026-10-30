@@ -1,4 +1,6 @@
-import { SPECIES, SPECIMEN_MAX, speciesAt } from "./butterfly-data";
+import { avoidanceSteer, type AvoidRegion } from "./butterfly-avoidance";
+import { SPECIES, speciesAt } from "./butterfly-data";
+import { clampSpecimenCount, DEFAULT_SPECIMEN_COUNT } from "./butterfly-density";
 import { steerFromPointer, type Steering } from "./butterfly-breeze";
 import { separateField, separationSteer } from "./butterfly-separation";
 import { specimenHalfHeight, specimenHalfSpan } from "./butterfly-shape";
@@ -37,6 +39,7 @@ export type FieldState = {
   height: number;
   time: number;
   specimens: Specimen[];
+  avoidRegions: readonly AvoidRegion[];
   pointer: FieldPointer;
   breezeSteer: Steering;
   rng: ReturnType<typeof createRng>;
@@ -129,19 +132,44 @@ export function createField(options: FieldOptions): FieldState {
     height: options.height,
     time: 0,
     specimens: [],
+    avoidRegions: [],
     pointer: { x: 0, y: 0, active: false },
     breezeSteer: { x: 0 },
     rng,
   };
 
-  const requested = options.specimenCount ?? SPECIMEN_MAX;
-  const count = clamp(Math.round(requested), 1, SPECIMEN_MAX);
+  const count = clampSpecimenCount(options.specimenCount ?? DEFAULT_SPECIMEN_COUNT);
 
   for (let index = 0; index < count; index++) {
     field.specimens.push(createSpecimen(field, index));
   }
 
   return field;
+}
+
+export function setSpecimenCount(
+  field: FieldState,
+  requestedCount: number,
+  enterFromBelow = false,
+): void {
+  const count = clampSpecimenCount(requestedCount);
+
+  if (count < field.specimens.length) {
+    field.specimens.splice(count);
+
+    return;
+  }
+
+  for (let index = field.specimens.length; index < count; index++) {
+    const specimen = createSpecimen(field, index);
+
+    if (enterFromBelow) {
+      specimen.y = field.height + specimen.scale * 1.2;
+      specimen.heading = -Math.PI / 2;
+    }
+
+    field.specimens.push(specimen);
+  }
 }
 
 export function resizeField(field: FieldState, width: number, height: number): void {
@@ -223,6 +251,13 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
 
   const neighbor = separationSteer(field, specimen);
 
+  const avoidance = avoidanceSteer(
+    field.avoidRegions,
+    specimen.x,
+    specimen.y,
+    specimen.scale * 1.15 + 4,
+  );
+
   const neighborTurn =
     neighbor.x === 0 && neighbor.y === 0
       ? 0
@@ -231,6 +266,13 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
         2.6;
 
   const targetTurn = angleDelta(specimen.targetX >= specimen.x ? 0 : Math.PI, specimen.heading);
+
+  const avoidanceTurn =
+    avoidance.x === 0 && avoidance.y === 0
+      ? 0
+      : angleDelta(Math.atan2(avoidance.y, avoidance.x), specimen.heading) *
+        Math.min(1, Math.hypot(avoidance.x, avoidance.y)) *
+        2.8;
 
   const marginX = Math.min(specimen.scale * 1.3 + 2, field.width * 0.35);
   const marginY = Math.min(specimen.scale * 1.05 + 2, field.height * 0.35);
@@ -249,6 +291,7 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
     Math.sin(field.time * 0.28 + specimen.id * 1.7) * 0.16 +
     centerTurn * edge * 1.8 +
     neighborTurn +
+    avoidanceTurn +
     targetTurn * 0.32 +
     breeze.x * 1.4;
 

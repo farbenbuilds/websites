@@ -4,10 +4,12 @@ import {
   stepAtmosphere,
   type Atmosphere,
 } from "./butterfly-atmosphere";
-import { SPECIMEN_MAX } from "./butterfly-data";
+import { measureAvoidRegions } from "./butterfly-content-measurement";
+import { fallbackSpecimenCount, resolveSpecimenCount } from "./butterfly-density";
 import {
   createField,
   resizeField,
+  setSpecimenCount,
   setPointer,
   stepField,
   type FieldState,
@@ -25,6 +27,8 @@ import { depositDrafts } from "./butterfly-drafts";
 export type ButterflyLoopOptions = {
   readonly canvas: HTMLCanvasElement;
   readonly hero: HTMLElement;
+  readonly contentRoot: HTMLElement;
+  readonly images: readonly HTMLImageElement[];
   readonly seed: number;
   readonly specimenCount: number;
   readonly onReady: () => void;
@@ -43,9 +47,12 @@ const MAX_DELTA = 0.1;
 const FONT_TIMEOUT_MS = 2000;
 const POLLEN_COUNT = 8;
 const TRACE_COUNT = 8;
+const CONTENT_MEASURE_INTERVAL = 30;
+const CONTENT_PADDING_CELLS = 2;
+const CONTENT_MERGE_GAP_PIXELS = 160;
 
 export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoop {
-  const created = createRenderer(options.canvas);
+  const created = createRenderer(options.canvas, options.images);
 
   if (!created) {
     options.onFailure();
@@ -57,11 +64,11 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   }
 
   const renderer: FieldRenderer = created;
-  const specimenCount = clamp(Math.round(options.specimenCount), 1, SPECIMEN_MAX);
 
   let field: FieldState | null = null;
   let atmosphere: Atmosphere | null = null;
   let frameHandle = 0;
+  let populationHandle = 0;
   let lastTime = 0;
   let lastDraw = 0;
   let accumulator = 0;
@@ -71,6 +78,8 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
   let destroyed = false;
   let stillSimulated = false;
   let fontTimer = 0;
+  let drawCount = 0;
+  let targetSpecimenCount = fallbackSpecimenCount(options.specimenCount);
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -92,7 +101,6 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   const themeObserver = new MutationObserver(() => {
     renderer.palette = readHostPalette(options.hero);
-    renderer.colors.clear();
     drawFrame();
   });
 
@@ -106,20 +114,21 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     const fontFamily = getComputedStyle(options.canvas).fontFamily || "ui-monospace, monospace";
 
     renderer.palette = readHostPalette(options.hero);
-    renderer.colors.clear();
     resizeRenderer(renderer, rect.width, rect.height, dpr, fontFamily);
+    targetSpecimenCount = resolveSpecimenCount(rect.width, options.specimenCount);
 
-    if (!field || field.specimens.length !== specimenCount) {
-      const previous = field;
+    if (!field) {
       field = createField({
         width: renderer.cols,
         height: renderer.rows,
-        specimenCount,
+        specimenCount: fallbackSpecimenCount(options.specimenCount),
         seed: options.seed,
       });
-      stillSimulated = previous !== null && reducedMotion.matches;
+      stillSimulated = false;
     } else {
       resizeField(field, renderer.cols, renderer.rows);
+
+      if (ready) updatePopulation();
     }
 
     if (!atmosphere) {
@@ -133,6 +142,36 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     } else {
       resizeAtmosphere(atmosphere, renderer.cols, renderer.rows);
     }
+
+    refreshContentRegions();
+  }
+
+  function updatePopulation(): void {
+    if (!field) return;
+    setSpecimenCount(field, targetSpecimenCount, targetSpecimenCount > field.specimens.length);
+  }
+
+  function promotePopulation(): void {
+    if (destroyed || populationHandle || !field) return;
+
+    if (field.specimens.length === targetSpecimenCount) return;
+    populationHandle = requestAnimationFrame(() => {
+      populationHandle = 0;
+
+      if (!destroyed) updatePopulation();
+    });
+  }
+
+  function refreshContentRegions(): void {
+    if (!field) return;
+    field.avoidRegions = measureAvoidRegions({
+      contentRoot: options.contentRoot,
+      canvas: options.canvas,
+      cellWidth: renderer.cellWidth,
+      cellHeight: renderer.cellHeight,
+      paddingCells: CONTENT_PADDING_CELLS,
+      mergeGapPixels: CONTENT_MERGE_GAP_PIXELS,
+    });
   }
 
   function drawStill(): void {
@@ -152,11 +191,15 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   function drawFrame(): void {
     if (!field || !atmosphere || destroyed) return;
+
+    if (drawCount % CONTENT_MEASURE_INTERVAL === 0) refreshContentRegions();
+    drawCount++;
     drawField(renderer, field, atmosphere);
 
     if (!ready) {
       ready = true;
       options.onReady();
+      promotePopulation();
     }
   }
 
@@ -330,6 +373,8 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     destroy: () => {
       destroyed = true;
       cancel();
+
+      if (populationHandle) cancelAnimationFrame(populationHandle);
 
       if (fontTimer) window.clearTimeout(fontTimer);
       resizeObserver.disconnect();

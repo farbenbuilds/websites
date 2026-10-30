@@ -1,8 +1,6 @@
 /*
- * Custom-mode docs home: full-screen butterfly hero.
- *
- * The left scrim keeps reading copy stable while the field stays visible on
- * the open side. Section layout lives in docs-home-sections.css.
+ * Custom-mode docs home: full-screen living print on larger screens and a
+ * copy-first composition with a bounded art band on narrow screens.
  */
 
 .docs-home {
@@ -20,6 +18,16 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 .docs-home-hero {
+  --hero-paper: #080604;
+  --hero-ink: #fff6df;
+  --hero-muted: #d8c59a;
+  --hero-rule: #8f6d2a;
+  --hero-accent: #ffb300;
+  --hero-accent-bright: #ffcf66;
+  --hero-ink-on-accent: #160f02;
+  --hero-hover: #1b1508;
+  --hero-eyebrow: #e2bf68;
+  --hero-still: #e9c66b;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 6.4fr) minmax(0, 5.6fr);
@@ -31,8 +39,12 @@ html:has(.docs-home-hero) #blume-content {
   overflow: hidden;
   padding: clamp(4.5rem, 10vh, 7rem) max(clamp(1.25rem, 4vw, 3rem), calc((100vw - 70rem) / 2))
     clamp(3.5rem, 8vh, 5rem);
-  background: #080604;
-  color: #fff6df;
+  background: var(--hero-paper);
+  color: var(--hero-ink);
+}
+
+.docs-home-hero > astro-island:has(> .butterfly-hero) {
+  display: contents;
 }
 
 .docs-home-hero .butterfly-hero {
@@ -41,16 +53,15 @@ html:has(.docs-home-hero) #blume-content {
   z-index: 0;
   min-height: 0;
   margin: 0;
-  --farben-field-paper: #080604;
-  --farben-field-ink: #fff6df;
-  --farben-field-muted: #8f6d2a;
-  --farben-field-accent: #ffb300;
+  --farben-field-paper: var(--hero-paper);
+  --farben-field-ink: var(--hero-ink);
+  --farben-field-muted: var(--hero-rule);
+  --farben-field-accent: var(--hero-accent);
 }
 
 .docs-home-hero .butterfly-hero-still:not(.is-hidden) {
-  color: #e9c66b;
-  font-size: clamp(0.3rem, 1.5vw, 1.1rem);
-  opacity: 0.6;
+  color: var(--hero-still);
+  opacity: 0.58;
 }
 
 .docs-home-hero-copy {
@@ -85,23 +96,19 @@ html .prose .docs-home-mark {
 }
 
 .docs-home-eyebrow {
-  color: #e2bf68;
-  text-shadow:
-    0 1px 2px #080604,
-    0 0 14px #080604;
+  color: var(--hero-eyebrow);
+  text-shadow: 0 1px 2px var(--hero-paper);
 }
 
 .docs-home-title {
   margin: 0;
-  color: #fff6df;
-  text-shadow:
-    0 1px 3px #080604,
-    0 0 24px #080604;
+  color: var(--hero-ink);
+  text-shadow: 0 1px 2px var(--hero-paper);
   white-space: nowrap;
   font-family: var(--blume-font-display);
   font-size: clamp(2.5rem, 5.2vw, 4.5rem);
   font-weight: 600;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
   line-height: 0.92;
 }
 
@@ -118,10 +125,8 @@ html .prose .docs-home-eyebrow {
 .docs-home-summary {
   max-width: 36ch;
   margin: 0;
-  color: #d8c59a;
-  text-shadow:
-    0 1px 2px #080604,
-    0 0 14px #080604;
+  color: var(--hero-muted);
+  text-shadow: 0 1px 2px var(--hero-paper);
   font-family: var(--blume-font-body);
   font-size: 1.0625rem;
   line-height: 1.7;
@@ -132,9 +137,9 @@ html .prose .docs-home-summary {
 }
 
 html .prose .docs-home-summary code {
-  border-color: color-mix(in srgb, #ffb300 45%, transparent);
-  background: #080604;
-  color: #ffcf66;
+  border-color: color-mix(in srgb, var(--hero-accent) 45%, transparent);
+  background: var(--hero-paper);
+  color: var(--hero-accent-bright);
 }
 
 .docs-home-actions {
@@ -145,130 +150,36 @@ html .prose .docs-home-summary code {
 }
 
 .docs-home-hero .editorial-action {
-  border-color: #8f6d2a;
-  color: #fff6df;
+  border-color: var(--hero-rule);
+  color: var(--hero-ink);
 }
 
 .docs-home-hero .editorial-action-primary {
-  border-color: #ffb300;
-  background: #ffb300;
-  color: #160f02;
+  border-color: var(--hero-accent);
+  background: var(--hero-accent);
+  color: var(--hero-ink-on-accent);
 }
 
 .docs-home-hero .editorial-action-primary:hover {
-  border-color: #ffc94d;
-  background: #ffc94d;
-  color: #160f02;
+  border-color: var(--hero-accent-bright);
+  background: var(--hero-accent-bright);
+  color: var(--hero-ink-on-accent);
 }
 
 .docs-home-hero .editorial-action-secondary {
-  background: #080604;
+  background: var(--hero-paper);
 }
 
 .docs-home-hero .editorial-action-secondary:hover {
-  border-color: #ffb300;
-  background: #1b1508;
-  color: #ffcf66;
-}
-
-.docs-home-scroll {
-  position: absolute;
-  bottom: clamp(1.5rem, 4vh, 2.5rem);
-  left: 50%;
-  z-index: 3;
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 1px solid color-mix(in srgb, #ffb300 55%, transparent);
-  border-radius: 50%;
-  background: #080604;
-  color: #ffcf66;
-  place-items: center;
-  text-decoration: none;
-  transform: translateX(-50%);
-  transition:
-    border-color 160ms ease,
-    color 160ms ease,
-    background-color 160ms ease;
-}
-
-.docs-home-scroll-halo {
-  position: absolute;
-  inset: 0;
-  border: 1px solid #ffb300;
-  border-radius: 50%;
-  opacity: 0.26;
-}
-
-.docs-home-scroll-mouse {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  width: 0.85rem;
-  height: 1.25rem;
-  padding-top: 0.18rem;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-}
-
-.docs-home-scroll-dot {
-  width: 0.2rem;
-  height: 0.2rem;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.docs-home-scroll:hover,
-.docs-home-scroll:focus-visible {
-  border-color: #ffb300;
-  background: #120d02;
-  color: #ffb300;
-}
-
-.docs-home-hero .butterfly-hero .editorial-square {
-  border-color: #8f6d2a;
-  background: #080604;
-  color: #e9c66b;
-}
-
-.docs-home-hero .butterfly-hero .editorial-square:hover {
-  border-color: #ffb300;
-  color: #ffb300;
-}
-
-.docs-home-hero-copy > * {
-  animation: docs-home-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.docs-home-hero-copy > :nth-child(2) {
-  animation-delay: 60ms;
-}
-
-.docs-home-hero-copy > :nth-child(3) {
-  animation-delay: 120ms;
-}
-
-.docs-home-hero-copy > :nth-child(4) {
-  animation-delay: 180ms;
-}
-
-@keyframes docs-home-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  border-color: var(--hero-accent);
+  background: var(--hero-hover);
+  color: var(--hero-accent-bright);
 }
 
 @media (max-width: 56rem) {
   .docs-home-hero {
     grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    padding-block: 5rem 7rem;
+    padding-block: 4rem 5.5rem;
   }
 
   .docs-home-hero-copy {
@@ -281,7 +192,8 @@ html .prose .docs-home-summary code {
     width: 2.75rem;
   }
 
-  .docs-home-title {
+  .docs-home-title,
+  html .prose .docs-home-title {
     font-size: clamp(2.25rem, 11vw, 3.5rem);
   }
 
@@ -304,23 +216,43 @@ html .prose .docs-home-summary code {
 }
 
 @media (max-width: 40rem) {
-  .docs-home-hero::before {
-    display: none;
+  .docs-home-hero {
+    grid-template-rows: auto minmax(14rem, 38svh);
+    gap: 1rem;
+    align-items: start;
+    min-height: 0;
+    padding: clamp(1.5rem, 6vw, 2rem) 1rem 0;
+  }
+
+  .docs-home-hero-copy {
+    grid-row: 1;
+    gap: 0.625rem;
+    padding-block-end: 0;
+  }
+
+  .docs-home-hero .butterfly-hero {
+    position: relative;
+    inset: auto;
+    grid-row: 2;
+    width: auto;
+    min-height: 14rem;
+    margin-inline: -1rem;
+  }
+
+  .docs-home-title,
+  html .prose .docs-home-title {
+    font-size: clamp(2rem, 10vw, 2.75rem);
+  }
+
+  .docs-home-summary {
+    font-size: 0.9375rem;
   }
 }
 
 @media (max-width: 26rem) {
-  .docs-home-hero {
-    padding-block: 2.5rem 7rem;
-  }
-
   .docs-home-mark {
     top: 0.3rem;
     width: 2.5rem;
-  }
-
-  .docs-home-title {
-    font-size: clamp(1.75rem, 9vw, 2.5rem);
   }
 
   .docs-home-actions {
@@ -334,23 +266,11 @@ html .prose .docs-home-summary code {
     padding-inline: 0.45rem;
     font-size: 0.72rem;
   }
-
-  .docs-home-scroll {
-    bottom: 1.15rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html:has(.docs-home) {
     scroll-behavior: auto;
-  }
-
-  .docs-home-hero-copy > * {
-    animation: none;
-  }
-
-  .docs-home-scroll {
-    transition: none;
   }
 }
 

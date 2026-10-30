@@ -1,13 +1,13 @@
 import { draftAt, type Atmosphere } from "./butterfly-atmosphere";
+import { drawContentMask } from "./butterfly-content-mask";
 import type { FieldState } from "./butterfly-field";
-import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape";
 import { butterflyBreezeColor, rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
-import { drawSpecimens, type SpecimenColors } from "./butterfly-specimen";
+import { drawSpecimens } from "./butterfly-specimen";
 
 export type FieldRenderer = {
   readonly canvas: HTMLCanvasElement;
   readonly context: CanvasRenderingContext2D;
-  readonly detail: AnatomyScratch;
+  readonly images: readonly HTMLImageElement[];
   width: number;
   height: number;
   dpr: number;
@@ -19,7 +19,6 @@ export type FieldRenderer = {
   palette: ButterflyPalette;
   matrix: HTMLCanvasElement | null;
   matrixKey: string;
-  readonly colors: Map<number, SpecimenColors>;
 };
 
 // Hosts own the field palette; this neutral fallback only covers missing tokens.
@@ -30,7 +29,10 @@ const FALLBACK_PALETTE: ButterflyPalette = {
   accent: { r: 128, g: 128, b: 128 },
 };
 
-export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null {
+export function createRenderer(
+  canvas: HTMLCanvasElement,
+  images: readonly HTMLImageElement[],
+): FieldRenderer | null {
   const context = canvas.getContext("2d", { alpha: true });
 
   if (!context) return null;
@@ -38,7 +40,7 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
   return {
     canvas,
     context,
-    detail: createAnatomyScratch(),
+    images,
     width: 0,
     height: 0,
     dpr: 1,
@@ -50,7 +52,6 @@ export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null 
     palette: FALLBACK_PALETTE,
     matrix: null,
     matrixKey: "",
-    colors: new Map(),
   };
 }
 
@@ -201,9 +202,10 @@ export function drawField(
   drawMatrix(renderer);
   drawAir(renderer, atmosphere);
   drawTraces(renderer, atmosphere);
-  drawSpecimens(renderer, field, renderer.colors);
+  drawSpecimens(renderer, field);
   drawBreeze(renderer, atmosphere);
   drawPollen(renderer, atmosphere);
+  drawContentMask(renderer, field.avoidRegions);
 }
 
 function drawAir(renderer: FieldRenderer, atmosphere: Atmosphere): void {

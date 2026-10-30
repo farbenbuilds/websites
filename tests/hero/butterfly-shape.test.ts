@@ -73,4 +73,38 @@ describe("butterfly anatomy", () => {
     expect(a.grain).toBe(b.grain);
     expect(a.part).toBe(b.part);
   });
+
+  it("keeps pattern coordinates fixed while a wing folds", () => {
+    const species = SPECIES[0];
+    const openPose = createSpecimenPose(0, 0);
+    const foldedPose = createSpecimenPose(Math.PI / 2, 0);
+    const bodyX = species.eyespot.x;
+    const bodyY = species.eyespot.y;
+
+    const open = sampleAnatomy(
+      species,
+      bodyX * openPose.foldRight,
+      bodyY - openPose.yShiftRight,
+      openPose,
+      41,
+      createAnatomyScratch(),
+    );
+
+    const folded = sampleAnatomy(
+      species,
+      bodyX * foldedPose.foldRight,
+      bodyY - foldedPose.yShiftRight,
+      foldedPose,
+      41,
+      createAnatomyScratch(),
+    );
+
+    expect(open.part).toBe("hind");
+    expect(folded.part).toBe("hind");
+    expect(folded.eyespot).toBe(open.eyespot);
+    expect(folded.band).toBe(open.band);
+    expect(folded.grain).toBe(open.grain);
+    expect(folded.bodyX).toBeCloseTo(open.bodyX, 8);
+    expect(folded.bodyY).toBeCloseTo(open.bodyY, 8);
+  });
 });

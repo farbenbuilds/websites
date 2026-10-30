@@ -12,6 +12,8 @@ export type AnatomySample = {
   band: number;
   eyespot: number;
   grain: number;
+  bodyX: number;
+  bodyY: number;
 };
 
 type WingSample = {
@@ -20,6 +22,8 @@ type WingSample = {
   shade: number;
   vein: number;
   band: number;
+  bodyX: number;
+  bodyY: number;
 };
 
 export type AnatomyScratch = {
@@ -66,8 +70,10 @@ export function createAnatomyScratch(): AnatomyScratch {
       band: 0,
       eyespot: 0,
       grain: 0,
+      bodyX: 0,
+      bodyY: 0,
     },
-    wing: { inside: false, edge: 0, shade: 0, vein: 0, band: 0 },
+    wing: { inside: false, edge: 0, shade: 0, vein: 0, band: 0, bodyX: 0, bodyY: 0 },
   };
 }
 
@@ -80,6 +86,8 @@ function resetAnatomySample(sample: AnatomySample): void {
   sample.band = 0;
   sample.eyespot = 0;
   sample.grain = 0;
+  sample.bodyX = 0;
+  sample.bodyY = 0;
 }
 
 function pointInPolygon(points: readonly WingPoint[], x: number, y: number): boolean {
@@ -164,6 +172,8 @@ function sampleWing(
   out.shade = clamp(0.55 + 0.45 * (wx / reach) + 0.05 * wy, 0, 1);
   out.vein = radius > 0.16 && Math.abs(veinWave) < 0.13 ? 1 : 0;
   out.band = radius > 0.18 && Math.abs(bandWave) < 0.16 ? 1 : 0;
+  out.bodyX = wx;
+  out.bodyY = wy;
   out.inside = true;
 
   return true;
@@ -231,6 +241,8 @@ export function sampleAnatomy(
     out.hit = true;
     out.part = "body";
     out.shade = 0.9 - t * 0.42;
+    out.bodyX = x;
+    out.bodyY = y;
     out.grain = hash2(Math.round(x * 32), Math.round(y * 32), grainSeed + species.glyphBias * 17);
 
     return out;
@@ -245,7 +257,13 @@ export function sampleAnatomy(
     out.edge = scratch.wing.edge;
     out.vein = scratch.wing.vein;
     out.band = scratch.wing.band;
-    out.grain = hash2(Math.round(x * 30), Math.round(y * 30), grainSeed + species.glyphBias * 31);
+    out.bodyX = scratch.wing.bodyX;
+    out.bodyY = scratch.wing.bodyY;
+    out.grain = hash2(
+      Math.round(out.bodyX * 30),
+      Math.round(out.bodyY * 30),
+      grainSeed + species.glyphBias * 31,
+    );
 
     return out;
   }
@@ -257,11 +275,20 @@ export function sampleAnatomy(
     out.edge = scratch.wing.edge;
     out.vein = scratch.wing.vein;
     out.band = scratch.wing.band;
+    out.bodyX = scratch.wing.bodyX;
+    out.bodyY = scratch.wing.bodyY;
 
-    const eyeDistance = Math.hypot(Math.abs(x) - species.eyespot.x, y - species.eyespot.y);
+    const eyeDistance = Math.hypot(
+      Math.abs(out.bodyX) - species.eyespot.x,
+      out.bodyY - species.eyespot.y,
+    );
 
     out.eyespot = eyeDistance < species.eyespot.radius ? 1 : 0;
-    out.grain = hash2(Math.round(x * 30), Math.round(y * 30), grainSeed + species.glyphBias * 47);
+    out.grain = hash2(
+      Math.round(out.bodyX * 30),
+      Math.round(out.bodyY * 30),
+      grainSeed + species.glyphBias * 47,
+    );
 
     return out;
   }
@@ -271,6 +298,8 @@ export function sampleAnatomy(
     out.part = "antenna";
     out.shade = 0.55;
     out.edge = 1;
+    out.bodyX = x;
+    out.bodyY = y;
     out.grain = hash2(Math.round(x * 32), Math.round(y * 32), grainSeed);
 
     return out;

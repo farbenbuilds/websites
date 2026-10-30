@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import { DEFAULT_SPECIMEN_COUNT } from "./butterfly-density";
+  import { loadButterflyImages } from "./butterfly-images";
   import { createButterflyLoop, type ButterflyLoop } from "./butterfly-loop";
-  import { generateStill } from "./butterfly-still";
 
   type ButterflyHeroProps = {
     locale?: "en" | "vi";
     seed?: number;
     specimenCount?: number;
+    spriteUrls?: readonly string[];
   };
 
   const COPY = {
@@ -26,8 +28,15 @@
   } as const;
 
   const PAUSE_KEY = "farben-butterfly-paused";
+  const CONTENT_ROOT_SELECTOR = "[data-butterfly-content-root]";
 
-  let { locale = "en", seed = 20261029, specimenCount = 8 }: ButterflyHeroProps = $props();
+  let {
+    locale = "en",
+    seed = 20261029,
+    specimenCount = DEFAULT_SPECIMEN_COUNT,
+    spriteUrls = [],
+  }: ButterflyHeroProps = $props();
+
   let root: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let loop: ButterflyLoop | null = null;
@@ -37,7 +46,6 @@
   let motionAllowed = $state(true);
 
   const copy = $derived(COPY[locale] ?? COPY.en);
-  const still = $derived(generateStill(seed, specimenCount));
 
   function togglePause(): void {
     paused = !paused;
@@ -66,23 +74,36 @@
       paused = false;
     }
 
-    loop = createButterflyLoop({
-      canvas,
-      hero: root,
-      seed,
-      specimenCount: Math.max(1, Math.min(8, Math.round(specimenCount))),
-      onReady: () => {
-        ready = true;
-        failed = false;
-      },
-      onFailure: () => {
-        ready = false;
-        failed = true;
-      },
-    });
-    loop.setPaused(paused);
+    let active = true;
+    const contentRoot = root.closest<HTMLElement>(CONTENT_ROOT_SELECTOR) ?? root;
+
+    void loadButterflyImages(spriteUrls)
+      .then((images) => {
+        if (!active) return;
+        loop = createButterflyLoop({
+          canvas,
+          hero: root,
+          contentRoot,
+          images,
+          seed,
+          specimenCount,
+          onReady: () => {
+            ready = true;
+            failed = false;
+          },
+          onFailure: () => {
+            ready = false;
+            failed = true;
+          },
+        });
+        loop.setPaused(paused);
+      })
+      .catch(() => {
+        if (active) failed = true;
+      });
 
     return () => {
+      active = false;
       motionQuery.removeEventListener("change", onMotionChange);
       loop?.destroy();
       loop = null;
@@ -92,7 +113,11 @@
 
 <div class="butterfly-hero" bind:this={root}>
   <div class="butterfly-hero-art" aria-hidden="true">
-    <pre class="butterfly-hero-still" class:is-hidden={ready && !failed}>{still}</pre>
+    <div class="butterfly-hero-still" class:is-hidden={ready && !failed}>
+      {#if spriteUrls[0]}
+        <img src={spriteUrls[0]} alt="" width="96" height="65" decoding="async" />
+      {/if}
+    </div>
     <canvas
       class="butterfly-hero-canvas pointer-events-none"
       class:is-ready={ready && !failed}
@@ -106,6 +131,7 @@
       class="editorial-square pointer-events-auto absolute bottom-3 end-3 z-10 gap-2 bg-background px-3 font-mono text-[0.62rem] uppercase tracking-[0.1em]"
       aria-label={paused ? copy.resumeLabel : copy.pauseLabel}
       aria-pressed={paused}
+      data-butterfly-avoid
       onclick={togglePause}
     >
       {paused ? copy.resume : copy.pause}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   createField,
+  setSpecimenCount,
   stepField,
 } from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-field.ts";
 import { separationSteer } from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-separation.ts";
@@ -37,6 +38,26 @@ describe("butterfly field", () => {
     expect(capped.specimens[3]?.scale).toBeLessThan(capped.specimens[0]?.scale ?? 0);
     expect(capped.specimens[6]?.scale).toBeLessThan(capped.specimens[2]?.scale ?? 0);
     expect(capped.specimens[7]?.scale).toBeLessThan(capped.specimens[3]?.scale ?? 0);
+  });
+
+  it("promotes a fallback population without moving visible specimens", () => {
+    const state = createField({
+      width: 120,
+      height: 60,
+      specimenCount: 3,
+      seed: 424242,
+    });
+
+    const fallback = state.specimens.map(({ id, x, y }) => ({ id, x, y }));
+
+    setSpecimenCount(state, 8, true);
+
+    expect(state.specimens).toHaveLength(8);
+    expect(state.specimens.slice(0, 3).map(({ id, x, y }) => ({ id, x, y }))).toEqual(fallback);
+    expect(state.specimens.slice(3).every((specimen) => specimen.y > state.height)).toBe(true);
+
+    setSpecimenCount(state, 3);
+    expect(state.specimens).toHaveLength(3);
   });
 
   it("steers a butterfly away from a close neighbour", () => {

@@ -10,9 +10,8 @@ mode: custom
     <style>{`html:has(.docs-home-hero) [data-blume-header] { position: sticky; visibility: visible; opacity: 1; transform: none; pointer-events: auto; }`}</style>
   </noscript>
 
-<section class="docs-home-hero" aria-labelledby="uwz-title">
-  <ButterflyHero locale="vi" seed={20261030} />
-  <div class="docs-home-hero-copy">
+<section class="docs-home-hero" aria-labelledby="uwz-title" data-butterfly-content-root>
+  <div class="docs-home-hero-copy" data-butterfly-avoid>
     <p class="docs-home-eyebrow editorial-label">{"Zig / HTTP / WebSocket / RPC"}</p>
     <div class="docs-home-title-row">
       <img
@@ -22,7 +21,6 @@ mode: custom
         width="72"
         height="72"
         aria-hidden="true"
-        data-hero-float
       />
       <h1 class="docs-home-title" id="uwz-title">
         µWebZockets
@@ -54,7 +52,21 @@ mode: custom
       </a>
     </div>
   </div>
-  <a class="docs-home-scroll" href="#docs-home-main" aria-label="Cuộn đến mục lục tài liệu">
+  <ButterflyHero
+    locale="vi"
+    seed={20261030}
+    spriteUrls={[
+      "/butterflies/monarch.png",
+      "/butterflies/painted-lady.png",
+      "/butterflies/sulphur.png",
+    ]}
+  />
+  <a
+    class="docs-home-scroll"
+    href="#docs-home-main"
+    aria-label="Cuộn đến mục lục tài liệu"
+    data-butterfly-avoid
+  >
     <span class="docs-home-scroll-halo" aria-hidden="true"></span>
     <span class="docs-home-scroll-mouse" aria-hidden="true">
       <span class="docs-home-scroll-dot"></span>
