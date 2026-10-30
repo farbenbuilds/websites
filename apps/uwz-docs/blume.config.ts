@@ -1,6 +1,6 @@
 import { defineConfig, type ComponentMarkdown } from "blume";
 
-import { SITE_LINKS, siteCopyright } from "./site-links.ts";
+import { SITE_LINKS, siteFooterNote } from "./site-links.ts";
 
 const omitDecorative: ComponentMarkdown = () => "";
 
@@ -49,7 +49,7 @@ export default defineConfig({
     },
   },
   footer: {
-    copyright: siteCopyright(),
+    copyright: siteFooterNote(),
     links: SITE_LINKS.map(({ label, href }) => ({ label, href })),
   },
 });

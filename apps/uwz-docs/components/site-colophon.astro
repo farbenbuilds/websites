@@ -3,7 +3,7 @@ import {
   SITE_LINKS,
   localizeHref,
   resolveLocale,
-  siteCopyright,
+  siteFooterNote,
   type SiteLocale,
 } from "../site-links";
 
@@ -42,5 +42,5 @@ const isExternal = (href: string): boolean =>
       ))
     }
   </ul>
-  <p>{siteCopyright()}</p>
+  <p>{siteFooterNote()}</p>
 </footer>

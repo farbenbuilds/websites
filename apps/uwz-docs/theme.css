@@ -16,6 +16,7 @@
 @import "../../../styles/docs-home.css";
 @import "../../../styles/docs-home-controls.css";
 @import "../../../styles/docs-home-sections.css";
+@import "../../../styles/docs-home-support.css";
 
 :root {
   --blume-background: #f4f0e6;

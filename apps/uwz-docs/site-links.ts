@@ -7,25 +7,24 @@ export type SiteLink = {
 
 export const PRODUCT_REPOSITORY_URL = "https://github.com/farbenbuilds/uWebZockets";
 
-export const DOCUMENTATION_SOURCE_URL =
-  "https://github.com/farbenbuilds/websites/tree/main/apps/uwz-docs";
-
 export const PRODUCT_LICENSE_URL = "https://github.com/farbenbuilds/uWebZockets/blob/main/LICENSE";
+
+export const AUTHOR_URL = "https://github.com/Coder-Blue";
 
 export const SITE_LINKS: readonly SiteLink[] = [
   {
     label: {
-      en: "µWebZockets on GitHub",
-      vi: "µWebZockets trên GitHub",
+      en: "Author",
+      vi: "Tác giả",
     },
-    href: PRODUCT_REPOSITORY_URL,
+    href: AUTHOR_URL,
   },
   {
     label: {
-      en: "Documentation source",
-      vi: "Mã nguồn tài liệu",
+      en: "Source",
+      vi: "Mã nguồn",
     },
-    href: DOCUMENTATION_SOURCE_URL,
+    href: PRODUCT_REPOSITORY_URL,
   },
   {
     label: {
@@ -56,6 +55,6 @@ export function localizeHref(href: string, locale: SiteLocale): string {
   return href === "/" ? "/vi" : `/vi${href}`;
 }
 
-export function siteCopyright(): string {
-  return `\u00A9 ${new Date().getFullYear()} Farben`;
+export function siteFooterNote(): string {
+  return "MIT License 2026";
 }

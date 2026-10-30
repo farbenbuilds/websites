@@ -378,10 +378,12 @@ Header decisions:
 
 Footer decisions:
 
-- Configure `footer.copyright` and two or three `footer.links` in each app
-  instead of inventing a new footer. The GitHub icon comes from `github.owner`
-  and `github.repo` and points at the monorepo; the product repository belongs in
-  a labeled text link. Keep those destinations distinct.
+- Configure `footer.copyright` as `MIT License 2026` and three `footer.links`:
+  Author ([Coder-Blue](https://github.com/Coder-Blue)), Source (the product
+  repository), and License (the product LICENSE file). The GitHub icon comes
+  from `github.owner` and `github.repo` and points at the monorepo; the product
+  repository belongs in the labeled Source link. Keep those destinations
+  distinct.
 - Do not add a social icon wall. GitHub is the relevant destination.
 - Add a license link only when the product repository publishes its own license
   file. Do not imply a product license from the monorepo's MIT license.
@@ -445,18 +447,23 @@ the first action stays above the fold.
 
 Below the hero:
 
-- A numbered index replaces the current `CardGroup`. Use three to five rows for
-  Getting Started, the source repository, and the strongest product facts. Each
-  row has a mono number, title, one-sentence description, and a descriptive link.
-- Do not drop the existing Highlights or the incomplete-documentation note. Move
-  the strongest facts into the index and keep the rest as a compact list below
-  it; keep the status note near the documentation links. Never present the site
-  as complete when the copy says it is still being written.
-- Keep the existing complete-example code block and the explanation that
-  follows it. Put it on the paper surface with a hairline rule and no card.
-- End with the docs home colophon: copyright, source, and documentation links, plus
-  a license link only when the product repository publishes one. It must match
-  the docs footer visually and use the same destinations.
+- A numbered index for Getting Started, support, server adoption, and the
+  author. Use two columns on desktop and one on mobile. Each row has a mono
+  number, title, one-sentence description, and a descriptive link.
+- A support section with a two-column capability grid and a platform table.
+  Cover HTTP, WebSocket, RPC, TLS, static assets, workers, and allocation
+  limits. Use badges for tested and compile-checked targets.
+- A server section with three numbered adoption steps and one link to Getting
+  Started. Do not put a code sample on the landing page.
+- An author section that links to
+  [Coder-Blue](https://github.com/Coder-Blue).
+- Keep the incomplete-documentation note as a quiet status row near the index.
+  Never present the site as complete when the copy says it is still being
+  written.
+- Do not add a sponsor section until the project publishes one.
+- End with the docs home colophon: the MIT License 2026 line, author, source,
+  and license links. It must match the docs footer visually and use the same
+  destinations.
 - Keep the English and Vietnamese pages equivalent. Translate labels; do not
   translate product names or code identifiers.
 
@@ -612,12 +619,12 @@ apps.
 | Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                      | Existing |
 | Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                        | Existing |
 | Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                            | Existing |
-| Docs home colophon   | Static per-app footer with copyright and links                                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                | New      |
+| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                | New      |
 | Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                       | Mixed    |
 | Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                               | New      |
 | Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                              | New      |
 | Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                       | Existing |
-| Docs home content    | Custom-mode hero, numbered index, example, colophon                                          | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                            | Existing |
+| Docs home content    | Custom-mode hero, numbered index, support, server, author, colophon                          | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                            | Existing |
 | Site registry        | Register hero and colophon for MDX                                                           | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`               | Mixed    |
 | Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                         | Existing |
 
@@ -932,6 +939,31 @@ field.
   informed the bounded-loop engineering; asciiart.eu and the user's Pinterest
   reference informed character density and wing shading. No upstream code, CSS,
   or artwork is copied.
+
+## Final landing sections (2026-10-30)
+
+The sections below the uWebZockets hero follow the Vize entry-page grammar while
+keeping Farben's own tokens, fonts, and copy.
+
+- **Index:** a two-column numbered index on desktop, one column on mobile. Rows
+  link to Getting Started, support, server adoption, and the author. A quiet
+  status row records that the documentation is still being written.
+- **Support:** an eight-item capability grid covering HTTP/1.1 and HTTP/2,
+  HTTP/3 (single process; QUIC clustering is not supported), WebSocket, RPC,
+  TLS, static assets, thread-per-core workers pinned where the platform allows,
+  and zero allocation. A hairline platform table marks Linux and macOS targets
+  as tested and Windows as compile-checked.
+- **Server:** three numbered adoption steps with no code sample. The steps cover
+  adding the package, mounting handlers, and running a single process or a
+  thread-per-core cluster, followed by a link to Getting Started.
+- **Author:** a monogram and short profile for
+  [Coder-Blue](https://github.com/Coder-Blue), linked to GitHub. No sponsor
+  section ships.
+- **Footer:** the docs home colophon and the site-wide Blume footer both show
+  `MIT License 2026` with Author, Source, and License links. Blume additionally
+  renders its monorepo GitHub icon on docs pages; the colophon keeps the three
+  text links and the license note. Custom mode gets the shared content from
+  `site-colophon.astro`.
 
 ## Research references
 

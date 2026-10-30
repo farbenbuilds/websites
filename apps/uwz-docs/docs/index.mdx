@@ -82,17 +82,53 @@ mode: custom
 </section>
 
 <section class="docs-home-section" id="docs-home-main" aria-labelledby="index-heading">
-  <h2 class="editorial-label" id="index-heading">
-    {"Index"}
-  </h2>
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"01 / Index"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="index-heading">{"Start here."}</h2>
+      <p>
+        {
+          "Four ways into the runtime: install it, see what ships, put it behind your service, or meet the author."
+        }
+      </p>
+    </div>
+  </div>
   <ol class="editorial-index docs-home-index" role="list">
     <li class="editorial-index-item">
       <a class="editorial-index-link" href="/getting-started">
         <span class="editorial-index-number" aria-hidden="true"></span>
         <span class="editorial-index-body">
-          <span class="editorial-index-title">Getting Started</span>
+          <span class="editorial-index-title">{"Getting Started"}</span>
           <span class="editorial-index-text">
-            {"Run the hello world server and add µWebZockets to a Zig project."}
+            {"Install the package and run your first server."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          {"->"}
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="#support">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">{"What µWZ supports"}</span>
+          <span class="editorial-index-text">
+            {"See every transport, platform, and deployment surface."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          {"->"}
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="#server">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">{"Use µWZ as your server"}</span>
+          <span class="editorial-index-text">
+            {"Keep your Zig application and replace the server layer."}
           </span>
         </span>
         <span class="editorial-index-arrow" aria-hidden="true">
@@ -103,57 +139,15 @@ mode: custom
     <li class="editorial-index-item">
       <a
         class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets"
+        href="https://github.com/Coder-Blue"
         target="_blank"
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
       >
         <span class="editorial-index-number" aria-hidden="true"></span>
         <span class="editorial-index-body">
-          <span class="editorial-index-title">Source repository</span>
-          <span class="editorial-index-text">
-            {"Releases, the issue tracker, and the product documentation."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a
-        class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">Zero allocation</span>
-          <span class="editorial-index-text">
-            {"Bounded startup slabs and explicit capacity limits on every request path."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a
-        class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/architecture.md"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">Shared-nothing workers</span>
-          <span class="editorial-index-text">
-            {"One event loop, slab set, and pinned physical core per worker."}
-          </span>
+          <span class="editorial-index-title">{"Author"}</span>
+          <span class="editorial-index-text">{"Follow the work behind the runtime."}</span>
         </span>
         <span class="editorial-index-arrow" aria-hidden="true">
           {"->"}
@@ -161,61 +155,245 @@ mode: custom
       </a>
     </li>
   </ol>
+  <p class="docs-home-status">
+    <span class="editorial-label">{"Status"}</span>
+    <span>
+      {
+        "This documentation is being written. Getting Started is ready today; the rest of the guides are on the way."
+      }
+    </span>
+  </p>
 </section>
 
-<section class="docs-home-section" aria-labelledby="highlights">
-  <h2 class="editorial-label" id="highlights">
-    {"Highlights"}
-  </h2>
-  <ul class="docs-home-facts" role="list">
-    <li>
-      <strong>Data-oriented.</strong> Struct-of-arrays pools, parallel router arrays, and
-      compile-time capacities make exhaustion explicit.
+<section class="docs-home-section" id="support" aria-labelledby="support-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"02 / Support"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="support-heading">{"What µWZ supports"}</h2>
+      <p>
+        {
+          "One server surface for the transports a Zig service actually needs, with the same routing, limits, and lifecycle across each one."
+        }
+      </p>
+    </div>
+  </div>
+  <ol class="docs-home-support-grid" role="list">
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"01"}
+      </span>
+      <div>
+        <h3>{"HTTP/1.1 and HTTP/2"}</h3>
+        <p>
+          {
+            "Persistent connections, streaming bodies, multiplexed streams, and TLS ALPN in one handler model."
+          }
+        </p>
+      </div>
     </li>
-    <li>
-      <strong>Readable types.</strong> Named callback, event, and override types instead of inline
-      anonymous structs.
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"02"}
+      </span>
+      <div>
+        <h3>{"HTTP/3"}</h3>
+        <p>
+          {
+            "QUIC over UDP with the same routing and handlers as the TCP transports. QUIC clustering is not supported."
+          }
+        </p>
+      </div>
     </li>
-    <li>
-      <strong>Cross-platform.</strong> Linux and macOS on x86_64 and aarch64 are supported and
-      tested; Windows is compile-checked only.
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"03"}
+      </span>
+      <div>
+        <h3>{"WebSocket"}</h3>
+        <p>{"RFC 6455 with compression, pub/sub, and heartbeats for long-lived connections."}</p>
+      </div>
     </li>
-  </ul>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"04"}
+      </span>
+      <div>
+        <h3>{"RPC"}</h3>
+        <p>{"Typed request and response calls that share the app, limits, and worker model."}</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"05"}
+      </span>
+      <div>
+        <h3>{"TLS"}</h3>
+        <p>Ephemeral and production credentials, ALPN, 0-RTT, and mutual TLS.</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"06"}
+      </span>
+      <div>
+        <h3>{"Static assets"}</h3>
+        <p>{"Serve files from the same process instead of adding a second asset server."}</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"07"}
+      </span>
+      <div>
+        <h3>{"Thread-per-core workers"}</h3>
+        <p>
+          {
+            "Shared-nothing workers with one event loop each, pinned to physical cores where the platform allows."
+          }
+        </p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"08"}
+      </span>
+      <div>
+        <h3>{"Zero allocation"}</h3>
+        <p>{"Bounded startup slabs and explicit capacity limits on every request path."}</p>
+      </div>
+    </li>
+  </ol>
+  <div class="docs-home-platforms">
+    <p class="editorial-label" id="platforms-label">
+      {"Platforms"}
+    </p>
+    <table class="docs-home-platform-table" aria-labelledby="platforms-label">
+      <thead>
+        <tr>
+          <th scope="col">{"Target"}</th>
+          <th scope="col">{"Status"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">{"Linux x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Tested"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"Linux aarch64"}</th>
+          <td>
+            <span class="editorial-badge">{"Tested"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"macOS x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Tested"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"macOS aarch64"}</th>
+          <td>
+            <span class="editorial-badge">{"Tested"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"Windows x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Compile-checked"}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 
-  <section class="docs-home-section" aria-labelledby="a-complete-server">
-    <p class="editorial-label">Example</p>
-    <h2 id="a-complete-server">A complete server</h2>
+<section class="docs-home-section" id="server" aria-labelledby="server-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"03 / Server"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="server-heading">{"Use µWZ as your server"}</h2>
+      <p>
+        {
+          "Keep the Zig application you already have. The runtime takes over transport, TLS, limits, and shutdown without changing how your handlers are written."
+        }
+      </p>
+    </div>
+  </div>
+  <ol class="docs-home-steps" role="list">
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"01"}
+      </span>
+      <h3>{"Add the package"}</h3>
+      <p>
+        {
+          "Fetch the pinned dependencies through the Zig package manager. No CMake, Ninja, Go, Perl, Python, or system zlib."
+        }
+      </p>
+    </li>
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"02"}
+      </span>
+      <h3>{"Mount your handlers"}</h3>
+      <p>
+        {
+          "Register HTTP, WebSocket, RPC, and static routes on one app. Your handlers stay ordinary Zig functions."
+        }
+      </p>
+    </li>
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"03"}
+      </span>
+      <h3>{"Run where you deploy"}</h3>
+      <p>
+        {
+          "Start one process or a thread-per-core cluster. Each worker owns its event loop, slab set, and physical core affinity where the platform allows."
+        }
+      </p>
+    </li>
+  </ol>
+  <div class="docs-home-server-cta">
+    <p>{"Bring your routes. The runtime owns transport, TLS, limits, and shutdown."}</p>
+    <a class="editorial-link" href="/getting-started">
+      {"Read the setup guide "}
+      <span aria-hidden="true">{"->"}</span>
+    </a>
+  </div>
+</section>
 
-    ```zig
-    const std = @import("std");
-    const uz = @import("uWebZockets");
-
-    fn hello(_: *uz.Request, res: *uz.Response) void {
-        res.text("hello from uWebZockets") catch {};
-    }
-
-    pub fn main(init: std.process.Init) !void {
-        var app = try uz.App(128).init(init.io);
-        defer app.deinit();
-
-        _ = try app.get("/", hello);
-        try app.listen("0.0.0.0", 3000);
-        try app.run();
-    }
-    ```
-
-    The same module carries the rest of the battery: `app.ws(...)` for WebSocket,
-    `app.rpc(...)` for RPC, `app.static(...)` for assets, `build_cluster`
-    for thread-per-core workers, `init_https_ephemeral` for HTTPS with no
-    certificate files, and `listen_udp` plus `init_http3` for HTTP/3.
-
-  </section>
-
-<Callout type="note">
-  This documentation site is being written. [Getting Started](/getting-started) is ready today; the
-  rest of the guides are on the way.
-</Callout>
+<section class="docs-home-section" id="author" aria-labelledby="author-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"04 / Author"}</p>
+    <div class="docs-home-author-card">
+      <span class="docs-home-author-mark" aria-hidden="true">
+        {"CB"}
+      </span>
+      <div class="docs-home-author-copy">
+        <h2 id="author-heading">{"Coder-Blue"}</h2>
+        <p>
+          {
+            "Designs and maintains µWebZockets, from the Zig runtime and transport layer to the documentation you are reading."
+          }
+        </p>
+        <a
+          class="editorial-link"
+          href="https://github.com/Coder-Blue"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"github.com/Coder-Blue "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
 
   <SiteColophon locale="en" />
 </div>

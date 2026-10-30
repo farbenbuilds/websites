@@ -82,17 +82,51 @@ mode: custom
 </section>
 
 <section class="docs-home-section" id="docs-home-main" aria-labelledby="index-heading">
-  <h2 class="editorial-label" id="index-heading">
-    {"Mục lục"}
-  </h2>
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"01 / Mục lục"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="index-heading">{"Bắt đầu tại đây."}</h2>
+      <p>
+        {
+          "Bốn lối vào runtime: cài đặt, xem những gì được hỗ trợ, đưa vào máy chủ của bạn hoặc gặp tác giả."
+        }
+      </p>
+    </div>
+  </div>
   <ol class="editorial-index docs-home-index" role="list">
     <li class="editorial-index-item">
       <a class="editorial-index-link" href="/vi/getting-started">
         <span class="editorial-index-number" aria-hidden="true"></span>
         <span class="editorial-index-body">
-          <span class="editorial-index-title">Bắt đầu</span>
+          <span class="editorial-index-title">{"Bắt đầu"}</span>
+          <span class="editorial-index-text">{"Cài đặt gói và chạy máy chủ đầu tiên."}</span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          {"->"}
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="#support">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">{"µWZ hỗ trợ gì"}</span>
           <span class="editorial-index-text">
-            {"Chạy máy chủ hello world và thêm µWebZockets vào dự án Zig."}
+            {"Xem mọi giao thức, nền tảng và bề mặt triển khai."}
+          </span>
+        </span>
+        <span class="editorial-index-arrow" aria-hidden="true">
+          {"->"}
+        </span>
+      </a>
+    </li>
+    <li class="editorial-index-item">
+      <a class="editorial-index-link" href="#server">
+        <span class="editorial-index-number" aria-hidden="true"></span>
+        <span class="editorial-index-body">
+          <span class="editorial-index-title">{"Dùng µWZ làm máy chủ"}</span>
+          <span class="editorial-index-text">
+            {"Giữ ứng dụng Zig hiện có và thay lớp máy chủ."}
           </span>
         </span>
         <span class="editorial-index-arrow" aria-hidden="true">
@@ -103,57 +137,15 @@ mode: custom
     <li class="editorial-index-item">
       <a
         class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets"
+        href="https://github.com/Coder-Blue"
         target="_blank"
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
       >
         <span class="editorial-index-number" aria-hidden="true"></span>
         <span class="editorial-index-body">
-          <span class="editorial-index-title">Mã nguồn</span>
-          <span class="editorial-index-text">
-            {"Bản phát hành, nơi theo dõi issue và tài liệu sản phẩm."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a
-        class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">Zero allocation</span>
-          <span class="editorial-index-text">
-            {"Slab khởi động có giới hạn và giới hạn dung lượng tường minh trên mọi đường xử lý."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a
-        class="editorial-index-link"
-        href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/architecture.md"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">Worker shared-nothing</span>
-          <span class="editorial-index-text">
-            {"Một event loop, bộ slab và lõi vật lý được ghim cho mỗi worker."}
-          </span>
+          <span class="editorial-index-title">{"Tác giả"}</span>
+          <span class="editorial-index-text">{"Theo dõi công việc phía sau runtime."}</span>
         </span>
         <span class="editorial-index-arrow" aria-hidden="true">
           {"->"}
@@ -161,62 +153,247 @@ mode: custom
       </a>
     </li>
   </ol>
+  <p class="docs-home-status">
+    <span class="editorial-label">{"Trạng thái"}</span>
+    <span>
+      {
+        "Trang tài liệu này đang được viết. Bắt đầu đã sẵn sàng; các hướng dẫn còn lại sẽ được bổ sung."
+      }
+    </span>
+  </p>
 </section>
 
-<section class="docs-home-section" aria-labelledby="highlights">
-  <h2 class="editorial-label" id="highlights">
-    {"Điểm nổi bật"}
-  </h2>
-  <ul class="docs-home-facts" role="list">
-    <li>
-      <strong>Định hướng dữ liệu.</strong> Pool struct-of-arrays, mảng router song song và dung
-      lượng xác định lúc biên dịch khiến việc cạn tài nguyên trở nên tường minh.
+<section class="docs-home-section" id="support" aria-labelledby="support-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"02 / Hỗ trợ"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="support-heading">{"µWZ hỗ trợ gì"}</h2>
+      <p>
+        {
+          "Một bề mặt máy chủ cho các giao thức mà dịch vụ Zig thực sự cần, với cùng định tuyến, giới hạn và vòng đời cho từng giao thức."
+        }
+      </p>
+    </div>
+  </div>
+  <ol class="docs-home-support-grid" role="list">
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"01"}
+      </span>
+      <div>
+        <h3>{"HTTP/1.1 và HTTP/2"}</h3>
+        <p>
+          {
+            "Kết nối liên tục, body dạng stream, luồng đa hợp và ALPN TLS trong cùng một mô hình handler."
+          }
+        </p>
+      </div>
     </li>
-    <li>
-      <strong>Kiểu dễ đọc.</strong> Các kiểu callback, event và override có tên thay cho struct ẩn
-      danh nội tuyến.
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"02"}
+      </span>
+      <div>
+        <h3>{"HTTP/3"}</h3>
+        <p>
+          {
+            "QUIC trên UDP với cùng định tuyến và handler như các transport TCP. Cluster QUIC chưa được hỗ trợ."
+          }
+        </p>
+      </div>
     </li>
-    <li>
-      <strong>Đa nền tảng.</strong> Hỗ trợ và kiểm thử trên Linux và macOS x86_64/aarch64; Windows
-      mới chỉ được kiểm tra biên dịch.
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"03"}
+      </span>
+      <div>
+        <h3>{"WebSocket"}</h3>
+        <p>{"RFC 6455 với nén, pub/sub và heartbeat cho kết nối dài hạn."}</p>
+      </div>
     </li>
-  </ul>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"04"}
+      </span>
+      <div>
+        <h3>{"RPC"}</h3>
+        <p>{"Lời gọi request/response có kiểu, dùng chung app, giới hạn và mô hình worker."}</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"05"}
+      </span>
+      <div>
+        <h3>{"TLS"}</h3>
+        <p>{"Chứng chỉ tạm thời và production, ALPN, 0-RTT và mutual TLS."}</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"06"}
+      </span>
+      <div>
+        <h3>{"Tài nguyên tĩnh"}</h3>
+        <p>{"Phục vụ tệp trong cùng tiến trình thay vì thêm một máy chủ tài sản thứ hai."}</p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"07"}
+      </span>
+      <div>
+        <h3>{"Worker thread-per-core"}</h3>
+        <p>
+          {
+            "Worker shared-nothing với một event loop mỗi worker, được ghim vào lõi vật lý khi nền tảng cho phép."
+          }
+        </p>
+      </div>
+    </li>
+    <li class="docs-home-support-item">
+      <span class="docs-home-support-number" aria-hidden="true">
+        {"08"}
+      </span>
+      <div>
+        <h3>{"Zero allocation"}</h3>
+        <p>
+          {"Slab khởi động có giới hạn và giới hạn dung lượng tường minh trên mọi đường xử lý."}
+        </p>
+      </div>
+    </li>
+  </ol>
+  <div class="docs-home-platforms">
+    <p class="editorial-label" id="platforms-label">
+      {"Nền tảng"}
+    </p>
+    <table class="docs-home-platform-table" aria-labelledby="platforms-label">
+      <thead>
+        <tr>
+          <th scope="col">{"Mục tiêu"}</th>
+          <th scope="col">{"Trạng thái"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">{"Linux x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Đã kiểm thử"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"Linux aarch64"}</th>
+          <td>
+            <span class="editorial-badge">{"Đã kiểm thử"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"macOS x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Đã kiểm thử"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"macOS aarch64"}</th>
+          <td>
+            <span class="editorial-badge">{"Đã kiểm thử"}</span>
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">{"Windows x86_64"}</th>
+          <td>
+            <span class="editorial-badge">{"Kiểm tra biên dịch"}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 
-  <section class="docs-home-section" aria-labelledby="a-complete-server">
-    <p class="editorial-label">Ví dụ</p>
-    <h2 id="a-complete-server">Một máy chủ hoàn chỉnh</h2>
+<section class="docs-home-section" id="server" aria-labelledby="server-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"03 / Máy chủ"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="server-heading">{"Dùng µWZ làm máy chủ"}</h2>
+      <p>
+        {
+          "Giữ ứng dụng Zig bạn đã có. Runtime đảm nhận transport, TLS, giới hạn và shutdown mà không đổi cách viết handler."
+        }
+      </p>
+    </div>
+  </div>
+  <ol class="docs-home-steps" role="list">
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"01"}
+      </span>
+      <h3>{"Thêm gói"}</h3>
+      <p>
+        {
+          "Tải các phụ thuộc được ghim qua trình quản lý gói của Zig. Không cần CMake, Ninja, Go, Perl, Python hay zlib hệ thống."
+        }
+      </p>
+    </li>
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"02"}
+      </span>
+      <h3>{"Gắn handler"}</h3>
+      <p>
+        {
+          "Đăng ký route HTTP, WebSocket, RPC và tệp tĩnh trên một app. Handler của bạn vẫn là các hàm Zig bình thường."
+        }
+      </p>
+    </li>
+    <li class="docs-home-step">
+      <span class="docs-home-step-number" aria-hidden="true">
+        {"03"}
+      </span>
+      <h3>{"Chạy nơi bạn triển khai"}</h3>
+      <p>
+        {
+          "Khởi động một tiến trình hoặc cluster thread-per-core. Mỗi worker sở hữu event loop, bộ slab và affinity lõi vật lý khi nền tảng cho phép."
+        }
+      </p>
+    </li>
+  </ol>
+  <div class="docs-home-server-cta">
+    <p>{"Mang theo route. Runtime lo transport, TLS và shutdown."}</p>
+    <a class="editorial-link" href="/vi/getting-started">
+      {"Đọc hướng dẫn cài đặt "}
+      <span aria-hidden="true">{"->"}</span>
+    </a>
+  </div>
+</section>
 
-    ```zig
-    const std = @import("std");
-    const uz = @import("uWebZockets");
-
-    fn hello(_: *uz.Request, res: *uz.Response) void {
-        res.text("hello from uWebZockets") catch {};
-    }
-
-    pub fn main(init: std.process.Init) !void {
-        var app = try uz.App(128).init(init.io);
-        defer app.deinit();
-
-        _ = try app.get("/", hello);
-        try app.listen("0.0.0.0", 3000);
-        try app.run();
-    }
-    ```
-
-    Cùng một module mang phần còn lại của bộ công cụ: `app.ws(...)` cho
-    WebSocket, `app.rpc(...)` cho RPC, `app.static(...)` cho tài nguyên
-    tĩnh, `build_cluster` cho worker thread-per-core, `init_https_ephemeral`
-    cho HTTPS không cần tệp chứng chỉ, cùng `listen_udp` và `init_http3` cho
-    HTTP/3.
-
-  </section>
-
-<Callout type="note">
-  Trang tài liệu này đang được viết. [Bắt đầu](/vi/getting-started) đã sẵn sàng; các hướng dẫn còn
-  lại sẽ được bổ sung.
-</Callout>
+<section class="docs-home-section" id="author" aria-labelledby="author-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"04 / Tác giả"}</p>
+    <div class="docs-home-author-card">
+      <span class="docs-home-author-mark" aria-hidden="true">
+        {"CB"}
+      </span>
+      <div class="docs-home-author-copy">
+        <h2 id="author-heading">{"Coder-Blue"}</h2>
+        <p>
+          {
+            "Thiết kế và duy trì µWebZockets, từ runtime và lớp transport bằng Zig đến tài liệu bạn đang đọc."
+          }
+        </p>
+        <a
+          class="editorial-link"
+          href="https://github.com/Coder-Blue"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"github.com/Coder-Blue "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
 
   <SiteColophon locale="vi" />
 </div>
