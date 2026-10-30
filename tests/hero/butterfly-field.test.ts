@@ -74,6 +74,13 @@ describe("butterfly field", () => {
     expect(steer.x).toBeLessThan(0);
   });
 
+  it("allows specimens to fly in both vertical directions", () => {
+    const directions = field().specimens.map((specimen) => Math.sign(Math.sin(specimen.heading)));
+
+    expect(directions).toContain(1);
+    expect(directions).toContain(-1);
+  });
+
   it("keeps every position finite, inside the field, and clear of its neighbour", () => {
     const state = field();
 
@@ -90,7 +97,6 @@ describe("butterfly field", () => {
       expect(specimen.x).toBeLessThanOrEqual(120);
       expect(specimen.y).toBeGreaterThanOrEqual(-specimen.scale * 1.2);
       expect(specimen.y).toBeLessThanOrEqual(60 + specimen.scale * 1.2);
-      expect(Math.sin(specimen.heading)).toBeLessThanOrEqual(0);
     }
 
     for (let i = 0; i < state.specimens.length; i++) {

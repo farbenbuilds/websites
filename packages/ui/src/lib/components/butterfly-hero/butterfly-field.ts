@@ -106,7 +106,7 @@ function createSpecimen(field: FieldState, index: number): Specimen {
     species: speciesIndex,
     x: clamp(field.width * slot.x, 2, field.width - 2),
     y: clamp(field.height * slot.y, 2, field.height - 2),
-    heading: randomBetween(field.rng, -Math.PI, 0),
+    heading: randomBetween(field.rng, -Math.PI, Math.PI),
     speed: randomBetween(field.rng, 0.55, 0.95),
     phase: randomBetween(field.rng, 0, Math.PI * 2),
     flapRate: randomBetween(field.rng, 5, 9),
@@ -194,14 +194,6 @@ function edgeWeight(value: number, size: number, margin: number): number {
   if (value > size - margin) return (value - (size - margin)) / Math.max(margin, 1);
 
   return 0;
-}
-
-function limitUpward(heading: number): number {
-  const normal = normalizeAngle(heading);
-
-  if (normal <= 0) return normal;
-
-  return Math.cos(normal) >= 0 ? 0 : -Math.PI;
 }
 
 function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
@@ -296,7 +288,7 @@ function stepSpecimen(field: FieldState, specimen: Specimen, dt: number): void {
     breeze.x * 1.4;
 
   specimen.turn = clamp(specimen.turn + (steer - specimen.turn) * Math.min(1, dt * 1.6), -2.2, 2.2);
-  specimen.heading = limitUpward(specimen.heading + specimen.turn * dt);
+  specimen.heading = normalizeAngle(specimen.heading + specimen.turn * dt);
 
   const pace = specimen.speed * (flapping ? 1.12 : 0.74);
   specimen.x += Math.cos(specimen.heading) * pace * dt;
