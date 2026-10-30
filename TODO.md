@@ -899,6 +899,40 @@ matrix is:
 
 Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
 
+## Final uWebZockets hero (2026-10-30)
+
+The shipped uWebZockets hero replaces the bounded ASCII/procedural experiments
+with a full-screen, image-based flight field.
+
+- **Composition:** the hero is a dark `100svh` editorial cover. Copy sits in the
+  left column; the field fills the viewport behind it. The Blume header is fixed,
+  hidden, and `inert` at the top; it reveals after 32px of scroll. Docs pages and
+  the no-JS path keep the header visible.
+- **Specimens:** three public-domain butterfly specimens from Wikimedia Commons
+  (monarch, painted lady, sulphur) are downscaled to 96px and drawn with
+  nearest-neighbour scaling. The pixelation is the art direction; do not smooth
+  the images. Provenance and the public-domain status are in
+  `THIRD_PARTY_NOTICES.md` and `apps/uwz-docs/public/butterflies/README.md`.
+- **Flight:** eight specimens (three large, four medium, one small) fly with
+  independent headings, target-x wandering, separation, content avoidance, wing
+  beat phases, and breeze puffs. They rotate with their heading; they do not
+  share a column or a conveyor.
+- **Readability:** the hero marks the copy and scroll control with
+  `data-butterfly-avoid`; the field measures those boxes and masks the art beneath
+  them. The copy keeps a text shadow but no opaque panel.
+- **Fallback:** one server-rendered pixelated monarch `<img>` stands in until the
+  three images decode. The canvas fades in only after the first successful
+  frame; if the images fail, the still remains. The old ASCII `<pre>` fallback is
+  retired.
+- **Motion controls:** pause persists in `sessionStorage`; reduced motion holds a
+  settled still and hides the play control. The canvas still respects DPR caps,
+  visibility, intersection, and unmount cleanup.
+- **Reference boundary:** Dao-Ho's koi pond informed the full-screen canvas,
+  waypoint curiosity, content avoidance, and reduced-motion settle; ascii-sharks
+  informed the bounded-loop engineering; asciiart.eu and the user's Pinterest
+  reference informed character density before the image-based direction replaced
+  it. No upstream code, CSS, or artwork is copied.
+
 ## Research references
 
 - [Vize documentation](https://vizejs.dev/) and the
@@ -968,3 +1002,11 @@ Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
   retain its license, record provenance in the third-party notices, and rewrite
   copied code to the repository's functional rules: no classes, prototypes, or
   `this`.
+- [asciiart.eu butterfly](https://www.asciiart.eu/art/bff9fbcd39eb0233) and the
+  user's [Pinterest butterfly reference](https://pin.it/2hqae6IZM) were studied
+  for character density and wing shading. The shipped art does not copy either.
+- [Danaus plexippus](https://commons.wikimedia.org/wiki/File:Danaus_plexippus-transparent.png),
+  [Colias eurytheme](https://commons.wikimedia.org/wiki/File:Colias_eurytheme-transparent.png),
+  and [Vanessa virginiensis](https://commons.wikimedia.org/wiki/File:Vanessa_virginiensis-transparent.png)
+  are public-domain Wikimedia Commons specimens, downscaled to 96px for the
+  pixelated field.
