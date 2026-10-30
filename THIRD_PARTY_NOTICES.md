@@ -30,19 +30,3 @@
 
 The anti-slop plugin carries its own upstream license under
 `tools/oxlint/anti-slop/`.
-
-## Butterfly specimen images
-
-- Source: Wikimedia Commons
-- Files: `Danaus plexippus-transparent.png`, `Colias eurytheme-transparent.png`,
-  `Vanessa virginiensis-transparent.png`
-- Source URLs:
-  - https://commons.wikimedia.org/wiki/File:Danaus_plexippus-transparent.png
-  - https://commons.wikimedia.org/wiki/File:Colias_eurytheme-transparent.png
-  - https://commons.wikimedia.org/wiki/File:Vanessa_virginiensis-transparent.png
-- License: Public domain, per the Commons file metadata
-- Vendored paths: `apps/uwz-docs/public/butterflies/monarch.png`,
-  `apps/uwz-docs/public/butterflies/painted-lady.png`,
-  `apps/uwz-docs/public/butterflies/sulphur.png`
-- Local changes: downscaled to 96px width with `ffmpeg`; transparent background
-  retained; rendered with nearest-neighbour scaling for the pixelated hero.
