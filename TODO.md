@@ -449,7 +449,7 @@ Below the hero:
 
 - A numbered index with six entries: Getting Started, Share nothing rule,
   Migrate existing projects, Configure a uWZ server, Understand a
-  Cluster/Worker, and Explore features. Use two columns on desktop and one on
+  Cluster/Worker, and Explore Type-safety. Use two columns on desktop and one on
   mobile. Getting Started links to its page; the rest use `#` placeholders until
   those guides ship.
 - A vertical dictionary note at the lower-right hero border, hidden below 56rem:
@@ -966,7 +966,7 @@ keeping Farben's own tokens, fonts, and copy.
 
 - **Index:** a two-column numbered index on desktop, one column on mobile. Six
   entries cover Getting Started, Share nothing rule, Migrate existing projects,
-  Configure a uWZ server, Understand a Cluster/Worker, and Explore features.
+  Configure a uWZ server, Understand a Cluster/Worker, and Explore Type-safety.
   Getting Started links to its page; the rest use `#` placeholders.
 - **Support:** an eight-item capability grid covering HTTP/1.1 and HTTP/2,
   HTTP/3 (single process; QUIC clustering is not supported), WebSocket, RPC,

@@ -18,7 +18,7 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
     label: "01 / Index",
     heading: "Start here.",
     intro:
-      "Six ways into the runtime: install it, learn the ownership rule, migrate a service, configure the server, understand the worker model, or explore the feature set.",
+      "Six ways into the runtime: install it, learn the ownership rule, migrate a service, configure the server, understand the worker model, or explore type-safety.",
     items: [
       {
         title: "Getting Started",
@@ -46,8 +46,8 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
         href: "#",
       },
       {
-        title: "Explore features",
-        description: "Browse HTTP, WebSocket, RPC, TLS, and deployment surfaces.",
+        title: "Explore Type-safety",
+        description: "See how typed requests, responses, and routes stay checked at compile time.",
         href: "#",
       },
     ],
@@ -56,7 +56,7 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
     label: "01 / Mục lục",
     heading: "Bắt đầu tại đây.",
     intro:
-      "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, chuyển dự án hiện có, cấu hình máy chủ, hiểu mô hình worker hoặc khám phá bộ tính năng.",
+      "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, chuyển dự án hiện có, cấu hình máy chủ, hiểu mô hình worker hoặc khám phá type-safety.",
     items: [
       {
         title: "Bắt đầu",
@@ -84,8 +84,9 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
         href: "#",
       },
       {
-        title: "Khám phá tính năng",
-        description: "Xem HTTP, WebSocket, RPC, TLS và các bề mặt triển khai.",
+        title: "Khám phá Type-safety",
+        description:
+          "Xem cách request, response và route có kiểu được kiểm tra ngay khi biên dịch.",
         href: "#",
       },
     ],
