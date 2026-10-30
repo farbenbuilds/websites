@@ -26,6 +26,18 @@ export function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   };
 }
 
+function relativeLuminance(color: Rgb): number {
+  return color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
+}
+
+function darkerOf(a: Rgb, b: Rgb): Rgb {
+  return relativeLuminance(a) <= relativeLuminance(b) ? a : b;
+}
+
+function lighterOf(a: Rgb, b: Rgb): Rgb {
+  return relativeLuminance(a) >= relativeLuminance(b) ? a : b;
+}
+
 function wingAt(palette: ButterflyPalette, index: number): Rgb {
   if (palette.wings.length === 0) return palette.accent;
 
@@ -43,16 +55,18 @@ export function butterflyPatternColor(
 ): Rgb {
   const primary = wingAt(palette, tone);
   const secondary = wingAt(palette, tone + 1);
-  const deep = mixRgb(primary, palette.paper, 0.52);
-  const pale = mixRgb(secondary, palette.ink, 0.42);
+  const shadow = darkerOf(palette.paper, palette.ink);
+  const light = lighterOf(palette.paper, palette.ink);
+  const deep = mixRgb(primary, shadow, 0.52);
+  const pale = mixRgb(secondary, light, 0.42);
 
   if (role === "hind") return mixRgb(secondary, deep, 0.18 + shade * 0.16);
 
-  if (role === "highlight") return mixRgb(pale, palette.ink, 0.35);
+  if (role === "highlight") return mixRgb(pale, light, 0.35);
 
-  if (role === "band") return mixRgb(secondary, palette.ink, 0.16 + shade * 0.14);
+  if (role === "band") return mixRgb(secondary, light, 0.16 + shade * 0.14);
 
-  if (role === "eyespot") return mixRgb(deep, palette.paper, 0.18);
+  if (role === "eyespot") return mixRgb(deep, shadow, 0.18);
 
   return mixRgb(primary, palette.accent, 0.18 + shade * 0.22);
 }
@@ -66,17 +80,20 @@ export function butterflyBreezeColor(palette: ButterflyPalette): Rgb {
 }
 
 export function inkFor(palette: ButterflyPalette, part: InkRole): string {
-  if (part === "eyespot") return rgba(palette.ink, 0.96);
+  const shadow = darkerOf(palette.paper, palette.ink);
+  const light = lighterOf(palette.paper, palette.ink);
+
+  if (part === "eyespot") return rgba(light, 0.96);
 
   if (part === "edge" || part === "vein" || part === "band") {
-    return rgba(mixRgb(palette.paper, palette.ink, 0.12), 0.92);
+    return rgba(mixRgb(shadow, light, 0.12), 0.92);
   }
 
-  if (part === "body") return rgba(palette.paper, 0.92);
+  if (part === "body") return rgba(shadow, 0.92);
 
   if (part === "antenna") return rgba(palette.accent, 0.92);
 
-  return rgba(palette.ink, 0.8);
+  return rgba(shadow, 0.8);
 }
 
 export function rgba(color: Rgb, alpha: number): string {

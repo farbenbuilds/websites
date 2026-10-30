@@ -1,0 +1,42 @@
+---
+import { homeIndexCopy, type HomeIndexLocale } from "./home-index-data";
+
+type Props = {
+  locale?: HomeIndexLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = homeIndexCopy(locale);
+---
+
+<section class="docs-home-section" id="index" aria-labelledby="index-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="index-heading">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+    </div>
+  </div>
+  <ol class="editorial-index docs-home-index" role="list">
+    {
+      copy.items.map((item) => (
+        <li class="editorial-index-item">
+          <a class="editorial-index-link" href={item.href}>
+            <span class="editorial-index-number" aria-hidden="true" />
+            <span class="editorial-index-body">
+              <span class="editorial-index-title">{item.title}</span>
+              <span class="editorial-index-text">{item.description}</span>
+            </span>
+            <span class="editorial-index-arrow" aria-hidden="true">
+              {"->"}
+            </span>
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+  <p class="docs-home-status">
+    <span class="editorial-label">{copy.statusLabel}</span>
+    <span>{copy.status}</span>
+  </p>
+</section>

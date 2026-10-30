@@ -2,6 +2,8 @@
 title: Introduction
 description: µWebZockets is a zero-allocation, shared-nothing server framework for Zig — HTTP, WebSocket, and RPC from one type-safe API.
 mode: custom
+seo:
+  title: µWebZockets
 ---
 
 <div class="docs-home">
@@ -81,234 +83,11 @@ mode: custom
   </a>
 </section>
 
-<section class="docs-home-section" id="docs-home-main" aria-labelledby="index-heading">
-  <div class="docs-home-section-head">
-    <p class="editorial-label">{"01 / Index"}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="index-heading">{"Start here."}</h2>
-      <p>
-        {
-          "Four ways into the runtime: install it, see what ships, put it behind your service, or meet the author."
-        }
-      </p>
-    </div>
-  </div>
-  <ol class="editorial-index docs-home-index" role="list">
-    <li class="editorial-index-item">
-      <a class="editorial-index-link" href="/getting-started">
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">{"Getting Started"}</span>
-          <span class="editorial-index-text">
-            {"Install the package and run your first server."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a class="editorial-index-link" href="#support">
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">{"What µWZ supports"}</span>
-          <span class="editorial-index-text">
-            {"See every transport, platform, and deployment surface."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a class="editorial-index-link" href="#server">
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">{"Use µWZ as your server"}</span>
-          <span class="editorial-index-text">
-            {"Keep your Zig application and replace the server layer."}
-          </span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-    <li class="editorial-index-item">
-      <a
-        class="editorial-index-link"
-        href="https://github.com/Coder-Blue"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        <span class="editorial-index-number" aria-hidden="true"></span>
-        <span class="editorial-index-body">
-          <span class="editorial-index-title">{"Author"}</span>
-          <span class="editorial-index-text">{"Follow the work behind the runtime."}</span>
-        </span>
-        <span class="editorial-index-arrow" aria-hidden="true">
-          {"->"}
-        </span>
-      </a>
-    </li>
-  </ol>
-  <p class="docs-home-status">
-    <span class="editorial-label">{"Status"}</span>
-    <span>
-      {
-        "This documentation is being written. Getting Started is ready today; the rest of the guides are on the way."
-      }
-    </span>
-  </p>
-</section>
+<div class="docs-home-index-anchor" id="docs-home-main"></div>
 
-<section class="docs-home-section" id="support" aria-labelledby="support-heading">
-  <div class="docs-home-section-head">
-    <p class="editorial-label">{"02 / Support"}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="support-heading">{"What µWZ supports"}</h2>
-      <p>
-        {
-          "One server surface for the transports a Zig service actually needs, with the same routing, limits, and lifecycle across each one."
-        }
-      </p>
-    </div>
-  </div>
-  <ol class="docs-home-support-grid" role="list">
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"01"}
-      </span>
-      <div>
-        <h3>{"HTTP/1.1 and HTTP/2"}</h3>
-        <p>
-          {
-            "Persistent connections, streaming bodies, multiplexed streams, and TLS ALPN in one handler model."
-          }
-        </p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"02"}
-      </span>
-      <div>
-        <h3>{"HTTP/3"}</h3>
-        <p>
-          {
-            "QUIC over UDP with the same routing and handlers as the TCP transports. QUIC clustering is not supported."
-          }
-        </p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"03"}
-      </span>
-      <div>
-        <h3>{"WebSocket"}</h3>
-        <p>{"RFC 6455 with compression, pub/sub, and heartbeats for long-lived connections."}</p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"04"}
-      </span>
-      <div>
-        <h3>{"RPC"}</h3>
-        <p>{"Typed request and response calls that share the app, limits, and worker model."}</p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"05"}
-      </span>
-      <div>
-        <h3>{"TLS"}</h3>
-        <p>Ephemeral and production credentials, ALPN, 0-RTT, and mutual TLS.</p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"06"}
-      </span>
-      <div>
-        <h3>{"Static assets"}</h3>
-        <p>{"Serve files from the same process instead of adding a second asset server."}</p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"07"}
-      </span>
-      <div>
-        <h3>{"Thread-per-core workers"}</h3>
-        <p>
-          {
-            "Shared-nothing workers with one event loop each, pinned to physical cores where the platform allows."
-          }
-        </p>
-      </div>
-    </li>
-    <li class="docs-home-support-item">
-      <span class="docs-home-support-number" aria-hidden="true">
-        {"08"}
-      </span>
-      <div>
-        <h3>{"Zero allocation"}</h3>
-        <p>{"Bounded startup slabs and explicit capacity limits on every request path."}</p>
-      </div>
-    </li>
-  </ol>
-  <div class="docs-home-platforms">
-    <p class="editorial-label" id="platforms-label">
-      {"Platforms"}
-    </p>
-    <table class="docs-home-platform-table" aria-labelledby="platforms-label">
-      <thead>
-        <tr>
-          <th scope="col">{"Target"}</th>
-          <th scope="col">{"Status"}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <th scope="row">{"Linux x86_64"}</th>
-          <td>
-            <span class="editorial-badge">{"Tested"}</span>
-          </td>
-        </tr>
-        <tr>
-          <th scope="row">{"Linux aarch64"}</th>
-          <td>
-            <span class="editorial-badge">{"Tested"}</span>
-          </td>
-        </tr>
-        <tr>
-          <th scope="row">{"macOS x86_64"}</th>
-          <td>
-            <span class="editorial-badge">{"Tested"}</span>
-          </td>
-        </tr>
-        <tr>
-          <th scope="row">{"macOS aarch64"}</th>
-          <td>
-            <span class="editorial-badge">{"Tested"}</span>
-          </td>
-        </tr>
-        <tr>
-          <th scope="row">{"Windows x86_64"}</th>
-          <td>
-            <span class="editorial-badge">{"Compile-checked"}</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+<HomeIndex locale="en" />
+
+<SupportSection locale="en" />
 
 <section class="docs-home-section" id="server" aria-labelledby="server-heading">
   <div class="docs-home-section-head">
@@ -370,27 +149,92 @@ mode: custom
   <div class="docs-home-section-head">
     <p class="editorial-label">{"04 / Author"}</p>
     <div class="docs-home-author-card">
-      <span class="docs-home-author-mark" aria-hidden="true">
-        {"CB"}
-      </span>
+      <img
+        class="docs-home-author-avatar"
+        src="/author/noah-tran.webp"
+        alt="Noah Trần"
+        width="512"
+        height="512"
+        decoding="async"
+      />
       <div class="docs-home-author-copy">
-        <h2 id="author-heading">{"Coder-Blue"}</h2>
+        <h2 id="author-heading">{"Noah Trần"}</h2>
         <p>
           {
-            "Designs and maintains µWebZockets, from the Zig runtime and transport layer to the documentation you are reading."
+            "Noah Trần is a software engineer based in Ho Chi Minh, working across Svelte, Astro, Zig, Rust, design, and framework/tooling. They are the creator of "
           }
+          <a
+            class="editorial-link"
+            href="https://hope-art.app"
+            target="_blank"
+            rel="noreferrer"
+            aria-describedby="blume-new-tab-hint"
+          >
+            {"Hope Art"}
+          </a>
+          {" and now author and lead maintainer of "}
+          <a
+            class="editorial-link"
+            href="https://github.com/farbenbuilds"
+            target="_blank"
+            rel="noreferrer"
+            aria-describedby="blume-new-tab-hint"
+          >
+            {"Farben"}
+          </a>
+          {"."}
         </p>
-        <a
-          class="editorial-link"
-          href="https://github.com/Coder-Blue"
-          target="_blank"
-          rel="noreferrer"
-          aria-describedby="blume-new-tab-hint"
-        >
-          {"github.com/Coder-Blue "}
-          <span aria-hidden="true">{"->"}</span>
-        </a>
+        <ul class="docs-home-author-socials" role="list">
+          <li>
+            <span class="editorial-label">{"Facebook"}</span>
+            <a
+              href="https://www.facebook.com/noah.tran1109"
+              aria-label="Facebook: Noah Trần"
+              target="_blank"
+              rel="noreferrer"
+              aria-describedby="blume-new-tab-hint"
+            >
+              {"Noah Trần"}
+            </a>
+          </li>
+          <li>
+            <span class="editorial-label">{"X"}</span>
+            <a
+              href="https://x.com/sh1ro_code"
+              aria-label="X: @sh1ro_code"
+              target="_blank"
+              rel="noreferrer"
+              aria-describedby="blume-new-tab-hint"
+            >
+              {"@sh1ro_code"}
+            </a>
+          </li>
+        </ul>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="docs-home-section docs-home-sponsor" id="sponsor" aria-labelledby="sponsor-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{"05 / Sponsor"}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="sponsor-heading">{"Sponsor the maintainers."}</h2>
+      <p>
+        {
+          "Thank you to the Farben maintainers for their hard work across the runtime, packages, and documentation. If µWebZockets helps your service, sponsor the work on GitHub."
+        }
+      </p>
+      <a
+        class="editorial-action editorial-action-secondary"
+        href="https://github.com/sponsors/farbenbuilds"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        {"Sponsor Farben "}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
     </div>
   </div>
 </section>

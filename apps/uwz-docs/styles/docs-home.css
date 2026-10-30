@@ -18,19 +18,19 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 .docs-home-hero {
-  --hero-paper: #080604;
-  --hero-ink: #fff6df;
-  --hero-muted: #d8c59a;
-  --hero-rule: #8f6d2a;
-  --hero-accent: #ffb300;
-  --hero-accent-bright: #ffcf66;
-  --hero-ink-on-accent: #160f02;
-  --hero-hover: #1b1508;
-  --hero-eyebrow: #e2bf68;
-  --hero-still: #e9c66b;
-  --hero-wing-1: #ff7a1a;
-  --hero-wing-2: #ffb300;
-  --hero-wing-3: #ffe08a;
+  --hero-paper: #f4f0e6;
+  --hero-ink: #171512;
+  --hero-muted: #5f5a52;
+  --hero-rule: #8a8378;
+  --hero-accent: #a64600;
+  --hero-accent-bright: #7a3300;
+  --hero-ink-on-accent: #ffffff;
+  --hero-hover: #ebe5d8;
+  --hero-eyebrow: #8a4a00;
+  --hero-still: #a64600;
+  --hero-wing-1: #c2410c;
+  --hero-wing-2: #a16207;
+  --hero-wing-3: #d97706;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 6.4fr) minmax(0, 5.6fr);
@@ -44,6 +44,22 @@ html:has(.docs-home-hero) #blume-content {
     clamp(3.5rem, 8vh, 5rem);
   background: var(--hero-paper);
   color: var(--hero-ink);
+}
+
+:root[data-theme="dark"] .docs-home-hero {
+  --hero-paper: #1a1917;
+  --hero-ink: #fff7f0;
+  --hero-muted: #d2c3ae;
+  --hero-rule: #8f6d2a;
+  --hero-accent: #ffb300;
+  --hero-accent-bright: #ffcf66;
+  --hero-ink-on-accent: #160f02;
+  --hero-hover: #2a241b;
+  --hero-eyebrow: #e2bf68;
+  --hero-still: #e9c66b;
+  --hero-wing-1: #ff7a1a;
+  --hero-wing-2: #ffb300;
+  --hero-wing-3: #ffe08a;
 }
 
 .docs-home-hero > astro-island:has(> .butterfly-hero) {

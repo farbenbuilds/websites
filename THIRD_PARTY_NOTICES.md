@@ -30,3 +30,10 @@
 
 The anti-slop plugin carries its own upstream license under
 `tools/oxlint/anti-slop/`.
+
+## Author avatar
+
+- Source: provided by Noah Trần
+- Vendored path: `apps/uwz-docs/public/author/noah-tran.webp`
+- Local changes: white background keyed out, resized to 512x512, encoded as WebP
+- Use: author profile on the uWebZockets docs home, with the author's permission

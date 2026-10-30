@@ -1,0 +1,97 @@
+---
+import { supportCopy, type SupportLocale } from "./support-section-data";
+
+type Props = {
+  locale?: SupportLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = supportCopy(locale);
+---
+
+<section class="docs-home-section" id="support" aria-labelledby="support-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="support-heading">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+    </div>
+  </div>
+  <ol class="docs-home-support-grid" role="list">
+    {
+      copy.items.map((item, index) => (
+        <li class="docs-home-support-item">
+          <span class="docs-home-support-number" aria-hidden="true">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <div>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+          </div>
+        </li>
+      ))
+    }
+  </ol>
+  <div class="docs-home-platforms">
+    <p class="editorial-label" id="platforms-label">
+      {copy.platformsLabel}
+    </p>
+    <table class="docs-home-platform-table" aria-labelledby="platforms-label">
+      <thead>
+        <tr>
+          <th scope="col">{copy.targetLabel}</th>
+          <th scope="col">{copy.statusLabel}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          copy.platforms.map((platform) => (
+            <tr>
+              <th scope="row">{platform.target}</th>
+              <td>
+                <span class="editorial-badge">{platform.status}</span>
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-home-benchmark" aria-labelledby="benchmark-heading">
+    <div class="docs-home-benchmark-head">
+      <div>
+        <p class="editorial-label">{copy.benchmarkLabel}</p>
+        <h3 id="benchmark-heading">{copy.benchmarkHeading}</h3>
+      </div>
+      <a
+        class="editorial-link"
+        href="https://bench.zig.bd/"
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        {"bench.zig.bd "}<span aria-hidden="true">{"->"}</span>
+      </a>
+    </div>
+    <p class="docs-home-benchmark-meta">{copy.benchmarkMeta}</p>
+    <ol class="docs-home-bars" aria-label={copy.benchmarkAria}>
+      {
+        copy.bars.map((bar) => (
+          <li
+            class={`docs-home-bar-row${bar.leader ? " docs-home-bar-row-leader" : ""}`}
+          >
+            <span class="docs-home-bar-name">{bar.name}</span>
+            <span class="docs-home-bar-track" aria-hidden="true">
+              <span
+                class={`docs-home-bar-fill${bar.leader ? " docs-home-bar-leader" : ""}`}
+                style={`--bar-width: ${bar.share}%`}
+              />
+            </span>
+            <span class="docs-home-bar-value">{bar.value}</span>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="docs-home-benchmark-source">{copy.benchmarkSource}</p>
+  </div>
+</section>

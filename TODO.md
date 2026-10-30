@@ -447,20 +447,25 @@ the first action stays above the fold.
 
 Below the hero:
 
-- A numbered index for Getting Started, support, server adoption, and the
-  author. Use two columns on desktop and one on mobile. Each row has a mono
-  number, title, one-sentence description, and a descriptive link.
-- A support section with a two-column capability grid and a platform table.
-  Cover HTTP, WebSocket, RPC, TLS, static assets, workers, and allocation
-  limits. Use badges for tested and compile-checked targets.
+- A numbered index with six entries: Getting Started, Share nothing rule,
+  Migrate existing projects, Configure a uWZ server, Understand a
+  Cluster/Worker, and Explore features. Use two columns on desktop and one on
+  mobile. Getting Started links to its page; the rest use `#` placeholders until
+  those guides ship.
+- Show the status as `Semi-production ready`. Do not present the site as
+  complete while guides are still being written.
+- A support section with a two-column capability grid, a left-aligned platform
+  table, and a plaintext throughput bar chart sourced from
+  [bench.zig.bd](https://bench.zig.bd/). Cover HTTP, WebSocket, RPC, TLS, static
+  assets, workers, and allocation limits.
 - A server section with three numbered adoption steps and one link to Getting
   Started. Do not put a code sample on the landing page.
-- An author section that links to
-  [Coder-Blue](https://github.com/Coder-Blue).
-- Keep the incomplete-documentation note as a quiet status row near the index.
-  Never present the site as complete when the copy says it is still being
-  written.
-- Do not add a sponsor section until the project publishes one.
+- An author section for Noah Trần with the supplied avatar, Hope Art and Farben
+  links, and Facebook and X links.
+- A sponsor section thanking the Farben maintainers and linking to
+  https://github.com/sponsors/farbenbuilds.
+- Set `seo.title: µWebZockets` on both home pages so the landing `<title>` is
+  just the product name.
 - End with the docs home colophon: the MIT License 2026 line, author, source,
   and license links. It must match the docs footer visually and use the same
   destinations.
@@ -624,8 +629,10 @@ apps.
 | Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                               | New      |
 | Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                              | New      |
 | Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                       | Existing |
-| Docs home content    | Custom-mode hero, numbered index, support, server, author, colophon                          | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                            | Existing |
-| Site registry        | Register hero and colophon for MDX                                                           | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`               | Mixed    |
+| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                            | Existing |
+| Docs home index      | Localized six-entry index, semi-production status, agent markdown serializer                 | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`              | Existing |
+| Docs home support    | Localized capability grid, platform table, benchmark chart, agent markdown serializer        | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`    | Existing |
+| Site registry        | Register hero, index, support, and colophon for MDX                                          | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`               | Mixed    |
 | Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                         | Existing |
 
 Boundaries:
@@ -909,16 +916,19 @@ Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
 The shipped uWebZockets hero is a full-screen, procedurally drawn ASCII flight
 field.
 
-- **Composition:** the hero is a dark `100svh` editorial cover. Copy sits in the
-  left column and stays bottom-left at every viewport; the field fills the
-  viewport behind it. The Blume header is fixed, hidden, and `inert` while the
-  hero is in view; it reveals after the reader scrolls past the hero. Docs pages
-  and the no-JS path keep the header visible.
+- **Composition:** the hero is a full-screen editorial cover in both themes. The
+  dark theme uses a soft `#1a1917` paper instead of pure black; the light theme
+  uses `#f4f0e6`. Copy sits in the left column and stays bottom-left at every
+  viewport; the field fills the viewport behind it. The Blume header is fixed,
+  hidden, and `inert` while the hero is in view; it reveals after the reader
+  scrolls past the hero. Docs pages and the no-JS path keep the header visible.
 - **Specimens:** original procedural ASCII butterflies are rasterized into the
   cell grid. Three faceted species use coloured wing tiles from the host
   `--farben-field-wing-*` aliases, with body-locked veins, bands, margins, and
-  eyespots drawn as glyphs. No photographs, sprite sheets, or downloaded artwork
-  ship with the hero.
+  eyespots drawn as glyphs. The palette picks the darker or lighter of the host
+  paper and ink for shadow, highlight, and glyph contrast, so the field reads in
+  both light and dark themes. No photographs, sprite sheets, or downloaded
+  artwork ship with the hero.
 - **Flight:** eight specimens (three large, four medium, one small) fly with
   independent headings, target-x wandering, separation, content avoidance, wing
   beat phases, and breeze puffs. They rotate with their heading; they do not
@@ -945,20 +955,28 @@ field.
 The sections below the uWebZockets hero follow the Vize entry-page grammar while
 keeping Farben's own tokens, fonts, and copy.
 
-- **Index:** a two-column numbered index on desktop, one column on mobile. Rows
-  link to Getting Started, support, server adoption, and the author. A quiet
-  status row records that the documentation is still being written.
+- **Index:** a two-column numbered index on desktop, one column on mobile. Six
+  entries cover Getting Started, Share nothing rule, Migrate existing projects,
+  Configure a uWZ server, Understand a Cluster/Worker, and Explore features.
+  Getting Started links to its page; the rest use `#` placeholders. The status
+  row reads `Semi-production ready`.
 - **Support:** an eight-item capability grid covering HTTP/1.1 and HTTP/2,
   HTTP/3 (single process; QUIC clustering is not supported), WebSocket, RPC,
   TLS, static assets, thread-per-core workers pinned where the platform allows,
-  and zero allocation. A hairline platform table marks Linux and macOS targets
-  as tested and Windows as compile-checked.
+  and zero allocation. A left-aligned platform table marks Linux as tested,
+  macOS as supported, and Windows as compile-checked. A plaintext throughput bar
+  chart below it uses the Linux x86_64 ranking from
+  [bench.zig.bd](https://bench.zig.bd/), with uWebZockets at 148,237 requests per
+  second.
 - **Server:** three numbered adoption steps with no code sample. The steps cover
   adding the package, mounting handlers, and running a single process or a
   thread-per-core cluster, followed by a link to Getting Started.
-- **Author:** a monogram and short profile for
-  [Coder-Blue](https://github.com/Coder-Blue), linked to GitHub. No sponsor
-  section ships.
+- **Author:** Noah Trần's avatar, a short engineering profile, Hope Art and
+  Farben links, and Facebook and X links.
+- **Sponsor:** a thank-you to the Farben maintainers and a link to
+  https://github.com/sponsors/farbenbuilds.
+- **SEO:** both home pages set `seo.title: µWebZockets`, so the landing document
+  title is just `µWebZockets`.
 - **Footer:** the docs home colophon and the site-wide Blume footer both show
   `MIT License 2026` with Author, Source, and License links. Blume additionally
   renders its monorepo GitHub icon on docs pages; the colophon keeps the three
@@ -967,6 +985,8 @@ keeping Farben's own tokens, fonts, and copy.
 
 ## Research references
 
+- [Zig Web Servers Benchmark](https://bench.zig.bd/) supplies the Linux
+  x86_64 plaintext throughput ranking used on the support section.
 - [Vize documentation](https://vizejs.dev/) and the
   [Vize repository](https://github.com/ubugeeei-prod/vize).
 - [Vize theme configuration](https://github.com/ubugeeei-prod/vize/blob/main/docs/vite.config.ts)

@@ -1,8 +1,16 @@
 import { defineConfig, type ComponentMarkdown } from "blume";
 
+import { renderHomeIndexMarkdown } from "./components/home-index-data.ts";
+import { renderSupportMarkdown } from "./components/support-section-data.ts";
 import { SITE_LINKS, siteFooterNote } from "./site-links.ts";
 
 const omitDecorative: ComponentMarkdown = () => "";
+
+const homeIndexMarkdown: ComponentMarkdown = ({ props }) =>
+  renderHomeIndexMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const supportMarkdown: ComponentMarkdown = ({ props }) =>
+  renderSupportMarkdown(props.locale === "vi" ? "vi" : "en");
 
 export default defineConfig({
   title: "µWebZockets",
@@ -25,6 +33,8 @@ export default defineConfig({
     markdownComponents: {
       ButterflyHero: omitDecorative,
       HeroChrome: omitDecorative,
+      HomeIndex: homeIndexMarkdown,
+      SupportSection: supportMarkdown,
     },
   },
   theme: {
