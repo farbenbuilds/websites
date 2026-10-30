@@ -60,6 +60,13 @@ html [data-blume-nav-drawer] a[data-blume-locale-choice] {
   text-transform: uppercase;
 }
 
+html [data-blume-header] a[data-blume-locale-choice] svg,
+html [data-blume-nav-drawer] a[data-blume-locale-choice] svg {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 html dialog[data-blume-search-dialog] {
   border: 1px solid var(--farben-border-strong);
   border-radius: 0;
