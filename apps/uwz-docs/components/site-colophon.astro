@@ -1,0 +1,46 @@
+---
+import {
+  SITE_LINKS,
+  localizeHref,
+  resolveLocale,
+  siteFooterNote,
+  type SiteLocale,
+} from "../site-links";
+
+type Props = {
+  locale?: SiteLocale;
+};
+
+const { locale } = Astro.props;
+const resolvedLocale = locale ?? resolveLocale(Astro.url.pathname);
+
+const label =
+  resolvedLocale === "vi"
+    ? "Chân trang tài liệu"
+    : "Documentation colophon";
+
+const isExternal = (href: string): boolean =>
+  href.startsWith("http://") || href.startsWith("https://");
+---
+
+<footer class="docs-home-colophon" aria-label={label}>
+  <ul class="docs-home-colophon-links" role="list">
+    {
+      SITE_LINKS.map((link) => (
+        <li>
+          <a
+            href={localizeHref(link.href, resolvedLocale)}
+            target={isExternal(link.href) ? "_blank" : undefined}
+            rel={isExternal(link.href) ? "noreferrer" : undefined}
+            aria-describedby={
+              isExternal(link.href) ? "blume-new-tab-hint" : undefined
+            }
+          >
+            {link.label[resolvedLocale]}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+  <p>{siteFooterNote()}</p>
+</footer>

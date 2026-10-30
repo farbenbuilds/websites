@@ -1,0 +1,63 @@
+---
+import { supportCopy, type SupportLocale } from "./support-section-data";
+
+type Props = {
+  locale?: SupportLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = supportCopy(locale);
+---
+
+<section class="docs-home-section" id="support" aria-labelledby="support-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="support-heading">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+    </div>
+  </div>
+  <ol class="docs-home-support-grid" role="list">
+    {
+      copy.items.map((item, index) => (
+        <li class="docs-home-support-item">
+          <span class="docs-home-support-number" aria-hidden="true">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <div>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+          </div>
+        </li>
+      ))
+    }
+  </ol>
+  <div class="docs-home-platforms">
+    <p class="editorial-label" id="platforms-label">
+      {copy.platformsLabel}
+    </p>
+    <p class="docs-home-platform-note">{copy.platformNote}</p>
+    <table class="docs-home-platform-table" aria-labelledby="platforms-label">
+      <thead>
+        <tr>
+          <th scope="col">{copy.platformHeader}</th>
+          <th scope="col">{copy.architectureHeader}</th>
+          <th scope="col">{copy.statusHeader}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          copy.platforms.map((platform) => (
+            <tr>
+              <th scope="row">{platform.platform}</th>
+              <td>{platform.architecture}</td>
+              <td>
+                <span class="editorial-badge">{platform.status}</span>
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

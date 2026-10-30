@@ -1,14 +1,56 @@
 /*
- * Blume inlines this file into the site's Tailwind entry, so Tailwind
- * directives work here.
+ * Host theme for the uWebZockets documentation.
  *
- * The shared UI package (@farben/ui) ships the shadcn-svelte design tokens and
- * the components that use them. The overrides below keep those components on
- * Blume's palette so both themes stay in sync.
+ * Blume inlines this file into the site's Tailwind entry, so Tailwind
+ * directives work here. The shared UI package ships the shadcn-svelte tokens;
+ * the editorial layer maps them to Farben's warm paper palette.
  */
 @import "@farben/ui/theme.css";
+@import "@farben/ui/editorial.css";
+
+/* Blume inlines this file into .blume/src/generated/app.css, so app-local
+ * imports resolve from that generated directory rather than the app root. */
+@import "../../../components/butterfly-hero/butterfly-hero.css";
+@import "../../../styles/blume-chrome.css";
+@import "../../../styles/blume-content.css";
+@import "../../../styles/docs-home.css";
+@import "../../../styles/docs-home-controls.css";
+@import "../../../styles/docs-home-sections.css";
+@import "../../../styles/docs-home-support.css";
+@import "../../../styles/docs-home-benchmark.css";
 
 :root {
+  --blume-background: #f4f0e6;
+  --blume-foreground: #171512;
+  --blume-muted: #ebe5d8;
+  --blume-muted-foreground: #5f5a52;
+  --blume-border: #d3ccbe;
+  --blume-radius: 0;
+  --blume-content-width: 42rem;
+  --blume-code-background: #fbf8f1;
+
+  /* The orange preset is 4.37:1 on this paper. This darker orange is 5.28:1. */
+  --blume-accent: #a64600;
+  --blume-accent-foreground: #ffffff;
+
+  /* 3.3:1 against the paper surface; decorative rules stay lighter. */
+  --farben-border-strong: #8a8378;
+
+  --farben-field-paper: var(--blume-background);
+  --farben-field-ink: var(--blume-foreground);
+  --farben-field-muted: var(--blume-muted-foreground);
+  --farben-field-accent: var(--blume-accent);
+
+  --editorial-ink: var(--blume-foreground);
+  --editorial-muted: var(--blume-muted-foreground);
+  --editorial-paper: var(--blume-background);
+  --editorial-accent: var(--blume-accent);
+  --editorial-rule: var(--blume-border);
+  --editorial-rule-strong: var(--farben-border-strong);
+  --editorial-font-display: var(--blume-font-display);
+  --editorial-font-body: var(--blume-font-body);
+  --editorial-font-label: var(--blume-font-mono);
+
   --background: var(--blume-background);
   --foreground: var(--blume-foreground);
   --card: var(--blume-background);
@@ -24,9 +66,21 @@
   --accent: var(--blume-accent);
   --accent-foreground: var(--blume-accent-foreground);
   --border: var(--blume-border);
-  --input: var(--blume-border);
+  --input: var(--farben-border-strong);
   --ring: var(--blume-accent);
   --radius: var(--blume-radius);
+}
+
+:root[data-theme="dark"] {
+  --blume-background: #161513;
+  --blume-foreground: #ece6da;
+  --blume-muted: #211f1b;
+  --blume-muted-foreground: #a39c90;
+  --blume-border: #2c2a25;
+  --blume-code-background: #1b1916;
+
+  /* 3.2:1 against the dark paper surface. */
+  --farben-border-strong: #6b665c;
 }
 
 /* Generate the utility classes the shared components use. */

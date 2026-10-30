@@ -3,7 +3,9 @@ import { extname, join } from "node:path";
 
 const roots = ["apps", "packages", "scripts", "tests", "tools"];
 const extensions = new Set([".ts", ".tsx", ".js", ".mjs", ".svelte", ".astro", ".css"]);
-const ignored = new Set(["node_modules", "dist", ".blume", ".git", ".direnv"]);
+
+const ignored = new Set(["node_modules", "dist", ".blume", ".blume-verify", ".git", ".direnv"]);
+
 const ignoredPaths = ["tools/oxlint/anti-slop"];
 const limit = 400;
 

@@ -1,9 +1,28 @@
-import { defineConfig } from "blume";
+import { defineConfig, type ComponentMarkdown } from "blume";
+
+import { renderHomeIndexMarkdown } from "./components/home-index-data.ts";
+import { renderBenchmarkMarkdown } from "./components/benchmark-section-data.ts";
+import { renderSupportMarkdown } from "./components/support-section-data.ts";
+import { SITE_LINKS, siteFooterNote } from "./site-links.ts";
+
+const omitDecorative: ComponentMarkdown = () => "";
+
+const homeIndexMarkdown: ComponentMarkdown = ({ props }) =>
+  renderHomeIndexMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const supportMarkdown: ComponentMarkdown = ({ props }) =>
+  renderSupportMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const benchmarkMarkdown: ComponentMarkdown = ({ props }) =>
+  renderBenchmarkMarkdown(props.locale === "vi" ? "vi" : "en");
 
 export default defineConfig({
   title: "µWebZockets",
   description:
     "Documentation for µWebZockets — a zero-allocation, shared-nothing server framework for Zig.",
+  logo: {
+    image: "/logo.svg",
+  },
   github: {
     owner: "farbenbuilds",
     repo: "websites",
@@ -17,8 +36,22 @@ export default defineConfig({
       { code: "vi", label: "Tiếng Việt" },
     ],
   },
+  agents: {
+    markdownComponents: {
+      ButterflyHero: omitDecorative,
+      HeroChrome: omitDecorative,
+      HomeIndex: homeIndexMarkdown,
+      SupportSection: supportMarkdown,
+      BenchmarkSection: benchmarkMarkdown,
+    },
+  },
   theme: {
     accent: "orange",
+    radius: "none",
+    background: {
+      light: "#f4f0e6",
+      dark: "#161513",
+    },
     fonts: {
       display: {
         name: "Google Sans Flex",
@@ -34,11 +67,7 @@ export default defineConfig({
     },
   },
   footer: {
-    links: [
-      {
-        label: { en: "µWebZockets on GitHub", vi: "µWebZockets trên GitHub" },
-        href: "https://github.com/farbenbuilds/uWebZockets",
-      },
-    ],
+    copyright: siteFooterNote(),
+    links: SITE_LINKS.map(({ label, href }) => ({ label, href })),
   },
 });

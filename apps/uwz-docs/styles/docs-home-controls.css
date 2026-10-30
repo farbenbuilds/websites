@@ -1,0 +1,150 @@
+.docs-home-scroll {
+  position: absolute;
+  bottom: clamp(1.5rem, 4vh, 2.5rem);
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--hero-accent);
+  border-radius: 0;
+  background: var(--hero-paper);
+  color: var(--hero-accent-bright);
+  place-items: center;
+  text-decoration: none;
+  transform: translateX(-50%);
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.docs-home-scroll-mouse {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 0.85rem;
+  height: 1.25rem;
+  padding-top: 0.18rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.docs-home-scroll-dot {
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.docs-home-scroll:hover,
+.docs-home-scroll:focus-visible {
+  border-color: var(--hero-accent);
+  background: var(--hero-hover);
+  color: var(--hero-accent);
+}
+
+.docs-home-scroll:focus-visible {
+  outline: 2px solid var(--hero-accent-bright);
+  outline-offset: 3px;
+}
+
+.docs-home-hero .butterfly-hero .editorial-square {
+  top: 1rem;
+  bottom: auto;
+  border-color: var(--hero-rule);
+  background: var(--hero-paper);
+  color: var(--hero-still);
+}
+
+.docs-home-hero .butterfly-hero .editorial-square:hover {
+  border-color: var(--hero-accent);
+  color: var(--hero-accent);
+}
+
+.docs-home-hero-copy > * {
+  animation: docs-home-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.docs-home-hero-copy > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.docs-home-hero-copy > :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.docs-home-hero-copy > :nth-child(4) {
+  animation-delay: 180ms;
+}
+
+@keyframes docs-home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 40rem) {
+  .docs-home-scroll {
+    right: 1rem;
+    bottom: 1rem;
+    left: auto;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-home-hero-copy > * {
+    animation: none;
+  }
+
+  .docs-home-scroll {
+    transition: none;
+  }
+}
+
+/*
+ * The custom home owns the first viewport. The header stays fixed so hiding
+ * and revealing it never moves the hero or the section below.
+ */
+html:has(.docs-home-hero) [data-blume-header] {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  width: 100%;
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 220ms ease,
+    visibility 0s;
+}
+
+html[data-uwz-hero="active"] [data-blume-header] {
+  transform: translateY(-100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 220ms ease,
+    visibility 0s linear 320ms;
+}
+
+html[data-uwz-hero="scrolled"] [data-blume-header] {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.docs-home-hero) [data-blume-header] {
+    transition: none;
+  }
+}

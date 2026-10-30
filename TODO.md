@@ -8,8 +8,9 @@ ASCII butterfly heroes for the home pages. The hero also adopts the animation an
 material grammar of the ASCII koi pond on [daoho.dev](https://www.daoho.dev/),
 studied in its [public repository](https://github.com/Dao-Ho/portfolio). The
 ascii-sharks field remains the density and engineering base; the koi pond supplies
-the material, atmosphere, and choreography that make it feel alive. All boxes
-below describe future work; this document does not implement either track.
+the material, atmosphere, and choreography that make it feel alive. The final
+section records what shipped in the uWebZockets hero; unchecked boxes remain
+future work.
 
 Vize is a visual reference, not a source to copy. Its documentation theme is
 built for Ox Content and Vue, while these sites use Blume, Astro, and Svelte.
@@ -42,21 +43,21 @@ docs app. It does not mean a separate marketing or branding site.
 
 `packages/ui` is currently a Svelte and shadcn-svelte package. A future app on
 another framework can share design tokens and CSS decisions, but it cannot consume
-the Svelte components directly. Adding a framework-specific shared package is a
-separate decision with its own plan.
+the Svelte components directly. The hero and docs-chrome reuse plan below is a
+separate decision with its own package boundaries.
 
 ## Status and decisions
 
-| Decision                                              | Status                                                                       |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Blume remains the framework for the two docs apps     | Decided. Do not eject or hand-edit generated output.                         |
-| Vize supplies the visual grammar                      | Decided. Do not copy its code, palette, identity, or assets.                 |
-| Dao Ho's koi pond supplies the hero animation grammar | Decided. Study only. The repository has no license, so do not copy anything. |
-| Docs home pages use Blume's `mode: custom`            | Decided. Only the two existing Blume apps; not a future framework decision.  |
-| The butterfly field uses Svelte, Canvas 2D, and CSS   | Decided. Dense field; no Three.js, Threlte, or WebGL.                        |
-| Large specimens rasterize procedurally into cells     | Decided. Small and midground butterflies use a cached sprite atlas.          |
-| Both docs sites share one editorial grammar           | Decided. Keep each site's accent and paper temperature.                      |
-| Blume keeps docs routing, search, i18n, and discovery | Decided. Restyle only the presentation boundary.                             |
+| Decision                                              | Status                                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Blume remains the framework for the two docs apps     | Decided. Do not eject or hand-edit generated output.                                                         |
+| Vize supplies the visual grammar                      | Decided. Do not copy its code, palette, identity, or assets.                                                 |
+| Dao Ho's koi pond supplies the hero animation grammar | Decided. Study only. The repository has no license, so do not copy anything.                                 |
+| Docs home pages use Blume's `mode: custom`            | Decided. Only the two existing Blume apps; not a future framework decision.                                  |
+| The butterfly field uses Svelte, Canvas 2D, and CSS   | Decided. Dense field; no Three.js, Threlte, or WebGL.                                                        |
+| Large specimens rasterize procedurally into cells     | Decided. The shipped field draws every specimen procedurally; a cached sprite atlas is optional future work. |
+| Both docs sites share one editorial grammar           | Decided. Keep each site's accent and paper temperature.                                                      |
+| Blume keeps docs routing, search, i18n, and discovery | Decided. Restyle only the presentation boundary.                                                             |
 
 uWebZockets keeps its orange accent over warm paper. ventiws keeps its teal
 accent over cool paper. The layout, type, rules, and component grammar are
@@ -79,11 +80,13 @@ carry the subject, many smaller details carry depth, and wake, ripples, shadow,
 food, and bite flashes make the field feel inhabited. The butterfly hero adopts
 that material and motion grammar at documentation scale. Two to four poster-scale
 specimen butterflies are rasterized procedurally into cells with real wing
-anatomy, veins, and eyespots. A dense midground of smaller butterflies comes from
-a cached sprite atlas. A quiet atmosphere of drifting pollen, wingbeat downdraft,
-and fading air traces gives the field weather. The hero remains a bounded region,
-not a page-wide canvas, but inside that frame it should read as one continuous
-living illustration rather than a repeated icon pattern.
+anatomy, veins, and eyespots. The shipped field also draws its smaller
+butterflies procedurally; a cached sprite atlas remains optional future work. A
+quiet atmosphere of drifting pollen, wingbeat downdraft,
+and fading air traces gives the field weather. The hero remains bounded to one
+full-screen documentation section, not a page-wide canvas, but inside that frame
+it should read as one continuous living illustration rather than a repeated icon
+pattern.
 
 Use Svelte for the component lifecycle, a Canvas 2D context for the field, and
 CSS for the surrounding hero. The canvas draws monospace glyphs into a cell grid;
@@ -151,26 +154,27 @@ Ox Content's default theme in `docs/vite.config.ts`, then overrides it in
 
 The reference is useful because the composition is disciplined: one accent,
 few surfaces, one rule weight, and metadata that is visibly secondary. Vize's
-full-page WebGL canvas, hidden header, and bottom mobile action bar are not part
-of the grammar we need. The butterfly field is a bounded Canvas 2D hero, not a
-page-wide background.
+full-page WebGL canvas and bottom mobile action bar are not part of the grammar
+we need. The hidden header is adopted only on the docs home hero; documentation
+pages keep navigation visible. The butterfly field is a Canvas 2D plate bounded
+to the full-screen hero, not a page-wide background.
 
 ### Adopt, adapt, reject
 
-| Vize move                                  | Farben decision                                                                                                         |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Warm paper and ink surfaces                | Adopt as one structure with two temperatures: warm for uWebZockets, cool for ventiws. Verify contrast in both modes.    |
-| Zero radius and 1px rules                  | Adopt through `theme.radius: "none"` and a zero `--radius` mapping.                                                     |
-| Mono uppercase labels and index numbers    | Adopt for labels, index numbers, keyboard hints, and footer metadata. Never use mono for body copy.                     |
-| Poster display type with negative tracking | Adapt to a clamp on the docs home page and a 2rem heading in docs; never use a 20vw title inside a reading page.        |
-| Numbered two-column feature index          | Adopt on the docs home page in place of a card grid.                                                                    |
-| Transparent sidebar with hairline groups   | Adopt at the token and selector layer while keeping Blume's layout and focus behavior.                                  |
-| Compact header controls                    | Adopt the density and square geometry, but keep Blume's 64px sticky header and its built-in search and drawer behavior. |
-| 100vh entry page                           | Adapt into a custom-mode docs home page whose first action remains visible at 320x568 without scrolling.                |
-| Hidden header until scroll                 | Reject. Documentation navigation must stay available without a scroll script.                                           |
-| Bottom mobile action bar                   | Reject. Blume's built-in drawer, search, and theme controls cover the need; M1 verifies them.                           |
-| Fixed full-page ambient WebGL canvas       | Reject. Use a bounded Canvas 2D butterfly field inside the hero; no page-wide canvas.                                   |
-| Vize palette, Helvetica, name, logo, copy  | Reject. Keep Google Sans Flex, Be Vietnam Pro, JetBrains Mono, and Farben's butterfly mark.                             |
+| Vize move                                  | Farben decision                                                                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Warm paper and ink surfaces                | Adopt as one structure with two temperatures: warm for uWebZockets, cool for ventiws. Verify contrast in both modes.                                                      |
+| Zero radius and 1px rules                  | Adopt through `theme.radius: "none"` and a zero `--radius` mapping.                                                                                                       |
+| Mono uppercase labels and index numbers    | Adopt for labels, index numbers, keyboard hints, and footer metadata. Never use mono for body copy.                                                                       |
+| Poster display type with negative tracking | Adapt to a clamp on the docs home page and a 2rem heading in docs; never use a 20vw title inside a reading page.                                                          |
+| Numbered two-column feature index          | Adopt on the docs home page in place of a card grid.                                                                                                                      |
+| Transparent sidebar with hairline groups   | Adopt at the token and selector layer while keeping Blume's layout and focus behavior.                                                                                    |
+| Compact header controls                    | Adopt the density and square geometry, but keep Blume's 64px sticky header and its built-in search and drawer behavior.                                                   |
+| 100vh entry page                           | Adopt as the docs home hero: full viewport on every screen, copy bottom-left; the first action stays visible at 320x568.                                                  |
+| Hidden header until scroll                 | Adopt on the docs home hero only: hide it while the full-screen hero covers the viewport and reveal it after the reader scrolls past. Docs pages keep the header visible. |
+| Bottom mobile action bar                   | Reject. Blume's built-in drawer, search, and theme controls cover the need; M1 verifies them.                                                                             |
+| Fixed full-page ambient WebGL canvas       | Reject. Use a bounded Canvas 2D butterfly field inside the hero; no page-wide canvas.                                                                                     |
+| Vize palette, Helvetica, name, logo, copy  | Reject. Keep Google Sans Flex, Be Vietnam Pro, JetBrains Mono, and Farben's butterfly mark.                                                                               |
 
 ## Reference study: Dao Ho koi pond
 
@@ -355,7 +359,9 @@ diacritic reading.
 
 Header decisions:
 
-- Keep the header sticky and visible. Do not add a scroll listener that hides it.
+- Keep the header sticky and visible on docs pages. On the docs home hero, hide
+  it while the hero covers the viewport, mark it `inert`, and reveal it after the
+  reader scrolls past. Restore it without JavaScript.
 - Keep Blume's 64px height because its sticky offsets are built around it.
 - Prefer Blume theme tokens first and a small app-local selector adapter second.
   Use only `data-blume-*` hooks that M0 verifies in the built HTML. They are an
@@ -372,10 +378,12 @@ Header decisions:
 
 Footer decisions:
 
-- Configure `footer.copyright` and two or three `footer.links` in each app
-  instead of inventing a new footer. The GitHub icon comes from `github.owner`
-  and `github.repo` and points at the monorepo; the product repository belongs in
-  a labeled text link. Keep those destinations distinct.
+- Configure `footer.copyright` as `MIT License 2026` and three `footer.links`:
+  Author ([Coder-Blue](https://github.com/Coder-Blue)), Source (the product
+  repository), and License (the product LICENSE file). The GitHub icon comes
+  from `github.owner` and `github.repo` and points at the monorepo; the product
+  repository belongs in the labeled Source link. Keep those destinations
+  distinct.
 - Do not add a social icon wall. GitHub is the relevant destination.
 - Add a license link only when the product repository publishes its own license
   file. Do not imply a product license from the monorepo's MIT license.
@@ -429,31 +437,47 @@ The docs home page has five regions:
 On desktop, use an asymmetric composition: text bottom-aligned in roughly a 5/12
 column, with the canvas in a 7/12 field that bleeds to the right and top edges of
 the hero. The field should feel like a plate printed on the page, not a widget in
-a box. On mobile, stack the text first and place a shorter canvas band after it;
-never put art behind the summary. A paper scrim may sit between the canvas and the
-text, but no glyph may cross the text exclusion area. The hero carries the
-reference's inverted hierarchy at documentation scale: the field is large and the
-metadata is small, while the h1 stays a real display heading and the first action
-stays above the fold.
+a box. On mobile, keep the same full-viewport stage and bottom-left copy; the
+field sits behind the copy and the exclusion area protects every line instead of
+stacking the copy above a short art band. A paper scrim may sit between the
+canvas and the text, but no glyph may cross the text exclusion area. The hero
+carries the reference's inverted hierarchy at documentation scale: the field is
+large and the metadata is small, while the h1 stays a real display heading and
+the first action stays above the fold.
 
 Below the hero:
 
-- A numbered index replaces the current `CardGroup`. Use three to five rows for
-  Getting Started, the source repository, and the strongest product facts. Each
-  row has a mono number, title, one-sentence description, and a descriptive link.
-- Do not drop the existing Highlights or the incomplete-documentation note. Move
-  the strongest facts into the index and keep the rest as a compact list below
-  it; keep the status note near the documentation links. Never present the site
-  as complete when the copy says it is still being written.
-- Keep the existing complete-example code block and the explanation that
-  follows it. Put it on the paper surface with a hairline rule and no card.
-- End with the docs home colophon: copyright, source, and documentation links, plus
-  a license link only when the product repository publishes one. It must match
-  the docs footer visually and use the same destinations.
+- A numbered index with six entries: Getting Started, Share nothing rule,
+  Migrate existing projects, Configure a uWZ server, Understand a
+  Cluster/Worker, and Explore Type-safety. Use two columns on desktop and one on
+  mobile. Getting Started links to its page; the rest use `#` placeholders until
+  those guides ship.
+- A vertical dictionary note at the lower-right hero border, hidden below 56rem:
+  the Japanese headword `速い`, its reading and part of speech, two short
+  definitions, and the `Semi-production ready` status line. Do not present the
+  site as complete while guides are still being written.
+- A support section with a two-column capability grid and a left-aligned
+  three-column platform table. Cover HTTP, WebSocket, RPC, TLS, static assets,
+  workers, and allocation limits. Keep the benchmark out of this section.
+- A benchmark section with the plaintext throughput chart sourced from
+  [bench.zig.bd](https://bench.zig.bd/) and the cross-protocol results from
+  [HTTP Arena](https://http-arena.com/frameworks/uwebzockets/).
+- A server section with three numbered adoption steps and one link to Getting
+  Started. Do not put a code sample on the landing page.
+- An author section for Noah Trần with the supplied avatar, Hope Art and Farben
+  links, and Facebook and X links.
+- A sponsor section with the Farben logo avatar, a thank-you to the maintainers,
+  and a link to https://github.com/sponsors/farbenbuilds.
+- Set `seo.title: µWebZockets` on both home pages so the landing `<title>` is
+  just the product name.
+- End with the docs home colophon: the MIT License 2026 line, author, source,
+  and license links. It must match the docs footer visually and use the same
+  destinations.
 - Keep the English and Vietnamese pages equivalent. Translate labels; do not
   translate product names or code identifiers.
 
-Do not add a second h1, a 100vh lock, a page-wide canvas, or a card grid.
+Do not add a second h1, a page-wide canvas, or a card grid. The hero may fill the
+viewport, but the page below must scroll normally.
 The page should read as an editorial front page, not a marketing splash.
 
 ## Butterfly hero contract
@@ -467,12 +491,10 @@ dense field, not a sparse accent.
 
 ### Field and sprites
 
-- Use a hybrid renderer. Render every butterfly into a Canvas 2D cell grid, but
-  split the population by size. Two to four foreground specimen butterflies are
-  rasterized procedurally per frame. The 80 to 160 small and midground
-  butterflies are pre-rendered sprites drawn with `drawImage`. At 320px start
-  with 24 to 48 small butterflies plus one specimen, then tune from measured
-  frame time. The specimen count is a hard cap, not a tuning variable.
+- The shipped renderer draws every butterfly into one Canvas 2D cell grid. A
+  future sprite atlas may add a denser midground; it is optional and is not part
+  of the current field. The current field caps at eight specimens and at three
+  specimens on fields 640px wide or narrower.
 - Size the cell grid from the mono face. Start near 8 to 12px wide with a cell
   2px taller than it is wide. Derive the column count from the measured canvas,
   not from breakpoints; expect roughly 60 to 110 columns on desktop and 35 to 60
@@ -485,11 +507,12 @@ dense field, not a sparse accent.
   tile for the wing wash and a glyph for the vein, margin, or texture. Cells near
   the edge get partial alpha and sparse glyphs. The field should read as ink and
   pigment, not as a wall of characters.
-- Pre-render each midground species at three wing phases and two or three scales
-  into an offscreen atlas. Rebuild the atlas when the palette, mono face, or DPR
-  changes, or tint mask sprites at draw time. Keep each silhouette legible at its
-  smallest rendered size and inspect the atlas at 1x and 2x DPR. A sprite smaller
-  than roughly 6 by 4 cells is a dot, not a butterfly; use a mote instead.
+- Optional future work: pre-render each midground species at three wing phases
+  and two or three scales into an offscreen atlas. Rebuild the atlas when the
+  palette, mono face, or DPR changes, or tint mask sprites at draw time. Keep
+  each silhouette legible at its smallest rendered size and inspect the atlas at
+  1x and 2x DPR. A sprite smaller than roughly 6 by 4 cells is a dot, not a
+  butterfly; use a mote instead.
 - Lock pattern detail to body coordinates. Wing bands, eyespots, veins, and grain
   must ride with the wing through the flap cycle, keyed by body position and
   instance id. Never let a random per-frame hash shimmer across the texture.
@@ -528,12 +551,12 @@ dense field, not a sparse accent.
   and any other protected block with a field-avoid hook, measure their boxes on
   resize and every 30 frames, and merge boxes closer than about 160px so
   butterflies are not squeezed into a slot between them. Steer the field around
-  the merged boxes with a soft repulsion and dim cells under text to about 0.15
-  with a smoothstep falloff over four cells.
-- Read the host `--farben-field-*` palette aliases for paper, ink, muted, and
-  accent on mount and when the theme attribute changes through a
-  `MutationObserver`. The shared code does not read `--blume-*` directly. Update
-  the palette, rebuild the sprite atlas, and redraw the current frame; draw a
+  the merged boxes with a soft repulsion, clear the art to paper under text, and
+  fade the mask over eight cells.
+- Read the host `--farben-field-*` palette aliases for paper, ink, muted,
+  accent, and wing tones on mount and when the theme attribute changes through a
+  `MutationObserver`. The hero code does not read `--blume-*` directly. Update
+  the palette, rebuild any sprite atlas, and redraw the current frame; draw a
   still only when reduced motion is active or the field is paused.
 - Wait up to two seconds for the mono face with `document.fonts.load` before the
   first draw. If it fails, draw with the system mono fallback and redraw when the
@@ -564,8 +587,8 @@ dense field, not a sparse accent.
   visit. Pausing stops the loop without hiding the still field.
 - Use one fixed-timestep `requestAnimationFrame` loop, starting at 1/60s with at
   most four steps per frame and a delta clamp of 0.1s. Cap the device pixel ratio
-  at 2 and recompute it on resize; rebuild the cell grid and sprite atlas when it
-  changes. Pause on `visibilitychange` and when the hero leaves the viewport
+  at 2 and recompute it on resize; rebuild the cell grid and any sprite atlas
+  when it changes. Pause on `visibilitychange` and when the hero leaves the viewport
   through an `IntersectionObserver`. Resume only when the document is visible,
   the hero is intersecting, the reader has not paused the field, and reduced
   motion is off.
@@ -578,9 +601,9 @@ dense field, not a sparse accent.
   block text selection, react on touch, or respond to clicks. Ship the field
   without pointer reaction if it distracts, and keep it fully alive without a
   pointer.
-- Do not use GSAP for the field or the hero. Both apps still declare GSAP from
-  the earlier plan, but the hero no longer uses it; remove it separately if no
-  other code imports it. The canvas loop owns the butterfly motion.
+- Do not use GSAP for the field or the hero. GSAP has been removed from both app
+  manifests, the workspace catalog, and the lockfile; no source file imports it.
+  The canvas loop owns the butterfly motion.
 - Profile with the browser performance panel at 4x CPU slowdown. Avoid per-frame
   allocations, reuse typed arrays, and lower sprite density before lowering the
   cell resolution. Do not add a second canvas or WebGL.
@@ -595,25 +618,27 @@ Every `apps/*` path in this table belongs to the two existing docs apps. The
 table does not reserve paths or architecture for the future marketing or shop
 apps.
 
-| Layer                | Responsibility                                                                               | Candidate files                                                                      | Status   |
-| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
-| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export        | New      |
-| Shared hero          | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `packages/ui/src/lib/components/butterfly-hero/butterfly-hero.svelte` and `index.ts` | New      |
-| Shared species       | Species definitions, palettes, wing-phase frames, scale steps, deterministic ids             | `butterfly-data.ts` under the same component folder                                  | New      |
-| Shared anatomy       | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                                 | New      |
-| Shared field         | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                                 | New      |
-| Shared sprites       | Offscreen sprite atlas, palette, font, and DPR cache, tint and draw helpers                  | `butterfly-sprites.ts` under the same component folder                               | New      |
-| Shared atmosphere    | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                            | New      |
-| Shared renderer      | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                              | New      |
-| Shared loop          | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                                  | New      |
-| Docs home colophon   | Static per-app footer with copyright and links                                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                      | New      |
-| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                             | Mixed    |
-| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                     | New      |
-| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                                    | New      |
-| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                             | Existing |
-| Docs home content    | Custom-mode hero, numbered index, example, colophon                                          | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                  | Existing |
-| Site registry        | Register hero and colophon for MDX                                                           | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                     | Mixed    |
-| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                               | Existing |
+| Layer                | Responsibility                                                                               | Candidate files                                                                 | Status   |
+| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------- |
+| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export   | New      |
+| Hero component       | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `apps/uwz-docs/components/butterfly-hero/butterfly-hero.svelte` and `index.ts`  | Existing |
+| Hero species         | Species definitions, wing outlines, band phases, vein counts, eyespots, glyph bias           | `butterfly-data.ts` under the same component folder                             | Existing |
+| Hero anatomy         | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                            | Existing |
+| Hero field           | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                            | Existing |
+| Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                       | Existing |
+| Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                         | Existing |
+| Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                             | Existing |
+| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                 | New      |
+| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                        | Mixed    |
+| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                | New      |
+| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                               | New      |
+| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                        | Existing |
+| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                             | Existing |
+| Docs home index      | Localized six-entry index and agent markdown serializer                                      | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`               | Existing |
+| Docs home support    | Localized capability grid, three-column platform table, agent markdown serializer            | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`     | Existing |
+| Docs home benchmark  | bench.zig.bd throughput bars, HTTP Arena metrics, agent markdown serializer                  | `apps/uwz-docs/components/benchmark-section.astro`, `benchmark-section-data.ts` | Existing |
+| Site registry        | Register hero, index, support, benchmark, and colophon for MDX                               | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                | Mixed    |
+| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                          | Existing |
 
 Boundaries:
 
@@ -624,23 +649,86 @@ Boundaries:
 - Shared primitives live in `@farben/ui`; app-local components own site-specific
   links and Blume selectors. Keep the docs home colophon and docs footer
   destinations in sync with a parity check.
-- The shared field and renderer receive a typed palette resolved from
+- The field and renderer receive a typed palette resolved from
   `--farben-field-*` aliases. Only the app `theme.css` maps those aliases to
-  Blume tokens; shared code never reads `--blume-*` directly.
+  Blume tokens; hero code never reads `--blume-*` directly.
 - The anatomy, field, and atmosphere modules stay pure and data-driven. DOM,
   Canvas, observers, and the clock live in the Svelte component and the loop
   module. The renderer owns only Canvas context state and typed cell buffers.
 - Do not add a new third-party runtime dependency. Add the existing
   `@farben/ui` workspace package to ventiws. The hero uses the browser Canvas 2D
-  API; no renderer package or GSAP dependency is added to `packages/ui`.
-- Do not edit `.blume/` or `dist/`. No `part-2` files; split anatomy, sprites,
-  atmosphere, field, renderer, and loop modules by responsibility before any
-  reaches 400 lines.
+  API; no renderer package or GSAP dependency is added for it.
+- Do not edit `.blume/` or `dist/`. No `part-2` files; split anatomy, atmosphere,
+  field, renderer, and loop modules by responsibility before any reaches 400
+  lines.
 
 Register the hero through Blume's `defineComponents` descriptor. Prefer
 `client: "visible"` when the hero sits in the first viewport and the static
 arrangement is acceptable until hydration. Verify the generated HTML and measure
 the behavior before choosing a directive; do not assume it.
+
+## Shared docs chrome and hero plan (2026-10-31)
+
+The next reuse target is ventiws: the same butterfly hero, the same navbar
+grammar, and the same footer grammar. Keep `@farben/ui` focused on generic
+primitives and tokens. Do not move the hero or the Blume chrome into it.
+
+| Surface        | Shared package           | Stays in the app                                      |
+| -------------- | ------------------------ | ----------------------------------------------------- |
+| Butterfly hero | `@farben/butterfly-hero` | Seed, locale, palette aliases, hero copy, page layout |
+| Navbar         | `@farben/docs-chrome`    | Product title, logo, GitHub target, locale labels     |
+| Footer         | `@farben/docs-chrome`    | Product links, license URL, copyright                 |
+| UI primitives  | `@farben/ui`             | Component composition and product-specific markup     |
+
+Why not `packages/ui`:
+
+- The hero is a canvas engine with its own field, atmosphere, renderer, motion
+  loop, and tests. It is not a primitive, and putting it beside the shadcn
+  registry would make every future UI consumer own and type-check unrelated
+  animation code.
+- The navbar and footer are Blume surfaces. The repository boundary says
+  `data-blume-*` selectors stay in the apps and `packages/ui` must not import
+  Blume. A docs-chrome package can own that boundary without weakening it.
+- A dedicated package gives each surface one reason to change and one test
+  suite. The hero can ship without pulling the footer; the footer can change
+  without touching the renderer.
+
+Navbar note: there is no custom navbar component to move. Blume renders the
+header; the app owns only its config, logo, and selector overrides. Share the
+CSS and config defaults, not a replacement header.
+
+Footer note: share the link builder, license line, colophon component, and
+Blume footer config helper. Pass the product links in from each app so no
+uWebZockets URL or copy leaks into the shared package.
+
+Hero note: the palette is already a CSS contract
+(`--farben-field-paper`, `--farben-field-ink`, `--farben-field-muted`,
+`--farben-field-accent`, and `--farben-field-wing-*`). The component and engine
+stay identical; each app maps the aliases in its own `theme.css`. ventiws maps
+its teal and cool-paper values. Do not add per-app forks or color props to the
+component.
+
+Planned slices:
+
+1. Move the hero's Svelte component, pure engine, CSS, and styles export into
+   `packages/butterfly-hero`. Keep the `[data-butterfly-content-root]` and
+   `[data-butterfly-avoid]` DOM contracts. Update uWebZockets to import the
+   package and confirm no rendering, motion, reduced-motion, or no-JS change.
+2. Publish the palette contract with neutral fallbacks and document the
+   per-app mapping. Split `butterfly-loop.ts` before it reaches 400 lines.
+3. Move the Blume chrome CSS, footer/colophon data builder, and footer config
+   helper into `packages/docs-chrome`. Keep product links and logo paths as
+   inputs. If Blume cannot register an `.astro` component from a package, keep
+   a thin app-local colophon wrapper that renders the shared data.
+4. Add both packages to ventiws, register the hero with
+   `client: "visible"`, map the teal palette, and supply its own footer links.
+5. Verify both apps at 320, 768, and 1280 in light and dark, reduced motion,
+   no-JS, and both locales. Run `pnpm ready` and inspect the generated
+   agent-facing Markdown.
+
+Do not copy the hero into ventiws, add GSAP, or move product URLs into the
+shared package. The hero must remain a decorative island with a server-rendered
+static fallback.
 
 ## Milestones and checklists
 
@@ -732,9 +820,10 @@ no duplicate heading, no missing action, and no broken locale or discovery outpu
       with no DOM or Canvas import. Keep the renderer and loop effectful at the
       component edge. Keep every source file at or below 400 lines and split by
       responsibility. Do not add GSAP to the field.
-- [ ] Build the offscreen sprite atlas for small and midground butterflies. Cache
-      palette, font, and DPR variants; rebuild on change; tint masks at draw time
-      where that is cheaper than rebuilding. Measure atlas size and draw cost.
+- [ ] Optional future: build the offscreen sprite atlas for small and midground
+      butterflies. Cache palette, font, and DPR variants; rebuild on change; tint
+      masks at draw time where that is cheaper than rebuilding. Measure atlas
+      size and draw cost.
 - [ ] Build the procedural specimen rasterizer: analytic wing outlines, center
       plus four sub-points, partial coverage at edges, tinted wing tiles, vein
       and margin glyphs, and body-locked bands and eyespots. Cap it at four
@@ -866,17 +955,8 @@ and the shared package passes the repository gate.
 
 ## Verification and evidence
 
-This document is a plan, not an implementation. The pull request that lands it
-changes `TODO.md` only. Its checks are:
-
-```sh
-pnpm format:check
-git diff --stat
-```
-
-`pnpm lint`, `pnpm check:size`, `pnpm test`, the app checks, and the builds do not
-validate a root Markdown plan. Do not claim them as evidence for this document.
-When the implementation starts, use the full gate and the narrowest app checks:
+The uWebZockets docs home and butterfly hero are implemented. Use the full gate
+and the narrowest app checks:
 
 ```sh
 pnpm exec vp run @farben/ui#check
@@ -899,8 +979,94 @@ matrix is:
 
 Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
 
+## Final uWebZockets hero (2026-10-30)
+
+The shipped uWebZockets hero is a full-screen, procedurally drawn ASCII flight
+field.
+
+- **Composition:** the hero is a full-screen editorial cover in both themes. The
+  dark theme uses a soft `#1a1917` paper instead of pure black; the light theme
+  uses `#f4f0e6`. Copy sits in the left column and stays bottom-left at every
+  viewport; the field fills the viewport behind it. The Blume header is fixed,
+  hidden, and `inert` while the hero is in view; it reveals after the reader
+  scrolls past the hero. Docs pages and the no-JS path keep the header visible.
+- **Specimens:** original procedural ASCII butterflies are rasterized into the
+  cell grid. Three faceted species use coloured wing tiles from the host
+  `--farben-field-wing-*` aliases, with body-locked veins, bands, margins, and
+  eyespots drawn as glyphs. The palette picks the darker or lighter of the host
+  paper and ink for shadow, highlight, and glyph contrast, so the field reads in
+  both light and dark themes. No photographs, sprite sheets, or downloaded
+  artwork ship with the hero.
+- **Flight:** eight specimens (three large, four medium, one small) fly with
+  independent headings, target-x wandering, separation, content avoidance, wing
+  beat phases, and breeze puffs. The breeze trails use the ASCII glyphs
+  `>`, `<`, `|`, `\`, and `/`. They rotate with their heading; they do not share
+  a column or a conveyor. Fields 640px wide or narrower cap the population at
+  three specimens.
+- **Site chrome:** the Blume header shows the butterfly mark from
+  `public/logo.svg` left of the µWebZockets wordmark. The locale dropdown uses
+  the same mono face, size, and uppercase treatment as the navbar locale label.
+- **Readability:** the hero marks the copy and scroll control with
+  `data-butterfly-avoid`; the field measures those boxes and clears the art to
+  paper beneath them with a smooth falloff. The no-JS path adds a paper scrim
+  behind the copy.
+- **Fallback:** one server-rendered ASCII `<pre>` generated from the same seed as
+  the canvas stands in until the first successful canvas frame. The old
+  image-based fallback and its public assets are retired.
+- **Motion controls:** pause persists in `sessionStorage`; reduced motion holds a
+  settled still and hides the play control. The canvas still respects DPR caps,
+  visibility, intersection, and unmount cleanup.
+- **Reference boundary:** Dao-Ho's koi pond informed the full-screen canvas,
+  waypoint curiosity, content avoidance, and reduced-motion settle; ascii-sharks
+  informed the bounded-loop engineering; asciiart.eu and the user's Pinterest
+  reference informed character density and wing shading. No upstream code, CSS,
+  or artwork is copied.
+
+## Final landing sections (2026-10-30)
+
+The sections below the uWebZockets hero follow the Vize entry-page grammar while
+keeping Farben's own tokens, fonts, and copy.
+
+- **Index:** a two-column numbered index on desktop, one column on mobile. Six
+  entries cover Getting Started, Share nothing rule, Migrate existing projects,
+  Configure a uWZ server, Understand a Cluster/Worker, and Explore Type-safety.
+  Getting Started links to its page; the rest use `#` placeholders.
+- **Support:** an eight-item capability grid covering HTTP/1.1 and HTTP/2,
+  HTTP/3 (single process; QUIC clustering is not supported), WebSocket, RPC,
+  TLS, static assets, thread-per-core workers pinned where the platform allows,
+  and zero allocation. A full-width, left-aligned table splits Platform,
+  Architecture, and Status and marks Linux as tested, macOS as supported, and
+  Windows as compile-checked.
+- **Benchmark:** its own section after Support. The bench.zig.bd plaintext chart
+  uses the Linux x86_64 ranking with uWebZockets at 148,237 requests per second.
+  Below it, the HTTP Arena panel links to
+  https://http-arena.com/frameworks/uwebzockets/ and reports HTTP/1.1
+  3,736,192 req/s, HTTP/2 2,483,817 req/s, WebSocket 4,311,546 msg/s, JSON
+  compression 16,639 req/s, and HTTP/3 1,771 req/s.
+- **Server:** three numbered adoption steps with no code sample. The steps cover
+  adding the package, mounting handlers, and running a single process or a
+  thread-per-core cluster, followed by a link to Getting Started.
+- **Author:** Noah Trần's avatar, a short engineering profile, Hope Art and
+  Farben links, and Facebook and X links.
+- **Sponsor:** the Farben logo avatar, a thank-you to the Farben maintainers,
+  and a link to https://github.com/sponsors/farbenbuilds.
+- **Dictionary note:** a vertical Japanese entry for `速い` at the lower-right
+  hero border, hidden below 56rem, ending with the semi-production status.
+- **SEO:** both home pages set `seo.title: µWebZockets`, so the landing document
+  title is just `µWebZockets`.
+- **Footer:** the docs home colophon and the site-wide Blume footer both show
+  `MIT License 2026` with Author, Source, and License links. Blume additionally
+  renders its monorepo GitHub icon on docs pages; the colophon keeps the three
+  text links and the license note. Custom mode gets the shared content from
+  `site-colophon.astro`.
+
 ## Research references
 
+- [Zig Web Servers Benchmark](https://bench.zig.bd/) supplies the Linux
+  x86_64 plaintext throughput ranking used on the benchmark section.
+- [HTTP Arena](https://http-arena.com/frameworks/uwebzockets/) supplies the
+  HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON compression results on the same
+  section.
 - [Vize documentation](https://vizejs.dev/) and the
   [Vize repository](https://github.com/ubugeeei-prod/vize).
 - [Vize theme configuration](https://github.com/ubugeeei-prod/vize/blob/main/docs/vite.config.ts)
@@ -968,3 +1134,6 @@ Use generated `dist/` and `.blume/` output only for inspection. Never edit it.
   retain its license, record provenance in the third-party notices, and rewrite
   copied code to the repository's functional rules: no classes, prototypes, or
   `this`.
+- [asciiart.eu butterfly](https://www.asciiart.eu/art/bff9fbcd39eb0233) and the
+  user's [Pinterest butterfly reference](https://pin.it/2hqae6IZM) were studied
+  for character density and wing shading. The shipped art does not copy either.

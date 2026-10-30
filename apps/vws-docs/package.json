@@ -15,7 +15,6 @@
   "dependencies": {
     "@astrojs/svelte": "catalog:",
     "blume": "catalog:",
-    "gsap": "catalog:",
     "svelte": "catalog:"
   },
   "devDependencies": {

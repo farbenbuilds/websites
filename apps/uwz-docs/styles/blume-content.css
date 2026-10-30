@@ -1,0 +1,226 @@
+/*
+ * Article and component styling for Blume's content components.
+ *
+ * Blume's generated CSS flattens code blocks with !important rules, so the
+ * code surface uses inset rules and a filled inset shadow instead of a border
+ * and background that the generated stylesheet would discard.
+ */
+
+html .prose {
+  --tw-prose-body: var(--blume-foreground);
+  --tw-prose-headings: var(--blume-foreground);
+  --tw-prose-lead: var(--blume-muted-foreground);
+  --tw-prose-links: var(--blume-accent);
+  --tw-prose-bold: var(--blume-foreground);
+  --tw-prose-counters: var(--blume-muted-foreground);
+  --tw-prose-bullets: var(--blume-muted-foreground);
+  --tw-prose-hr: var(--blume-border);
+  --tw-prose-quotes: var(--blume-foreground);
+  --tw-prose-quote-borders: var(--blume-border);
+  --tw-prose-captions: var(--blume-muted-foreground);
+  --tw-prose-code: var(--blume-foreground);
+  --tw-prose-pre-code: var(--blume-foreground);
+  --tw-prose-pre-bg: var(--blume-code-background);
+  --tw-prose-th-borders: var(--blume-border);
+  --tw-prose-td-borders: var(--blume-border);
+}
+
+html .prose h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+html .prose > h2 {
+  margin-top: 2.75rem;
+  border-top: 1px solid var(--blume-border);
+  padding-top: 1.75rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+html .prose h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+html .prose a {
+  color: var(--blume-accent);
+  text-decoration-color: color-mix(in srgb, var(--blume-accent) 45%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+html .prose a:hover {
+  text-decoration-color: currentColor;
+}
+
+html .prose :is(h1, h2, h3, h4, h5, h6) a.blume-heading-anchor,
+html .prose :is(h1, h2, h3, h4, h5, h6) a.blume-heading-anchor:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+html .prose pre.astro-code {
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 100vmax var(--blume-code-background),
+    inset 0 0 0 1px var(--blume-border);
+  font-family: var(--blume-font-mono);
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
+
+html .prose pre.astro-code code {
+  font-family: var(--blume-font-mono);
+  font-size: inherit;
+}
+
+html .prose :not(pre) > code {
+  border: 1px solid var(--blume-border);
+  border-radius: 0;
+  background: var(--blume-muted);
+  padding: 0.1rem 0.3rem;
+  font-family: var(--blume-font-mono);
+  font-size: 0.84em;
+  font-weight: 400;
+}
+
+html .prose :not(pre) > code::before,
+html .prose :not(pre) > code::after {
+  content: none;
+}
+
+html .prose table {
+  border-collapse: collapse;
+  border-top: 1px solid var(--blume-border);
+  border-bottom: 1px solid var(--blume-border);
+  font-size: 0.875rem;
+}
+
+html .prose thead th {
+  border-bottom: 1px solid var(--blume-border);
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-mono);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html .prose tbody tr + tr {
+  border-top: 1px solid var(--blume-border);
+}
+
+html .prose tbody td {
+  border: 0;
+}
+
+html [data-blume-card] {
+  border: 1px solid var(--blume-border);
+  border-radius: 0;
+  background: var(--blume-background);
+  box-shadow: none;
+}
+
+html [data-blume-card]:hover,
+html [data-blume-card]:focus-visible {
+  border-color: var(--blume-accent);
+}
+
+html [data-blume-card] * {
+  border-radius: 0;
+}
+
+html [data-blume-callout] {
+  border: 1px solid var(--blume-border);
+  border-radius: 0;
+  background: var(--blume-muted);
+  box-shadow: none;
+}
+
+html [data-blume-callout] > span:first-child {
+  color: var(--blume-muted-foreground);
+}
+
+html [data-blume-badge] {
+  border: 1px solid var(--farben-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+html [data-blume-tablist] {
+  gap: 0;
+  border-bottom: 1px solid var(--blume-border);
+}
+
+html [data-blume-tablist] button {
+  border-radius: 0;
+}
+
+html [data-blume-tablist] button[aria-selected="true"] {
+  border-bottom: 2px solid var(--blume-accent);
+  color: var(--blume-foreground);
+}
+
+html [data-blume-tab-content] {
+  border-radius: 0;
+}
+
+html [data-blume-step] {
+  border-radius: 0;
+}
+
+html .prose details,
+html .prose [data-blume-accordion] {
+  border: 1px solid var(--blume-border);
+  border-radius: 0;
+  background: var(--blume-background);
+}
+
+html .prose summary {
+  border-radius: 0;
+}
+
+html .prose blockquote {
+  border-inline-start: 1px solid var(--blume-border);
+  color: var(--blume-muted-foreground);
+  font-style: normal;
+}
+
+html .prose hr {
+  border-color: var(--blume-border);
+}
+
+html .astro-code + button {
+  border: 1px solid var(--farben-border-strong);
+  border-radius: 0;
+  background: var(--blume-background);
+  color: var(--blume-muted-foreground);
+}
+
+@media (max-width: 40rem) {
+  html .prose {
+    font-size: 0.96rem;
+  }
+
+  html .prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  html .prose pre.astro-code {
+    font-size: 0.78rem;
+  }
+}

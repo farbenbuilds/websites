@@ -16,7 +16,6 @@
     "@astrojs/svelte": "catalog:",
     "@farben/ui": "workspace:*",
     "blume": "catalog:",
-    "gsap": "catalog:",
     "svelte": "catalog:"
   },
   "devDependencies": {
