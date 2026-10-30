@@ -43,8 +43,8 @@ docs app. It does not mean a separate marketing or branding site.
 
 `packages/ui` is currently a Svelte and shadcn-svelte package. A future app on
 another framework can share design tokens and CSS decisions, but it cannot consume
-the Svelte components directly. Adding a framework-specific shared package is a
-separate decision with its own plan.
+the Svelte components directly. The hero and docs-chrome reuse plan below is a
+separate decision with its own package boundaries.
 
 ## Status and decisions
 
@@ -601,9 +601,9 @@ dense field, not a sparse accent.
   block text selection, react on touch, or respond to clicks. Ship the field
   without pointer reaction if it distracts, and keep it fully alive without a
   pointer.
-- Do not use GSAP for the field or the hero. Both apps still declare GSAP from
-  the earlier plan, but the hero no longer uses it; remove it separately if no
-  other code imports it. The canvas loop owns the butterfly motion.
+- Do not use GSAP for the field or the hero. GSAP has been removed from both app
+  manifests, the workspace catalog, and the lockfile; no source file imports it.
+  The canvas loop owns the butterfly motion.
 - Profile with the browser performance panel at 4x CPU slowdown. Avoid per-frame
   allocations, reuse typed arrays, and lower sprite density before lowering the
   cell resolution. Do not add a second canvas or WebGL.
@@ -666,6 +666,69 @@ Register the hero through Blume's `defineComponents` descriptor. Prefer
 `client: "visible"` when the hero sits in the first viewport and the static
 arrangement is acceptable until hydration. Verify the generated HTML and measure
 the behavior before choosing a directive; do not assume it.
+
+## Shared docs chrome and hero plan (2026-10-31)
+
+The next reuse target is ventiws: the same butterfly hero, the same navbar
+grammar, and the same footer grammar. Keep `@farben/ui` focused on generic
+primitives and tokens. Do not move the hero or the Blume chrome into it.
+
+| Surface        | Shared package           | Stays in the app                                      |
+| -------------- | ------------------------ | ----------------------------------------------------- |
+| Butterfly hero | `@farben/butterfly-hero` | Seed, locale, palette aliases, hero copy, page layout |
+| Navbar         | `@farben/docs-chrome`    | Product title, logo, GitHub target, locale labels     |
+| Footer         | `@farben/docs-chrome`    | Product links, license URL, copyright                 |
+| UI primitives  | `@farben/ui`             | Component composition and product-specific markup     |
+
+Why not `packages/ui`:
+
+- The hero is a canvas engine with its own field, atmosphere, renderer, motion
+  loop, and tests. It is not a primitive, and putting it beside the shadcn
+  registry would make every future UI consumer own and type-check unrelated
+  animation code.
+- The navbar and footer are Blume surfaces. The repository boundary says
+  `data-blume-*` selectors stay in the apps and `packages/ui` must not import
+  Blume. A docs-chrome package can own that boundary without weakening it.
+- A dedicated package gives each surface one reason to change and one test
+  suite. The hero can ship without pulling the footer; the footer can change
+  without touching the renderer.
+
+Navbar note: there is no custom navbar component to move. Blume renders the
+header; the app owns only its config, logo, and selector overrides. Share the
+CSS and config defaults, not a replacement header.
+
+Footer note: share the link builder, license line, colophon component, and
+Blume footer config helper. Pass the product links in from each app so no
+uWebZockets URL or copy leaks into the shared package.
+
+Hero note: the palette is already a CSS contract
+(`--farben-field-paper`, `--farben-field-ink`, `--farben-field-muted`,
+`--farben-field-accent`, and `--farben-field-wing-*`). The component and engine
+stay identical; each app maps the aliases in its own `theme.css`. ventiws maps
+its teal and cool-paper values. Do not add per-app forks or color props to the
+component.
+
+Planned slices:
+
+1. Move the hero's Svelte component, pure engine, CSS, and styles export into
+   `packages/butterfly-hero`. Keep the `[data-butterfly-content-root]` and
+   `[data-butterfly-avoid]` DOM contracts. Update uWebZockets to import the
+   package and confirm no rendering, motion, reduced-motion, or no-JS change.
+2. Publish the palette contract with neutral fallbacks and document the
+   per-app mapping. Split `butterfly-loop.ts` before it reaches 400 lines.
+3. Move the Blume chrome CSS, footer/colophon data builder, and footer config
+   helper into `packages/docs-chrome`. Keep product links and logo paths as
+   inputs. If Blume cannot register an `.astro` component from a package, keep
+   a thin app-local colophon wrapper that renders the shared data.
+4. Add both packages to ventiws, register the hero with
+   `client: "visible"`, map the teal palette, and supply its own footer links.
+5. Verify both apps at 320, 768, and 1280 in light and dark, reduced motion,
+   no-JS, and both locales. Run `pnpm ready` and inspect the generated
+   agent-facing Markdown.
+
+Do not copy the hero into ventiws, add GSAP, or move product URLs into the
+shared package. The hero must remain a decorative island with a server-rendered
+static fallback.
 
 ## Milestones and checklists
 
