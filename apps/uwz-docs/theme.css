@@ -18,6 +18,7 @@
 @import "../../../styles/docs-home-sections.css";
 @import "../../../styles/docs-home-support.css";
 @import "../../../styles/docs-home-benchmark.css";
+@import "../../../styles/docs-home-drafting.css";
 
 :root {
   --blume-background: #f4f0e6;

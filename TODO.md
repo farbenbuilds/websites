@@ -637,6 +637,7 @@ apps.
 | Docs home index      | Localized six-entry index and agent markdown serializer                                      | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`               | Existing |
 | Docs home support    | Localized capability grid, three-column platform table, agent markdown serializer            | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`     | Existing |
 | Docs home benchmark  | bench.zig.bd throughput bars, HTTP Arena metrics, agent markdown serializer                  | `apps/uwz-docs/components/benchmark-section.astro`, `benchmark-section-data.ts` | Existing |
+| Drafting layer       | Warm measurement grid, guide ticks, registration marks, benchmark scale annotations          | `apps/uwz-docs/styles/docs-home-drafting.css`                                   | New      |
 | Site registry        | Register hero, index, support, benchmark, and colophon for MDX                               | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                | Mixed    |
 | Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                          | Existing |
 
@@ -989,6 +990,12 @@ keeping Farben's own tokens, fonts, and copy.
   and a link to https://github.com/sponsors/farbenbuilds.
 - **Dictionary note:** a vertical Japanese entry for `速い` at the lower-right
   hero border, hidden below 56rem, ending with the semi-production status.
+- **Drafting layer:** the sections below the hero keep the warm editorial
+  palette, type, and spacing, with a faint 1rem/5rem measurement grid, tick
+  strips on section and table rules, registration crosses, label leader lines,
+  dashed center guides, scale ticks on the benchmark bars, step nodes, avatar
+  crop marks, and a colophon title-block rule. The layer is scoped to
+  `docs-home-drafting.css` and uses only the existing site tokens.
 - **SEO:** both home pages set `seo.title: µWebZockets`, so the landing document
   title is just `µWebZockets`.
 - **Footer:** the docs home colophon and the site-wide Blume footer both show
