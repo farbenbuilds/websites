@@ -70,6 +70,19 @@ seo:
     </div>
   </div>
   <ButterflyHero locale="vi" seed={20261030} />
+  <aside class="docs-home-dictionary" data-butterfly-avoid aria-label="Mục từ điển cho từ fast">
+    <p>
+      {"速い"}
+      <br />
+      {"/はやい/ · 形容詞"}
+      <br />
+      {"1. 動きや動作の速度が大きい。"}
+      <br />
+      {"2. Zig で HTTP、WebSocket、RPC をゼロアロケーションで処理する。"}
+      <br />
+      <span class="docs-home-dictionary-status">{"Sẵn sàng ở mức bán production."}</span>
+    </p>
+  </aside>
   <a
     class="docs-home-scroll"
     href="#docs-home-main"
@@ -89,9 +102,11 @@ seo:
 
 <SupportSection locale="vi" />
 
+<BenchmarkSection locale="vi" />
+
 <section class="docs-home-section" id="server" aria-labelledby="server-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"03 / Máy chủ"}</p>
+    <p class="editorial-label">{"04 / Máy chủ"}</p>
     <div class="docs-home-section-intro">
       <h2 id="server-heading">{"Dùng µWZ làm máy chủ"}</h2>
       <p>
@@ -147,7 +162,7 @@ seo:
 
 <section class="docs-home-section" id="author" aria-labelledby="author-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"04 / Tác giả"}</p>
+    <p class="editorial-label">{"05 / Tác giả"}</p>
     <div class="docs-home-author-card">
       <img
         class="docs-home-author-avatar"
@@ -217,24 +232,33 @@ seo:
 
 <section class="docs-home-section docs-home-sponsor" id="sponsor" aria-labelledby="sponsor-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"05 / Tài trợ"}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="sponsor-heading">{"Tài trợ cho các maintainer."}</h2>
-      <p>
-        {
-          "Cảm ơn các maintainer của Farben vì công sức của họ cho runtime, các gói và tài liệu. Nếu µWebZockets hữu ích cho dịch vụ của bạn, hãy tài trợ cho dự án trên GitHub."
-        }
-      </p>
-      <a
-        class="editorial-action editorial-action-secondary"
-        href="https://github.com/sponsors/farbenbuilds"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        {"Tài trợ Farben "}
-        <span aria-hidden="true">{"->"}</span>
-      </a>
+    <p class="editorial-label">{"06 / Tài trợ"}</p>
+    <div class="docs-home-author-card">
+      <img
+        class="docs-home-author-avatar"
+        src="/sponsor/farben-logo.png"
+        alt="Logo Farben"
+        width="512"
+        height="512"
+      />
+      <div class="docs-home-author-copy">
+        <h2 id="sponsor-heading">{"Tài trợ cho các maintainer."}</h2>
+        <p>
+          {
+            "Cảm ơn các maintainer của Farben vì công sức của họ cho runtime, các gói và tài liệu. Nếu µWebZockets hữu ích cho dịch vụ của bạn, hãy tài trợ cho dự án trên GitHub."
+          }
+        </p>
+        <a
+          class="editorial-action editorial-action-secondary"
+          href="https://github.com/sponsors/farbenbuilds"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"Tài trợ Farben "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
     </div>
   </div>
 </section>

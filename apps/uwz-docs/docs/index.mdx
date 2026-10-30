@@ -70,6 +70,23 @@ seo:
     </div>
   </div>
   <ButterflyHero locale="en" />
+  <aside
+    class="docs-home-dictionary"
+    data-butterfly-avoid
+    aria-label="Dictionary entry for the word fast"
+  >
+    <p>
+      {"速い"}
+      <br />
+      {"/はやい/ · 形容詞"}
+      <br />
+      {"1. 動きや動作の速度が大きい。"}
+      <br />
+      {"2. Zig で HTTP、WebSocket、RPC をゼロアロケーションで処理する。"}
+      <br />
+      <span class="docs-home-dictionary-status">{"Semi-production ready."}</span>
+    </p>
+  </aside>
   <a
     class="docs-home-scroll"
     href="#docs-home-main"
@@ -89,9 +106,11 @@ seo:
 
 <SupportSection locale="en" />
 
+<BenchmarkSection locale="en" />
+
 <section class="docs-home-section" id="server" aria-labelledby="server-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"03 / Server"}</p>
+    <p class="editorial-label">{"04 / Server"}</p>
     <div class="docs-home-section-intro">
       <h2 id="server-heading">{"Use µWZ as your server"}</h2>
       <p>
@@ -147,7 +166,7 @@ seo:
 
 <section class="docs-home-section" id="author" aria-labelledby="author-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"04 / Author"}</p>
+    <p class="editorial-label">{"05 / Author"}</p>
     <div class="docs-home-author-card">
       <img
         class="docs-home-author-avatar"
@@ -217,24 +236,33 @@ seo:
 
 <section class="docs-home-section docs-home-sponsor" id="sponsor" aria-labelledby="sponsor-heading">
   <div class="docs-home-section-head">
-    <p class="editorial-label">{"05 / Sponsor"}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="sponsor-heading">{"Sponsor the maintainers."}</h2>
-      <p>
-        {
-          "Thank you to the Farben maintainers for their hard work across the runtime, packages, and documentation. If µWebZockets helps your service, sponsor the work on GitHub."
-        }
-      </p>
-      <a
-        class="editorial-action editorial-action-secondary"
-        href="https://github.com/sponsors/farbenbuilds"
-        target="_blank"
-        rel="noreferrer"
-        aria-describedby="blume-new-tab-hint"
-      >
-        {"Sponsor Farben "}
-        <span aria-hidden="true">{"->"}</span>
-      </a>
+    <p class="editorial-label">{"06 / Sponsor"}</p>
+    <div class="docs-home-author-card">
+      <img
+        class="docs-home-author-avatar"
+        src="/sponsor/farben-logo.png"
+        alt="Farben logo"
+        width="512"
+        height="512"
+      />
+      <div class="docs-home-author-copy">
+        <h2 id="sponsor-heading">{"Sponsor the maintainers."}</h2>
+        <p>
+          {
+            "Thank you to the Farben maintainers for their hard work across the runtime, packages, and documentation. If µWebZockets helps your service, sponsor the work on GitHub."
+          }
+        </p>
+        <a
+          class="editorial-action editorial-action-secondary"
+          href="https://github.com/sponsors/farbenbuilds"
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {"Sponsor Farben "}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
     </div>
   </div>
 </section>

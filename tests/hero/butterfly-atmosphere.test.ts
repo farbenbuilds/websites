@@ -51,6 +51,7 @@ describe("butterfly atmosphere", () => {
     const active = state.breeze.find((puff) => puff.life > 0);
     expect(active).toBeDefined();
     expect(active?.life).toBeGreaterThan(0);
+    expect([">", "<", "|", "\\", "/"]).toContain(active?.glyph);
 
     for (let index = 0; index < 120; index++) {
       stepAtmosphere(state, 1 / 60);

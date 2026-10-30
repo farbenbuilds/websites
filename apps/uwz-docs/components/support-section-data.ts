@@ -6,15 +6,9 @@ export type SupportItem = {
 };
 
 export type PlatformRow = {
-  readonly target: string;
+  readonly platform: string;
+  readonly architecture: string;
   readonly status: string;
-};
-
-export type BenchmarkBar = {
-  readonly name: string;
-  readonly value: string;
-  readonly share: number;
-  readonly leader?: boolean;
 };
 
 export type SupportCopy = {
@@ -23,26 +17,12 @@ export type SupportCopy = {
   readonly intro: string;
   readonly items: readonly SupportItem[];
   readonly platformsLabel: string;
-  readonly targetLabel: string;
-  readonly statusLabel: string;
+  readonly platformNote: string;
+  readonly platformHeader: string;
+  readonly architectureHeader: string;
+  readonly statusHeader: string;
   readonly platforms: readonly PlatformRow[];
-  readonly benchmarkLabel: string;
-  readonly benchmarkHeading: string;
-  readonly benchmarkMeta: string;
-  readonly benchmarkAria: string;
-  readonly benchmarkSource: string;
-  readonly bars: readonly BenchmarkBar[];
 };
-
-const BARS: readonly BenchmarkBar[] = [
-  { name: "µWebZockets", value: "148,237", share: 100, leader: true },
-  { name: "httpz", value: "109,571", share: 73.9 },
-  { name: "zap", value: "102,595", share: 69.2 },
-  { name: "dusty+zio", value: "91,995", share: 62.1 },
-  { name: "std", value: "90,021", share: 60.7 },
-  { name: "dusty+std", value: "60,801", share: 41 },
-  { name: "zzz", value: "40,453", share: 27.3 },
-];
 
 const SUPPORT: Readonly<Record<SupportLocale, SupportCopy>> = {
   en: {
@@ -85,21 +65,18 @@ const SUPPORT: Readonly<Record<SupportLocale, SupportCopy>> = {
       },
     ],
     platformsLabel: "Platforms",
-    targetLabel: "Target",
-    statusLabel: "Status",
+    platformNote:
+      "Linux runs the hosted runtime matrix; macOS is supported and cross-compiled; Windows is compile-checked.",
+    platformHeader: "Platform",
+    architectureHeader: "Architecture",
+    statusHeader: "Status",
     platforms: [
-      { target: "Linux x86_64", status: "Tested" },
-      { target: "Linux aarch64", status: "Tested" },
-      { target: "macOS x86_64", status: "Supported" },
-      { target: "macOS aarch64", status: "Supported" },
-      { target: "Windows x86_64", status: "Compile-checked" },
+      { platform: "Linux", architecture: "x86_64", status: "Tested" },
+      { platform: "Linux", architecture: "aarch64", status: "Tested" },
+      { platform: "macOS", architecture: "x86_64", status: "Supported" },
+      { platform: "macOS", architecture: "aarch64", status: "Supported" },
+      { platform: "Windows", architecture: "x86_64", status: "Compile-checked" },
     ],
-    benchmarkLabel: "Benchmark",
-    benchmarkHeading: "Plaintext throughput",
-    benchmarkMeta: "Requests per second · Plaintext · Linux x86_64 · 32 connections · 8 seconds",
-    benchmarkAria: "Zig server plaintext throughput in requests per second",
-    benchmarkSource: "Source: bench.zig.bd, captured 2026-10-30. Higher is better.",
-    bars: BARS,
   },
   vi: {
     label: "02 / Hỗ trợ",
@@ -141,21 +118,18 @@ const SUPPORT: Readonly<Record<SupportLocale, SupportCopy>> = {
       },
     ],
     platformsLabel: "Nền tảng",
-    targetLabel: "Mục tiêu",
-    statusLabel: "Trạng thái",
+    platformNote:
+      "Linux chạy ma trận runtime trên CI; macOS được hỗ trợ và cross-compile; Windows được kiểm tra biên dịch.",
+    platformHeader: "Nền tảng",
+    architectureHeader: "Kiến trúc",
+    statusHeader: "Trạng thái",
     platforms: [
-      { target: "Linux x86_64", status: "Đã kiểm thử" },
-      { target: "Linux aarch64", status: "Đã kiểm thử" },
-      { target: "macOS x86_64", status: "Được hỗ trợ" },
-      { target: "macOS aarch64", status: "Được hỗ trợ" },
-      { target: "Windows x86_64", status: "Kiểm tra biên dịch" },
+      { platform: "Linux", architecture: "x86_64", status: "Đã kiểm thử" },
+      { platform: "Linux", architecture: "aarch64", status: "Đã kiểm thử" },
+      { platform: "macOS", architecture: "x86_64", status: "Được hỗ trợ" },
+      { platform: "macOS", architecture: "aarch64", status: "Được hỗ trợ" },
+      { platform: "Windows", architecture: "x86_64", status: "Kiểm tra biên dịch" },
     ],
-    benchmarkLabel: "Benchmark",
-    benchmarkHeading: "Thông lượng plaintext",
-    benchmarkMeta: "Yêu cầu mỗi giây · Plaintext · Linux x86_64 · 32 kết nối · 8 giây",
-    benchmarkAria: "Thông lượng plaintext của máy chủ Zig, yêu cầu mỗi giây",
-    benchmarkSource: "Nguồn: bench.zig.bd, ghi nhận 2026-10-30. Cao hơn là tốt hơn.",
-    bars: BARS,
   },
 };
 
@@ -168,22 +142,19 @@ export function renderSupportMarkdown(locale: string | undefined): string {
   const items = copy.items.map((item) => `- **${item.title}:** ${item.text}`).join("\n");
 
   const platforms = [
-    `| ${copy.targetLabel} | ${copy.statusLabel} |`,
-    "| --- | --- |",
-    ...copy.platforms.map((platform) => `| ${platform.target} | ${platform.status} |`),
+    `| ${copy.platformHeader} | ${copy.architectureHeader} | ${copy.statusHeader} |`,
+    "| --- | --- | --- |",
+    ...copy.platforms.map(
+      (platform) => `| ${platform.platform} | ${platform.architecture} | ${platform.status} |`,
+    ),
   ].join("\n");
-
-  const bars = copy.bars.map((bar) => `- ${bar.name}: ${bar.value}`).join("\n");
 
   return [
     `## ${copy.heading}`,
     copy.intro,
     items,
     `### ${copy.platformsLabel}`,
+    copy.platformNote,
     platforms,
-    `### ${copy.benchmarkHeading}`,
-    copy.benchmarkMeta,
-    bars,
-    copy.benchmarkSource,
   ].join("\n\n");
 }

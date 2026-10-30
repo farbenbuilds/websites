@@ -3,14 +3,16 @@
 ## Farben artwork
 
 - Source: https://github.com/farbenbuilds/farben-artwork
-- Source paths: `icons/farben-logo.svg`, `github/farben-logo-github.png`
+- Source paths: `icons/farben-logo.svg`, `icons/farben-logo-512.png`,
+  `github/farben-logo-github.png`
 - Author: Noah Trần
 - License: CC-BY-SA-4.0
 - License text: [LICENSES/CC-BY-SA-4.0.txt](LICENSES/CC-BY-SA-4.0.txt)
 - Vendored paths: `apps/uwz-docs/public/`, `apps/vws-docs/public/`
 - Local changes: the 1024px GitHub avatar was downscaled to 180px for the Apple
   touch icon. The SVG favicon crops the transparent margin around the mark and
-  raises the outline weight from 16.63 to 24 for legibility at tab sizes.
+  raises the outline weight from 16.63 to 24 for legibility at tab sizes. The
+  512px Farben logo is copied unchanged as the sponsor avatar.
 
 ## Graphify
 

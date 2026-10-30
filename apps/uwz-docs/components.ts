@@ -10,6 +10,7 @@ export default defineComponents({
     HeroChrome: { component: HeroChrome, client: "only" },
     HomeIndex: "./components/home-index.astro",
     SupportSection: "./components/support-section.astro",
+    BenchmarkSection: "./components/benchmark-section.astro",
     CopyCommand: { component: CopyCommand, client: "visible" },
     SiteColophon: "./components/site-colophon.astro",
   },

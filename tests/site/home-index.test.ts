@@ -6,7 +6,7 @@ import {
 } from "../../apps/uwz-docs/components/home-index-data.ts";
 
 describe("docs home index", () => {
-  it("keeps six localized entries and the semi-production status", () => {
+  it("keeps six localized entries", () => {
     const english = homeIndexCopy("en");
     const vietnamese = homeIndexCopy("vi");
 
@@ -14,8 +14,6 @@ describe("docs home index", () => {
     expect(vietnamese.items).toHaveLength(6);
     expect(english.items[0]?.href).toBe("/getting-started");
     expect(english.items.slice(1).every(({ href }) => href === "#")).toBe(true);
-    expect(english.status).toBe("Semi-production ready.");
-    expect(vietnamese.status).toBe("Sẵn sàng ở mức bán production.");
   });
 
   it("renders the same entries for agent-facing markdown", () => {
@@ -23,6 +21,6 @@ describe("docs home index", () => {
 
     expect(markdown).toContain("## Start here.");
     expect(markdown).toContain("[Share nothing rule](#)");
-    expect(markdown).toContain("**Status:** Semi-production ready.");
+    expect(markdown).not.toContain("Semi-production ready.");
   });
 });

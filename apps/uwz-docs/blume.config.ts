@@ -1,6 +1,7 @@
 import { defineConfig, type ComponentMarkdown } from "blume";
 
 import { renderHomeIndexMarkdown } from "./components/home-index-data.ts";
+import { renderBenchmarkMarkdown } from "./components/benchmark-section-data.ts";
 import { renderSupportMarkdown } from "./components/support-section-data.ts";
 import { SITE_LINKS, siteFooterNote } from "./site-links.ts";
 
@@ -12,10 +13,16 @@ const homeIndexMarkdown: ComponentMarkdown = ({ props }) =>
 const supportMarkdown: ComponentMarkdown = ({ props }) =>
   renderSupportMarkdown(props.locale === "vi" ? "vi" : "en");
 
+const benchmarkMarkdown: ComponentMarkdown = ({ props }) =>
+  renderBenchmarkMarkdown(props.locale === "vi" ? "vi" : "en");
+
 export default defineConfig({
   title: "µWebZockets",
   description:
     "Documentation for µWebZockets — a zero-allocation, shared-nothing server framework for Zig.",
+  logo: {
+    image: "/logo.svg",
+  },
   github: {
     owner: "farbenbuilds",
     repo: "websites",
@@ -35,6 +42,7 @@ export default defineConfig({
       HeroChrome: omitDecorative,
       HomeIndex: homeIndexMarkdown,
       SupportSection: supportMarkdown,
+      BenchmarkSection: benchmarkMarkdown,
     },
   },
   theme: {

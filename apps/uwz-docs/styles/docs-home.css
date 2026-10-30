@@ -100,6 +100,31 @@ html:has(.docs-home-hero) #blume-content {
   text-align: left;
 }
 
+.docs-home-dictionary {
+  position: absolute;
+  right: clamp(1.25rem, 2.5vw, 2rem);
+  bottom: clamp(1.75rem, 4vh, 2.5rem);
+  z-index: 2;
+  max-height: min(24rem, 46vh);
+  padding-inline-end: 0.15rem;
+  color: var(--hero-muted);
+  font-family: var(--blume-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  pointer-events: none;
+  text-orientation: mixed;
+  writing-mode: vertical-rl;
+}
+
+.docs-home-dictionary p {
+  margin: 0;
+}
+
+.docs-home-dictionary-status {
+  color: var(--hero-accent-bright);
+}
+
 .docs-home-title-row {
   display: flex;
   align-items: center;
@@ -204,6 +229,10 @@ html .prose .docs-home-hero .editorial-action-secondary:hover {
   .docs-home-hero {
     grid-template-columns: minmax(0, 1fr);
     padding-block: 4rem 5.5rem;
+  }
+
+  .docs-home-dictionary {
+    display: none;
   }
 
   .docs-home-hero-copy {

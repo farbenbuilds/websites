@@ -67,24 +67,6 @@
   text-underline-offset: 0.16em;
 }
 
-.docs-home-status {
-  display: grid;
-  grid-template-columns: minmax(8rem, 0.32fr) minmax(0, 1fr);
-  gap: 0.75rem clamp(2rem, 5vw, 4rem);
-  align-items: baseline;
-  margin: clamp(2rem, 4vw, 3rem) 0 0;
-  border-top: 1px solid var(--blume-border);
-  padding-block-start: 1.25rem;
-  color: var(--blume-muted-foreground);
-  font-family: var(--blume-font-body);
-  font-size: 0.875rem;
-  line-height: 1.65;
-}
-
-.docs-home-status > .editorial-label {
-  align-self: start;
-}
-
 .docs-home-steps {
   display: grid;
   grid-template-columns: 1fr;
@@ -297,8 +279,7 @@
     padding-block: clamp(2.5rem, 6vw, 4rem);
   }
 
-  .docs-home-section-head,
-  .docs-home-status {
+  .docs-home-section-head {
     grid-template-columns: 1fr;
     gap: 0.9rem;
   }

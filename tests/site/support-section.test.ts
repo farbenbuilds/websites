@@ -6,28 +6,28 @@ import {
 } from "../../apps/uwz-docs/components/support-section-data.ts";
 
 describe("docs home support section", () => {
-  it("keeps localized capabilities, platforms, and benchmark bars", () => {
+  it("keeps localized capabilities and platform rows", () => {
     for (const locale of ["en", "vi"] as const) {
       const copy = supportCopy(locale);
 
       expect(copy.items).toHaveLength(8);
       expect(copy.platforms).toHaveLength(5);
-      expect(copy.bars).toHaveLength(7);
-      expect(copy.bars[0]?.name).toBe("µWebZockets");
-      expect(copy.bars[0]?.value).toBe("148,237");
-      expect(copy.bars[0]?.share).toBe(100);
-      expect(copy.bars[0]?.leader).toBe(true);
-      expect(copy.bars.every(({ share }) => share > 0 && share <= 100)).toBe(true);
+      expect(copy.platforms[0]).toEqual({
+        platform: "Linux",
+        architecture: "x86_64",
+        status: locale === "en" ? "Tested" : "Đã kiểm thử",
+      });
     }
   });
 
-  it("renders the platform matrix and benchmark for agent-facing markdown", () => {
+  it("renders a contiguous three-column platform table for agents", () => {
     const markdown = renderSupportMarkdown("en");
 
     expect(markdown).toContain("### Platforms");
-    expect(markdown).toContain("| Target | Status |\n| --- | --- |\n| Linux x86_64 | Tested |");
-    expect(markdown).not.toContain("| Target | Status |\n\n| --- | --- |");
-    expect(markdown).toContain("### Plaintext throughput");
-    expect(markdown).toContain("- µWebZockets: 148,237");
+    expect(markdown).toContain(
+      "| Platform | Architecture | Status |\n| --- | --- | --- |\n| Linux | x86_64 | Tested |",
+    );
+    expect(markdown).not.toContain("| Platform | Architecture | Status |\n\n| --- |");
+    expect(markdown).not.toContain("Plaintext throughput");
   });
 });

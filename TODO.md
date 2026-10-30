@@ -452,18 +452,22 @@ Below the hero:
   Cluster/Worker, and Explore features. Use two columns on desktop and one on
   mobile. Getting Started links to its page; the rest use `#` placeholders until
   those guides ship.
-- Show the status as `Semi-production ready`. Do not present the site as
-  complete while guides are still being written.
-- A support section with a two-column capability grid, a left-aligned platform
-  table, and a plaintext throughput bar chart sourced from
-  [bench.zig.bd](https://bench.zig.bd/). Cover HTTP, WebSocket, RPC, TLS, static
-  assets, workers, and allocation limits.
+- A vertical dictionary note at the lower-right hero border, hidden below 56rem:
+  the Japanese headword `速い`, its reading and part of speech, two short
+  definitions, and the `Semi-production ready` status line. Do not present the
+  site as complete while guides are still being written.
+- A support section with a two-column capability grid and a left-aligned
+  three-column platform table. Cover HTTP, WebSocket, RPC, TLS, static assets,
+  workers, and allocation limits. Keep the benchmark out of this section.
+- A benchmark section with the plaintext throughput chart sourced from
+  [bench.zig.bd](https://bench.zig.bd/) and the cross-protocol results from
+  [HTTP Arena](https://http-arena.com/frameworks/uwebzockets/).
 - A server section with three numbered adoption steps and one link to Getting
   Started. Do not put a code sample on the landing page.
 - An author section for Noah Trần with the supplied avatar, Hope Art and Farben
   links, and Facebook and X links.
-- A sponsor section thanking the Farben maintainers and linking to
-  https://github.com/sponsors/farbenbuilds.
+- A sponsor section with the Farben logo avatar, a thank-you to the maintainers,
+  and a link to https://github.com/sponsors/farbenbuilds.
 - Set `seo.title: µWebZockets` on both home pages so the landing `<title>` is
   just the product name.
 - End with the docs home colophon: the MIT License 2026 line, author, source,
@@ -614,26 +618,27 @@ Every `apps/*` path in this table belongs to the two existing docs apps. The
 table does not reserve paths or architecture for the future marketing or shop
 apps.
 
-| Layer                | Responsibility                                                                               | Candidate files                                                                | Status   |
-| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------- |
-| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export  | New      |
-| Hero component       | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `apps/uwz-docs/components/butterfly-hero/butterfly-hero.svelte` and `index.ts` | Existing |
-| Hero species         | Species definitions, wing outlines, band phases, vein counts, eyespots, glyph bias           | `butterfly-data.ts` under the same component folder                            | Existing |
-| Hero anatomy         | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                           | Existing |
-| Hero field           | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                           | Existing |
-| Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                      | Existing |
-| Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                        | Existing |
-| Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                            | Existing |
-| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                | New      |
-| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                       | Mixed    |
-| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                               | New      |
-| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                              | New      |
-| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                       | Existing |
-| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                            | Existing |
-| Docs home index      | Localized six-entry index, semi-production status, agent markdown serializer                 | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`              | Existing |
-| Docs home support    | Localized capability grid, platform table, benchmark chart, agent markdown serializer        | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`    | Existing |
-| Site registry        | Register hero, index, support, and colophon for MDX                                          | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`               | Mixed    |
-| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                         | Existing |
+| Layer                | Responsibility                                                                               | Candidate files                                                                 | Status   |
+| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------- |
+| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export   | New      |
+| Hero component       | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `apps/uwz-docs/components/butterfly-hero/butterfly-hero.svelte` and `index.ts`  | Existing |
+| Hero species         | Species definitions, wing outlines, band phases, vein counts, eyespots, glyph bias           | `butterfly-data.ts` under the same component folder                             | Existing |
+| Hero anatomy         | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                            | Existing |
+| Hero field           | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                            | Existing |
+| Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                       | Existing |
+| Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                         | Existing |
+| Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                             | Existing |
+| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                 | New      |
+| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                        | Mixed    |
+| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                | New      |
+| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                               | New      |
+| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                        | Existing |
+| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                             | Existing |
+| Docs home index      | Localized six-entry index and agent markdown serializer                                      | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`               | Existing |
+| Docs home support    | Localized capability grid, three-column platform table, agent markdown serializer            | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`     | Existing |
+| Docs home benchmark  | bench.zig.bd throughput bars, HTTP Arena metrics, agent markdown serializer                  | `apps/uwz-docs/components/benchmark-section.astro`, `benchmark-section-data.ts` | Existing |
+| Site registry        | Register hero, index, support, benchmark, and colophon for MDX                               | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                | Mixed    |
+| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                          | Existing |
 
 Boundaries:
 
@@ -931,9 +936,13 @@ field.
   artwork ship with the hero.
 - **Flight:** eight specimens (three large, four medium, one small) fly with
   independent headings, target-x wandering, separation, content avoidance, wing
-  beat phases, and breeze puffs. They rotate with their heading; they do not
-  share a column or a conveyor. Fields 640px wide or narrower cap the population
-  at three specimens.
+  beat phases, and breeze puffs. The breeze trails use the ASCII glyphs
+  `>`, `<`, `|`, `\`, and `/`. They rotate with their heading; they do not share
+  a column or a conveyor. Fields 640px wide or narrower cap the population at
+  three specimens.
+- **Site chrome:** the Blume header shows the butterfly mark from
+  `public/logo.svg` left of the µWebZockets wordmark. The locale dropdown uses
+  the same mono face, size, and uppercase treatment as the navbar locale label.
 - **Readability:** the hero marks the copy and scroll control with
   `data-butterfly-avoid`; the field measures those boxes and clears the art to
   paper beneath them with a smooth falloff. The no-JS path adds a paper scrim
@@ -958,23 +967,28 @@ keeping Farben's own tokens, fonts, and copy.
 - **Index:** a two-column numbered index on desktop, one column on mobile. Six
   entries cover Getting Started, Share nothing rule, Migrate existing projects,
   Configure a uWZ server, Understand a Cluster/Worker, and Explore features.
-  Getting Started links to its page; the rest use `#` placeholders. The status
-  row reads `Semi-production ready`.
+  Getting Started links to its page; the rest use `#` placeholders.
 - **Support:** an eight-item capability grid covering HTTP/1.1 and HTTP/2,
   HTTP/3 (single process; QUIC clustering is not supported), WebSocket, RPC,
   TLS, static assets, thread-per-core workers pinned where the platform allows,
-  and zero allocation. A left-aligned platform table marks Linux as tested,
-  macOS as supported, and Windows as compile-checked. A plaintext throughput bar
-  chart below it uses the Linux x86_64 ranking from
-  [bench.zig.bd](https://bench.zig.bd/), with uWebZockets at 148,237 requests per
-  second.
+  and zero allocation. A full-width, left-aligned table splits Platform,
+  Architecture, and Status and marks Linux as tested, macOS as supported, and
+  Windows as compile-checked.
+- **Benchmark:** its own section after Support. The bench.zig.bd plaintext chart
+  uses the Linux x86_64 ranking with uWebZockets at 148,237 requests per second.
+  Below it, the HTTP Arena panel links to
+  https://http-arena.com/frameworks/uwebzockets/ and reports HTTP/1.1
+  3,736,192 req/s, HTTP/2 2,483,817 req/s, WebSocket 4,311,546 msg/s, JSON
+  compression 16,639 req/s, and HTTP/3 1,771 req/s.
 - **Server:** three numbered adoption steps with no code sample. The steps cover
   adding the package, mounting handlers, and running a single process or a
   thread-per-core cluster, followed by a link to Getting Started.
 - **Author:** Noah Trần's avatar, a short engineering profile, Hope Art and
   Farben links, and Facebook and X links.
-- **Sponsor:** a thank-you to the Farben maintainers and a link to
-  https://github.com/sponsors/farbenbuilds.
+- **Sponsor:** the Farben logo avatar, a thank-you to the Farben maintainers,
+  and a link to https://github.com/sponsors/farbenbuilds.
+- **Dictionary note:** a vertical Japanese entry for `速い` at the lower-right
+  hero border, hidden below 56rem, ending with the semi-production status.
 - **SEO:** both home pages set `seo.title: µWebZockets`, so the landing document
   title is just `µWebZockets`.
 - **Footer:** the docs home colophon and the site-wide Blume footer both show
@@ -986,7 +1000,10 @@ keeping Farben's own tokens, fonts, and copy.
 ## Research references
 
 - [Zig Web Servers Benchmark](https://bench.zig.bd/) supplies the Linux
-  x86_64 plaintext throughput ranking used on the support section.
+  x86_64 plaintext throughput ranking used on the benchmark section.
+- [HTTP Arena](https://http-arena.com/frameworks/uwebzockets/) supplies the
+  HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON compression results on the same
+  section.
 - [Vize documentation](https://vizejs.dev/) and the
   [Vize repository](https://github.com/ubugeeei-prod/vize).
 - [Vize theme configuration](https://github.com/ubugeeei-prod/vize/blob/main/docs/vite.config.ts)

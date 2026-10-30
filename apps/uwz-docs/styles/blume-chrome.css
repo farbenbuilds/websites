@@ -43,6 +43,23 @@ html [data-blume-header] a[href="/vi/"] {
   letter-spacing: -0.03em;
 }
 
+html [data-blume-header] a[href="/"] :is(img, svg),
+html [data-blume-header] a[href="/vi"] :is(img, svg),
+html [data-blume-header] a[href="/vi/"] :is(img, svg) {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+
+html [data-blume-header] a[data-blume-locale-choice],
+html [data-blume-nav-drawer] a[data-blume-locale-choice] {
+  font-family: var(--blume-font-mono);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 html dialog[data-blume-search-dialog] {
   border: 1px solid var(--farben-border-strong);
   border-radius: 0;

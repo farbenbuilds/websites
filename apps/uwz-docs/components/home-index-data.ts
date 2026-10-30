@@ -10,8 +10,6 @@ export type HomeIndexCopy = {
   readonly label: string;
   readonly heading: string;
   readonly intro: string;
-  readonly statusLabel: string;
-  readonly status: string;
   readonly items: readonly HomeIndexItem[];
 };
 
@@ -21,8 +19,6 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
     heading: "Start here.",
     intro:
       "Six ways into the runtime: install it, learn the ownership rule, migrate a service, configure the server, understand the worker model, or explore the feature set.",
-    statusLabel: "Status",
-    status: "Semi-production ready.",
     items: [
       {
         title: "Getting Started",
@@ -61,8 +57,6 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
     heading: "Bắt đầu tại đây.",
     intro:
       "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, chuyển dự án hiện có, cấu hình máy chủ, hiểu mô hình worker hoặc khám phá bộ tính năng.",
-    statusLabel: "Trạng thái",
-    status: "Sẵn sàng ở mức bán production.",
     items: [
       {
         title: "Bắt đầu",
@@ -109,5 +103,5 @@ export function renderHomeIndexMarkdown(locale: string | undefined): string {
     .map((item) => `- [${item.title}](${item.href}): ${item.description}`)
     .join("\n");
 
-  return `## ${copy.heading}\n\n${copy.intro}\n\n${items}\n\n**${copy.statusLabel}:** ${copy.status}`;
+  return `## ${copy.heading}\n\n${copy.intro}\n\n${items}`;
 }

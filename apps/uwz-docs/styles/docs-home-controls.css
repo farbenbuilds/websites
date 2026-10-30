@@ -58,6 +58,8 @@
 }
 
 .docs-home-hero .butterfly-hero .editorial-square {
+  top: 1rem;
+  bottom: auto;
   border-color: var(--hero-rule);
   background: var(--hero-paper);
   color: var(--hero-still);
@@ -102,11 +104,6 @@
     bottom: 1rem;
     left: auto;
     transform: none;
-  }
-
-  .docs-home-hero .butterfly-hero .editorial-square {
-    top: 1rem;
-    bottom: auto;
   }
 }
 

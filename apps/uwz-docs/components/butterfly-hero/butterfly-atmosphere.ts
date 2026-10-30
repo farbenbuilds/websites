@@ -52,7 +52,7 @@ export type AtmosphereOptions = {
 };
 
 const TRACE_GLYPHS = [".", "'", "`", "-", ","];
-const BREEZE_GLYPHS = [",", "'", "`"];
+const BREEZE_GLYPHS = [">", "<", "|", "\\", "/"];
 const BREEZE_POOL = 64;
 
 export function createAtmosphere(options: AtmosphereOptions): Atmosphere {
