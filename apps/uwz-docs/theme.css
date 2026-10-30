@@ -7,10 +7,10 @@
  */
 @import "@farben/ui/theme.css";
 @import "@farben/ui/editorial.css";
-@import "@farben/ui/butterfly-hero.css";
 
 /* Blume inlines this file into .blume/src/generated/app.css, so app-local
  * imports resolve from that generated directory rather than the app root. */
+@import "../../../components/butterfly-hero/butterfly-hero.css";
 @import "../../../styles/blume-chrome.css";
 @import "../../../styles/blume-content.css";
 @import "../../../styles/docs-home.css";

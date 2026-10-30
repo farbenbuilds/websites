@@ -7,7 +7,22 @@ mode: custom
 <div class="docs-home">
   <HeroChrome />
   <noscript>
-    <style>{`html:has(.docs-home-hero) [data-blume-header] { position: sticky; visibility: visible; opacity: 1; transform: none; pointer-events: auto; }`}</style>
+    <style>{`
+      html:has(.docs-home-hero) [data-blume-header] { position: sticky; }
+      .docs-home-hero { min-height: calc(100svh - 4rem); }
+      .docs-home-hero-copy::before {
+        content: "";
+        position: absolute;
+        inset: -1rem;
+        z-index: -1;
+        background: var(--hero-paper);
+      }
+      .docs-home-hero .butterfly-hero-still:not(.is-hidden) {
+        place-items: start center;
+        padding-block-start: 1rem;
+        opacity: 0.4;
+      }
+    `}</style>
   </noscript>
 
 <section class="docs-home-hero" aria-labelledby="uwz-title" data-butterfly-content-root>
@@ -23,7 +38,7 @@ mode: custom
         aria-hidden="true"
       />
       <h1 class="docs-home-title" id="uwz-title">
-        µWebZockets
+        {"µWebZockets"}
       </h1>
     </div>
     <p class="docs-home-summary">
@@ -52,14 +67,7 @@ mode: custom
       </a>
     </div>
   </div>
-  <ButterflyHero
-    locale="en"
-    spriteUrls={[
-      "/butterflies/monarch.png",
-      "/butterflies/painted-lady.png",
-      "/butterflies/sulphur.png",
-    ]}
-  />
+  <ButterflyHero locale="en" />
   <a
     class="docs-home-scroll"
     href="#docs-home-main"

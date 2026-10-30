@@ -9,6 +9,7 @@ export type ButterflyPalette = {
   readonly ink: Rgb;
   readonly muted: Rgb;
   readonly accent: Rgb;
+  readonly wings: readonly Rgb[];
 };
 
 export type InkRole = "wing" | "edge" | "vein" | "band" | "eyespot" | "body" | "antenna";
@@ -25,38 +26,35 @@ export function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
   };
 }
 
-export function butterflyWingColor(
-  palette: ButterflyPalette,
-  speciesAccent: number,
-  shade: number,
-): Rgb {
-  const warm = mixRgb(palette.paper, palette.accent, 0.82 + speciesAccent * 0.12);
-  const highlight = mixRgb(palette.accent, palette.ink, 0.38);
+function wingAt(palette: ButterflyPalette, index: number): Rgb {
+  if (palette.wings.length === 0) return palette.accent;
 
-  return mixRgb(warm, highlight, 0.55 + shade * 0.3);
+  const wrapped =
+    ((Math.round(index) % palette.wings.length) + palette.wings.length) % palette.wings.length;
+
+  return palette.wings[wrapped] ?? palette.accent;
 }
 
 export function butterflyPatternColor(
   palette: ButterflyPalette,
-  speciesAccent: number,
+  tone: number,
   shade: number,
   role: WingPatternRole,
 ): Rgb {
-  const base = butterflyWingColor(palette, speciesAccent, shade);
+  const primary = wingAt(palette, tone);
+  const secondary = wingAt(palette, tone + 1);
+  const deep = mixRgb(primary, palette.paper, 0.52);
+  const pale = mixRgb(secondary, palette.ink, 0.42);
 
-  if (role === "hind") return mixRgb(base, palette.muted, 0.14);
+  if (role === "hind") return mixRgb(secondary, deep, 0.18 + shade * 0.16);
 
-  if (role === "highlight") return mixRgb(base, palette.ink, 0.42);
+  if (role === "highlight") return mixRgb(pale, palette.ink, 0.35);
 
-  if (role === "band") {
-    const copper = mixRgb(palette.accent, palette.paper, 0.24 + speciesAccent * 0.18);
+  if (role === "band") return mixRgb(secondary, palette.ink, 0.16 + shade * 0.14);
 
-    return mixRgb(copper, palette.accent, 0.12 + shade * 0.18);
-  }
+  if (role === "eyespot") return mixRgb(deep, palette.paper, 0.18);
 
-  if (role === "eyespot") return mixRgb(palette.accent, palette.ink, 0.22);
-
-  return base;
+  return mixRgb(primary, palette.accent, 0.18 + shade * 0.22);
 }
 
 export function butterflyBodyColor(palette: ButterflyPalette): Rgb {
@@ -68,19 +66,17 @@ export function butterflyBreezeColor(palette: ButterflyPalette): Rgb {
 }
 
 export function inkFor(palette: ButterflyPalette, part: InkRole): string {
-  if (part === "eyespot") return rgba(palette.accent, 0.95);
+  if (part === "eyespot") return rgba(palette.ink, 0.96);
 
-  if (part === "edge") return rgba(mixRgb(palette.paper, palette.ink, 0.08), 0.88);
+  if (part === "edge" || part === "vein" || part === "band") {
+    return rgba(mixRgb(palette.paper, palette.ink, 0.12), 0.92);
+  }
 
-  if (part === "vein") return rgba(mixRgb(palette.paper, palette.ink, 0.12), 0.9);
+  if (part === "body") return rgba(palette.paper, 0.92);
 
-  if (part === "band") return rgba(palette.accent, 0.7);
+  if (part === "antenna") return rgba(palette.accent, 0.92);
 
-  if (part === "body") return rgba(palette.paper, 0.9);
-
-  if (part === "antenna") return rgba(palette.accent, 0.85);
-
-  return rgba(palette.ink, 0.7);
+  return rgba(palette.ink, 0.8);
 }
 
 export function rgba(color: Rgb, alpha: number): string {

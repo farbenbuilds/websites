@@ -1,5 +1,5 @@
-import { SPECIMEN_MAX } from "./butterfly-data";
-import { clamp } from "./butterfly-math";
+import { SPECIMEN_MAX } from "./butterfly-data.ts";
+import { clamp } from "./butterfly-math.ts";
 
 export const COMPACT_FIELD_MAX_WIDTH = 640;
 export const COMPACT_SPECIMEN_COUNT = 3;

@@ -1,6 +1,6 @@
 /*
- * Custom-mode docs home: full-screen living print on larger screens and a
- * copy-first composition with a bounded art band on narrow screens.
+ * Custom-mode docs home: a full-screen living print on every viewport, with
+ * the reading copy anchored to the bottom-left of the section.
  */
 
 .docs-home {
@@ -28,6 +28,9 @@ html:has(.docs-home-hero) #blume-content {
   --hero-hover: #1b1508;
   --hero-eyebrow: #e2bf68;
   --hero-still: #e9c66b;
+  --hero-wing-1: #ff7a1a;
+  --hero-wing-2: #ffb300;
+  --hero-wing-3: #ffe08a;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 6.4fr) minmax(0, 5.6fr);
@@ -57,6 +60,9 @@ html:has(.docs-home-hero) #blume-content {
   --farben-field-ink: var(--hero-ink);
   --farben-field-muted: var(--hero-rule);
   --farben-field-accent: var(--hero-accent);
+  --farben-field-wing-1: var(--hero-wing-1);
+  --farben-field-wing-2: var(--hero-wing-2);
+  --farben-field-wing-3: var(--hero-wing-3);
 }
 
 .docs-home-hero .butterfly-hero-still:not(.is-hidden) {
@@ -69,6 +75,7 @@ html:has(.docs-home-hero) #blume-content {
   z-index: 2;
   display: flex;
   grid-column: 1;
+  align-self: end;
   flex-direction: column;
   align-items: flex-start;
   gap: 1.1rem;
@@ -149,28 +156,29 @@ html .prose .docs-home-summary code {
   padding-block-start: 0.4rem;
 }
 
-.docs-home-hero .editorial-action {
+html .prose .docs-home-hero .editorial-action {
   border-color: var(--hero-rule);
   color: var(--hero-ink);
 }
 
-.docs-home-hero .editorial-action-primary {
+html .prose .docs-home-hero .editorial-action-primary {
   border-color: var(--hero-accent);
   background: var(--hero-accent);
   color: var(--hero-ink-on-accent);
 }
 
-.docs-home-hero .editorial-action-primary:hover {
+html .prose .docs-home-hero .editorial-action-primary:hover {
   border-color: var(--hero-accent-bright);
   background: var(--hero-accent-bright);
   color: var(--hero-ink-on-accent);
 }
 
-.docs-home-hero .editorial-action-secondary {
+html .prose .docs-home-hero .editorial-action-secondary {
   background: var(--hero-paper);
+  color: var(--hero-ink);
 }
 
-.docs-home-hero .editorial-action-secondary:hover {
+html .prose .docs-home-hero .editorial-action-secondary:hover {
   border-color: var(--hero-accent);
   background: var(--hero-hover);
   color: var(--hero-accent-bright);
@@ -217,26 +225,14 @@ html .prose .docs-home-summary code {
 
 @media (max-width: 40rem) {
   .docs-home-hero {
-    grid-template-rows: auto minmax(14rem, 38svh);
-    gap: 1rem;
-    align-items: start;
-    min-height: 0;
-    padding: clamp(1.5rem, 6vw, 2rem) 1rem 0;
+    gap: 0;
+    padding: 2.5rem 1rem 5rem;
   }
 
   .docs-home-hero-copy {
-    grid-row: 1;
     gap: 0.625rem;
+    width: 100%;
     padding-block-end: 0;
-  }
-
-  .docs-home-hero .butterfly-hero {
-    position: relative;
-    inset: auto;
-    grid-row: 2;
-    width: auto;
-    min-height: 14rem;
-    margin-inline: -1rem;
   }
 
   .docs-home-title,
@@ -245,6 +241,7 @@ html .prose .docs-home-summary code {
   }
 
   .docs-home-summary {
+    max-width: 32ch;
     font-size: 0.9375rem;
   }
 }
@@ -264,7 +261,7 @@ html .prose .docs-home-summary code {
     flex: 1 1 0;
     gap: 0.35rem;
     padding-inline: 0.45rem;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
   }
 }
 

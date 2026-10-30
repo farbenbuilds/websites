@@ -1,5 +1,5 @@
-import type { SpeciesSpec, WingPoint, WingSpec } from "./butterfly-data";
-import { clamp, hash2 } from "./butterfly-math";
+import type { SpeciesSpec, WingPoint, WingSpec } from "./butterfly-data.ts";
+import { clamp, hash2 } from "./butterfly-math.ts";
 
 export type AnatomyPart = "none" | "body" | "antenna" | "fore" | "hind";
 
@@ -171,7 +171,7 @@ function sampleWing(
   out.edge = clamp(1 - distance / 0.075, 0, 1);
   out.shade = clamp(0.55 + 0.45 * (wx / reach) + 0.05 * wy, 0, 1);
   out.vein = radius > 0.16 && Math.abs(veinWave) < 0.13 ? 1 : 0;
-  out.band = radius > 0.18 && Math.abs(bandWave) < 0.16 ? 1 : 0;
+  out.band = radius > 0.18 && Math.abs(bandWave) < 0.22 ? 1 : 0;
   out.bodyX = wx;
   out.bodyY = wy;
   out.inside = true;

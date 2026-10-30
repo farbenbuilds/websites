@@ -1,4 +1,4 @@
-import { clamp } from "./butterfly-math";
+import { clamp } from "./butterfly-math.ts";
 
 export type AvoidRegion = {
   readonly left: number;

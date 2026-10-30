@@ -1,10 +1,10 @@
-import { avoidanceSteer, type AvoidRegion } from "./butterfly-avoidance";
-import { SPECIES, speciesAt } from "./butterfly-data";
-import { clampSpecimenCount, DEFAULT_SPECIMEN_COUNT } from "./butterfly-density";
-import { steerFromPointer, type Steering } from "./butterfly-breeze";
-import { separateField, separationSteer } from "./butterfly-separation";
-import { specimenHalfHeight, specimenHalfSpan } from "./butterfly-shape";
-import { angleDelta, clamp, createRng, normalizeAngle, randomBetween } from "./butterfly-math";
+import { avoidanceSteer, type AvoidRegion } from "./butterfly-avoidance.ts";
+import { SPECIES, speciesAt } from "./butterfly-data.ts";
+import { clampSpecimenCount, DEFAULT_SPECIMEN_COUNT } from "./butterfly-density.ts";
+import { steerFromPointer, type Steering } from "./butterfly-breeze.ts";
+import { separateField, separationSteer } from "./butterfly-separation.ts";
+import { specimenHalfHeight, specimenHalfSpan } from "./butterfly-shape.ts";
+import { angleDelta, clamp, createRng, normalizeAngle, randomBetween } from "./butterfly-math.ts";
 
 export type FieldPointer = {
   x: number;

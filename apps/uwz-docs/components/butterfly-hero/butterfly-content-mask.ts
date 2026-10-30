@@ -1,6 +1,6 @@
-import type { AvoidRegion } from "./butterfly-avoidance";
-import { smoothstep } from "./butterfly-math";
-import { rgba, type ButterflyPalette } from "./butterfly-palette";
+import type { AvoidRegion } from "./butterfly-avoidance.ts";
+import { smoothstep } from "./butterfly-math.ts";
+import { rgba, type ButterflyPalette } from "./butterfly-palette.ts";
 
 type ContentMaskSurface = {
   readonly context: CanvasRenderingContext2D;
@@ -9,8 +9,8 @@ type ContentMaskSurface = {
   readonly palette: ButterflyPalette;
 };
 
-const FALLOFF_CELLS = 4;
-const CENTER_ALPHA = 0.85;
+const FALLOFF_CELLS = 8;
+const CENTER_ALPHA = 1;
 
 export function contentMaskAlpha(region: AvoidRegion, column: number, row: number): number {
   const centerX = column + 0.5;

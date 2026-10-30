@@ -4,7 +4,7 @@ import {
   avoidanceSteer,
   mergeAvoidRegions,
   type AvoidRegion,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-avoidance.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-avoidance.ts";
 
 const REGION: AvoidRegion = { left: 10, top: 10, right: 20, bottom: 20 };
 

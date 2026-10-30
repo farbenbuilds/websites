@@ -14,7 +14,6 @@ export type EyespotSpec = {
 };
 
 export type SpeciesSpec = {
-  readonly id: string;
   readonly fore: WingSpec;
   readonly hind: WingSpec;
   readonly bodyWidth: number;
@@ -24,7 +23,6 @@ export type SpeciesSpec = {
   readonly bandPhase: number;
   readonly veinCount: number;
   readonly eyespot: EyespotSpec;
-  readonly accentMix: number;
   readonly glyphBias: number;
 };
 
@@ -36,7 +34,6 @@ export const EDGE_RAMP = ".'`,;:";
 
 export const SPECIES: readonly SpeciesSpec[] = [
   {
-    id: "amber-facet",
     fore: {
       points: [
         { x: 0.04, y: -0.08 },
@@ -65,11 +62,9 @@ export const SPECIES: readonly SpeciesSpec[] = [
     bandPhase: 0.4,
     veinCount: 6,
     eyespot: { x: 0.62, y: 0.36, radius: 0.08 },
-    accentMix: 0.26,
     glyphBias: 0,
   },
   {
-    id: "ochre-facet",
     fore: {
       points: [
         { x: 0.04, y: -0.06 },
@@ -98,11 +93,9 @@ export const SPECIES: readonly SpeciesSpec[] = [
     bandPhase: 1.1,
     veinCount: 7,
     eyespot: { x: 0.6, y: 0.38, radius: 0.09 },
-    accentMix: 0.32,
     glyphBias: 1,
   },
   {
-    id: "copper-facet",
     fore: {
       points: [
         { x: 0.04, y: -0.1 },
@@ -131,7 +124,6 @@ export const SPECIES: readonly SpeciesSpec[] = [
     bandPhase: 2,
     veinCount: 5,
     eyespot: { x: 0.64, y: 0.34, radius: 0.075 },
-    accentMix: 0.22,
     glyphBias: 2,
   },
 ];

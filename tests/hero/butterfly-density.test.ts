@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   fallbackSpecimenCount,
   resolveSpecimenCount,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-density.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-density.ts";
 
 describe("butterfly density", () => {
   it("uses three specimens through the compact breakpoint", () => {

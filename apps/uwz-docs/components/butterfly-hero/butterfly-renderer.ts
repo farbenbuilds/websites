@@ -1,13 +1,21 @@
-import { draftAt, type Atmosphere } from "./butterfly-atmosphere";
-import { drawContentMask } from "./butterfly-content-mask";
-import type { FieldState } from "./butterfly-field";
-import { butterflyBreezeColor, rgba, type ButterflyPalette, type Rgb } from "./butterfly-palette";
-import { drawSpecimens } from "./butterfly-specimen";
+import { draftAt, type Atmosphere } from "./butterfly-atmosphere.ts";
+import { drawContentMask } from "./butterfly-content-mask.ts";
+import type { FieldState } from "./butterfly-field.ts";
+import {
+  butterflyBreezeColor,
+  mixRgb,
+  rgba,
+  type ButterflyPalette,
+  type Rgb,
+} from "./butterfly-palette.ts";
+import { createAnatomyScratch, type AnatomyScratch } from "./butterfly-shape.ts";
+import { drawSpecimens, type SpecimenColors } from "./butterfly-specimen.ts";
 
 export type FieldRenderer = {
   readonly canvas: HTMLCanvasElement;
   readonly context: CanvasRenderingContext2D;
-  readonly images: readonly HTMLImageElement[];
+  readonly detail: AnatomyScratch;
+  readonly colors: Map<number, SpecimenColors>;
   width: number;
   height: number;
   dpr: number;
@@ -27,12 +35,14 @@ const FALLBACK_PALETTE: ButterflyPalette = {
   ink: { r: 17, g: 17, b: 17 },
   muted: { r: 102, g: 102, b: 102 },
   accent: { r: 128, g: 128, b: 128 },
+  wings: [
+    { r: 128, g: 128, b: 128 },
+    { r: 160, g: 160, b: 160 },
+    { r: 96, g: 96, b: 96 },
+  ],
 };
 
-export function createRenderer(
-  canvas: HTMLCanvasElement,
-  images: readonly HTMLImageElement[],
-): FieldRenderer | null {
+export function createRenderer(canvas: HTMLCanvasElement): FieldRenderer | null {
   const context = canvas.getContext("2d", { alpha: true });
 
   if (!context) return null;
@@ -40,7 +50,8 @@ export function createRenderer(
   return {
     canvas,
     context,
-    images,
+    detail: createAnatomyScratch(),
+    colors: new Map(),
     width: 0,
     height: 0,
     dpr: 1,
@@ -68,6 +79,26 @@ function readColor(context: CanvasRenderingContext2D, value: string, fallback: R
   };
 }
 
+function readWings(
+  context: CanvasRenderingContext2D,
+  style: CSSStyleDeclaration,
+  accent: Rgb,
+): readonly Rgb[] {
+  return [
+    readColor(context, style.getPropertyValue("--farben-field-wing-1"), accent),
+    readColor(
+      context,
+      style.getPropertyValue("--farben-field-wing-2"),
+      mixRgb(accent, { r: 255, g: 255, b: 255 }, 0.28),
+    ),
+    readColor(
+      context,
+      style.getPropertyValue("--farben-field-wing-3"),
+      mixRgb(accent, { r: 0, g: 0, b: 0 }, 0.28),
+    ),
+  ];
+}
+
 export function readHostPalette(element: HTMLElement): ButterflyPalette {
   const style = getComputedStyle(element);
   const canvas = document.createElement("canvas");
@@ -76,6 +107,12 @@ export function readHostPalette(element: HTMLElement): ButterflyPalette {
   const context = canvas.getContext("2d", { willReadFrequently: true });
 
   if (!context) return FALLBACK_PALETTE;
+
+  const accent = readColor(
+    context,
+    style.getPropertyValue("--farben-field-accent"),
+    FALLBACK_PALETTE.accent,
+  );
 
   return {
     paper: readColor(
@@ -89,11 +126,8 @@ export function readHostPalette(element: HTMLElement): ButterflyPalette {
       style.getPropertyValue("--farben-field-muted"),
       FALLBACK_PALETTE.muted,
     ),
-    accent: readColor(
-      context,
-      style.getPropertyValue("--farben-field-accent"),
-      FALLBACK_PALETTE.accent,
-    ),
+    accent,
+    wings: readWings(context, style, accent),
   };
 }
 
@@ -136,6 +170,8 @@ function ensureMatrix(renderer: FieldRenderer): HTMLCanvasElement {
     palette.accent.r,
     palette.accent.g,
     palette.accent.b,
+    renderer.cols,
+    renderer.rows,
     renderer.cellWidth,
     renderer.cellHeight,
     renderer.dpr,
@@ -202,7 +238,7 @@ export function drawField(
   drawMatrix(renderer);
   drawAir(renderer, atmosphere);
   drawTraces(renderer, atmosphere);
-  drawSpecimens(renderer, field);
+  drawSpecimens(renderer, field, renderer.colors);
   drawBreeze(renderer, atmosphere);
   drawPollen(renderer, atmosphere);
   drawContentMask(renderer, field.avoidRegions);

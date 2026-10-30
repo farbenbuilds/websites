@@ -5,8 +5,8 @@ import {
   createSpecimenPose,
   sampleAnatomy,
   specimenHalfSpan,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-shape.ts";
-import { SPECIES } from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-data.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-shape.ts";
+import { SPECIES } from "../../apps/uwz-docs/components/butterfly-hero/butterfly-data.ts";
 
 describe("butterfly anatomy", () => {
   it("defines three faceted species with both wing outlines and an eyespot", () => {

@@ -1,6 +1,6 @@
-import { depositDraft, emitBreeze, emitTrace, type Atmosphere } from "./butterfly-atmosphere";
-import { speciesAt } from "./butterfly-data";
-import type { FieldState, Specimen } from "./butterfly-field";
+import { depositDraft, emitBreeze, emitTrace, type Atmosphere } from "./butterfly-atmosphere.ts";
+import { speciesAt } from "./butterfly-data.ts";
+import type { FieldState, Specimen } from "./butterfly-field.ts";
 
 function emitWingBreeze(atmosphere: Atmosphere, specimen: Specimen): void {
   const species = speciesAt(specimen.species);

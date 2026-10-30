@@ -4,8 +4,8 @@ import {
   createField,
   setSpecimenCount,
   stepField,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-field.ts";
-import { separationSteer } from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-separation.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-field.ts";
+import { separationSteer } from "../../apps/uwz-docs/components/butterfly-hero/butterfly-separation.ts";
 
 function field() {
   return createField({

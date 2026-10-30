@@ -1,4 +1,4 @@
-import { clamp, createRng, nextRandom, randomBetween, wrap, type Rng } from "./butterfly-math";
+import { clamp, createRng, nextRandom, randomBetween, wrap, type Rng } from "./butterfly-math.ts";
 
 export type Pollen = {
   x: number;

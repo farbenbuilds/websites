@@ -3,9 +3,9 @@ import {
   resizeAtmosphere,
   stepAtmosphere,
   type Atmosphere,
-} from "./butterfly-atmosphere";
-import { measureAvoidRegions } from "./butterfly-content-measurement";
-import { fallbackSpecimenCount, resolveSpecimenCount } from "./butterfly-density";
+} from "./butterfly-atmosphere.ts";
+import { measureAvoidRegions } from "./butterfly-content-measurement.ts";
+import { fallbackSpecimenCount, resolveSpecimenCount } from "./butterfly-density.ts";
 import {
   createField,
   resizeField,
@@ -13,22 +13,21 @@ import {
   setPointer,
   stepField,
   type FieldState,
-} from "./butterfly-field";
+} from "./butterfly-field.ts";
 import {
   createRenderer,
   drawField,
   readHostPalette,
   resizeRenderer,
   type FieldRenderer,
-} from "./butterfly-renderer";
-import { clamp } from "./butterfly-math";
-import { depositDrafts } from "./butterfly-drafts";
+} from "./butterfly-renderer.ts";
+import { clamp } from "./butterfly-math.ts";
+import { depositDrafts } from "./butterfly-drafts.ts";
 
 export type ButterflyLoopOptions = {
   readonly canvas: HTMLCanvasElement;
   readonly hero: HTMLElement;
   readonly contentRoot: HTMLElement;
-  readonly images: readonly HTMLImageElement[];
   readonly seed: number;
   readonly specimenCount: number;
   readonly onReady: () => void;
@@ -52,7 +51,7 @@ const CONTENT_PADDING_CELLS = 2;
 const CONTENT_MERGE_GAP_PIXELS = 160;
 
 export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoop {
-  const created = createRenderer(options.canvas, options.images);
+  const created = createRenderer(options.canvas);
 
   if (!created) {
     options.onFailure();
@@ -101,6 +100,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
   const themeObserver = new MutationObserver(() => {
     renderer.palette = readHostPalette(options.hero);
+    renderer.colors.clear();
     drawFrame();
   });
 
@@ -114,6 +114,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
     const fontFamily = getComputedStyle(options.canvas).fontFamily || "ui-monospace, monospace";
 
     renderer.palette = readHostPalette(options.hero);
+    renderer.colors.clear();
     resizeRenderer(renderer, rect.width, rect.height, dpr, fontFamily);
     targetSpecimenCount = resolveSpecimenCount(rect.width, options.specimenCount);
 

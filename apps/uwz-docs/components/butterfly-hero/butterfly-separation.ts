@@ -1,5 +1,5 @@
-import type { FieldState, Specimen } from "./butterfly-field";
-import { clamp } from "./butterfly-math";
+import type { FieldState, Specimen } from "./butterfly-field.ts";
+import { clamp } from "./butterfly-math.ts";
 
 const SPECIMEN_RADIUS = 1.25;
 const MIN_GAP = 1.2;

@@ -7,7 +7,6 @@
   "exports": {
     "./theme.css": "./src/lib/styles/theme.css",
     "./editorial.css": "./src/lib/styles/editorial.css",
-    "./butterfly-hero.css": "./src/lib/components/butterfly-hero/butterfly-hero.css",
     "./utils": "./src/lib/utils.ts",
     "./utils.js": "./src/lib/utils.ts",
     "./components/*": "./src/lib/components/*/index.ts",

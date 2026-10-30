@@ -1,4 +1,4 @@
-import { mergeAvoidRegions, type AvoidRegion } from "./butterfly-avoidance";
+import { mergeAvoidRegions, type AvoidRegion } from "./butterfly-avoidance.ts";
 
 type ContentMeasurementOptions = {
   readonly contentRoot: HTMLElement;

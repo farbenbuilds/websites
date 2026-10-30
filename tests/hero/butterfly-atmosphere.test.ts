@@ -7,7 +7,7 @@ import {
   emitBreeze,
   emitTrace,
   stepAtmosphere,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-atmosphere.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-atmosphere.ts";
 
 function atmosphere() {
   return createAtmosphere({

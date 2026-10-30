@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   steerFromPointer,
   type Steering,
-} from "../../packages/ui/src/lib/components/butterfly-hero/butterfly-breeze.ts";
+} from "../../apps/uwz-docs/components/butterfly-hero/butterfly-breeze.ts";
 
 function steering(): Steering {
   return { x: 0 };

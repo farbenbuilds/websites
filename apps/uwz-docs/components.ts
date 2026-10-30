@@ -1,4 +1,4 @@
-import { ButterflyHero } from "@farben/ui/components/butterfly-hero";
+import { ButterflyHero } from "./components/butterfly-hero/index.ts";
 import { defineComponents } from "blume";
 
 import CopyCommand from "./components/copy-command.svelte";
