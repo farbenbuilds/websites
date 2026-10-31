@@ -1,5 +1,7 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "astro": true,
+  "svelte": true,
   "semi": true,
   "singleQuote": false,
   "trailingComma": "all",

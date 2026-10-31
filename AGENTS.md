@@ -104,8 +104,14 @@ Vite+ notes:
   match.
 - `vp toolchain` shows the active tool graph; `vp why <package>` shows the
   dependency graph.
-- Oxfmt does not format `.svelte` files yet. Oxlint checks their `<script>`
-  blocks, and `svelte-check` covers their types.
+- Oxfmt formats `.astro` and `.svelte` through the `astro` and `svelte`
+  options in `.oxfmtrc.json`. Those options resolve `@astrojs/compiler-rs` and
+  `svelte` from the root dev dependencies. Oxlint checks their script and
+  frontmatter blocks, and `svelte-check` covers Svelte types. `.oxlintrc.json`
+  loads `eslint-plugin-svelte` for script-level rules and
+  `tools/oxlint/astro-plugin/index.mjs` for the Astro frontmatter rules.
+  Oxlint has no custom parser support, so Svelte template rules and Astro
+  template rules are not available.
 - Formatting lives in `.oxfmtrc.json`; linting lives in `.oxlintrc.json`; the
   vendored anti-slop rules live in `tools/oxlint/anti-slop/`. Do not add another
   formatter or linter.
@@ -116,7 +122,8 @@ Vite+ notes:
 
 - `apps/uwz-docs` documents uWebZockets. It uses Blume, Astro, Svelte islands,
   and `@farben/ui`.
-- `apps/vws-docs` documents ventiws. It currently uses Blume only.
+- `apps/vws-docs` documents ventiws. It uses Blume with local Astro landing
+  components and no `@farben/ui` dependency yet.
 - `apps/` contains only those two documentation apps today. A future marketing
   or shop app may use another framework; do not assume Blume, Astro, Svelte, or
   `@farben/ui`, and do not add it without a separate plan.

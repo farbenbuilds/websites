@@ -11,13 +11,7 @@
 <script lang="ts">
   import { cn } from "@farben/ui/utils.js";
 
-  let {
-    label,
-    class: className,
-    avoid = false,
-    href = "#",
-    ...rest
-  }: ScrollCueProps = $props();
+  let { label, class: className, avoid = false, href = "#", ...rest }: ScrollCueProps = $props();
 </script>
 
 <a

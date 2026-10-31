@@ -23,7 +23,7 @@ docs site.
 ## Toolchain
 
 Vite+ (`vp`) is the unified toolchain: Vite, Rolldown, Vitest, Oxlint, Oxfmt,
-and the task runner. Node.js 22.19 or newer and pnpm 12.4.2 are specified by
+and the task runner. Node.js 22.22.3 or newer and pnpm 12.4.2 are specified by
 `package.json`, the Nix flake, and the CI workflows.
 
 Use the project-local CLI through pnpm on every host:
@@ -43,7 +43,10 @@ project commands always go through `pnpm exec vp`.
 The Nix flake provides the web toolchain for `x86_64-linux`, `aarch64-linux`,
 and `aarch64-darwin`. It exposes a glibc shell and a musl shell; `.envrc`
 selects the matching shell. `pnpm-workspace.yaml` installs both libc variants
-of native packages so a checkout remains usable after a shell switch.
+of native packages so a checkout remains usable after a shell switch. Oxfmt
+formats `.astro` and `.svelte` files through its `astro` and `svelte` options,
+which resolve `@astrojs/compiler-rs` and `svelte` from the root dev
+dependencies.
 
 ## Layout
 
@@ -53,11 +56,13 @@ websites/
 │   ├── uwz-docs/                 # uWebZockets documentation
 │   │   ├── docs/                # English Markdown and MDX source
 │   │   ├── docs/vi/             # Vietnamese translations
-│   │   ├── components/          # Svelte islands registered in components.ts
+│   │   ├── components/          # landing, index-cards, support, benchmark, colophon
 │   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
 │   │   └── theme.css            # host Tailwind entry and tokens
 │   └── vws-docs/                 # ventiws documentation
+│       ├── components/           # landing and index-cards Astro components
+│       ├── components.ts         # MDX component registration
 │       ├── docs/                 # English Markdown and MDX source
 │       ├── docs/vi/              # Vietnamese translations
 │       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
@@ -110,10 +115,12 @@ Astro route generation and MDX rendering
     +--> Svelte island hydration
 ```
 
-`apps/uwz-docs` uses the full stack: Blume, Astro, Svelte, `@farben/ui`, and a
-`CopyCommand` island. `apps/vws-docs` currently uses Blume only. Both apps run
-the same package scripts: `dev`, `build`, `preview`, `check`, `test`, and
-`doctor`.
+`apps/uwz-docs` uses the full stack: Blume, Astro, Svelte, `@farben/ui`, and
+client-only hero chrome. `apps/vws-docs` uses Blume with local Astro landing
+components. Each `index.mdx` lists its page sections explicitly; the section
+components live under `components/landing/`, `components/index-cards/`, and the
+other named section folders. Both apps run the same package scripts: `dev`,
+`build`, `preview`, `check`, `test`, and `doctor`.
 
 Both sites publish English at the root and Vietnamese under `/vi`. English
 content lives at the root of `docs/`, and Vietnamese translations live in
@@ -186,9 +193,14 @@ vp run -r build
 ```
 
 `pnpm lint` runs Oxlint with `.oxlintrc.json`, the vendored anti-slop plugin,
-project rules, and type-aware checks. `pnpm format:check` runs Oxfmt with
-`.oxfmtrc.json`. `pnpm typecheck` runs every workspace `check` task, including
-`svelte-check` and `blume check`. `pnpm test` runs the root Vitest suite.
+project rules, and type-aware checks. The config also loads `eslint-plugin-svelte`
+and a local adapter for `eslint-plugin-astro` under `tools/oxlint/astro-plugin/`.
+Oxlint has no custom parser support, so Svelte template rules and Astro
+template rules are not available; the adapter enables the Astro frontmatter
+rules, and the Svelte rules apply to the extracted `<script>` block. `pnpm
+format:check` runs Oxfmt with `.oxfmtrc.json`. `pnpm typecheck` runs every
+workspace `check` task, including `svelte-check` and `blume check`. `pnpm test`
+runs the root Vitest suite.
 Workspace `test` tasks run `blume validate`; workspace `build` tasks run
 `blume build`.
 

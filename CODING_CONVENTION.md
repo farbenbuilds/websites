@@ -30,7 +30,7 @@ violates it is rejected in review, not negotiated in a pull request.
 
 - TypeScript everywhere on the web surface. The current docs apps use Blume and
   MDX; `uwz-docs` also uses Astro, Svelte 5, and `@farben/ui`, while `vws-docs`
-  is Blume-only today. A future app may choose another framework; the rules in
+  uses local Astro components today. A future app may choose another framework; the rules in
   this document still apply.
 - Use `type` rather than `interface` for object shapes and unions. Use
   `import type` for type-only imports.
@@ -190,11 +190,16 @@ new primitive.
 ## 9. Formatting, Linting, and Verification
 
 - Oxfmt formats and Oxlint lints. Do not add a second formatter or linter.
+  Oxfmt formats `.astro` and `.svelte` through the `astro` and `svelte`
+  options in `.oxfmtrc.json`; Oxlint loads the framework ESLint plugins
+  separately through `jsPlugins`.
 - Formatter settings live in `.oxfmtrc.json`: semicolons on, double quotes, and
   trailing commas for all multiline constructs.
 - Linter settings live in `.oxlintrc.json`: kebab-case filenames, camelCase
   functions, the 400-line limit, strict TypeScript rules, project rules, and the
-  vendored anti-slop rules.
+  vendored anti-slop rules. It also loads `eslint-plugin-svelte` and the local
+  Astro frontmatter adapter under `tools/oxlint/astro-plugin/`. Oxlint does not
+  support custom parsers, so Svelte and Astro template rules stay out of scope.
 - The anti-slop plugin is vendored under `tools/oxlint/anti-slop/`. Update it
   through the `install-anti-slop` skill, not by editing rule files in place.
 - `lefthook` runs lint, format, size, typecheck, and tests before a commit. Do

@@ -3,7 +3,9 @@
   "jsPlugins": [
     { "name": "farben", "specifier": "./scripts/oxlint-plugin.mjs" },
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
-    { "name": "vite-plus", "specifier": "vite-plus/oxlint-plugin" }
+    { "name": "vite-plus", "specifier": "vite-plus/oxlint-plugin" },
+    { "name": "astro", "specifier": "./tools/oxlint/astro-plugin/index.mjs" },
+    { "name": "svelte", "specifier": "eslint-plugin-svelte" }
   ],
   "plugins": ["import", "oxc", "typescript", "unicorn"],
   "categories": {
@@ -51,9 +53,41 @@
   },
   "overrides": [
     {
-      "files": ["**/*.config.{js,mjs,ts}", "apps/*/components.ts", "scripts/oxlint-plugin.mjs"],
+      "files": [
+        "**/*.config.{js,mjs,ts}",
+        "apps/*/components.ts",
+        "scripts/oxlint-plugin.mjs",
+        "tools/oxlint/astro-plugin/index.mjs"
+      ],
       "rules": {
         "import/no-default-export": "off"
+      }
+    },
+    {
+      "files": ["**/*.astro"],
+      "env": { "astro": true },
+      "rules": {
+        "astro/no-deprecated-astro-canonicalurl": "error",
+        "astro/no-deprecated-astro-fetchcontent": "error",
+        "astro/no-deprecated-astro-resolve": "error",
+        "astro/no-deprecated-getentrybyslug": "error",
+        "astro/no-exports-from-components": "error",
+        "astro/no-prerender-export-outside-pages": "error"
+      }
+    },
+    {
+      "files": ["**/*.svelte"],
+      "rules": {
+        "svelte/derived-has-same-inputs-outputs": "error",
+        "svelte/no-add-event-listener": "error",
+        "svelte/no-conflicting-module-names": "error",
+        "svelte/no-ignored-unsubscribe": "error",
+        "svelte/no-inspect": "error",
+        "svelte/no-store-async": "error",
+        "svelte/prefer-derived-over-derived-by": "error",
+        "svelte/prefer-writable-derived": "error",
+        "svelte/require-store-callbacks-use-set-param": "error",
+        "svelte/require-stores-init": "error"
       }
     }
   ],

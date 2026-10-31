@@ -17,9 +17,13 @@
     "dev:vws": "vp run vws-docs#dev"
   },
   "devDependencies": {
+    "@astrojs/compiler-rs": "catalog:",
+    "eslint-plugin-astro": "catalog:",
+    "eslint-plugin-svelte": "catalog:",
     "lefthook": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "svelte": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -30,6 +34,6 @@
     }
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22.22.3"
   }
 }
