@@ -26,7 +26,7 @@ Every page starts with:
 
 ```mdx
 ---
-title: Getting Started
+title: Getting started
 description: Install the package, run the first example, and verify the result.
 ---
 ```
@@ -38,7 +38,7 @@ description: Install the package, run the first example, and verify the result.
 - Procedures use numbered steps with one action per step.
 - Reference detail follows the task, not the reverse.
 - Every code fence declares a language.
-- Internal links are root-relative, such as `/getting-started`.
+- Internal links are root-relative, such as `/docs/getting-started`.
 - External links name the destination instead of using "click here".
 - No emoji, exclamation mark, marketing filler, or unverified claim.
 
@@ -76,14 +76,38 @@ Documentation content is localized by mirrored MDX, not x18n.
 
 - English page: `docs/<slug>.mdx`.
 - Vietnamese page: `docs/vi/<slug>.mdx`.
+- Use the ISO 639-1 language code `vi` in the URL prefix. Do not use `vn`, which
+  is a country code, not a language code.
 - Future pages such as `getting-started.mdx` and `api.mdx` follow the same
   pattern.
 - Keep translated headings pinned to the English anchor ids so fragment links
   resolve across locales.
+- Keep core technical terms in English in Vietnamese prose: `slab`, `capacity`,
+  `backpressure`, `async token`, `worker`, `shared-nothing`, `handler`,
+  `middleware`, `route`, `request`, `response`, `connection`, `transport`,
+  `event loop`, `completion`, `buffer`, `queue`, `package`, `dependency`,
+  `runtime`, `server`, `cluster`. Write natural Vietnamese around them.
+- Use `build` for the build step and `biên dịch` only when source is compiled.
+- Apply the same terminology to `locales/vi.json` and landing-page copy.
+- Review Vietnamese pages for grammar and typos as well as key parity.
 - Do not add MDX files, page prose, frontmatter, or docs routes to
   `x18n.config.ts` or `locales/*.json`.
 - x18n checks component UI copy only. A docs-only change does not need
   `pnpm i18n:check`; a component copy change does.
+
+## Documentation UI
+
+- Use generated sidebar groups for sections. Keep them collapsible, with the
+  active group open and visually marked by a warm accent surface and a one-pixel
+  tinted border, not a blurred halo.
+- Do not add a hover effect to category summaries. Page rows inside a category
+  may use the normal hover state.
+- Keep the docs footer identical to the landing `SiteColophon`. Do not create a
+  second footer design.
+- Do not add a header tab until every route under it resolves. The current docs
+  tree has no `Docs` tab.
+- Preserve route stability when flattening or regrouping navigation; add
+  redirects for every moved URL.
 
 ## Navigation and Discovery
 
@@ -102,6 +126,9 @@ pnpm exec vp run uwz-docs#check
 pnpm exec vp run vws-docs#check
 pnpm exec vp run uwz-docs#build
 pnpm exec vp run vws-docs#build
+pnpm --filter uwz-docs exec blume validate --strict
+pnpm --filter uwz-docs exec blume audit --fail-on warning
+pnpm i18n:check
 ```
 
 Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
@@ -112,6 +139,8 @@ Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
 - The page answers one reader goal.
 - The English and Vietnamese MDX files exist; docs content was not added to
   x18n resources.
+- Vietnamese pages keep English technical terms and read naturally without
+  literal translations, typos, or broken grammar.
 - Commands are copy-pasteable and tested.
 - Links resolve and external links are descriptive.
 - Code fences have a language and no secrets.

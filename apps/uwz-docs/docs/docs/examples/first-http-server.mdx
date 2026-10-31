@@ -1,0 +1,150 @@
+---
+title: Your first HTTP server
+description: Build a complete App(128) server, add a route and parameter, verify both with curl, and request shutdown with a signal.
+sidebar:
+  order: 1
+search:
+  tags: [getting-started, tutorial, http1]
+---
+
+This tutorial builds a complete HTTP/1.1 server on `App(128)`. It registers a
+static route and a parameterized route, starts the listener, verifies both with
+`curl`, and installs the graceful-shutdown watcher.
+
+## Prerequisites
+
+- A project with the `uWebZockets` dependency, as described in
+  [Quickstart](/docs/getting-started/quickstart).
+- Zig 0.16.0.
+- `curl`.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("Hello from µWebZockets! Zero allocation achieved.") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| {
+            std.log.err("response failed: {}", .{res_err});
+        };
+        return;
+    };
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.get("/greet/:name", greet);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Run it
+
+```sh
+zig build run
+```
+
+The development log prints the version, the startup time, and the local
+address before the first request arrives. The exact elapsed time varies by
+host.
+
+## Verify it
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+```text
+Hello from µWebZockets! Zero allocation achieved.
+```
+
+```sh
+curl -s http://127.0.0.1:3000/greet/Ada
+```
+
+```text
+hello Ada
+```
+
+`/greet` does not match `/greet/:name` because the parameter requires one
+nonempty segment. Register `/greet` separately if you want a route without a
+capture. The `orelse "world"` fallback in `greet` covers a missing capture value,
+not a missing route.
+
+## What happens at startup
+
+| Step                     | Detail                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `App(128).init`          | Computes the slab layout and makes one allocation for 128 connection slots, request buffers, write queues, and router storage. |
+| `app.get`                | Writes the route into fixed router storage. Registration before `listen` keeps the arrays immutable while workers run.         |
+| `catch_shutdown_signals` | Installs the process-wide SIGINT and SIGTERM watcher. It requests shutdown.                                                    |
+| `listen`                 | Binds the socket, starts accepting, and locks route registration.                                                              |
+| `run`                    | Drives the event loop until shutdown completes.                                                                                |
+| `deinit`                 | Releases the slab exactly once. It panics if called from inside the loop.                                                      |
+
+## Change the address or port
+
+```zig
+try app.listen("127.0.0.1", 8080);
+```
+
+`0.0.0.0` binds every local interface. `127.0.0.1` binds loopback only. The port
+must be free before `listen` is called; a bind failure returns an error instead
+of starting a partial listener.
+
+## Add another method
+
+The registration helpers follow the method name:
+
+```zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.post("/items", create);
+```
+
+`req.text()` returns the buffered body. The default body capacity is 16 KiB;
+raise it with `ServerConfig` or `with_max_body_size` when the application needs
+larger uploads.
+
+## Stop it cleanly
+
+Press Ctrl+C. The watcher requests shutdown, which stops accepting, cancels
+recurring timers, closes active connections, and drains completions before
+`run` returns. In-flight requests are not guaranteed to finish. The
+`defer app.deinit()` then releases the slab.
+
+## Next
+
+- [Your first WebSocket](/docs/examples/first-websocket) adds a
+  bidirectional route.
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
+  serves typed procedures on the same application.
+- [Your first TLS server](/docs/examples/first-tls-server) wraps the
+  listener in TLS 1.3.

@@ -159,6 +159,8 @@ A change is done when:
 - Functional style is preserved; no class or hidden mutable state was added.
 - Component UI copy stays in locale JSON and passes `pnpm i18n:check`;
   documentation pages stay in mirrored MDX and are not x18n resources.
+- Vietnamese pages keep the core technical terms in English and read as natural
+  Vietnamese around them, following `CODING_CONVENTION.md` section 8.
 - Documentation and templates match the actual commands and behavior.
 - The required checks ran and passed, or a failure is reported with its cause.
 - The Reviewer has no unresolved blocking finding.

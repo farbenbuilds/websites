@@ -1,0 +1,102 @@
+---
+title: µWebZockets là gì
+description: Hiểu mô hình runtime, các giao thức và Zig toolchain được hỗ trợ trước khi viết route đầu tiên cho ứng dụng của bạn.
+sidebar:
+  order: 1
+search:
+  tags: [getting-started, concept]
+---
+
+µWebZockets là framework server cho Zig 0.16.0, xử lý HTTP/1.1, HTTP/2,
+HTTP/3, WebSocket và JSON-RPC qua một API ứng dụng có kiểu. Nó hướng đến các
+dịch vụ cần bộ nhớ có giới hạn và độ trễ ổn định hơn capacity co giãn.
+
+Tên dự án được viết là µWebZockets trong văn bản, `uWebZockets` trong package
+path và `uz` trong code Zig.
+
+## Một ứng dụng, nhiều giao thức
+
+Một giá trị ứng dụng sở hữu route và trạng thái transport. Cùng một chữ ký
+handler phục vụ mọi phiên bản HTTP:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+Bạn đăng ký handler một lần và chọn transport lúc khởi động:
+
+| Transport                        | Initializer                              | Listener         |
+| -------------------------------- | ---------------------------------------- | ---------------- |
+| HTTP/1.1 plaintext               | `App(N).init`                            | `listen`         |
+| HTTPS với file PEM               | `init_https`                             | `listen`         |
+| HTTPS với chứng chỉ trong bộ nhớ | `init_https_ephemeral`                   | `listen`         |
+| HTTP/3 trên QUIC                 | `init_http3` hoặc `init_http3_ephemeral` | `listen_udp`     |
+| Nhóm worker                      | `Server.builder(...).build_cluster`      | `Cluster.listen` |
+
+Khác biệt giữa các giao thức nằm dưới ranh giới handler. Connection sở hữu
+stream storage của HTTP/2, trạng thái QPACK của HTTP/3 và WebSocket framing.
+Ứng dụng nhận dữ liệu request được mượn trong vòng đời của callback.
+
+## Một lần cấp phát lúc khởi động
+
+`App(N)` là kiểu có capacity được xác định lúc compile cho `N` connection đồng thời.
+Initializer của nó cấp phát một application slab chứa connection pool, buffer
+request HTTP/1.1, WebSocket message region, response write queue, lưu trữ router
+và scratch nén tùy chọn. Request path dùng lại các vùng đó và không cấp phát.
+
+Thiết kế này biến capacity thành quyết định cấu hình thay vì bất ngờ lúc
+runtime. `ServerConfig`, `Presets` và `Server.builder` biểu diễn giới hạn bằng
+giá trị có tên. Khi cạn capacity, hệ thống trả lỗi cụ thể hoặc rejection có
+cấu trúc thay vì làm queue phình ra.
+
+## Worker shared-nothing
+
+`App.cluster(worker_count)` và `Server.builder(...).build_cluster(...)` tạo
+nhóm thread-per-core. Mỗi worker sở hữu một event loop và một slab, dùng chung
+port qua `SO_REUSEPORT` trên nền tảng hỗ trợ, và chỉ phối hợp với worker khác
+qua ring lock-free có giới hạn. Một connection nằm trọn trong worker đã accept nó.
+
+Cluster API là phần bổ sung. Một `App` đơn vẫn là đường ngắn nhất cho service không
+cần nhiều lõi. TLS cluster vẫn chỉ dùng TCP.
+
+## Package cung cấp gì
+
+| Surface                           | Điểm vào công khai                  | Trạng thái               |
+| --------------------------------- | ----------------------------------- | ------------------------ |
+| Định tuyến và middleware HTTP/1.1 | `App`, `Request`, `Response`        | Được hỗ trợ              |
+| HTTP/2 và HPACK                   | `init_https`, `uz.http2`            | Được hỗ trợ, có giới hạn |
+| HTTP/3 và QPACK                   | `init_http3`, `listen_udp`          | Được hỗ trợ, có giới hạn |
+| WebSocket server                  | `App.ws`, `uz.WebSocket`            | Được hỗ trợ              |
+| JSON-RPC 2.0                      | `uz.json_rpc.Service`, `App.rpc`    | Được hỗ trợ              |
+| TLS 1.3 và mTLS                   | `init_https`, `init_https_mtls`     | Được hỗ trợ              |
+| Nhóm worker                       | `Server.builder(...).build_cluster` | Được hỗ trợ trên TCP     |
+| C ABI                             | `include/uWebZockets.h`             | High-level subset        |
+| HTTP/1.1 client                   | `uz.client`                         | Được hỗ trợ, có giới hạn |
+| WebTransport                      | `uz.webtransport`                   | Helper-only, chưa live   |
+
+Package biên dịch BoringSSL, lsquic, libdeflate và zlib từ source đã pin bằng
+toolchain C và C++ của Zig. Bạn không cần CMake, zlib hệ thống hay thư viện TLS
+riêng.
+
+## Toolchain được hỗ trợ
+
+Phiên bản 2.1.6 yêu cầu Zig 0.16.0. Linux và macOS trên `x86_64` và `aarch64`
+là nền tảng runtime được hỗ trợ. Windows có job compile và runtime native;
+hỗ trợ chính thức chỉ được công bố sau khi job runtime pass cho commit phát
+hành. FreeBSD, NetBSD, OpenBSD và DragonFlyBSD là target build cộng đồng,
+không có CI runtime riêng.
+
+## Bước tiếp theo
+
+- [Vì sao µWebZockets](/docs/why-uwebsockets) giải thích các đánh đổi.
+- [Động lực](/docs/getting-started/motivation) bắt đầu từ vấn đề thiết kế giải
+  quyết.
+- [Quickstart](/docs/getting-started/quickstart) giúp bạn chạy server đầu tiên.
+- [Thuật ngữ](/docs/getting-started/glossary) định nghĩa các từ lặp lại.

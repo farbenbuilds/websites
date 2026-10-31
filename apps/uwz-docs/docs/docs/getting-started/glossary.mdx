@@ -1,0 +1,47 @@
+---
+title: Glossary
+description: Define the recurring terms for capacity, ownership, backpressure, and protocol state used across the µWebZockets site.
+sidebar:
+  order: 14
+search:
+  tags: [getting-started, reference]
+---
+
+Use this glossary when a page names a term that belongs to the runtime model.
+Each entry gives the meaning used on this site and links to the page that
+explains it in context.
+
+| Term                      | Definition                                                                                                                                                                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Application slab**      | The one contiguous allocation that holds the connection pool, request buffers, message regions, write queues, and router storage for one application. See [What is µWebZockets](/docs/what-is-uwebsockets).                                          |
+| **Async token**           | A copyable, generation-checked `AsyncResponse` value that completes exactly once on the owning event loop. See [Motivation](/docs/getting-started/motivation).                                                                                       |
+| **Backpressure**          | A bounded producer signal, usually `error.WouldBlock`, that asks the caller to resume later. See [Your first WebSocket](/docs/examples/first-websocket#backpressure).                                                                                |
+| **Borrowed**              | A slice owned by a connection or request and valid only for the callback. The handler must copy data it keeps. See [Philosophy](/docs/getting-started/philosophy#explicit-ownership).                                                                |
+| **Capacity**              | A compile-time or startup bound, not a throughput number. See [FAQ](/docs/getting-started/faq#can-capacity-grow-at-runtime).                                                                                                                         |
+| **Cluster**               | A thread-per-core worker group with one loop and one slab per worker, coordinated through bounded rings. See [Your first cluster](/docs/examples/first-cluster).                                                                                     |
+| **Completion**            | An event-loop result for accept, read, write, close, timer, or async wake. Completions are inline members of their owner, not heap objects.                                                                                                          |
+| **Connection slot**       | One reusable `TcpConnection` in the pool. A slot returns to the freelist only after its close, read, and write completions drain.                                                                                                                    |
+| **Drain**                 | The callback invoked when a bounded write queue has room again. Shutdown is a separate path that stops accepting, closes active connections, and drains completions. See [Your first HTTP server](/docs/examples/first-http-server#stop-it-cleanly). |
+| **Ephemeral certificate** | A self-signed certificate generated in memory at startup for local development. See [Your first TLS server](/docs/examples/first-tls-server).                                                                                                        |
+| **Handler**               | A function registered on a route and invoked by the dispatcher. See [Your first HTTP server](/docs/examples/first-http-server).                                                                                                                      |
+| **HPACK**                 | HTTP/2 header compression. The server keeps bounded per-session HPACK state.                                                                                                                                                                         |
+| **HTTP/3**                | The HTTP mapping over QUIC, using QPACK header compression and UDP transport. See [Your first HTTP/3 server](/docs/examples/first-http3-server).                                                                                                     |
+| **Middleware**            | An ordered callback that runs before route dispatch and may stop the chain. The global chain is capped at 32 callbacks.                                                                                                                              |
+| **mTLS**                  | Mutual TLS, where the client also presents a certificate that the server verifies against a CA bundle. See [Your first TLS server](/docs/examples/first-tls-server#mutual-tls).                                                                      |
+| **Preset**                | A named `ServerConfig` tuned for a workload shape: microservice, WebSocket chat, or file server. See [Examples](/docs/examples).                                                                                                                     |
+| **Pub/sub**               | Bounded topic subscription and publish within one application or cluster. See [Your first WebSocket](/docs/examples/first-websocket#pubsub).                                                                                                         |
+| **QPACK**                 | HTTP/3 header compression. Header sets and decoded fields use fixed startup pools.                                                                                                                                                                   |
+| **QUIC**                  | The UDP transport beneath HTTP/3, with its own connection, stream, and packet state. See [Your first HTTP/3 server](/docs/examples/first-http3-server).                                                                                              |
+| **Route capture**         | A borrowed `:name` or terminal `*name` value extracted from the path. See [Your first HTTP server](/docs/examples/first-http-server).                                                                                                                |
+| **Shared-nothing**        | A design where each worker owns its loop, slab, and mutable state, and no thread touches another worker's slab. See [Your first cluster](/docs/examples/first-cluster).                                                                              |
+| **Slab layout**           | The computed partition of the application slab into pool, buffer, queue, and router regions. See the [capacity model](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md).                                                   |
+| **SoA**                   | Structure of arrays: parallel arrays that group hot fields for cache-friendly scans.                                                                                                                                                                 |
+| **0-RTT**                 | TLS 1.3 early data. TCP dispatches only safe methods before the handshake confirms; the live HTTP/3 listener disables early data.                                                                                                                    |
+| **Worker**                | One OS thread with its own event loop, slab, and optional TLS context. See [Your first cluster](/docs/examples/first-cluster).                                                                                                                       |
+| **Write queue**           | The fixed per-connection ring that holds response bytes until the socket drains. It returns `error.WouldBlock` when full.                                                                                                                            |
+
+## Related pages
+
+- [What is µWebZockets](/docs/what-is-uwebsockets)
+- [Philosophy](/docs/getting-started/philosophy)
+- [FAQ](/docs/getting-started/faq)

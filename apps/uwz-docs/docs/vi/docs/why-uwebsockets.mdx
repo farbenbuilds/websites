@@ -1,0 +1,110 @@
+---
+title: Vì sao chọn µWebZockets
+description: So sánh thiết kế shared-nothing có giới hạn với cấp phát theo từng request và quyết định mô hình này có phù hợp với workload của bạn hay không.
+sidebar:
+  order: 2
+search:
+  tags: [getting-started, concept]
+---
+
+µWebZockets dành cho các dịch vụ Zig cần thất bại tại một giới hạn đã biết
+thay vì suy giảm không đoán trước dưới tải. Nó phù hợp khi bộ nhớ được lập kế
+hoạch, độ trễ quan trọng và một handler API dùng chung cho nhiều giao thức giúp
+giảm code lặp lại.
+
+Nó không phù hợp khi bạn cần capacity co giãn, streaming request body, một hệ
+sinh thái client được quản lý hoặc hành vi giao thức nằm ngoài phạm vi đã ghi.
+
+## Vấn đề thiết kế giải quyết
+
+| Vấn đề                           | Hệ quả ở server thông thường                               | Cách µWebZockets xử lý                                            |
+| -------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cấp phát mỗi request             | Độ trễ tăng vọt, tranh chấp allocator, bộ nhớ khó đoán     | Một slab lúc khởi động; buffer request và write queue có giới hạn |
+| Queue không giới hạn             | Bộ nhớ tăng đến khi process bị dừng                        | Write queue cố định; producer nhận `error.WouldBlock`             |
+| Trạng thái chia sẻ               | Lock và tranh chấp cache line trên hot path                | Một worker sở hữu loop, slab và connection state                  |
+| Handler riêng cho từng giao thức | Nhiều nhánh code cho HTTP/1.1, HTTP/2, HTTP/3 và WebSocket | Một ranh giới `Request` và `Response`                             |
+| Giới hạn ngầm                    | Lỗi hiện ra dưới dạng timeout hoặc socket bị đóng          | Giới hạn có tên, lỗi có kiểu và rejection có cấu trúc             |
+
+## Code thay đổi thế nào
+
+Bạn chọn capacity lúc khởi động, đăng ký route trước listener đầu tiên, và
+giữ công việc handler đồng bộ trừ khi dùng async token. Giá trị ứng dụng phải
+ở địa chỉ ổn định khi listener đang chạy. Công việc hoãn lại hoàn tất trên event loop sở hữu
+connection. Các đoạn này lược bỏ import và thân handler; [quickstart](/docs/getting-started/quickstart)
+cho thấy chương trình hoàn chỉnh.
+
+```zig
+var app = try uz.App(128).init(init.io);
+defer app.deinit();
+
+_ = try app.get("/", hello);
+try app.listen("0.0.0.0", 3000);
+try app.run();
+```
+
+Cùng hình dạng đó mở rộng sang nhóm worker mà không đổi handler:
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(128)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/", hello);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+## Cái giá phải trả
+
+Thiết kế có giới hạn luôn đi kèm đánh đổi:
+
+- Bạn phải tính số connection, request body, write queue, message WebSocket,
+  route, middleware và trạng thái giao thức. [Mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+  ghi các giá trị mặc định.
+- Cạn capacity được báo tường minh. Write queue đầy trả `error.WouldBlock`; request
+  quá lớn nhận `413` hoặc `431` kèm tài liệu có cấu trúc.
+- Không có cơ chế tăng capacity động. Muốn nâng giới hạn phải đổi cấu hình và khởi
+  động lại.
+- Request body được buffer thay vì stream đến handler. Bạn có thể stream
+  response qua `begin_stream`.
+- Client chỉ hỗ trợ HTTP/1.1, dùng host dạng số và không có redirect, cookie,
+  proxy, mTLS hay connection pooling.
+- Helper WebTransport chưa nối với listener HTTP/3 live, và cluster HTTP/3
+  không được hỗ trợ.
+- TLS chỉ hỗ trợ phiên bản 1.3. Bạn phải rolling restart để xoay chứng chỉ;
+  hot reload chưa được hỗ trợ.
+
+## Khi nào nên chọn
+
+Chọn µWebZockets khi bạn trả lời được các câu sau trước khi deploy:
+
+1. Số connection đồng thời tối đa là bao nhiêu?
+2. Request body hợp lệ lớn nhất là bao nhiêu?
+3. Mỗi connection được buffer bao nhiêu dữ liệu phản hồi?
+4. Process phải phục vụ protocol và TLS mode nào?
+5. Bao nhiêu worker nên sở hữu slab và event loop?
+
+Nếu các câu trả lời ổn định, mô hình capacity biến chúng thành một lần cấp
+phát lúc khởi động và một failure mode dễ dự đoán. Nếu chúng đổi theo từng
+request, runtime khác có thể phù hợp hơn.
+
+## Dùng bằng chứng thay cho tuyên bố
+
+Dự án công bố workflow kiểm tra giao thức, sanitizer, fuzz và benchmark thay vì
+hứa hẹn hiệu năng tuyệt đối. Benchmark là chốt chống hồi quy tương đối
+trên host và commit được nêu. Đọc [roadmap và ranh giới](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
+trước khi lặp lại một con số trong kế hoạch production.
+
+## Bước tiếp theo
+
+- [Triết lý](/docs/getting-started/philosophy) mô tả các quy tắc thiết kế.
+- [Cài đặt](/docs/getting-started/installation) thêm package vào dự án.
+- [FAQ](/docs/getting-started/faq) trả lời các câu hỏi ranh giới thường gặp.

@@ -1,0 +1,161 @@
+---
+title: Cluster đầu tiên
+description: Khởi động bốn worker shared-nothing, chia sẻ một port qua SO_REUSEPORT, kiểm tra phản hồi và shutdown nhóm bằng tín hiệu.
+sidebar:
+  order: 5
+search:
+  tags: [getting-started, tutorial, cluster]
+---
+
+Hướng dẫn này khởi động nhóm worker thread-per-core với bốn worker. Mỗi worker
+sở hữu event loop, slab khởi động và connection state riêng, đồng thời bind
+cùng port qua `SO_REUSEPORT` ở nền tảng hỗ trợ.
+
+## Điều kiện trước
+
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const worker_count = 4;
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a pinned shared-nothing worker") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(128)
+        .with_write_queue_size(32 * 1024)
+        .with_idle_timeout_ms(60_000)
+        .build_cluster(std.heap.page_allocator, worker_count, .{});
+    defer group.deinit();
+
+    const Cluster = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Cluster.Worker, index: usize) !void {
+            _ = index;
+            _ = try worker.get("/", hello);
+        }
+    }.routes);
+
+    try group.catch_shutdown_signals();
+    try group.listen("0.0.0.0", 3000);
+    try group.run();
+}
+```
+
+`build_cluster` nhận worker capacity lúc compile. Tham số cuối là
+`ClusterOptions`, có thể chọn số worker active nhỏ hơn và hành vi cluster
+khác. Dùng `build_cluster_from_environment` khi muốn `UWEBZOCKETS_WORKERS`
+ghi đè mặc định.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+Process khởi động bốn worker thread. Mỗi worker in record development log
+riêng và sở hữu một slab.
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+```text
+hello from a pinned shared-nothing worker
+```
+
+Lặp request vài lần. Kernel cân bằng connection được accept trên các listening
+socket; một TCP connection riêng lẻ nằm trên worker đã accept nó.
+
+## Nhóm sở hữu gì
+
+| Thành phần           | Sở hữu                                       |
+| -------------------- | -------------------------------------------- |
+| Event loop           | Một mỗi worker.                              |
+| Application slab     | Một mỗi worker, định cỡ từ cấu hình builder. |
+| Connection slot      | Thuộc worker đã accept.                      |
+| Route                | Đăng ký một lần mỗi worker qua `configure`.  |
+| Message cross-worker | Inbox lock-free có giới hạn mỗi worker.      |
+| TLS context          | Một mỗi worker khi bật TLS.                  |
+
+Không connection state, buffer request, write queue hay completion nào được
+chia sẻ giữa worker. Pinning là best effort: Linux dùng affinity lõi vật lý,
+Windows dùng process affinity mask, và macOS chạy không pin vì nền tảng không
+có API hard-affinity.
+
+## Vòng đời
+
+Thứ tự được hỗ trợ:
+
+```text
+build_cluster -> configure -> enable_https (optional) -> listen -> run
+-> request_shutdown or signal -> deinit
+```
+
+| Lệnh gọi                 | Quy tắc                                                    |
+| ------------------------ | ---------------------------------------------------------- |
+| `configure`              | Đăng ký route trên mỗi worker trước khi thread nào chạy.   |
+| `enable_https`           | Thiết lập TLS tùy chọn, sau `configure` và trước `listen`. |
+| `listen`                 | Bind port chia sẻ và bắt đầu accept.                       |
+| `run`                    | Spawn worker, join và trả lỗi đầu tiên.                    |
+| `catch_shutdown_signals` | Cài một watcher SIGINT/SIGTERM process-wide cho nhóm.      |
+| `request_shutdown`       | Yêu cầu shutdown cho mọi worker.                           |
+| `deinit`                 | Giải phóng lưu trữ worker sau khi loop dừng.               |
+
+`state()` báo `configured`, `running`, `stopped`, `releasing` hoặc `released`.
+Khi `run` trả lỗi worker, `first_failure()` báo index worker, phase lỗi và lỗi
+gốc. Lỗi đầu tiên thắng để shutdown cascade không thay thế nguyên nhân gốc.
+
+## Xem lỗi
+
+```zig
+group.run() catch |err| {
+    if (group.first_failure()) |failure| {
+        std.log.err("worker {d} ({s}): {s}", .{
+            failure.index,
+            @tagName(failure.phase),
+            @errorName(failure.err),
+        });
+    }
+    return err;
+};
+```
+
+Lỗi spawn ghi phase `spawn`, lỗi event loop ghi phase `run`, và lỗi drain sau
+run ghi phase `cleanup`.
+
+## Ranh giới
+
+- Cluster HTTP/3 và QUIC không được hỗ trợ. `init_http3` và `listen_udp` vẫn là
+  API single-application.
+- TLS cluster bao phủ HTTP/1.1 và HTTP/2 trên TCP. `enable_https` không cấu
+  hình chứng chỉ client. mTLS chỉ có qua `init_https_mtls` cho
+  single-application; TLS cluster không có đường mTLS được ghi.
+- Cluster Windows dùng `SO_REUSEADDR` vì không có `SO_REUSEPORT`. Phân phối
+  của kernel trên các listener là không xác định.
+- Worker count lớn hơn số lõi vật lý sẽ quấn vòng qua các lõi được chọn thay vì
+  giữ slab cho worker không dùng.
+
+## Tiếp theo
+
+- [HTTP/3 server đầu tiên](/docs/examples/first-http3-server) phục vụ
+  QUIC trên một ứng dụng.
+- [TLS server đầu tiên](/docs/examples/first-tls-server) bao gồm TLS
+  context mỗi worker.
+- [Ví dụ](/docs/examples) liệt kê bước
+  `tls_cluster`.

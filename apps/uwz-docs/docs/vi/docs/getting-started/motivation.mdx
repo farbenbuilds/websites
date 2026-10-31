@@ -1,0 +1,95 @@
+---
+title: Động lực
+description: Hiểu vì sao cấp phát có giới hạn, ownership tường minh và một API handler giúp hành vi của server µWebZockets dễ dự đoán.
+sidebar:
+  order: 1
+search:
+  tags: [getting-started, concept, capacity]
+---
+
+Phần lớn framework server giúp bạn sớm đạt throughput cao nhưng khiến capacity
+khó dự đoán. µWebZockets làm theo hướng ngược lại: xác định giới hạn tài
+nguyên trước, rồi dùng lại chúng trên hot path.
+
+## Vấn đề của cấp phát không giới hạn
+
+Request path thông thường cấp phát cho request, header, body, giá trị đã parse,
+response part và output đang chờ. Mỗi lần cấp phát thêm một failure mode:
+
+- Allocator có thể chậm hoặc bị tranh chấp dưới tải.
+- Bộ nhớ có thể tăng đến khi process bị dừng.
+- Độ trễ phụ thuộc allocator và garbage collector hoặc page fault.
+- Quá tải biểu hiện dưới dạng timeout, reset hoặc out-of-memory thay vì lỗi có tên.
+
+µWebZockets loại bỏ các cấp phát đó khỏi request path. `App(N)` và
+`Server.builder` cấp phát một slab lúc khởi động. Buffer request, connection slot,
+vùng message, write queue và lưu trữ router đến từ slab đó và trở lại slab khi
+connection đóng.
+
+## Vấn đề của trạng thái chia sẻ
+
+Bảng connection hoặc output queue dùng chung cần lock hay thao tác atomic trên mỗi
+lần truy cập. Trên nhiều lõi, phối hợp đó trở thành hot path. Mô hình
+shared-nothing cấp cho mỗi worker một event loop, một slab và trạng thái connection riêng.
+Các worker giao tiếp qua ring lock-free có giới hạn. Chỉ worker đã accept
+một connection mới được truy cập connection đó.
+
+Cái giá là trạng thái không tự động có mặt ở mọi nơi. Nếu một message phải
+đến mọi worker, hãy dùng API publish của cluster và xử lý inbox đầy như một kết quả
+có tên.
+
+## Vấn đề của API riêng cho từng giao thức
+
+HTTP/1.1, HTTP/2, HTTP/3 và WebSocket có framing, flow control và quy tắc vòng
+đời khác nhau. Một API handler riêng cho mỗi giao thức sẽ lặp lại routing,
+validation và code tạo response. µWebZockets giữ một ranh giới `Request` và
+`Response`, đẩy khác biệt giao thức xuống transport:
+
+| Lớp       | Sở hữu                                                 |
+| --------- | ------------------------------------------------------ |
+| Handler   | Method, target, header, body, capture của ứng dụng     |
+| Router    | Khớp static, parameter và wildcard; dispatch method    |
+| HTTP/1.1  | Parse có giới hạn, pipelining, keep-alive, write queue |
+| HTTP/2    | Frame, HPACK, lưu trữ stream, flow control             |
+| HTTP/3    | Stream QUIC, QPACK, validation request                 |
+| WebSocket | Upgrade, framing, nén, pub/sub                         |
+
+Handler vẫn thấy dữ kiện riêng của giao thức khi cần, như HTTP method hoặc
+WebSocket opcode. Nó không cần cấu trúc ứng dụng thứ hai để phục vụ chúng.
+
+## µWebZockets thay đổi gì
+
+1. **Capacity là tường minh.** Connection, body, header, route, middleware,
+   message và queue đều có giới hạn có tên.
+2. **Ownership là tường minh.** Request slice được mượn trong callback;
+   `Request.clone` và `req.json(T, allocator)` là các lối cấp phát được ghi.
+3. **Backpressure là một giá trị.** `error.WouldBlock` bảo producer quay lại
+   sau thay vì làm queue phình ra.
+4. **Shutdown có kết quả xác định.** Tín hiệu hoặc `request_shutdown` drain
+   event loop, giải phóng completion và trả control về cho caller.
+5. **Một API phục vụ nhiều giao thức.** Cùng một route trả lời request HTTP/1.1,
+   HTTP/2 và HTTP/3; route WebSocket dùng cùng giá trị ứng dụng.
+
+## Cái giá phải trả
+
+Mô hình đòi hỏi nhiều hơn từ người viết ứng dụng:
+
+- Bạn phải ước lượng capacity trước khi deploy.
+- Giới hạn cố định không tăng theo tải; tăng capacity cần khởi động lại.
+- Consumer chậm phải xử lý drain thay vì dựa vào buffer không giới hạn.
+- Request body được buffer, nên upload lớn cần body capacity lớn hơn hoặc
+  thiết kế khác.
+- Callback chạy trên event loop sở hữu. Hãy chuyển công việc blocking sang
+  thread khác và dùng async token để báo hoàn tất.
+
+Đây là các ràng buộc có chủ đích. [Mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+giải thích cách tính slab, và [Vì sao µWebZockets](/docs/why-uwebsockets) so
+sánh đánh đổi với thiết kế khác.
+
+## Bước tiếp theo
+
+- [Triết lý](/docs/getting-started/philosophy) biến các vấn đề này thành quy
+  tắc thiết kế.
+- [Cài đặt](/docs/getting-started/installation) thêm package.
+- [HTTP server đầu tiên](/docs/examples/first-http-server) cho thấy mô
+  hình trong một chương trình hoàn chỉnh.

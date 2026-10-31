@@ -12,18 +12,18 @@ describe("docs home index", () => {
 
     expect(english.items).toHaveLength(6);
     expect(vietnamese.items).toHaveLength(6);
-    expect(english.items[0]?.href).toBe("/getting-started");
-    expect(english.items.slice(1).every(({ href }) => href === "#")).toBe(true);
-    expect(english.items[5]?.title).toBe("Explore Type-safety");
-    expect(vietnamese.items[5]?.title).toBe("Khám phá Type-safety");
+    expect(english.items[0]?.href).toBe("/docs/getting-started");
+    expect(english.items.every(({ href }) => href.startsWith("/docs/"))).toBe(true);
+    expect(english.items[5]?.title).toBe("Explore the examples");
+    expect(vietnamese.items[5]?.title).toBe("Khám phá các ví dụ");
   });
 
   it("renders the same entries for agent-facing markdown", () => {
     const markdown = renderIndexCardsMarkdown("en");
 
     expect(markdown).toContain("## Start here.");
-    expect(markdown).toContain("[Share nothing rule](#)");
-    expect(markdown).toContain("[Explore Type-safety](#)");
+    expect(markdown).toContain("[Share nothing rule](/docs/examples/first-cluster)");
+    expect(markdown).toContain("[Explore the examples](/docs/examples)");
     expect(markdown).not.toContain("Semi-production ready.");
   });
 });

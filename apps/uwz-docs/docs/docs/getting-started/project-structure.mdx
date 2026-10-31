@@ -1,0 +1,110 @@
+---
+title: Project structure
+description: Organize a µWebZockets consumer project with build files, source modules, tests, static assets, and clear module boundaries.
+sidebar:
+  order: 5
+search:
+  tags: [getting-started, concept, operations]
+---
+
+A µWebZockets project is a normal Zig project with three required files. Keep
+application code in `src/`, tests in your own `tests/` directory, and static
+files wherever you want to serve them from.
+
+## Minimal project
+
+```text
+hello-uwz/
+├── build.zig
+├── build.zig.zon
+└── src/
+    └── main.zig
+```
+
+| Path            | Purpose                                                          |
+| --------------- | ---------------------------------------------------------------- |
+| `build.zig`     | Adds the `uWebZockets` module and defines install and run steps. |
+| `build.zig.zon` | Pins the package version and dependency hash.                    |
+| `src/main.zig`  | Creates the application, registers routes, listens, and runs.    |
+
+`zig fetch --save` writes the dependency entry in `build.zig.zon`. Do not edit
+the generated hash by hand.
+
+## Grow by responsibility
+
+A small server can stay in `src/main.zig`. When it grows, split by
+responsibility rather than by line count:
+
+```text
+src/
+├── main.zig       # startup, listener, shutdown
+├── routes.zig     # route registration
+├── handlers/      # HTTP and WebSocket handlers
+└── domain/        # pure types and functions
+```
+
+| Code                        | Suggested location                                    |
+| --------------------------- | ----------------------------------------------------- |
+| Startup and listener wiring | `src/main.zig`                                        |
+| Route registration          | `src/routes.zig`                                      |
+| HTTP handlers               | `src/handlers/http.zig`                               |
+| WebSocket handlers          | `src/handlers/websocket.zig`                          |
+| JSON-RPC procedures         | `src/handlers/rpc.zig`                                |
+| Pure domain logic           | `src/domain/`                                         |
+| Tests                       | `tests/`                                              |
+| Static assets               | `public/` or another directory passed to `app.static` |
+
+Keep pure domain code independent of `uz.Request` and `uz.Response` when it does
+not need them. A pure function is easier to test and can be reused by an HTTP
+handler, a WebSocket callback, or a JSON-RPC procedure.
+
+## Package boundary
+
+Import the package from one module:
+
+```zig
+const uz = @import("uWebZockets");
+```
+
+The module exposes the application and request/response types, WebSocket,
+JSON-RPC, TLS, middleware, client, metrics, and the other supported helpers.
+Application code should use those exports rather than importing files from the
+package source tree.
+
+The package manifest supplies the native link metadata for BoringSSL, lsquic,
+libdeflate, and zlib. A consumer does not add those dependencies or their link
+flags by hand.
+
+## Build commands
+
+| Command                            | Result                                           |
+| ---------------------------------- | ------------------------------------------------ |
+| `zig build`                        | Builds the executable.                           |
+| `zig build run`                    | Builds and starts the server.                    |
+| `zig build -Doptimize=ReleaseSafe` | Builds with runtime safety checks.               |
+| `zig build test`                   | Runs the test step when `build.zig` defines one. |
+
+`zig build run` blocks in the foreground. Use a second terminal for `curl` or a
+WebSocket client.
+
+## Where to put configuration
+
+Keep capacities and timeouts in one place, usually a `const` in `build.zig` or
+`src/main.zig`:
+
+```zig
+const server = try uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_body_size(64 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Values that size the application are compile-time or startup-time bounds. They
+are not read per request.
+
+## Next steps
+
+- [Quickstart](/docs/getting-started/quickstart) creates the minimal project.
+- [Examples](/docs/examples) adds the first server and protocol routes.
+- [FAQ](/docs/getting-started/faq) covers capacities and boundaries.

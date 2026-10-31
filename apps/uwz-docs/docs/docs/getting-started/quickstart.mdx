@@ -1,0 +1,163 @@
+---
+title: Quickstart
+description: Create a Zig project from scratch, add µWebZockets, run one complete server, and reach a verified HTTP response with curl.
+sidebar:
+  order: 4
+search:
+  tags: [getting-started, tutorial]
+---
+
+This quickstart creates a new Zig project, adds µWebZockets as a dependency,
+and reaches a verified `200 OK` response. It uses one complete program and one
+build command.
+
+## Prerequisites
+
+- Zig 0.16.0 on a supported host.
+- A terminal in the directory where you keep projects.
+- `curl`.
+
+## Create the project
+
+<Steps>
+  <Step title="Initialize a Zig project">
+    ```sh
+    mkdir hello-uwz
+    cd hello-uwz
+    zig init
+    ```
+
+    `zig init` creates `build.zig`, `build.zig.zon`, and a starter source tree.
+    You replace the generated executable with the server below.
+
+  </Step>
+  <Step title="Add the dependency">
+    ```sh
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+    ```
+
+    The command pins version 2.1.6 in `build.zig.zon`.
+
+  </Step>
+  <Step title="Wire the module">
+    Replace `build.zig` with this file:
+
+    ```zig
+    const std = @import("std");
+
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
+        const optimize = b.standardOptimizeOption(.{});
+
+        const uz = b.dependency("uWebZockets", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = "hello-uwz",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+        b.installArtifact(exe);
+
+        const run = b.addRunArtifact(exe);
+        const runStep = b.step("run", "Run the hello server");
+        runStep.dependOn(&run.step);
+    }
+    ```
+
+  </Step>
+  <Step title="Write the server">
+    Replace `src/main.zig` with:
+
+    ```zig
+    const std = @import("std");
+    const uz = @import("uWebZockets");
+
+    fn hello(_: *uz.Request, res: *uz.Response) void {
+        res.text("hello from a dependency") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+    }
+
+    pub fn main(init: std.process.Init) !void {
+        var app = try uz.App(128).init(init.io);
+        defer app.deinit();
+
+        _ = try app.get("/", hello);
+        try app.catch_shutdown_signals();
+        try app.listen("0.0.0.0", 3000);
+        try app.run();
+    }
+    ```
+
+  </Step>
+  <Step title="Run it">
+    ```sh
+    zig build run
+    ```
+
+    Leave the server running and open a second terminal.
+
+  </Step>
+  <Step title="Verify the response">
+    ```sh
+    curl -i http://127.0.0.1:3000/
+    ```
+
+    The response starts with `HTTP/1.1 200 OK` and ends with:
+
+    ```text
+    hello from a dependency
+    ```
+
+  </Step>
+</Steps>
+
+## What just happened
+
+| Call                           | Effect                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `uz.App(128).init(init.io)`    | Allocates one slab for 128 concurrent connections and creates the loop. |
+| `app.get("/", hello)`          | Registers a synchronous `GET /` route before listening.                 |
+| `app.catch_shutdown_signals()` | Installs the SIGINT and SIGTERM watcher that requests shutdown.         |
+| `app.listen("0.0.0.0", 3000)`  | Binds the TCP listener and locks route registration.                    |
+| `app.run()`                    | Drives the event loop until shutdown completes.                         |
+| `app.deinit()`                 | Releases the slab after the loop has drained.                           |
+
+The handler signature is `fn (*uz.Request, *uz.Response) void`. The request
+slices are borrowed for the callback, and `res.text` copies the body into the
+bounded write queue before returning.
+
+## Change the port
+
+Pass a different port to `listen`:
+
+```zig
+try app.listen("127.0.0.1", 8080);
+```
+
+Binding `127.0.0.1` keeps the server on the loopback interface. Binding
+`0.0.0.0` accepts connections on every local interface.
+
+## Stop the server
+
+Press Ctrl+C in the server terminal. The signal watcher requests the normal
+shutdown path: it stops accepting, cancels timers, closes active connections,
+and drains completions before `deinit` releases the slab. In-flight requests
+are not guaranteed to finish. A forced kill skips the drain and is not the
+normal stop path.
+
+## Next
+
+- [Your first HTTP server](/docs/examples/first-http-server) explains the
+  lifecycle and adds route parameters.
+- [Your first WebSocket](/docs/examples/first-websocket) adds a
+  bidirectional route.
+- [Installation](/docs/getting-started/installation) covers the Zig download,
+  offline caches, and dependency pinning.

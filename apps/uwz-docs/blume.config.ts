@@ -43,6 +43,80 @@ export default defineConfig({
       { code: "vi", label: "Tiếng Việt" },
     ],
   },
+  navigation: {
+    sidebar: {
+      display: "group",
+    },
+  },
+  redirects: [
+    { from: "/getting-started", to: "/docs/getting-started", status: 301 },
+    { from: "/getting-started/:slug*", to: "/docs/getting-started/:slug*", status: 301 },
+    { from: "/vi/getting-started", to: "/vi/docs/getting-started", status: 301 },
+    { from: "/vi/getting-started/:slug*", to: "/vi/docs/getting-started/:slug*", status: 301 },
+    {
+      from: "/docs/getting-started/first-http-server",
+      to: "/docs/examples/first-http-server",
+      status: 301,
+    },
+    {
+      from: "/docs/getting-started/first-websocket",
+      to: "/docs/examples/first-websocket",
+      status: 301,
+    },
+    {
+      from: "/docs/getting-started/first-json-rpc-service",
+      to: "/docs/examples/first-json-rpc-service",
+      status: 301,
+    },
+    {
+      from: "/docs/getting-started/first-tls-server",
+      to: "/docs/examples/first-tls-server",
+      status: 301,
+    },
+    {
+      from: "/docs/getting-started/first-cluster",
+      to: "/docs/examples/first-cluster",
+      status: 301,
+    },
+    {
+      from: "/docs/getting-started/first-http3-server",
+      to: "/docs/examples/first-http3-server",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-http-server",
+      to: "/vi/docs/examples/first-http-server",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-websocket",
+      to: "/vi/docs/examples/first-websocket",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-json-rpc-service",
+      to: "/vi/docs/examples/first-json-rpc-service",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-tls-server",
+      to: "/vi/docs/examples/first-tls-server",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-cluster",
+      to: "/vi/docs/examples/first-cluster",
+      status: 301,
+    },
+    {
+      from: "/vi/docs/getting-started/first-http3-server",
+      to: "/vi/docs/examples/first-http3-server",
+      status: 301,
+    },
+  ],
+  deployment: {
+    site: "https://uwz.farben.dev",
+  },
   integrations: [svelte()],
   agents: {
     markdownComponents: {
@@ -58,7 +132,7 @@ export default defineConfig({
     },
   },
   theme: {
-    accent: "orange",
+    accent: { light: "#a64600", dark: "#ffb300" },
     radius: "none",
     background: {
       light: "#f4f0e6",

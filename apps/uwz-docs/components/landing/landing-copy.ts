@@ -96,7 +96,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     summary: parseInlineMarkdown(landing.hero.summary),
     primaryAction: {
       label: landing.hero.primaryAction,
-      href: localizeHref("/getting-started", resolvedLocale),
+      href: localizeHref("/docs/getting-started", resolvedLocale),
     },
     secondaryAction: {
       label: landing.hero.secondaryAction,
@@ -120,7 +120,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
       ctaText: landing.server.ctaText,
       cta: {
         label: landing.server.cta,
-        href: localizeHref("/getting-started", resolvedLocale),
+        href: localizeHref("/docs/getting-started", resolvedLocale),
       },
     },
     author: {

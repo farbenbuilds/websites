@@ -1,0 +1,170 @@
+---
+title: Your first WebSocket
+description: Add a WebSocket echo route with open, message, and close callbacks, then test it with wscat or a browser console.
+sidebar:
+  order: 2
+search:
+  tags: [getting-started, tutorial, websocket]
+---
+
+This tutorial adds a WebSocket route to the HTTP application. The server echoes
+every text or binary message, sends a welcome message on open, and logs when a
+peer disconnects.
+
+## Prerequisites
+
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `npx` for `wscat`, or a browser with a JavaScript console.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.send("welcome", .text) catch |err| {
+        std.log.err("welcome failed: {}", .{err});
+    };
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| {
+        std.log.err("echo failed: {}", .{err});
+    };
+}
+
+fn on_close(_: *uz.WebSocket) void {
+    std.log.info("websocket closed", .{});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/echo", .{
+        .open = on_open,
+        .message = on_message,
+        .close = on_close,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`app.ws` registers an HTTP/1.1 upgrade route. The route uses the same
+application value and the same bounded connection slab as the HTTP routes.
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify with wscat
+
+In another terminal:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+Send a message at the prompt:
+
+```console
+Connected (press CTRL+C to quit)
+< welcome
+> hello
+< hello
+```
+
+The first line is the server's welcome message. The second is the echo of the
+text you sent. Binary messages follow the same path and keep their opcode.
+
+## Verify with a browser
+
+Open the developer console on any page and run:
+
+```js
+const socket = new WebSocket("ws://127.0.0.1:3000/echo");
+socket.addEventListener("open", () => socket.send("hello from the browser"));
+socket.addEventListener("message", (event) => console.log(event.data));
+```
+
+The console prints `welcome` and then `hello from the browser`.
+
+## What the callbacks own
+
+| Callback  | Signature                                        | Lifetime rule                                  |
+| --------- | ------------------------------------------------ | ---------------------------------------------- |
+| `open`    | `fn (*uz.WebSocket) void`                        | Runs after the upgrade succeeds.               |
+| `message` | `fn (*uz.WebSocket, []const u8, uz.Opcode) void` | The message slice is valid only for this call. |
+| `close`   | `fn (*uz.WebSocket) void`                        | Runs once when the socket closes.              |
+
+Copy a message into application-owned storage before starting work that outlives
+the callback. `ws.send` copies the bytes into the bounded write queue before it
+returns, so the send itself does not borrow the message slice.
+
+## Backpressure
+
+`ws.send` returns `error.WouldBlock` when the write queue for that connection is
+full. Do not drop the message silently and do not block the event loop. Add the
+`drain` callback to the existing `/echo` registration to resume the producer:
+
+```zig
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("resume after {d} buffered bytes", .{ws.buffered_amount()});
+}
+
+_ = try app.ws("/echo", .{
+    .open = on_open,
+    .message = on_message,
+    .close = on_close,
+    .drain = on_drain,
+});
+```
+
+A production producer keeps its unsent bytes in bounded application storage and
+retries from `drain`. The write queue is per connection and sized by the
+application configuration.
+
+## Pub/sub
+
+The WebSocket object also exposes the bounded pub/sub engine:
+
+```zig
+fn on_chat_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("global", message, opcode == .text);
+}
+```
+
+`subscribe`, `publish`, and `unsubscribe` operate on fixed-capacity topics. A
+publish reports how many subscribers it reached. `App.cluster` coordinates
+cross-worker publishes through bounded per-worker inboxes.
+
+## Boundaries
+
+- The library has no WebSocket client yet. Use a browser, `wscat`, or another
+  client for testing.
+- Per-message deflate is opt-in with `.compression = .permessage_deflate` and
+  requires compression scratch. The HTTP/2 tunnel path carries uncompressed
+  frames.
+- Incoming messages are capped by `max_frame_size` and `max_message_size`. The
+  defaults are 16 KiB.
+- A route whose limits exceed the configured message capacity fails
+  registration with `error.InvalidWebSocketLimits` before the listener starts.
+  The process never accepts a peer it cannot serve, and no HTTP status is sent
+  for the configuration error.
+
+## Next
+
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
+  adds typed procedures.
+- [Examples](/docs/examples) points to the pub/sub chat
+  example.
+- [FAQ](/docs/getting-started/faq) lists the WebSocket boundaries.

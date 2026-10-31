@@ -1,0 +1,141 @@
+---
+title: Your first JSON-RPC service
+description: Register a typed math.add procedure, mount it on App.rpc, and verify the JSON-RPC request and response with curl.
+sidebar:
+  order: 3
+search:
+  tags: [getting-started, tutorial, json-rpc]
+---
+
+This tutorial mounts a typed JSON-RPC 2.0 service on `/rpc`. It defines one
+procedure, decodes named parameters into a Zig struct, and serializes a typed
+result.
+
+## Prerequisites
+
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct {
+    left: i64,
+    right: i64,
+};
+
+const AddResult = struct {
+    sum: i64,
+};
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init(init.io);
+    defer server.deinit();
+
+    var rpc = uz.json_rpc.Service{};
+    try rpc.register_typed("math.add", AddParams, AddResult, add);
+    _ = try server.rpc("/rpc", &rpc);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3000);
+    try server.run();
+}
+```
+
+`register_typed` builds the parameter decoder and result writer at compile time.
+The handler receives a decoded `AddParams` value and returns an `AddResult` or
+one of the `HandlerError` values.
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify it
+
+```sh
+curl http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```json
+{ "jsonrpc": "2.0", "result": { "sum": 5 }, "id": 1 }
+```
+
+The response is an HTTP 200 with one JSON-RPC result. A notification without an
+`id` returns HTTP 204 because no response body is requested.
+
+## Request rules
+
+| Rule               | Behavior                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Content type       | The request must carry exactly one `application/json` or `application/json-rpc` header. |
+| Method names       | Copied during registration; the registry is sealed when the service is mounted.         |
+| Parameter lifetime | Parameters are borrowed only for the callback.                                          |
+| Typed scratch      | Typed adapters use 4 KiB of fixed stack scratch for decoded parameters.                 |
+| Result capacity    | The default service response buffer is 16 KiB.                                          |
+| Batches            | Single calls, notifications, and batches are supported.                                 |
+
+Complete JSON syntax is validated before a batch invokes its first procedure.
+If a batch is malformed, no procedure runs. A method name that is missing,
+duplicated, or too long fails registration with a named error.
+
+## Larger parameters
+
+The typed adapter fits parameters into 4 KiB. For a larger type, use the
+lower-level `register` API with `Call.parse_params` and an explicit allocator.
+Register the procedure before `server.rpc` mounts the service; the example uses
+a different method name because `math.add` is already registered above:
+
+```zig
+fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+    try call.result(.{ .sum = parsed.value.left + parsed.value.right });
+}
+
+try rpc.register("math.add_large", custom);
+```
+
+The allocator is the caller's choice. The request path remains bounded when the
+procedure uses fixed storage or a bounded allocator.
+
+## Application errors
+
+Return a JSON-RPC application error with `Call.fail`:
+
+```zig
+fn divide(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    return call.fail(-32001, "division by zero");
+}
+```
+
+The dispatcher turns the fault into a JSON-RPC error object with the supplied
+code and message. Standard codes are available as
+`uz.json_rpc.StandardError`.
+
+## Cluster note
+
+One mounted service owns one HTTP response buffer and belongs to one event
+loop. In a worker group, create one service per worker and mount it inside the
+`configure` callback. Do not share a service across workers.
+
+## Next
+
+- [Your first TLS server](/docs/examples/first-tls-server) serves the
+  same routes over HTTPS.
+- [Examples](/docs/examples) lists the runnable
+  `rpc_server` step.
+- [FAQ](/docs/getting-started/faq) covers the batched-request caveat.

@@ -1,0 +1,106 @@
+---
+title: What is µWebZockets
+description: Understand the µWebZockets runtime model, protocol surface, and supported Zig toolchain before you write your first route.
+sidebar:
+  order: 1
+search:
+  tags: [getting-started, concept]
+---
+
+µWebZockets is a server framework for Zig 0.16.0 that handles HTTP/1.1,
+HTTP/2, HTTP/3, WebSocket, and JSON-RPC through one typed application API. It
+targets services that need bounded memory and predictable latency more than they
+need elastic capacity.
+
+The project name appears as µWebZockets in prose, `uWebZockets` in package
+paths, and `uz` in Zig code.
+
+## One application, several protocols
+
+An application value owns its routes and its transport state. The same handler
+signature serves every HTTP version:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+You register the handler once and choose the transport at startup:
+
+| Transport                           | Initializer                            | Listener         |
+| ----------------------------------- | -------------------------------------- | ---------------- |
+| Plain HTTP/1.1                      | `App(N).init`                          | `listen`         |
+| HTTPS with PEM files                | `init_https`                           | `listen`         |
+| HTTPS with an in-memory certificate | `init_https_ephemeral`                 | `listen`         |
+| HTTP/3 over QUIC                    | `init_http3` or `init_http3_ephemeral` | `listen_udp`     |
+| Worker group                        | `Server.builder(...).build_cluster`    | `Cluster.listen` |
+
+The protocol differences stay underneath the handler boundary: HTTP/2 stream
+storage, HTTP/3 QPACK state, and WebSocket framing are connection-owned, and the
+application sees borrowed request data with a callback-scoped lifetime.
+
+## One startup allocation
+
+`App(N)` is a compile-time capacity type for `N` concurrent connections. Its
+initializer allocates one contiguous slab that contains the connection pool,
+HTTP/1.1 request buffers, WebSocket message regions, response write queues,
+router storage, and optional compression scratch. The request path reuses those
+regions and does not allocate.
+
+That design makes capacity a configuration decision rather than a runtime
+surprise. `ServerConfig`, `Presets`, and `Server.builder` expose the limits as
+named values. Exhaustion returns a specific error or a structured rejection
+instead of growing a queue.
+
+## Shared-nothing workers
+
+`App.cluster(worker_count)` and `Server.builder(...).build_cluster(...)` create a
+thread-per-core group. Each worker owns one event loop and one slab, binds the
+same port through `SO_REUSEPORT` where the platform supports it, and coordinates
+with other workers only through bounded lock-free rings. A connection stays
+inside the worker that accepted it.
+
+The cluster API is additive. A single `App` is still the shortest path for a
+service that does not need multiple cores, and TLS clusters remain TCP-only.
+
+## What ships in the package
+
+| Surface                         | Public entry point                  | Status                |
+| ------------------------------- | ----------------------------------- | --------------------- |
+| HTTP/1.1 routing and middleware | `App`, `Request`, `Response`        | Supported             |
+| HTTP/2 and HPACK                | `init_https`, `uz.http2`            | Supported, bounded    |
+| HTTP/3 and QPACK                | `init_http3`, `listen_udp`          | Supported, bounded    |
+| WebSocket server                | `App.ws`, `uz.WebSocket`            | Supported             |
+| JSON-RPC 2.0                    | `uz.json_rpc.Service`, `App.rpc`    | Supported             |
+| TLS 1.3 and mTLS                | `init_https`, `init_https_mtls`     | Supported             |
+| Worker group                    | `Server.builder(...).build_cluster` | Supported on TCP      |
+| C ABI                           | `include/uWebZockets.h`             | High-level subset     |
+| HTTP/1.1 client                 | `uz.client`                         | Supported, bounded    |
+| WebTransport                    | `uz.webtransport`                   | Helper-only, not live |
+
+The package builds BoringSSL, lsquic, libdeflate, and zlib from pinned sources
+with Zig's own C and C++ toolchain. You do not need CMake, system zlib, or a
+separate TLS library.
+
+## Supported toolchain
+
+Version 2.1.6 requires Zig 0.16.0. Linux and macOS on `x86_64` and `aarch64`
+are the supported runtime targets. Windows has native compile and runtime jobs;
+official support follows a green runtime job for the release commit. FreeBSD,
+NetBSD, OpenBSD, and DragonFlyBSD are community build targets without dedicated
+runtime CI.
+
+## Next steps
+
+- [Why µWebZockets](/docs/why-uwebsockets) explains the tradeoffs behind these
+  choices.
+- [Motivation](/docs/getting-started/motivation) starts from the problems the
+  design addresses.
+- [Quickstart](/docs/getting-started/quickstart) gets a server running.
+- [Glossary](/docs/getting-started/glossary) defines the recurring terms.

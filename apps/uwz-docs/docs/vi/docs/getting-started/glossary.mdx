@@ -1,0 +1,47 @@
+---
+title: Thuật ngữ
+description: Định nghĩa các thuật ngữ cốt lõi về capacity, ownership, backpressure và protocol state trên site µWebZockets.
+sidebar:
+  order: 14
+search:
+  tags: [getting-started, reference]
+---
+
+Dùng glossary này khi một trang nêu thuật ngữ thuộc runtime model. Các thuật ngữ
+cốt lõi được giữ nguyên tiếng Anh vì đó là tên gọi developers dùng trong code và
+trong tài liệu gốc.
+
+| Thuật ngữ                 | Định nghĩa                                                                                                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Application slab**      | Vùng memory liên tục được cấp phát một lần, chứa connection pool, request buffer, message region, write queue và router storage cho một application. Xem [µWebZockets là gì](/docs/what-is-uwebsockets).                        |
+| **Async token**           | Giá trị `AsyncResponse` có thể copy, được generation-check và complete đúng một lần trên event loop sở hữu. Xem [Động lực](/docs/getting-started/motivation).                                                                   |
+| **Backpressure**          | Tín hiệu producer có giới hạn, thường là `error.WouldBlock`, yêu cầu caller quay lại sau. Xem [WebSocket đầu tiên](/docs/examples/first-websocket#backpressure).                                                                |
+| **Borrowed**              | Dữ liệu thuộc connection hoặc request và chỉ hợp lệ trong callback. Handler phải copy dữ liệu nếu muốn giữ lại. Xem [Triết lý](/docs/getting-started/philosophy#explicit-ownership).                                            |
+| **Capacity**              | Giới hạn lúc compile hoặc startup, không phải con số throughput. Xem [FAQ](/docs/getting-started/faq#can-capacity-grow-at-runtime).                                                                                             |
+| **Cluster**               | Worker group thread-per-core với một event loop và một slab cho mỗi worker, phối hợp qua ring có giới hạn. Xem [Cluster đầu tiên](/docs/examples/first-cluster).                                                                |
+| **Completion**            | Kết quả event loop cho accept, read, write, close, timer hoặc async wake. Completion là inline member của owner, không phải heap object.                                                                                        |
+| **Connection slot**       | Một `TcpConnection` được tái sử dụng trong pool. Slot chỉ trở lại freelist sau khi close, read và write completion drain.                                                                                                       |
+| **Drain**                 | Callback được gọi khi write queue có giới hạn còn chỗ. Shutdown là đường riêng: ngừng accept, đóng connection đang hoạt động và drain completion. Xem [HTTP server đầu tiên](/docs/examples/first-http-server#stop-it-cleanly). |
+| **Ephemeral certificate** | Chứng chỉ self-signed được tạo trong memory lúc startup cho local development. Xem [TLS server đầu tiên](/docs/examples/first-tls-server).                                                                                      |
+| **Handler**               | Hàm được đăng ký trên route và được dispatcher gọi. Xem [HTTP server đầu tiên](/docs/examples/first-http-server).                                                                                                               |
+| **HPACK**                 | Header compression cho HTTP/2. Server giữ HPACK state có giới hạn cho mỗi session.                                                                                                                                              |
+| **HTTP/3**                | HTTP mapping trên QUIC, dùng QPACK header compression và UDP transport. Xem [HTTP/3 server đầu tiên](/docs/examples/first-http3-server).                                                                                        |
+| **Middleware**            | Callback có thứ tự chạy trước route dispatch và có thể dừng chain. Global chain giới hạn 32 callback.                                                                                                                           |
+| **mTLS**                  | Mutual TLS, client cũng trình certificate để server xác minh với CA bundle. Xem [TLS server đầu tiên](/docs/examples/first-tls-server#mutual-tls).                                                                              |
+| **Preset**                | `ServerConfig` có tên, được tinh chỉnh cho một workload shape: microservice, WebSocket chat hoặc file server. Xem [Ví dụ](/docs/examples).                                                                                      |
+| **Pub/sub**               | Đăng ký và publish topic có giới hạn trong một application hoặc cluster. Xem [WebSocket đầu tiên](/docs/examples/first-websocket#pubsub).                                                                                       |
+| **QPACK**                 | Header compression cho HTTP/3. Header set và decoded field dùng fixed startup pool.                                                                                                                                             |
+| **QUIC**                  | UDP transport bên dưới HTTP/3, với connection state, stream và packet riêng. Xem [HTTP/3 server đầu tiên](/docs/examples/first-http3-server).                                                                                   |
+| **Route capture**         | Giá trị `:name` hoặc `*name` cuối path, được mượn từ request. Xem [HTTP server đầu tiên](/docs/examples/first-http-server).                                                                                                     |
+| **Shared-nothing**        | Thiết kế trong đó mỗi worker sở hữu event loop, slab và mutable state riêng; không thread nào chạm slab của worker khác. Xem [Cluster đầu tiên](/docs/examples/first-cluster).                                                  |
+| **Slab layout**           | Cách application slab được chia thành pool, buffer, queue và router storage. Xem [mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md).                                                |
+| **SoA**                   | Structure of arrays: các mảng song song nhóm hot field để scan thân thiện với cache.                                                                                                                                            |
+| **0-RTT**                 | TLS 1.3 early data. TCP chỉ dispatch safe method trước khi handshake xác nhận; HTTP/3 listener live tắt early data.                                                                                                             |
+| **Worker**                | Một OS thread với event loop, slab và TLS context tùy chọn riêng. Xem [Cluster đầu tiên](/docs/examples/first-cluster).                                                                                                         |
+| **Write queue**           | Ring cố định cho mỗi connection, giữ response byte đến khi socket drain. Trả `error.WouldBlock` khi đầy.                                                                                                                        |
+
+## Trang liên quan
+
+- [µWebZockets là gì](/docs/what-is-uwebsockets)
+- [Triết lý](/docs/getting-started/philosophy)
+- [FAQ](/docs/getting-started/faq)

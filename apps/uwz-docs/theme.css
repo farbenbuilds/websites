@@ -86,6 +86,8 @@ html {
   --blume-muted-foreground: #a39c90;
   --blume-border: #2c2a25;
   --blume-code-background: #1b1916;
+  --blume-accent: #ffb300;
+  --blume-accent-foreground: #160f02;
 
   /* 3.2:1 against the dark paper surface. */
   --farben-border-strong: #6b665c;

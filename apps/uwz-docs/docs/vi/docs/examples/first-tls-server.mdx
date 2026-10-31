@@ -1,0 +1,147 @@
+---
+title: TLS server đầu tiên
+description: Phục vụ HTTPS bằng chứng chỉ trong bộ nhớ, kiểm tra bằng curl -k và chuyển sang file PEM production cùng mTLS.
+sidebar:
+  order: 4
+search:
+  tags: [getting-started, tutorial, tls]
+---
+
+Hướng dẫn này khởi động HTTPS server với chứng chỉ được tạo trong bộ nhớ lúc
+khởi động. Nó không cần file chứng chỉ và không cần lệnh `openssl`, phù hợp
+cho test local và demo.
+
+## Điều kiện trước
+
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from ephemeral TLS") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+`init_https_ephemeral` tạo key ECDSA P-256 và chứng chỉ X.509 tự ký bằng
+BoringSSL trước khi loop chạy. Chứng chỉ bao gồm `localhost`, `127.0.0.1` và
+`::1`, mang extended key usage `serverAuth`, và có hiệu lực 90 ngày từ lúc khởi
+động.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra
+
+```sh
+curl -k https://127.0.0.1:3443/
+```
+
+```text
+hello from ephemeral TLS
+```
+
+Cờ `-k` tắt xác minh chứng chỉ. Chứng chỉ tự ký nên không client nào tin nó tự
+động. `curl -k` và thao tác "proceed anyway" của trình duyệt chỉ phù hợp cho
+smoke test local.
+
+Để xem giao thức được thương lượng:
+
+```sh
+curl -k -v https://127.0.0.1:3443/
+```
+
+Tìm dòng ALPN. Bản `curl` có hỗ trợ HTTP/2 thương lượng `h2`; bản không có
+thương lượng `http/1.1`:
+
+```text
+* ALPN: server accepted h2
+```
+
+TLS context chỉ dùng TLS 1.3 và quảng bá `h2` rồi `http/1.1`. HTTP/3 dùng
+context riêng quảng bá `h3`.
+
+## Dùng chứng chỉ production
+
+Thay initializer ephemeral bằng file PEM:
+
+```zig
+var server = try uz.App(128).init_https(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer server.deinit();
+```
+
+Tham số chứng chỉ là chuỗi PEM với leaf đầu tiên. Tham số key là private key
+PEM. BoringSSL kiểm tra key khớp chứng chỉ khi load, nên lệch cặp fail lúc khởi
+động với `error.PrivateKeyLoadFailed` thay vì trong handshake đầu tiên.
+
+Đường dẫn là slice Zig kết thúc bằng NUL. Trong lệnh gọi literal, string literal
+đã có kiểu cần thiết.
+
+## Vì sao không tin chứng chỉ được tạo
+
+Chứng chỉ được tạo là tự ký và cố ý không export được. Nó không nằm trong
+trust store nào, và chứng chỉ mới được tạo mỗi lần khởi động, nên session đã
+cache không sống qua restart. Khi workflow local cần chứng chỉ được tin, như
+service worker hoặc thiết bị mobile cùng LAN, tạo bằng `mkcert` hoặc CA nội bộ
+và truyền file cho `init_https`.
+
+## Mutual TLS [#mutual-tls]
+
+Khi client phải trình chứng chỉ, dùng `init_https_mtls` với bundle CA client:
+
+```zig
+var server = try uz.App(128).init_https_mtls(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+    .{ .mode = .required, .ca_path = "certs/client-ca.pem" },
+);
+defer server.deinit();
+```
+
+Chế độ chứng chỉ client giữ TLS 1.3 early data tắt vì chứng chỉ client được
+kiểm tra sau flight đầu. Handshake fail closed trước khi parser HTTP thấy
+request khi xác minh thất bại.
+
+## TLS cluster [#tls-clusters]
+
+Nhóm worker kết thúc TLS bằng `enable_https` hoặc `enable_https_ephemeral` sau
+`configure` và trước `listen`. Mỗi worker sở hữu TLS context riêng và load
+chứng chỉ một lần lúc khởi động. Xoay chứng chỉ là rolling restart; hot reload
+không được hỗ trợ.
+
+## Tiếp theo
+
+- [Cluster đầu tiên](/docs/examples/first-cluster) chạy một worker mỗi
+  lõi.
+- [HTTP/3 server đầu tiên](/docs/examples/first-http3-server) dùng QUIC
+  context riêng.
+- [FAQ](/docs/getting-started/faq) trả lời câu hỏi phiên bản TLS và xoay chứng
+  chỉ.

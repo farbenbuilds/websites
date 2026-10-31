@@ -22,6 +22,7 @@ presentation, and tooling as separate products with separate owners.
 | [CONTRIBUTING.md](.github/CONTRIBUTING.md)                   | Environment, commands, branch and PR process                             |
 | [SECURITY.md](SECURITY.md)                                   | Reporting, supported versions, trust boundaries                          |
 | [SKILL.md](SKILL.md)                                         | Project master skill and skill routing                                   |
+| [uWZ-TODO.md](uWZ-TODO.md)                                   | uWebZockets docs roadmap, page register, milestones, and status          |
 | [.github/COMMIT_CONVENTION.md](.github/COMMIT_CONVENTION.md) | Commit message format                                                    |
 
 ## Non-Negotiable Rules
@@ -53,6 +54,12 @@ rules agents most often break:
   `docs/` and `docs/vi/` MDX pages under Blume, including future pages such as
   `getting-started.mdx` and `api.mdx`. Never add MDX files, page prose,
   frontmatter, or docs routes to locale JSON or x18n resources.
+- Vietnamese pages keep the core technical vocabulary in English: slab,
+  capacity, backpressure, async token, worker, shared-nothing, handler,
+  middleware, route, request, response, connection, transport, event loop,
+  completion, buffer, queue, package, dependency, runtime, server, cluster.
+  Write natural Vietnamese around those terms; do not translate them literally.
+  The locale prefix is `/vi` (ISO 639-1), never `/vn`.
 - TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
   silence a real uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the

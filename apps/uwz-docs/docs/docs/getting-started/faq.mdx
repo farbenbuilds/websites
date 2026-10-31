@@ -1,0 +1,151 @@
+---
+title: FAQ
+description: Answers about allocation, capacity limits, platform support, clients, and deliberately unsupported protocol features.
+sidebar:
+  order: 13
+search:
+  tags: [getting-started, reference]
+---
+
+These answers cover the questions that decide whether µWebZockets fits a
+project. Each answer links to the page or source that owns the detail.
+
+## Does every request allocate?
+
+No. `App(N)` and `Server.builder` allocate one startup slab. Connection slots,
+HTTP/1.1 request buffers, WebSocket message regions, response write queues, and
+router storage come from that slab. The request, parse, route, and write paths
+do not allocate.
+
+The documented allocating request APIs are `Request.clone(allocator)` and
+`req.json(T, allocator)`. TLS setup, ephemeral certificate generation, QUIC
+engine pools, and compressed WebSocket scratch allocate at startup, before the
+listener accepts connections.
+
+## What happens when a capacity is exhausted?
+
+The failure is explicit:
+
+| Resource                    | Result                                                    |
+| --------------------------- | --------------------------------------------------------- |
+| Response write queue        | `error.WouldBlock`; resume from the `drain` callback.     |
+| HTTP request body           | `413 Payload Too Large` with a structured JSON document.  |
+| HTTP headers                | `431 Request Header Fields Too Large`.                    |
+| Connection pool             | The connection is rejected; the pool does not grow.       |
+| Cluster inbox               | A dropped count and wakeup failure in `PublishReport`.    |
+| JSON-RPC procedure registry | A named registration error before the service is mounted. |
+
+See the [capacity model](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+for the default values and the slab layout.
+
+## Can capacity grow at runtime?
+
+No. Fixed startup capacity is the architecture. `ServerConfig`,
+`Presets`, and the builder compute one slab before the first listener starts.
+Raising a limit requires a configuration change and a restart.
+
+`App.cluster` uses a compiled worker capacity but can run fewer active workers
+through `ClusterOptions.worker_count` or `UWEBZOCKETS_WORKERS`. Only active
+workers allocate slabs and threads.
+
+## Is the request body streamed to the handler?
+
+No. Handlers are synchronous and receive a buffered body. `max_body_size` bounds
+the HTTP/1.1 buffer; HTTP/2 and HTTP/3 use their own compiled body slabs.
+Response streaming is supported through `begin_stream`, and chunked output is
+supported through `begin_chunked`.
+
+## Does it support Windows?
+
+Windows on `x86_64-windows-gnu` has native compile and runtime jobs. Official
+support is claimed only after the runtime job is green for the release commit.
+No Windows binaries are published; consumers build from source.
+
+The Windows cluster uses `SO_REUSEADDR` because `SO_REUSEPORT` is unavailable.
+Kernel distribution across listeners is unspecified. Affinity uses
+`SetThreadAffinityMask`.
+
+## Which operating systems are supported?
+
+Linux and macOS on `x86_64` and `aarch64` are supported. Linux runs the hosted
+runtime and sanitizer matrix. macOS cross-compiles the test graph, but no hosted
+runner executes kqueue. FreeBSD, NetBSD, OpenBSD, and DragonFlyBSD are community
+build targets without dedicated runtime CI.
+
+## Is WebTransport available?
+
+The `uz.webtransport` and `uz.http3_extensions` helper modules exist, but they
+are not connected to the live lsquic listener. Extended CONNECT is answered with
+`501 Not Implemented`. The helper models cover draft-16 settings, sessions,
+datagrams, capsules, and error mapping for embedders and future backend work.
+
+## Does HTTP/2 support server push?
+
+No. HTTP/2 server push is not implemented. It is deprecated in practice and was
+removed from lsquic upstream.
+
+## Does it support h2c Upgrade?
+
+No. Cleartext HTTP/2 uses prior knowledge; TLS uses ALPN. The RFC 9113 Upgrade
+mechanism is not implemented.
+
+## Is TLS 1.2 supported?
+
+No. TLS is 1.3 only. This is a deliberate security posture, not a missing
+configuration. Ephemeral certificates use ECDSA P-256 and SHA-256.
+
+## Can certificates be reloaded without a restart?
+
+No. Production certificates are read once per process or per worker at startup.
+Rotation is a rolling restart. A worker group reads the PEM files once per
+worker, so a reconnect that lands on another worker may not resume a session
+from the previous worker.
+
+## How many concurrent HTTP/2 streams are supported?
+
+Eight per connection by default. WebSocket over HTTP/2 is limited to one active
+RFC 8441 tunnel per connection; additional tunnels receive
+`503 Service Unavailable` without disturbing the active one. Raising the stream
+count requires specializing the connection type.
+
+## What is the client scope? [#client-scope]
+
+The bundled client is HTTP/1.1 only. It supports numeric hosts, fixed request
+slots, timeouts, `Content-Length`, chunked bodies with trailers, and
+close-delimited bodies. It does not support DNS resolution, redirects, cookies,
+proxy configuration, connection pooling, mTLS, HTTP/2, or HTTP/3.
+
+There is no WebSocket client. Use a browser, `wscat`, or another client.
+
+## Can a cluster publish to every worker?
+
+Yes. `Cluster.publish` broadcasts through bounded per-worker rings.
+`publish_report` returns queued, dropped, and wakeup-failed counts plus the first
+worker that dropped a message. `all_delivered()` means every worker accepted the
+message and every wakeup was posted, not that an application subscriber
+consumed it.
+
+## Does HTTP/3 support clustering or 0-RTT?
+
+No. HTTP/3 and QUIC clustering are not supported. The live QUIC listener rejects
+TLS 0-RTT so replayable application requests never reach a handler. Congestion
+control is BBRv1 with per-connection pacing.
+
+## Why is there no dynamic worker count after startup?
+
+Workers own slabs, loops, and TLS contexts. Starting or stopping one after
+`run` would require a new lifecycle protocol and could race release teardown.
+`build_cluster_from_environment` chooses the active count before the group
+starts.
+
+## Where do I report a security issue?
+
+Follow the [security policy](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+Do not open a public issue for a vulnerability.
+
+## Next
+
+- [Glossary](/docs/getting-started/glossary) defines the terms used here.
+- [Why µWebZockets](/docs/why-uwebsockets) compares the tradeoffs.
+- [Your first HTTP server](/docs/examples/first-http-server) starts the
+  practical path.

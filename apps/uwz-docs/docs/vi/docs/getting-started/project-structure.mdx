@@ -1,0 +1,109 @@
+---
+title: Cấu trúc dự án
+description: Cách tổ chức dự án dùng µWebZockets với file build, source module, test, static asset và ranh giới module rõ ràng.
+sidebar:
+  order: 5
+search:
+  tags: [getting-started, concept, operations]
+---
+
+Dự án dùng µWebZockets là một dự án Zig thông thường với ba file bắt buộc. Giữ
+code ứng dụng trong `src/`, test trong thư mục `tests/` và file tĩnh ở
+thư mục bạn muốn phục vụ.
+
+## Dự án tối thiểu
+
+```text
+hello-uwz/
+├── build.zig
+├── build.zig.zon
+└── src/
+    └── main.zig
+```
+
+| Đường dẫn       | Mục đích                                                   |
+| --------------- | ---------------------------------------------------------- |
+| `build.zig`     | Thêm module `uWebZockets`, định nghĩa bước install và run. |
+| `build.zig.zon` | Pin phiên bản package và hash dependency.                  |
+| `src/main.zig`  | Tạo ứng dụng, đăng ký route, rồi gọi `listen` và `run`.    |
+
+`zig fetch --save` ghi dependency entry trong `build.zig.zon`. Không sửa hash
+được tạo bằng tay.
+
+## Mở rộng theo trách nhiệm
+
+Server nhỏ có thể ở trong `src/main.zig`. Khi lớn hơn, tách theo trách nhiệm
+thay vì theo số dòng:
+
+```text
+src/
+├── main.zig       # khởi động, listener, shutdown
+├── routes.zig     # đăng ký route
+├── handlers/      # handler HTTP và WebSocket
+└── domain/        # kiểu và hàm thuần
+```
+
+| Code                           | Vị trí đề xuất                                 |
+| ------------------------------ | ---------------------------------------------- |
+| Khởi động và cấu hình listener | `src/main.zig`                                 |
+| Đăng ký route                  | `src/routes.zig`                               |
+| Handler HTTP                   | `src/handlers/http.zig`                        |
+| Handler WebSocket              | `src/handlers/websocket.zig`                   |
+| Procedure JSON-RPC             | `src/handlers/rpc.zig`                         |
+| Domain logic thuần             | `src/domain/`                                  |
+| Test                           | `tests/`                                       |
+| Static asset                   | `public/` hoặc thư mục truyền cho `app.static` |
+
+Giữ domain logic thuần độc lập với `uz.Request` và `uz.Response` khi không cần
+chúng. Hàm thuần dễ test hơn và dùng lại được cho handler HTTP, callback
+WebSocket hoặc procedure JSON-RPC.
+
+## Ranh giới package
+
+Import package từ một module:
+
+```zig
+const uz = @import("uWebZockets");
+```
+
+Module export các kiểu ứng dụng và request/response, WebSocket, JSON-RPC, TLS,
+middleware, client, metrics và các helper được hỗ trợ. Code ứng dụng nên dùng
+các export đó thay vì import file từ source tree của package.
+
+Package manifest cung cấp metadata link native cho BoringSSL, lsquic,
+libdeflate và zlib. Dự án sử dụng package không cần tự thêm các dependency hay
+linker flag này.
+
+## Lệnh build
+
+| Lệnh                               | Kết quả                                            |
+| ---------------------------------- | -------------------------------------------------- |
+| `zig build`                        | Build executable.                                  |
+| `zig build run`                    | Build và khởi động server.                         |
+| `zig build -Doptimize=ReleaseSafe` | Build với runtime safety check.                    |
+| `zig build test`                   | Chạy bước test khi `build.zig` định nghĩa bước đó. |
+
+`zig build run` chiếm terminal hiện tại. Dùng terminal thứ hai cho `curl` hoặc
+WebSocket client.
+
+## Đặt cấu hình ở đâu
+
+Giữ capacity và timeout ở một chỗ, thường là `const` trong `build.zig` hoặc
+`src/main.zig`:
+
+```zig
+const server = try uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_body_size(64 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Giá trị sizing ứng dụng là giới hạn lúc compile hoặc startup. Chúng không được
+đọc lại mỗi request.
+
+## Bước tiếp theo
+
+- [Quickstart](/docs/getting-started/quickstart) tạo dự án tối thiểu.
+- [Ví dụ](/docs/examples) thêm server và route giao thức đầu tiên.
+- [FAQ](/docs/getting-started/faq) bao gồm capacity và ranh giới.

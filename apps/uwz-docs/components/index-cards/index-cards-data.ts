@@ -19,12 +19,12 @@ export type IndexCardsCopy = {
 type IndexCardKey = keyof SiteMessages["indexCards"]["items"];
 
 const INDEX_CARD_DEFINITIONS = [
-  { key: "gettingStarted", href: "/getting-started" },
-  { key: "shareNothing", href: "#" },
-  { key: "migrate", href: "#" },
-  { key: "configure", href: "#" },
-  { key: "clusterWorker", href: "#" },
-  { key: "typeSafety", href: "#" },
+  { key: "gettingStarted", href: "/docs/getting-started" },
+  { key: "shareNothing", href: "/docs/examples/first-cluster" },
+  { key: "migrate", href: "/docs/why-uwebsockets" },
+  { key: "configure", href: "/docs/getting-started/motivation" },
+  { key: "clusterWorker", href: "/docs/examples/first-cluster" },
+  { key: "examples", href: "/docs/examples" },
 ] as const satisfies readonly { readonly key: IndexCardKey; readonly href: string }[];
 
 export function indexCardsCopy(locale: string | undefined): IndexCardsCopy {

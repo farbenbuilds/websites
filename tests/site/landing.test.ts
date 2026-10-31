@@ -23,7 +23,7 @@ describe("uwz landing page", () => {
       expect(copy.author.socials).toHaveLength(2);
       expect(authorLinks.every((part) => part.className === "editorial-link")).toBe(true);
       expect(copy.hero.primaryAction.href).toBe(
-        locale === "vi" ? "/vi/getting-started" : "/getting-started",
+        locale === "vi" ? "/vi/docs/getting-started" : "/docs/getting-started",
       );
     }
   });

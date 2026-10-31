@@ -1,0 +1,111 @@
+---
+title: Why µWebZockets
+description: Compare bounded shared-nothing design with per-request allocation and decide whether the tradeoffs fit your workload.
+sidebar:
+  order: 2
+search:
+  tags: [getting-started, concept]
+---
+
+µWebZockets exists for Zig services that would rather fail at a known capacity
+than degrade unpredictably under load. It is a good fit when memory is planned,
+latency matters, and one handler API across protocols removes duplicated work.
+
+It is a poor fit when you need elastic capacity, request-body streaming, a
+managed client ecosystem, or protocol behavior outside the documented surface.
+
+## The problems it addresses
+
+| Problem                    | Consequence in a conventional server                            | µWebZockets response                                           |
+| -------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| Per-request allocation     | Latency spikes, allocator contention, and unpredictable memory  | One startup slab; bounded request buffers and write queues     |
+| Unbounded queues           | Memory growth hides overload until the process is killed        | Fixed write queues; producers observe `error.WouldBlock`       |
+| Shared mutable state       | Locks and cache-line contention on the hot path                 | One worker owns its loop, slab, and connection state           |
+| Protocol-specific handlers | Separate code paths for HTTP/1.1, HTTP/2, HTTP/3, and WebSocket | One `Request` and `Response` boundary                          |
+| Implicit limits            | Failures surface as timeouts or dropped sockets                 | Named limits, typed errors, and structured rejection documents |
+
+## What changes in your code
+
+You choose capacities at startup, register routes before the first listener, and
+keep handler work synchronous unless you use an async token. The application
+value stays at a stable address while it is listening. Deferred work completes
+on the loop that owns the connection. These snippets omit imports and the
+handler body; the [quickstart](/docs/getting-started/quickstart) shows a
+complete program.
+
+```zig
+var app = try uz.App(128).init(init.io);
+defer app.deinit();
+
+_ = try app.get("/", hello);
+try app.listen("0.0.0.0", 3000);
+try app.run();
+```
+
+The same shape scales to a worker group without changing the handler:
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(128)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/", hello);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+## What it costs
+
+Bounded design is a trade, not a free upgrade:
+
+- You must size connections, request bodies, write queues, WebSocket messages,
+  routes, middleware, and protocol state. The [capacity model](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+  documents the defaults.
+- Exhaustion is explicit. A full write queue returns `error.WouldBlock`; an
+  oversized request receives `413` or `431` with a structured document.
+- There is no dynamic capacity growth. Raising a limit means changing
+  configuration and restarting.
+- Request bodies are buffered, not streamed to handlers. Response streaming is
+  available through `begin_stream`.
+- The client is HTTP/1.1 only, with numeric hosts and no redirects, cookies,
+  proxy support, mTLS, or connection pooling.
+- WebTransport helpers are not connected to the live HTTP/3 listener, and HTTP/3
+  clustering is not supported.
+- TLS is 1.3 only. Certificate rotation is a rolling restart, not a hot reload.
+
+## When to choose it
+
+Choose µWebZockets when you can answer these questions before deployment:
+
+1. What is the maximum number of concurrent connections?
+2. What is the largest legitimate request body?
+3. How much response data may be buffered per connection?
+4. Which protocols and TLS modes must the process serve?
+5. How many workers should own slabs and event loops?
+
+If those answers are stable, the capacity model turns them into one startup
+allocation and a predictable failure mode. If they change per request, a
+different runtime may fit better.
+
+## Evidence over claims
+
+The project publishes protocol compliance, sanitizer, fuzz, and benchmark
+workflows rather than absolute performance promises. Benchmarks are relative
+regression guards on a named host and commit. Read the
+[roadmap and boundaries](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
+before repeating a number in production planning.
+
+## Next steps
+
+- [Philosophy](/docs/getting-started/philosophy) describes the design rules.
+- [Installation](/docs/getting-started/installation) adds the package to a
+  project.
+- [FAQ](/docs/getting-started/faq) answers the common boundary questions.

@@ -1,0 +1,87 @@
+---
+title: Getting started
+description: Install µWebZockets, build a complete server, and verify each core tutorial with curl or a WebSocket client in your own project.
+sidebar:
+  order: 0
+search:
+  tags: [getting-started, tutorial]
+---
+
+This section takes you from a clean machine to a running server. It covers
+installation, the first project, the application model, and the answers readers
+need before adding protocol routes.
+
+## Before you begin
+
+You need:
+
+- Zig 0.16.0 from [ziglang.org/download](https://ziglang.org/download/). Check
+  with `zig version`.
+- A Linux or macOS host on `x86_64` or `aarch64`. Windows has compile and
+  runtime jobs, but official runtime support follows a green release job.
+- `curl` for the HTTP examples.
+
+## The first-success path
+
+<Steps>
+  <Step title="Install Zig and the package">
+    Follow [Installation](/docs/getting-started/installation) to download Zig and add µWebZockets to
+    your own project.
+  </Step>
+  <Step title="Run the quickstart">
+    [Quickstart](/docs/getting-started/quickstart) creates one complete project and verifies it with
+    `curl`.
+  </Step>
+  <Step title="Understand the project">
+    [Project structure](/docs/getting-started/project-structure) shows where to put startup,
+    handlers, domain code, tests, and assets.
+  </Step>
+  <Step title="Add protocol routes">
+    Continue to [Examples](/docs/examples) for HTTP, WebSocket, JSON-RPC, TLS, cluster, and HTTP/3
+    tutorials.
+  </Step>
+</Steps>
+
+## Core tutorials
+
+| Tutorial                                                     | What you learn                       | Prerequisite |
+| ------------------------------------------------------------ | ------------------------------------ | ------------ |
+| [Motivation](/docs/getting-started/motivation)               | The reasoning behind bounded design  | None         |
+| [Philosophy](/docs/getting-started/philosophy)               | The design rules the API follows     | None         |
+| [Installation](/docs/getting-started/installation)           | Zig and the package dependency       | None         |
+| [Quickstart](/docs/getting-started/quickstart)               | A complete hello server              | Installation |
+| [Project structure](/docs/getting-started/project-structure) | The consumer project layout          | Installation |
+| [FAQ](/docs/getting-started/faq)                             | Allocation, capacity, and boundaries | None         |
+| [Glossary](/docs/getting-started/glossary)                   | Slab, capacity, backpressure, token  | None         |
+
+## Examples
+
+The [Examples](/docs/examples) category sits below this section and contains the
+protocol tutorials:
+
+- [Your first HTTP server](/docs/examples/first-http-server)
+- [Your first WebSocket](/docs/examples/first-websocket)
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
+- [Your first TLS server](/docs/examples/first-tls-server)
+- [Your first cluster](/docs/examples/first-cluster)
+- [Your first HTTP/3 server](/docs/examples/first-http3-server)
+
+## Conventions used in these tutorials
+
+Every Zig example declares a complete `main` and imports `uWebZockets`. The
+examples use `std.process.Init` and `init.io` because Zig 0.16 passes the I/O
+implementation through `main`.
+
+Error handling is explicit. A handler that cannot recover logs the error or
+returns a status; a tutorial does not hide a failure with `catch {}` unless the
+callback signature cannot return an error and the page explains why.
+
+Commands use a `sh` fence; expected output uses `text` or `console`. Commands
+assume the project root unless a step says otherwise.
+
+## Next
+
+- [Documentation home](/docs)
+- [Motivation](/docs/getting-started/motivation)
+- [Quickstart](/docs/getting-started/quickstart)
+- [Examples](/docs/examples)

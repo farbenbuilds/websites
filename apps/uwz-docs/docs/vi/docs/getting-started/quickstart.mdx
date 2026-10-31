@@ -1,0 +1,161 @@
+---
+title: Quickstart
+description: Tạo dự án Zig từ đầu, thêm µWebZockets, chạy một server hoàn chỉnh và kiểm tra HTTP response thực tế bằng curl.
+sidebar:
+  order: 4
+search:
+  tags: [getting-started, tutorial]
+---
+
+Quickstart này tạo dự án Zig mới, thêm µWebZockets làm dependency và xác minh
+response `200 OK`. Hướng dẫn dùng một chương trình hoàn chỉnh và một lệnh build.
+
+## Điều kiện trước
+
+- Zig 0.16.0 trên máy được hỗ trợ.
+- Terminal trong thư mục bạn muốn tạo dự án.
+- `curl`.
+
+## Tạo dự án
+
+<Steps>
+  <Step title="Khởi tạo dự án Zig">
+    ```sh
+    mkdir hello-uwz
+    cd hello-uwz
+    zig init
+    ```
+
+    `zig init` tạo `build.zig`, `build.zig.zon` và cây source ban đầu. Bạn
+    thay executable được tạo bằng server bên dưới.
+
+  </Step>
+  <Step title="Thêm dependency">
+    ```sh
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+    ```
+
+    Lệnh pin phiên bản 2.1.6 trong `build.zig.zon`.
+
+  </Step>
+  <Step title="Nối module">
+    Thay `build.zig` bằng file này:
+
+    ```zig
+    const std = @import("std");
+
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
+        const optimize = b.standardOptimizeOption(.{});
+
+        const uz = b.dependency("uWebZockets", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = "hello-uwz",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+        b.installArtifact(exe);
+
+        const run = b.addRunArtifact(exe);
+        const runStep = b.step("run", "Run the hello server");
+        runStep.dependOn(&run.step);
+    }
+    ```
+
+  </Step>
+  <Step title="Viết server">
+    Thay `src/main.zig` bằng:
+
+    ```zig
+    const std = @import("std");
+    const uz = @import("uWebZockets");
+
+    fn hello(_: *uz.Request, res: *uz.Response) void {
+        res.text("hello from a dependency") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+    }
+
+    pub fn main(init: std.process.Init) !void {
+        var app = try uz.App(128).init(init.io);
+        defer app.deinit();
+
+        _ = try app.get("/", hello);
+        try app.catch_shutdown_signals();
+        try app.listen("0.0.0.0", 3000);
+        try app.run();
+    }
+    ```
+
+  </Step>
+  <Step title="Chạy">
+    ```sh
+    zig build run
+    ```
+
+    Giữ server chạy, rồi mở terminal thứ hai.
+
+  </Step>
+  <Step title="Kiểm tra phản hồi">
+    ```sh
+    curl -i http://127.0.0.1:3000/
+    ```
+
+    Phản hồi bắt đầu bằng `HTTP/1.1 200 OK` và kết thúc bằng:
+
+    ```text
+    hello from a dependency
+    ```
+
+  </Step>
+</Steps>
+
+## Cách chương trình hoạt động
+
+| Lệnh gọi                       | Tác dụng                                               |
+| ------------------------------ | ------------------------------------------------------ |
+| `uz.App(128).init(init.io)`    | Cấp một slab cho 128 connection đồng thời và tạo loop. |
+| `app.get("/", hello)`          | Đăng ký route `GET /` đồng bộ trước khi gọi `listen`.  |
+| `app.catch_shutdown_signals()` | Cài watcher SIGINT và SIGTERM để yêu cầu shutdown.     |
+| `app.listen("0.0.0.0", 3000)`  | Bind TCP listener và khóa đăng ký route.               |
+| `app.run()`                    | Chạy event loop đến khi shutdown hoàn tất.             |
+| `app.deinit()`                 | Giải phóng slab sau khi loop đã drain.                 |
+
+Chữ ký handler là `fn (*uz.Request, *uz.Response) void`. Slice request được
+mượn trong callback, và `res.text` copy body vào write queue có giới hạn trước
+khi trả về.
+
+## Đổi port
+
+Truyền port khác cho `listen`:
+
+```zig
+try app.listen("127.0.0.1", 8080);
+```
+
+Bind `127.0.0.1` để server chỉ lắng nghe trên loopback interface. Bind
+`0.0.0.0` để nhận connection trên mọi interface cục bộ.
+
+## Dừng server
+
+Nhấn Ctrl+C trong terminal của server. Signal watcher yêu cầu shutdown theo
+đường shutdown bình thường: ngừng accept, hủy timer, đóng connection đang hoạt động và drain
+completion trước khi `deinit` giải phóng slab. Request đang xử lý không được
+đảm bảo hoàn tất. Buộc process dừng sẽ bỏ qua drain.
+
+## Tiếp theo
+
+- [HTTP server đầu tiên](/docs/examples/first-http-server) giải thích
+  vòng đời và thêm route parameter.
+- [WebSocket đầu tiên](/docs/examples/first-websocket) thêm route hai
+  chiều.
+- [Cài đặt](/docs/getting-started/installation) bao gồm tải Zig, cache offline
+  và pin dependency.
