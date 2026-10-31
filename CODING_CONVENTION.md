@@ -30,8 +30,8 @@ violates it is rejected in review, not negotiated in a pull request.
 
 - TypeScript everywhere on the web surface. The current docs apps use Blume and
   MDX; `uwz-docs` also uses Astro, Svelte 5, and `@farben/ui`, while `vws-docs`
-  uses local Astro components today. A future app may choose another framework; the rules in
-  this document still apply.
+  uses local Astro components today. A future app may choose another
+  framework; the rules in this document still apply.
 - Use `type` rather than `interface` for object shapes and unions. Use
   `import type` for type-only imports.
 - File names are kebab-case for TypeScript, CSS, Markdown, Svelte, and Astro.
