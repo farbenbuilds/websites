@@ -1,13 +1,13 @@
 ---
 title: Bắt đầu
-description: Cài µWebZockets, build server hoàn chỉnh và kiểm tra từng tutorial cốt lõi bằng curl hoặc WebSocket client trong project của bạn.
+description: Cài µWebZockets, build server hoàn chỉnh và kiểm tra từng hướng dẫn bằng curl hoặc WebSocket client trong dự án của bạn.
 sidebar:
   order: 0
 search:
   tags: [getting-started, tutorial]
 ---
 
-Phần này đưa bạn từ máy sạch đến server đang chạy. Nó bao gồm cài đặt, project
+Phần này đưa bạn từ máy sạch đến server đang chạy. Nó bao gồm cài đặt, dự án
 đầu tiên, mô hình ứng dụng và các câu trả lời cần biết trước khi thêm route
 giao thức.
 
@@ -17,24 +17,24 @@ Bạn cần:
 
 - Zig 0.16.0 từ [ziglang.org/download](https://ziglang.org/download/). Kiểm tra
   bằng `zig version`.
-- Host Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và
-  runtime, nhưng hỗ trợ runtime chính thức chỉ sau khi job phát hành xanh.
+- Máy Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và
+  job runtime, nhưng chỉ được hỗ trợ chính thức sau khi job runtime của bản phát
+  hành pass.
 - `curl` cho các ví dụ HTTP.
 
 ## Lộ trình thành công đầu tiên
 
 <Steps>
   <Step title="Cài Zig và package">
-    Theo [Cài đặt](/docs/getting-started/installation) để tải Zig và thêm µWebZockets vào project
-    của bạn.
+    Theo [Cài đặt](/docs/getting-started/installation) để tải Zig và thêm µWebZockets vào dự án của
+    bạn.
   </Step>
   <Step title="Chạy quickstart">
-    [Quickstart](/docs/getting-started/quickstart) tạo một project hoàn chỉnh và kiểm tra bằng
-    `curl`.
+    [Quickstart](/docs/getting-started/quickstart) tạo một dự án hoàn chỉnh và kiểm tra bằng `curl`.
   </Step>
-  <Step title="Hiểu cấu trúc project">
-    [Cấu trúc project](/docs/getting-started/project-structure) chỉ nơi đặt startup, handler, domain
-    code, test và tài nguyên.
+  <Step title="Hiểu cấu trúc dự án">
+    [Cấu trúc dự án](/docs/getting-started/project-structure) chỉ ra nơi đặt code khởi động,
+    handler, domain logic, test và tài nguyên.
   </Step>
   <Step title="Thêm route giao thức">
     Tiếp tục với [Ví dụ](/docs/examples) cho HTTP, WebSocket, JSON-RPC, TLS, cluster và HTTP/3.
@@ -43,15 +43,15 @@ Bạn cần:
 
 ## Hướng dẫn cốt lõi
 
-| Hướng dẫn                                                   | Bạn học gì                          | Điều kiện trước |
-| ----------------------------------------------------------- | ----------------------------------- | --------------- |
-| [Động lực](/docs/getting-started/motivation)                | Lý do của thiết kế có giới hạn      | Không           |
-| [Triết lý](/docs/getting-started/philosophy)                | Các quy tắc thiết kế API            | Không           |
-| [Cài đặt](/docs/getting-started/installation)               | Zig và dependency package           | Không           |
-| [Quickstart](/docs/getting-started/quickstart)              | Server hello hoàn chỉnh             | Cài đặt         |
-| [Cấu trúc project](/docs/getting-started/project-structure) | Bố cục project consumer             | Cài đặt         |
-| [FAQ](/docs/getting-started/faq)                            | Cấp phát, dung lượng và ranh giới   | Không           |
-| [Thuật ngữ](/docs/getting-started/glossary)                 | Slab, capacity, backpressure, token | Không           |
+| Hướng dẫn                                                 | Bạn học gì                          | Điều kiện trước |
+| --------------------------------------------------------- | ----------------------------------- | --------------- |
+| [Động lực](/docs/getting-started/motivation)              | Lý do của thiết kế có giới hạn      | Không           |
+| [Triết lý](/docs/getting-started/philosophy)              | Các quy tắc thiết kế API            | Không           |
+| [Cài đặt](/docs/getting-started/installation)             | Zig và dependency của package       | Không           |
+| [Quickstart](/docs/getting-started/quickstart)            | Server hello hoàn chỉnh             | Cài đặt         |
+| [Cấu trúc dự án](/docs/getting-started/project-structure) | Bố cục dự án sử dụng package        | Cài đặt         |
+| [FAQ](/docs/getting-started/faq)                          | Cấp phát, capacity và ranh giới     | Không           |
+| [Thuật ngữ](/docs/getting-started/glossary)               | Slab, capacity, backpressure, token | Không           |
 
 ## Ví dụ
 
@@ -68,15 +68,15 @@ thức:
 ## Quy ước trong hướng dẫn
 
 Mọi ví dụ Zig khai báo `main` hoàn chỉnh và import `uWebZockets`. Ví dụ dùng
-`std.process.Init` và `init.io` vì Zig 0.16 truyền implementation I/O qua
+`std.process.Init` và `init.io` vì Zig 0.16 truyền I/O implementation vào
 `main`.
 
-Xử lý lỗi là tường minh. Handler không thể phục hồi sẽ log lỗi hoặc trả status;
+Xử lý lỗi là tường minh. Handler không thể phục hồi sẽ ghi log lỗi hoặc trả status;
 hướng dẫn không giấu lỗi bằng `catch {}` trừ khi chữ ký callback không thể trả
 lỗi và trang giải thích lý do.
 
-Lệnh dùng fence `sh`; output dự kiến dùng `text` hoặc `console`. Lệnh giả định
-thư mục gốc project trừ khi bước nói khác.
+Lệnh dùng code fence `sh`; output dự kiến dùng `text` hoặc `console`. Lệnh giả
+định thư mục gốc của dự án trừ khi bước khác nói rõ.
 
 ## Tiếp theo
 

@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Giải đáp về cấp phát, giới hạn dung lượng, hỗ trợ nền tảng, client và các tính năng giao thức cố ý chưa hỗ trợ.
+description: Giải đáp về cấp phát, giới hạn capacity, hỗ trợ nền tảng, client và các tính năng giao thức cố ý chưa được hỗ trợ.
 sidebar:
   order: 13
 search:
@@ -8,21 +8,21 @@ search:
 ---
 
 Các câu trả lời này bao gồm những câu hỏi quyết định liệu µWebZockets có phù
-hợp với project hay không. Mỗi câu trả lời liên kết đến trang hoặc source sở
+hợp với dự án hay không. Mỗi câu trả lời liên kết đến trang hoặc source sở
 hữu chi tiết.
 
 ## Mọi request có cấp phát không?
 
-Không. `App(N)` và `Server.builder` cấp một slab lúc khởi động. Slot kết nối,
-buffer request HTTP/1.1, vùng message WebSocket, write queue phản hồi và lưu
-trữ router đến từ slab đó. Request, parse, route và write path không cấp phát.
+Không. `App(N)` và `Server.builder` cấp một slab lúc khởi động. Connection slot,
+buffer request HTTP/1.1, message region WebSocket, response write queue và router
+storage đến từ slab đó. Request, parse, route và write path không cấp phát.
 
 API request được ghi là có cấp phát gồm `Request.clone(allocator)` và
 `req.json(T, allocator)`. Thiết lập TLS, tạo chứng chỉ ephemeral, pool engine
 QUIC và scratch WebSocket nén được cấp lúc khởi động, trước khi listener nhận
-kết nối.
+connection.
 
-## Điều gì xảy ra khi cạn dung lượng?
+## Điều gì xảy ra khi cạn capacity?
 
 Thất bại là tường minh:
 
@@ -31,20 +31,20 @@ Thất bại là tường minh:
 | Write queue phản hồi        | `error.WouldBlock`; tiếp tục từ callback `drain`.      |
 | Request body HTTP           | `413 Payload Too Large` kèm tài liệu JSON có cấu trúc. |
 | Header HTTP                 | `431 Request Header Fields Too Large`.                 |
-| Pool kết nối                | Kết nối bị từ chối; pool không tăng.                   |
+| Connection pool             | Connection bị từ chối; pool không tăng.                |
 | Inbox cluster               | Số drop và wakeup failure trong `PublishReport`.       |
 | Registry procedure JSON-RPC | Lỗi đăng ký có tên trước khi service được mount.       |
 
-Xem [mô hình dung lượng](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+Xem [mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
 để biết giá trị mặc định và bố cục slab.
 
-## Dung lượng có tăng lúc runtime không? [#can-capacity-grow-at-runtime]
+## Capacity có tăng lúc runtime không? [#can-capacity-grow-at-runtime]
 
-Không. Dung lượng khởi động cố định là kiến trúc. `ServerConfig`, `Presets`
+Không. Capacity khởi động cố định là kiến trúc. `ServerConfig`, `Presets`
 và builder tính một slab trước khi listener đầu tiên bắt đầu. Nâng giới hạn
 cần đổi cấu hình và khởi động lại.
 
-`App.cluster` dùng dung lượng worker lúc compile nhưng có thể chạy ít worker
+`App.cluster` dùng worker capacity lúc compile nhưng có thể chạy ít worker
 active hơn qua `ClusterOptions.worker_count` hoặc `UWEBZOCKETS_WORKERS`. Chỉ
 worker active cấp slab và thread.
 
@@ -57,8 +57,8 @@ HTTP/1.1; HTTP/2 và HTTP/3 dùng slab body biên dịch riêng. Response stream
 ## Có hỗ trợ Windows không?
 
 Windows trên `x86_64-windows-gnu` có job compile và runtime native. Hỗ trợ
-chính thức chỉ được công bố sau khi job runtime xanh cho commit phát hành.
-Không có binary Windows được phát hành; consumer build từ source.
+chính thức chỉ được công bố sau khi job runtime pass cho commit phát hành.
+Không có Windows binary được phát hành; consumer build từ source.
 
 Cluster Windows dùng `SO_REUSEADDR` vì không có `SO_REUSEPORT`. Phân phối của
 kernel trên các listener là không xác định. Affinity dùng
@@ -74,8 +74,8 @@ cộng đồng, không có CI runtime riêng.
 ## WebTransport có sẵn không?
 
 Module helper `uz.webtransport` và `uz.http3_extensions` tồn tại, nhưng chưa
-nối với listener lsquic live. Extended CONNECT nhận `501 Not Implemented`. Mô
-hình helper bao gồm cấu hình draft-16, session, datagram, capsule và ánh xạ lỗi
+nối với listener lsquic live. Extended CONNECT nhận `501 Not Implemented`. Helper
+model bao gồm cấu hình draft-16, session, datagram, capsule và ánh xạ lỗi
 cho embedder và công việc backend tương lai.
 
 ## HTTP/2 có hỗ trợ server push không?
@@ -90,27 +90,27 @@ RFC 9113 không được triển khai.
 
 ## Có hỗ trợ TLS 1.2 không?
 
-Không. TLS chỉ 1.3. Đây là lập trường bảo mật có chủ đích, không phải cấu hình
+Không. TLS chỉ hỗ trợ 1.3. Đây là lập trường bảo mật có chủ đích, không phải cấu hình
 thiếu. Chứng chỉ ephemeral dùng ECDSA P-256 và SHA-256.
 
 ## Có thể reload chứng chỉ mà không restart không?
 
 Không. Chứng chỉ production được đọc một lần mỗi process hoặc mỗi worker lúc
-khởi động. Xoay là rolling restart. Nhóm worker đọc file PEM một lần mỗi
+khởi động. Xoay chứng chỉ là rolling restart. Nhóm worker đọc file PEM một lần mỗi
 worker, nên reconnect rơi vào worker khác có thể không resume được session từ
 worker trước.
 
 ## Bao nhiêu stream HTTP/2 đồng thời được hỗ trợ?
 
-Tám mỗi kết nối theo mặc định. WebSocket trên HTTP/2 giới hạn một tunnel RFC
-8441 active mỗi kết nối; tunnel thêm nhận `503 Service Unavailable` mà không
-ảnh hưởng tunnel đang active. Nâng số stream cần chuyên biệt hóa kiểu kết nối.
+Tám stream mỗi connection theo mặc định. WebSocket trên HTTP/2 giới hạn một tunnel RFC
+8441 active mỗi connection; tunnel bổ sung nhận `503 Service Unavailable` mà không
+ảnh hưởng tunnel đang active. Nâng số stream cần specialize connection type.
 
 ## Phạm vi client là gì? [#client-scope]
 
-Client đi kèm chỉ hỗ trợ HTTP/1.1. Nó hỗ trợ host dạng số, slot request cố
-định, timeout, `Content-Length`, body chunked có trailer và body kết thúc bằng
-close. Nó không hỗ trợ DNS resolution, redirect, cookie, cấu hình proxy,
+Client đi kèm chỉ hỗ trợ HTTP/1.1. Nó hỗ trợ host dạng số, fixed request slot,
+timeout, `Content-Length`, body chunked có trailer và body kết thúc bằng
+close. Nó không hỗ trợ DNS resolution, redirect, cookie, proxy configuration,
 connection pooling, mTLS, HTTP/2 hay HTTP/3.
 
 Không có WebSocket client. Dùng trình duyệt, `wscat` hoặc client khác.
@@ -126,13 +126,13 @@ wakeup đã được post, không phải application subscriber đã tiêu thụ
 
 Không. Cluster HTTP/3 và QUIC không được hỗ trợ. Listener QUIC live từ chối TLS
 0-RTT để request ứng dụng có thể replay không bao giờ đến handler. Congestion
-control là BBRv1 với pacing mỗi kết nối.
+control là BBRv1 với pacing mỗi connection.
 
-## Vì sao không có worker count động sau khởi động?
+## Vì sao không có dynamic worker count sau khởi động?
 
 Worker sở hữu slab, loop và TLS context. Bật hoặc tắt một worker sau `run` cần
-giao thức vòng đời mới và có thể race với release teardown.
-`build_cluster_from_environment` chọn số active trước khi nhóm bắt đầu.
+lifecycle protocol mới và có thể race với release teardown.
+`build_cluster_from_environment` chọn số worker active trước khi nhóm bắt đầu.
 
 ## Báo lỗi bảo mật ở đâu?
 
@@ -142,5 +142,5 @@ Theo [chính sách bảo mật](https://github.com/farbenbuilds/uWebZockets/blob
 
 - [Thuật ngữ](/docs/getting-started/glossary) định nghĩa các từ dùng ở đây.
 - [Vì sao µWebZockets](/docs/why-uwebsockets) so sánh đánh đổi.
-- [HTTP server đầu tiên](/docs/examples/first-http-server) bắt đầu đường
+- [HTTP server đầu tiên](/docs/examples/first-http-server) bắt đầu lộ trình
   thực hành.

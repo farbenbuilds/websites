@@ -192,13 +192,37 @@ new primitive.
 - x18n owns component UI copy only. Component strings live in
   `apps/<app>/locales/{locale}.json` and are checked with `pnpm i18n:check`.
 - Blume owns documentation content. Every docs page is an MDX file at
-  `docs/<slug>.mdx` with its translation at `docs/vi/<slug>.mdx`.
+  `docs/<slug>.mdx` with its translation at `docs/vi/<slug>.mdx`. Vietnamese
+  routes use the ISO 639-1 language code `vi`; `vn` is a country code, not a
+  language code.
 - Do not add MDX files, page prose, frontmatter, or docs routes to x18n
   resources, locale JSON, or an `x18n.config.ts` resource pattern.
 - A future page such as `getting-started.mdx` or `api.mdx` follows the mirrored
   MDX layout and does not need x18n keys.
 - A string belongs to x18n only when a component renders it. If it is part of a
   document body, it belongs in MDX.
+
+### Vietnamese terminology
+
+Vietnamese pages are not literal translations. Keep the technical vocabulary
+developers see in the API and in the source, and write natural Vietnamese around
+it.
+
+- Keep these terms in English in Vietnamese prose and tables: `application slab`,
+  `async token`, `backpressure`, `buffer`, `capacity`, `cluster`, `completion`,
+  `connection`, `connection slot`, `dependency`, `event loop`, `handler`,
+  `hot path`, `middleware`, `package`, `queue`, `request`, `response`, `route`,
+  `runtime`, `server`, `shared-nothing`, `slab`, `stream`, `transport`, `worker`.
+- Keep API names, type names, error names, header names, CLI flags, file paths,
+  and command output exactly as written in English.
+- Use `build` for the build step and `compile`/`biên dịch` only when the source
+  is compiled. Do not translate `build server` into `biên dịch server`.
+- Translate explanatory prose, not identifiers. Prefer short Vietnamese
+  sentences with English terms embedded over literal translations such as
+  `dung lượng` for capacity or `cấp phát liền mạch` for application slab.
+- Apply the same rule to `apps/uwz-docs/locales/vi.json` and the landing page.
+- A reviewer checks Vietnamese pages for grammar, typos, and glossary
+  consistency, not just key parity.
 
 ## 9. Formatting, Linting, and Verification
 

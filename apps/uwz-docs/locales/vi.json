@@ -8,30 +8,30 @@
     "hero": {
       "eyebrow": "Zig / HTTP / WebSocket / RPC",
       "title": "µWebZockets",
-      "summary": "Framework máy chủ zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và RPC qua một API type-safe `Request`/`Response` duy nhất.",
+      "summary": "Framework server zero-allocation, shared-nothing cho Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket và RPC dùng chung một API `Request`/`Response` type-safe.",
       "primaryAction": "Bắt đầu",
       "secondaryAction": "Xem trên GitHub",
       "dictionary": {
         "label": "Mục từ điển cho từ fast",
-        "status": "Sẵn sàng ở mức bán production."
+        "status": "Sẵn sàng cho một phần workload production."
       }
     },
     "server": {
-      "label": "04 / Máy chủ",
-      "heading": "Dùng µWZ làm máy chủ",
+      "label": "04 / Server",
+      "heading": "Dùng µWZ làm server",
       "intro": "Giữ ứng dụng Zig bạn đã có. Runtime đảm nhận transport, TLS, giới hạn và shutdown mà không đổi cách viết handler.",
       "steps": {
         "addPackage": {
-          "title": "Thêm gói",
-          "text": "Tải các phụ thuộc được ghim qua trình quản lý gói của Zig. Không cần CMake, Ninja, Go, Perl, Python hay zlib hệ thống."
+          "title": "Thêm package",
+          "text": "Tải các dependency đã pin qua package manager của Zig. Không cần CMake, Ninja, Go, Perl, Python hay zlib hệ thống."
         },
         "mountHandlers": {
           "title": "Gắn handler",
-          "text": "Đăng ký route HTTP, WebSocket, RPC và tệp tĩnh trên một app. Handler của bạn vẫn là các hàm Zig bình thường."
+          "text": "Đăng ký route HTTP, WebSocket, RPC và file tĩnh trên một app. Handler của bạn vẫn là các hàm Zig bình thường."
         },
         "runWhereYouDeploy": {
           "title": "Chạy nơi bạn triển khai",
-          "text": "Khởi động một tiến trình hoặc cluster thread-per-core. Mỗi worker sở hữu event loop, bộ slab và affinity lõi vật lý khi nền tảng cho phép."
+          "text": "Khởi động một process hoặc cluster thread-per-core. Mỗi worker sở hữu event loop, slab set và CPU affinity khi nền tảng cho phép."
         }
       },
       "ctaText": "Mang theo route. Runtime lo transport, TLS và shutdown.",
@@ -41,7 +41,7 @@
       "label": "05 / Tác giả",
       "name": "Noah Trần",
       "avatarAlt": "Noah Trần",
-      "bio": "Noah Trần là kỹ sư phần mềm tại Thành phố Hồ Chí Minh, làm việc với Svelte, Astro, Zig, Rust, thiết kế và framework/tooling. Tác giả đã tạo ra [Hope Art](https://hope-art.app) và hiện là tác giả, lead maintainer của [Farben](https://github.com/farbenbuilds).",
+      "bio": "Noah Trần là kỹ sư phần mềm tại Thành phố Hồ Chí Minh, làm việc với Svelte, Astro, Zig, Rust, thiết kế và tooling cho framework. Anh tạo ra [Hope Art](https://hope-art.app) và là tác giả kiêm lead maintainer của [Farben](https://github.com/farbenbuilds).",
       "socials": {
         "facebook": {
           "label": "Facebook",
@@ -59,34 +59,34 @@
       "label": "06 / Tài trợ",
       "heading": "Tài trợ cho các maintainer.",
       "logoAlt": "Logo Farben",
-      "body": "Cảm ơn các maintainer của Farben vì công sức của họ cho runtime, các gói và tài liệu. Nếu µWebZockets hữu ích cho dịch vụ của bạn, hãy tài trợ cho dự án trên GitHub.",
+      "body": "Cảm ơn các maintainer của Farben vì công sức của họ cho runtime, package và tài liệu. Nếu µWebZockets hữu ích cho dịch vụ của bạn, hãy tài trợ cho dự án trên GitHub.",
       "action": "Tài trợ Farben"
     }
   },
   "indexCards": {
     "label": "01 / Mục lục",
     "heading": "Bắt đầu tại đây.",
-    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, so sánh đánh đổi, tính dung lượng, hiểu mô hình worker hoặc khám phá các ví dụ.",
+    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, so sánh đánh đổi, lập kế hoạch capacity, hiểu mô hình worker hoặc khám phá các ví dụ.",
     "items": {
       "gettingStarted": {
         "title": "Bắt đầu",
-        "description": "Cài đặt gói và chạy máy chủ đầu tiên."
+        "description": "Cài package và chạy server đầu tiên."
       },
       "shareNothing": {
         "title": "Quy tắc shared-nothing",
-        "description": "Mỗi worker một event loop, một bộ slab, không chia sẻ trạng thái."
+        "description": "Mỗi worker một event loop, một slab set, không chia sẻ trạng thái."
       },
       "migrate": {
         "title": "So sánh đánh đổi",
         "description": "Xem điều gì thay đổi khi dịch vụ dùng cấp phát có giới hạn."
       },
       "configure": {
-        "title": "Tính dung lượng",
-        "description": "Hiểu vì sao slab cố định và giới hạn có tên thay thế cấp phát mỗi request."
+        "title": "Lập kế hoạch capacity",
+        "description": "Hiểu vì sao slab cố định và các giới hạn có tên thay thế cấp phát mỗi request."
       },
       "clusterWorker": {
         "title": "Hiểu Cluster/Worker",
-        "description": "Theo dõi cách worker chia sẻ cổng và sở hữu trạng thái."
+        "description": "Theo dõi cách worker chia sẻ port và sở hữu trạng thái."
       },
       "examples": {
         "title": "Khám phá các ví dụ",
@@ -97,19 +97,19 @@
   "support": {
     "label": "02 / Hỗ trợ",
     "heading": "µWZ hỗ trợ gì",
-    "intro": "Một bề mặt máy chủ cho các giao thức mà dịch vụ Zig thực sự cần, với cùng định tuyến, giới hạn và vòng đời cho từng giao thức.",
+    "intro": "Một server surface cho các giao thức mà dịch vụ Zig thực sự cần, với cùng routing, giới hạn và lifecycle cho từng giao thức.",
     "items": {
       "http": {
         "title": "HTTP/1.1 và HTTP/2",
-        "text": "Kết nối liên tục, body dạng stream, luồng đa hợp và ALPN TLS trong cùng một mô hình handler."
+        "text": "Persistent connection, streaming body, multiplexed stream và TLS ALPN trong cùng một handler model."
       },
       "http3": {
         "title": "HTTP/3",
-        "text": "QUIC trên UDP với cùng định tuyến và handler như các transport TCP. Cluster QUIC chưa được hỗ trợ."
+        "text": "QUIC trên UDP với cùng routing và handler như các transport TCP. Cluster QUIC chưa được hỗ trợ."
       },
       "webSocket": {
         "title": "WebSocket",
-        "text": "RFC 6455 với nén, pub/sub và heartbeat cho kết nối dài hạn."
+        "text": "RFC 6455 với nén, pub/sub và heartbeat cho long-lived connection."
       },
       "rpc": {
         "title": "RPC",
@@ -117,11 +117,11 @@
       },
       "tls": {
         "title": "TLS",
-        "text": "Chứng chỉ tạm thời và production, ALPN, 0-RTT và mutual TLS."
+        "text": "Chứng chỉ ephemeral và production, ALPN, 0-RTT và mutual TLS."
       },
       "staticAssets": {
-        "title": "Tài nguyên tĩnh",
-        "text": "Phục vụ tệp trong cùng tiến trình thay vì thêm một máy chủ tài sản thứ hai."
+        "title": "Static asset",
+        "text": "Phục vụ file trong cùng process thay vì thêm một asset server thứ hai."
       },
       "workers": {
         "title": "Worker thread-per-core",
@@ -129,11 +129,11 @@
       },
       "zeroAllocation": {
         "title": "Zero allocation",
-        "text": "Slab khởi động có giới hạn và giới hạn dung lượng tường minh trên mọi đường xử lý."
+        "text": "Startup slab có giới hạn và capacity limit tường minh trên mọi request path."
       }
     },
     "platformsLabel": "Nền tảng",
-    "platformNote": "Linux chạy ma trận runtime trên CI; macOS được hỗ trợ và cross-compile; Windows được kiểm tra biên dịch.",
+    "platformNote": "Linux chạy runtime matrix trên CI; macOS được hỗ trợ và cross-compile; Windows được compile-check.",
     "platformHeader": "Nền tảng",
     "architectureHeader": "Kiến trúc",
     "statusHeader": "Trạng thái",
@@ -142,16 +142,16 @@
       "linuxArm64": "Đã kiểm thử",
       "macosX86": "Được hỗ trợ",
       "macosArm64": "Được hỗ trợ",
-      "windowsX86": "Kiểm tra biên dịch"
+      "windowsX86": "Compile-check"
     }
   },
   "benchmark": {
     "label": "03 / Benchmark",
     "heading": "Hiệu năng.",
-    "intro": "Các phép đo độc lập từ hai benchmark máy chủ Zig. Cao hơn là tốt hơn; trang nguồn có đầy đủ kết quả.",
+    "intro": "Các phép đo độc lập từ hai benchmark server Zig. Cao hơn là tốt hơn; trang nguồn có đầy đủ kết quả.",
     "benchHeading": "Thông lượng plaintext",
-    "benchMeta": "Yêu cầu mỗi giây · Plaintext · Linux x86_64 · 32 kết nối · 8 giây",
-    "benchAria": "Thông lượng plaintext của máy chủ Zig, yêu cầu mỗi giây",
+    "benchMeta": "Request mỗi giây · Plaintext · Linux x86_64 · 32 connection · 8 giây",
+    "benchAria": "Thông lượng plaintext của server Zig, request mỗi giây",
     "benchSource": "Nguồn: bench.zig.bd, ghi nhận 2026-10-30.",
     "arenaHeading": "Kết quả đa giao thức",
     "arenaMeta": "Alpha Round · 23 lần chạy · cập nhật 2026-10-28",
@@ -176,7 +176,7 @@
   },
   "siteLinks": {
     "author": "Tác giả",
-    "source": "Mã nguồn",
+    "source": "Source",
     "license": "Giấy phép",
     "footerNote": "MIT License 2026",
     "colophonLabel": "Chân trang tài liệu"

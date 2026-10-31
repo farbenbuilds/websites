@@ -79,14 +79,14 @@ HTTP 204 vì không yêu cầu body phản hồi.
 
 ## Quy tắc request
 
-| Quy tắc            | Hành vi                                                                         |
-| ------------------ | ------------------------------------------------------------------------------- |
-| Content type       | Request phải có đúng một header `application/json` hoặc `application/json-rpc`. |
-| Tên method         | Được copy lúc đăng ký; registry bị seal khi service được mount.                 |
-| Vòng đời tham số   | Tham số được mượn chỉ trong callback.                                           |
-| Scratch có kiểu    | Adapter có kiểu dùng 4 KiB stack cố định cho tham số đã decode.                 |
-| Dung lượng kết quả | Buffer phản hồi mặc định của service là 16 KiB.                                 |
-| Batch              | Hỗ trợ single call, notification và batch.                                      |
+| Quy tắc          | Hành vi                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| Content type     | Request phải có đúng một header `application/json` hoặc `application/json-rpc`. |
+| Tên method       | Được copy lúc đăng ký; registry bị seal khi service được mount.                 |
+| Vòng đời tham số | Tham số được mượn chỉ trong callback.                                           |
+| Scratch có kiểu  | Adapter có kiểu dùng 4 KiB stack cố định cho tham số đã decode.                 |
+| Result capacity  | Buffer phản hồi mặc định của service là 16 KiB.                                 |
+| Batch            | Hỗ trợ single call, notification và batch.                                      |
 
 Cú pháp JSON đầy đủ được validate trước khi batch gọi procedure đầu tiên. Nếu
 batch sai, không procedure nào chạy. Tên method thiếu, trùng hoặc quá dài fail

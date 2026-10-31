@@ -93,21 +93,21 @@ chỉ quảng bá `h3`.
 
 | Tài nguyên                    | Giới hạn                                                                   |
 | ----------------------------- | -------------------------------------------------------------------------- |
-| Kết nối QUIC và stream active | Dung lượng kết nối đã cấu hình.                                            |
+| Kết nối QUIC và stream active | Connection capacity đã cấu hình.                                           |
 | Header request đã decode      | `max_header_size` và `max_header_count`; tối đa 65535 byte khi bật HTTP/3. |
 | Request body                  | `max_h3_body_size`.                                                        |
 | Metadata phản hồi             | `max_h3_response_header_size` và `max_h3_response_header_count`.           |
-| Body phản hồi                 | Dung lượng write queue đã cấu hình.                                        |
+| Body phản hồi                 | Write queue capacity đã cấu hình.                                          |
 | UDP payload QUIC              | 2 KiB.                                                                     |
 
 Trạng thái QPACK, stream, packet buffer và body đến từ pool cấp lúc khởi động.
 Linux gộp packet cùng kích thước cho một đích vào một `sendmsg` với
 `UDP_SEGMENT`; kích thước hỗn hợp và nền tảng khác dùng đường từng packet.
-`UDP_GRO` phía nhận bị tắt vì event loop không phơi ranh giới segment phụ.
+`UDP_GRO` phía nhận bị tắt vì event loop không expose ranh giới segment phụ.
 
 ## Ranh giới [#boundaries]
 
-- **Congestion control:** BBRv1 với pacing mỗi kết nối. Không cấu hình được qua
+- **Congestion control:** BBRv1 với pacing mỗi connection. Không cấu hình được qua
   API công khai.
 - **0-RTT:** bị từ chối trên listener live. Request ứng dụng có thể replay
   không bao giờ đến handler.
@@ -118,7 +118,7 @@ Linux gộp packet cùng kích thước cho một đích vào một `sendmsg` v�
 - **Metrics:** HTTP/3 phát một record development-log `http_request` mỗi
   exchange hoàn tất nhưng không tăng counter registry trong bản này.
 - **Validation request:** pseudo-field phải đứng trước field thường và không
-  trùng. Field riêng của kết nối bị từ chối với `H3_MESSAGE_ERROR` phạm vi
+  trùng. Field riêng của connection bị từ chối với `H3_MESSAGE_ERROR` phạm vi
   stream.
 
 ## Dừng sạch

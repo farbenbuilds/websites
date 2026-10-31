@@ -1,22 +1,22 @@
 ---
 title: Cài đặt
-description: Tải Zig 0.16.0 và thêm µWebZockets 2.1.6 vào project của riêng bạn bằng URL archive package được pin, tái lập được.
+description: Tải Zig 0.16.0 và thêm µWebZockets 2.1.6 vào dự án bằng URL archive của package đã pin để build có thể tái lập.
 sidebar:
   order: 3
 search:
   tags: [getting-started, tutorial, operations]
 ---
 
-Trang này cài Zig và thêm µWebZockets vào project của bạn.
+Trang này hướng dẫn bạn cài Zig và thêm µWebZockets vào dự án.
 
 ## Điều kiện trước
 
-| Yêu cầu         | Chi tiết                                                                                 |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| Zig             | Đúng 0.16.0. Kiểm tra bằng `zig version`.                                                |
-| Host            | Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và runtime native. |
-| Mạng            | Zig tải source dependency được pin trong lần build đầu.                                  |
-| Toolchain C/C++ | Không cần riêng. Zig biên dịch source dependency được pin.                               |
+| Yêu cầu         | Chi tiết                                                                              |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Zig             | Đúng 0.16.0. Kiểm tra bằng `zig version`.                                             |
+| Máy             | Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và job runtime. |
+| Mạng            | Zig tải source của các dependency đã pin trong lần build đầu.                         |
+| C/C++ toolchain | Không cần cài riêng. Zig biên dịch source của các dependency đã pin.                  |
 
 ## Tải Zig
 
@@ -31,16 +31,16 @@ zig version
 0.16.0
 ```
 
-## Thêm package
+## Thêm package vào dự án
 
-Từ thư mục gốc project của bạn, fetch bản phát hành được pin:
+Từ thư mục gốc của dự án, fetch bản phát hành đã pin:
 
 ```sh
 zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
 ```
 
-Lệnh thêm package vào `build.zig.zon` dưới tên `uWebZockets`. Dùng cùng URL khi
-nâng cấp để dependency luôn tái lập được.
+Lệnh này thêm package vào `build.zig.zon` dưới tên `uWebZockets`. Khi nâng cấp,
+hãy pin URL của bản phát hành mới để dependency luôn tái lập được.
 
 ## Nối module
 
@@ -54,20 +54,20 @@ const uz = b.dependency("uWebZockets", .{
 exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
 ```
 
-Chương trình consumer hoàn chỉnh nằm trong [quickstart](/docs/getting-started/quickstart).
+Chương trình hoàn chỉnh sử dụng package nằm trong [quickstart](/docs/getting-started/quickstart).
 
 ## Kỳ vọng với package
 
-- Package export một module tên `uWebZockets`.
+- Package export module `uWebZockets`.
 - Module mang metadata link native và thứ tự dependency, nên bạn không phải
-  link BoringSSL, lsquic, zlib hay libdeflate bằng tay.
-- Bản phát hành là source archive. Không có archive binary theo nền tảng, nên
-  Zig biên dịch dependency được pin trong lần dùng đầu.
+  tự link BoringSSL, lsquic, zlib hay libdeflate.
+- Bản phát hành là source archive. Không có binary archive cho từng nền tảng,
+  nên Zig biên dịch dependency đã pin trong lần dùng đầu.
 
 ## Build đầu và dùng offline
 
-Build đầu chậm hơn vì Zig biên dịch BoringSSL, lsquic, libdeflate và zlib từ
-source. Build sau dùng lại `~/.cache/zig` và cache trong project.
+Build đầu tiên chậm hơn vì Zig biên dịch BoringSSL, lsquic, libdeflate và zlib
+từ source. Các build sau dùng lại `~/.cache/zig` và cache trong dự án.
 
 Để build không cần mạng, nạp cả hai cache trên máy có mạng trước, rồi dùng
 lại. URL và hash dependency được pin trong `build.zig.zon`; Zig xác minh hash
@@ -81,22 +81,22 @@ Thêm server từ [Quickstart](/docs/getting-started/quickstart), rồi chạy:
 zig build run
 ```
 
-Development log in ra phiên bản, thời gian khởi động và địa chỉ local. Dừng
+Development log hiển thị phiên bản, thời gian khởi động và địa chỉ cục bộ. Dừng
 server bằng Ctrl+C.
 
-## Lỗi thường gặp lần đầu
+## Lỗi thường gặp khi bắt đầu
 
 | Triệu chứng                  | Nguyên nhân và cách sửa                                                                      |
 | ---------------------------- | -------------------------------------------------------------------------------------------- |
 | `error: invalid Zig version` | Compiler đang dùng không phải 0.16.0. Tải Zig 0.16.0 và chọn nó.                             |
-| Hash dependency không khớp   | Cache package hỏng hoặc URL đổi. Xóa package đã cache và fetch lại. Không sửa hash được pin. |
-| Build đầu có vẻ treo         | Đang biên dịch source C và C++ đi kèm. Kiểm tra CPU và đĩa trước khi ngắt.                   |
+| Hash dependency không khớp   | Package cache hỏng hoặc URL đổi. Xóa package đã cache và fetch lại. Không sửa hash được pin. |
+| Build đầu có vẻ treo         | Zig đang biên dịch source C và C++ đi kèm. Kiểm tra CPU và đĩa trước khi ngắt.               |
 | Tải dependency thất bại      | Kiểm tra kết nối mạng tới GitHub, rồi chạy lại lệnh `zig fetch`.                             |
 
 ## Bước tiếp theo
 
-- [Quickstart](/docs/getting-started/quickstart) build một project hoàn chỉnh.
-- [Cấu trúc project](/docs/getting-started/project-structure) cho thấy bố cục
-  consumer.
+- [Quickstart](/docs/getting-started/quickstart) build một dự án hoàn chỉnh.
+- [Cấu trúc dự án](/docs/getting-started/project-structure) cho thấy bố cục
+  của dự án sử dụng package.
 - [Ví dụ](/docs/examples) thêm route, WebSocket, JSON-RPC service, TLS, cluster
   hoặc listener HTTP/3.

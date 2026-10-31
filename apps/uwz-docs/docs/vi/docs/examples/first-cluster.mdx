@@ -8,7 +8,7 @@ search:
 ---
 
 Hướng dẫn này khởi động nhóm worker thread-per-core với bốn worker. Mỗi worker
-sở hữu event loop, slab khởi động và trạng thái kết nối riêng, đồng thời bind
+sở hữu event loop, slab khởi động và connection state riêng, đồng thời bind
 cùng port qua `SO_REUSEPORT` ở nền tảng hỗ trợ.
 
 ## Điều kiện trước
@@ -55,7 +55,7 @@ pub fn main(init: std.process.Init) !void {
 }
 ```
 
-`build_cluster` nhận dung lượng worker lúc compile. Tham số cuối là
+`build_cluster` nhận worker capacity lúc compile. Tham số cuối là
 `ClusterOptions`, có thể chọn số worker active nhỏ hơn và hành vi cluster
 khác. Dùng `build_cluster_from_environment` khi muốn `UWEBZOCKETS_WORKERS`
 ghi đè mặc định.
@@ -79,8 +79,8 @@ curl -s http://127.0.0.1:3000/
 hello from a pinned shared-nothing worker
 ```
 
-Lặp request vài lần. Kernel cân bằng kết nối được accept trên các listening
-socket; một kết nối TCP riêng lẻ nằm trên worker đã accept nó.
+Lặp request vài lần. Kernel cân bằng connection được accept trên các listening
+socket; một TCP connection riêng lẻ nằm trên worker đã accept nó.
 
 ## Nhóm sở hữu gì
 
@@ -88,12 +88,12 @@ socket; một kết nối TCP riêng lẻ nằm trên worker đã accept nó.
 | -------------------- | -------------------------------------------- |
 | Event loop           | Một mỗi worker.                              |
 | Application slab     | Một mỗi worker, định cỡ từ cấu hình builder. |
-| Slot kết nối         | Thuộc worker đã accept.                      |
+| Connection slot      | Thuộc worker đã accept.                      |
 | Route                | Đăng ký một lần mỗi worker qua `configure`.  |
 | Message cross-worker | Inbox lock-free có giới hạn mỗi worker.      |
 | TLS context          | Một mỗi worker khi bật TLS.                  |
 
-Không trạng thái kết nối, buffer request, write queue hay completion nào được
+Không connection state, buffer request, write queue hay completion nào được
 chia sẻ giữa worker. Pinning là best effort: Linux dùng affinity lõi vật lý,
 Windows dùng process affinity mask, và macOS chạy không pin vì nền tảng không
 có API hard-affinity.

@@ -57,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
 ```
 
 `app.ws` đăng ký route upgrade HTTP/1.1. Route dùng cùng giá trị ứng dụng và
-cùng slab kết nối có giới hạn như route HTTP.
+cùng connection slab có giới hạn như route HTTP.
 
 ## Chạy
 
@@ -111,7 +111,7 @@ nên bản thân lệnh gửi không mượn slice message.
 
 ## Backpressure [#backpressure]
 
-`ws.send` trả `error.WouldBlock` khi write queue của kết nối đầy. Không bỏ
+`ws.send` trả `error.WouldBlock` khi write queue của connection đầy. Không bỏ
 message một cách âm thầm và không block event loop. Thêm callback `drain` vào
 đăng ký `/echo` hiện có để tiếp tục producer:
 
@@ -129,12 +129,12 @@ _ = try app.ws("/echo", .{
 ```
 
 Producer production giữ byte chưa gửi trong lưu trữ ứng dụng có giới hạn và
-thử lại từ `drain`. Write queue thuộc từng kết nối và được định cỡ bởi cấu
+thử lại từ `drain`. Write queue thuộc từng connection và được định cỡ bởi cấu
 hình ứng dụng.
 
 ## Pub/sub [#pubsub]
 
-Đối tượng WebSocket cũng phơi pub/sub engine có giới hạn:
+Đối tượng WebSocket cũng expose pub/sub engine có giới hạn:
 
 ```zig
 fn on_chat_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
@@ -142,7 +142,7 @@ fn on_chat_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) vo
 }
 ```
 
-`subscribe`, `publish` và `unsubscribe` thao tác trên topic dung lượng cố
+`subscribe`, `publish` và `unsubscribe` thao tác trên topic capacity cố
 định. Publish báo số subscriber đã nhận. `App.cluster` phối hợp publish giữa
 worker qua inbox có giới hạn.
 
@@ -154,7 +154,7 @@ worker qua inbox có giới hạn.
   scratch nén. Đường tunnel HTTP/2 mang frame không nén.
 - Message đến bị giới hạn bởi `max_frame_size` và `max_message_size`. Mặc định
   là 16 KiB.
-- Route có giới hạn vượt dung lượng message đã cấu hình sẽ fail đăng ký với
+- Route có giới hạn vượt message capacity đã cấu hình sẽ fail đăng ký với
   `error.InvalidWebSocketLimits` trước khi listener bắt đầu. Process không bao
   giờ nhận peer không phục vụ được, và lỗi cấu hình không gửi HTTP status.
 

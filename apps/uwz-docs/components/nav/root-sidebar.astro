@@ -12,13 +12,12 @@ type Props = {
 
 const { items, currentRoute, fragmentBase, ids, strings } = Astro.props;
 
-const isDocsGroup = (item: NavNode): boolean =>
-  item.kind === "group" && (item.route === "/docs" || item.route === "/vi/docs");
-
 // Blume wraps the /docs folder in a "Documentation" group. Flatten it so its
 // pages and subgroups sit at the sidebar root without changing their routes.
 const rootItems = items.flatMap((item) =>
-  isDocsGroup(item) && item.kind === "group" ? item.children : [item],
+  item.kind === "group" && (item.route === "/docs" || item.route === "/vi/docs")
+    ? item.children
+    : [item],
 );
 ---
 

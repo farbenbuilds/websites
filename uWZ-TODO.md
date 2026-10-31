@@ -135,8 +135,8 @@ add the missing tutorials, recipes, reference pages, and evidence.
   build; the site owns content and presentation hooks.
 - Do not create a separate marketing site in this app. The root `/` remains the
   existing editorial landing page; the docs live under `/docs` and `/reference`.
-- Do not duplicate the repository's `TODO.md` editorial design plan. That plan
-  owns the landing page and visual grammar; this plan owns documentation scope.
+- Do not duplicate the landing page's existing editorial design. The landing
+  components own that visual grammar; this plan owns documentation scope.
 - Do not claim features that are helper-only, experimental, platform-gated, or
   planned. WebTransport, Windows support, HTTP/3 metrics, HTTP/2 push, h2c
   Upgrade, request-body streaming, and kTLS integration all have explicit
@@ -168,10 +168,11 @@ The docs must make three things inseparable:
 3. **The operational contract:** fixed slabs, per-worker TLS, cluster lifecycle,
    platform support, and evidence-gated performance.
 
-### 2.2 Current website audit
+### 2.2 Baseline website audit
 
-Checked on 2026-10-31 with `blume doctor` and `blume validate` from
-`apps/uwz-docs`.
+Checked before milestone 1 on 2026-10-31 with `blume doctor` and
+`blume validate` from `apps/uwz-docs`. The page register and document change
+log record the work completed after this baseline.
 
 | Area             | Current state                                                                            | Gap                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -1699,8 +1700,8 @@ Acceptance:
 
 ### 7.1 Visual language
 
-Keep the existing editorial grammar from `TODO.md`: warm paper, near-black ink,
-orange accent, square geometry, display type for the landing hero, and a calm
+Keep the landing page's editorial grammar: warm paper, near-black ink, orange
+accent, square geometry, display type for the landing hero, and a calm
 reading surface for documentation. The docs must feel like the same publication
 as the landing page without turning every page into a poster.
 
@@ -2176,29 +2177,41 @@ docs/
 `blume translate` may produce a first draft, but it is not a publishing tool.
 Every generated translation gets a technical review and a language review.
 
-### 9.4 Vietnamese glossary
+### 9.4 Vietnamese terminology
 
-Keep a shared table for recurring terms. Proposed mappings:
+Vietnamese pages are not literal translations. Keep the technical vocabulary
+developers see in the API and source, and write natural Vietnamese around it.
 
-| English      | Vietnamese        | Notes                               |
-| ------------ | ----------------- | ----------------------------------- |
-| application  | ứng dụng          |                                     |
-| connection   | kết nối           |                                     |
-| request      | yêu cầu           |                                     |
-| response     | phản hồi          |                                     |
-| route        | tuyến             | Keep `route` in code contexts       |
-| middleware   | middleware        | Common in Vietnamese technical text |
-| worker       | worker            | Keep the English term               |
-| slab         | slab              | Keep the English term               |
-| capacity     | dung lượng        | Explain as a fixed bound            |
-| backpressure | backpressure      | Keep the English term               |
-| async token  | token bất đồng bộ |                                     |
-| borrowed     | mượn              | Explain ownership                   |
-| owned        | sở hữu            |                                     |
-| certificate  | chứng chỉ         |                                     |
-| handshake    | bắt tay           |                                     |
-| compression  | nén               |                                     |
-| benchmark    | benchmark         | Keep the English term               |
+Keep these terms in English in Vietnamese prose and tables:
+
+`application slab`, `async token`, `backpressure`, `buffer`, `capacity`,
+`cluster`, `completion`, `connection`, `connection slot`, `dependency`,
+`event loop`, `handler`, `hot path`, `middleware`, `package`, `queue`,
+`request`, `response`, `route`, `runtime`, `server`, `shared-nothing`, `slab`,
+`stream`, `transport`, `worker`.
+
+Use `build` for the build step and `compile`/`biên dịch` only when source is
+compiled. Do not translate `build server` into `biên dịch server`.
+
+Translate explanatory prose, not identifiers. Prefer short Vietnamese sentences
+with English terms embedded over literal translations such as `dung lượng` for
+capacity or `cấp phát liền mạch` for application slab.
+
+| English                                                 | Vietnamese usage                                                                             |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| application                                             | `ứng dụng` in general prose; keep `application` in compound terms such as `application slab` |
+| certificate                                             | `chứng chỉ`                                                                                  |
+| compression                                             | `nén`                                                                                        |
+| handshake                                               | `bắt tay`                                                                                    |
+| connection                                              | keep `connection` for the technical object; `kết nối` is acceptable for the network action   |
+| request / response                                      | keep both terms in technical prose                                                           |
+| route / middleware / handler / worker / slab / capacity | keep the English term                                                                        |
+| build                                                   | keep `build` as the noun or verb for the build step                                          |
+| package / dependency / runtime / server / cluster       | keep the English term                                                                        |
+
+Apply the same terminology to `apps/uwz-docs/locales/vi.json` and the landing
+page. A reviewer checks Vietnamese pages for grammar, typos, and glossary
+consistency, not just key parity.
 
 ### 9.5 i18n QA
 
@@ -3282,7 +3295,7 @@ Research performed for this plan on 2026-10-31:
 - Repository sources: `README.md`, `docs/*.md`, `CODEBASE.md`, `CHANGELOG.md`,
   `SECURITY.md`, `src/root.zig`, `src/router/config.zig`,
   `src/http/response.zig`, `src/http/middleware.zig`, and `examples/`.
-- Current site audit: `blume doctor` reports 4 pages, static output, Orama
+- Baseline site audit: `blume doctor` reported 4 pages, static output, Orama
   search, no references, no analytics, no assistant. `blume validate --strict`
   reports no broken links.
 
@@ -3300,6 +3313,7 @@ source at the time it is written.
 | 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                             | Docs writing pass  |
 | 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                 | Docs writing pass  |
 | 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
+| 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

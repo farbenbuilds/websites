@@ -13,7 +13,7 @@ route tĩnh và một route parameter, khởi động listener, kiểm tra cả 
 
 ## Điều kiện trước
 
-- Project có dependency `uWebZockets`, như mô tả trong
+- Dự án có dependency `uWebZockets`, như mô tả trong
   [Quickstart](/docs/getting-started/quickstart).
 - Zig 0.16.0.
 - `curl`.
@@ -93,14 +93,14 @@ trong `greet` xử lý trường hợp thiếu giá trị capture, không phải
 
 ## Chuyện gì xảy ra lúc khởi động
 
-| Bước                     | Chi tiết                                                                                             |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `App(128).init`          | Tính bố cục slab và cấp một lần cho 128 slot kết nối, buffer request, write queue và lưu trữ router. |
-| `app.get`                | Ghi route vào lưu trữ router cố định. Đăng ký trước `listen` giữ mảng bất biến khi worker chạy.      |
-| `catch_shutdown_signals` | Cài watcher SIGINT và SIGTERM process-wide. Nó yêu cầu shutdown.                                     |
-| `listen`                 | Bind socket, bắt đầu accept và khóa đăng ký route.                                                   |
-| `run`                    | Chạy event loop đến khi shutdown hoàn tất.                                                           |
-| `deinit`                 | Giải phóng slab đúng một lần. Nó panic nếu gọi từ trong loop.                                        |
+| Bước                     | Chi tiết                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `App(128).init`          | Tính bố cục slab và cấp một lần cho 128 connection slot, buffer request, write queue và lưu trữ router. |
+| `app.get`                | Ghi route vào lưu trữ router cố định. Đăng ký trước `listen` giữ mảng bất biến khi worker chạy.         |
+| `catch_shutdown_signals` | Cài watcher SIGINT và SIGTERM process-wide. Nó yêu cầu shutdown.                                        |
+| `listen`                 | Bind socket, bắt đầu accept và khóa đăng ký route.                                                      |
+| `run`                    | Chạy event loop đến khi shutdown hoàn tất.                                                              |
+| `deinit`                 | Giải phóng slab đúng một lần. Nó panic nếu gọi từ trong loop.                                           |
 
 ## Đổi địa chỉ hoặc port
 
@@ -127,13 +127,13 @@ fn create(req: *uz.Request, res: *uz.Response) void {
 _ = try app.post("/items", create);
 ```
 
-`req.text()` trả body đã buffer. Dung lượng body mặc định là 16 KiB; nâng bằng
+`req.text()` trả body đã buffer. Body capacity mặc định là 16 KiB; nâng bằng
 `ServerConfig` hoặc `with_max_body_size` khi ứng dụng cần upload lớn hơn.
 
 ## Dừng sạch [#stop-it-cleanly]
 
 Nhấn Ctrl+C. Watcher yêu cầu shutdown: ngừng accept, hủy timer định kỳ, đóng
-kết nối đang hoạt động và drain completion trước khi `run` trả về. Request
+connection đang hoạt động và drain completion trước khi `run` trả về. Request
 đang xử lý không được đảm bảo hoàn tất. `defer app.deinit()` sau đó giải phóng
 slab.
 

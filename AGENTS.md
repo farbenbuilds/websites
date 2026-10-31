@@ -54,6 +54,12 @@ rules agents most often break:
   `docs/` and `docs/vi/` MDX pages under Blume, including future pages such as
   `getting-started.mdx` and `api.mdx`. Never add MDX files, page prose,
   frontmatter, or docs routes to locale JSON or x18n resources.
+- Vietnamese pages keep the core technical vocabulary in English: slab,
+  capacity, backpressure, async token, worker, shared-nothing, handler,
+  middleware, route, request, response, connection, transport, event loop,
+  completion, buffer, queue, package, dependency, runtime, server, cluster.
+  Write natural Vietnamese around those terms; do not translate them literally.
+  The locale prefix is `/vi` (ISO 639-1), never `/vn`.
 - TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
   silence a real uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the

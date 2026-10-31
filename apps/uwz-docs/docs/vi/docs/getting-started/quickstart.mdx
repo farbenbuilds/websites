@@ -1,33 +1,32 @@
 ---
 title: Quickstart
-description: Tạo project Zig từ đầu, thêm µWebZockets, chạy một server hoàn chỉnh và đạt phản hồi HTTP đã kiểm tra bằng curl.
+description: Tạo dự án Zig từ đầu, thêm µWebZockets, chạy một server hoàn chỉnh và kiểm tra HTTP response thực tế bằng curl.
 sidebar:
   order: 4
 search:
   tags: [getting-started, tutorial]
 ---
 
-Quickstart này tạo project Zig mới, thêm µWebZockets làm dependency và đạt
-phản hồi `200 OK` đã kiểm tra. Nó dùng một chương trình hoàn chỉnh và một lệnh
-build.
+Quickstart này tạo dự án Zig mới, thêm µWebZockets làm dependency và xác minh
+response `200 OK`. Hướng dẫn dùng một chương trình hoàn chỉnh và một lệnh build.
 
 ## Điều kiện trước
 
-- Zig 0.16.0 trên host được hỗ trợ.
-- Terminal trong thư mục bạn giữ project.
+- Zig 0.16.0 trên máy được hỗ trợ.
+- Terminal trong thư mục bạn muốn tạo dự án.
 - `curl`.
 
-## Tạo project
+## Tạo dự án
 
 <Steps>
-  <Step title="Khởi tạo project Zig">
+  <Step title="Khởi tạo dự án Zig">
     ```sh
     mkdir hello-uwz
     cd hello-uwz
     zig init
     ```
 
-    `zig init` tạo `build.zig`, `build.zig.zon` và cây source khởi đầu. Bạn
+    `zig init` tạo `build.zig`, `build.zig.zon` và cây source ban đầu. Bạn
     thay executable được tạo bằng server bên dưới.
 
   </Step>
@@ -102,7 +101,7 @@ build.
     zig build run
     ```
 
-    Giữ server chạy và mở terminal thứ hai.
+    Giữ server chạy, rồi mở terminal thứ hai.
 
   </Step>
   <Step title="Kiểm tra phản hồi">
@@ -119,16 +118,16 @@ build.
   </Step>
 </Steps>
 
-## Chuyện gì vừa xảy ra
+## Cách chương trình hoạt động
 
-| Lệnh gọi                       | Tác dụng                                            |
-| ------------------------------ | --------------------------------------------------- |
-| `uz.App(128).init(init.io)`    | Cấp một slab cho 128 kết nối đồng thời và tạo loop. |
-| `app.get("/", hello)`          | Đăng ký route `GET /` đồng bộ trước khi listen.     |
-| `app.catch_shutdown_signals()` | Cài watcher SIGINT và SIGTERM để yêu cầu shutdown.  |
-| `app.listen("0.0.0.0", 3000)`  | Bind listener TCP và khóa đăng ký route.            |
-| `app.run()`                    | Chạy event loop đến khi shutdown hoàn tất.          |
-| `app.deinit()`                 | Giải phóng slab sau khi loop đã drain.              |
+| Lệnh gọi                       | Tác dụng                                               |
+| ------------------------------ | ------------------------------------------------------ |
+| `uz.App(128).init(init.io)`    | Cấp một slab cho 128 connection đồng thời và tạo loop. |
+| `app.get("/", hello)`          | Đăng ký route `GET /` đồng bộ trước khi gọi `listen`.  |
+| `app.catch_shutdown_signals()` | Cài watcher SIGINT và SIGTERM để yêu cầu shutdown.     |
+| `app.listen("0.0.0.0", 3000)`  | Bind TCP listener và khóa đăng ký route.               |
+| `app.run()`                    | Chạy event loop đến khi shutdown hoàn tất.             |
+| `app.deinit()`                 | Giải phóng slab sau khi loop đã drain.                 |
 
 Chữ ký handler là `fn (*uz.Request, *uz.Response) void`. Slice request được
 mượn trong callback, và `res.text` copy body vào write queue có giới hạn trước
@@ -142,16 +141,15 @@ Truyền port khác cho `listen`:
 try app.listen("127.0.0.1", 8080);
 ```
 
-Bind `127.0.0.1` giữ server trên interface loopback. Bind `0.0.0.0` nhận kết
-nối trên mọi interface local.
+Bind `127.0.0.1` để server chỉ lắng nghe trên loopback interface. Bind
+`0.0.0.0` để nhận connection trên mọi interface cục bộ.
 
 ## Dừng server
 
-Nhấn Ctrl+C trong terminal server. Signal watcher yêu cầu đường shutdown bình
-thường: ngừng accept, hủy timer, đóng kết nối đang hoạt động và drain
+Nhấn Ctrl+C trong terminal của server. Signal watcher yêu cầu shutdown theo
+đường shutdown bình thường: ngừng accept, hủy timer, đóng connection đang hoạt động và drain
 completion trước khi `deinit` giải phóng slab. Request đang xử lý không được
-đảm bảo hoàn tất. Kill cưỡng bức bỏ qua drain và không phải đường dừng bình
-thường.
+đảm bảo hoàn tất. Buộc process dừng sẽ bỏ qua drain.
 
 ## Tiếp theo
 

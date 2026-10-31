@@ -1,6 +1,6 @@
 ---
 title: Triết lý
-description: Đọc quy tắc thiết kế đằng sau slab có giới hạn, dữ liệu mượn, parser thuần, không trạng thái global ẩn và bằng chứng.
+description: Tìm hiểu các quy tắc thiết kế về slab có giới hạn, borrowed data, parser thuần, trạng thái global và bằng chứng kỹ thuật.
 sidebar:
   order: 2
 search:
@@ -13,9 +13,9 @@ số tính năng cố ý không có.
 
 ## Có giới hạn theo thiết kế
 
-Mọi tài nguyên hot path có giới hạn lúc khởi động hoặc lúc compile. Slab ứng
-dụng chứa slot kết nối, buffer request, vùng message WebSocket, write queue và
-lưu trữ router. Bảng giao thức như trạng thái stream HTTP/2, lưu trữ HPACK và
+Mọi tài nguyên trên hot path đều có giới hạn lúc startup hoặc compile. Application slab
+chứa connection slot, buffer request, vùng message WebSocket, write queue và
+lưu trữ router. Protocol table như trạng thái stream HTTP/2, lưu trữ HPACK và
 pool HTTP/3 cũng được định cỡ trước khi listener bắt đầu.
 
 Khi chạm giới hạn, thư viện báo ra:
@@ -23,49 +23,50 @@ Khi chạm giới hạn, thư viện báo ra:
 - Write queue đầy trả `error.WouldBlock`.
 - Body quá lớn trả `413` kèm tài liệu JSON có cấu trúc.
 - Header block quá lớn trả `431`.
-- Inbox cluster đầy báo số message bị drop và wakeup thất bại thay vì block
+- Inbox cluster đầy báo số message bị bỏ và wakeup thất bại thay vì block
   publisher.
 
-Lợi ích là chế độ thất bại đoán trước. Cái giá là không thể tăng dung lượng mà
+Lợi ích là failure mode dễ dự đoán. Cái giá là không thể tăng capacity mà
 không khởi động lại.
 
 ## Sở hữu tường minh [#explicit-ownership]
 
-Thư viện phân biệt bộ nhớ mượn và sở hữu. Header request, capture route,
-message WebSocket và cặp query trỏ vào lưu trữ thuộc connection và chỉ hợp lệ
+Thư viện phân biệt borrowed và owned memory. Header request, route capture,
+message WebSocket và query pair trỏ vào storage thuộc connection và chỉ hợp lệ
 trong callback. `Request.clone(allocator)` tạo `OwnedRequest` khi công việc phải
 sống lâu hơn callback, và `req.json(T, allocator)` trả dữ liệu đã parse thuộc
 caller.
 
-Handler lưu slice mượn mà không copy là lỗi vòng đời, không phải lỗi framework.
-Quy tắc tương tự áp dụng cho slice `message` của WebSocket và field async token
-không được park bằng `sleep_complete`.
+Nếu handler lưu borrowed slice mà không copy, ứng dụng vi phạm vòng đời dữ liệu.
+Quy tắc tương tự áp dụng cho slice `message` của WebSocket và field trong async
+token không được park bằng `sleep_complete`.
 
-## Parser và transform thuần
+## Parser và phép biến đổi thuần
 
-Parse, percent decode, chấm điểm `Accept`, so khớp ETag, quét cookie và
-validation schema là các hàm nhỏ với input/output tường minh. Chúng không đọc
-trạng thái global, không cấp phát và không I/O. I/O có trạng thái nằm ở ranh
-giới transport, nơi completion và slot kết nối được sở hữu.
+Parse, percent decode, score `Accept`, so khớp ETag, scan cookie và
+schema validation là các hàm nhỏ với input/output tường minh. Chúng không đọc
+global state, không cấp phát và không I/O. I/O có trạng thái nằm ở ranh
+giới transport, nơi completion và connection slot được sở hữu.
 
 Cách tách này làm code giao thức dễ test bằng byte slice và buffer cố định. Nó
 cũng giữ ranh giới handler không có trạng thái ẩn.
 
 ## Một ranh giới trung lập transport
 
-`Request` và `Response` là cùng một kiểu dù byte đến qua HTTP/1.1, HTTP/2,
+`Request` và `Response` giữ nguyên kiểu dù byte đến qua HTTP/1.1, HTTP/2,
 HTTP/3 hay upgrade WebSocket. Router và middleware thấy một hình dạng. Hành vi
 riêng của giao thức nằm trong transport và ở các field thực sự khác, như method
 hoặc WebSocket opcode.
 
-Cái giá là một số chi tiết giao thức không được phơi thành kiểu handler riêng.
+Cái giá là một số chi tiết giao thức không được expose thành kiểu handler riêng.
 Khi một tính năng không thể biểu diễn an toàn qua mọi transport, nó ở lại
-module helper-only hoặc ranh giới được ghi thay vì thành abstraction rò rỉ.
+trong helper-only module hoặc được ghi rõ là một ranh giới, thay vì tạo ra
+leaky abstraction.
 
-## Bộ nhớ hướng dữ liệu
+## Bộ nhớ data-oriented
 
-Tập hợp lớn dùng mảng song song và index dung lượng cố định. Pool kết nối giữ
-bitmap hoạt động và freelist tách khỏi field lạnh. Router giữ mảng segment,
+Tập hợp lớn dùng mảng song song và index với capacity cố định. Connection pool giữ
+bitmap hoạt động và freelist tách khỏi các cold field. Router giữ mảng segment,
 child, sibling, parent, method và handler song song để lần quét chỉ chạm thứ
 cần. Inbox cluster giữ trạng thái producer và consumer trên cache line riêng.
 
@@ -74,13 +75,14 @@ và một vòng đời.
 
 ## Không có trạng thái global ẩn
 
-Ứng dụng sở hữu router, pub/sub engine, metrics registry, dev log sink và pool
-giao thức. Worker sở hữu loop và slab. Vài tiện ích process-wide là tường minh:
-signal watcher shutdown, chọn backend libxev và tham chiếu khởi tạo lsquic.
+Ứng dụng sở hữu router, pub/sub engine, metrics registry, development log sink và
+protocol pool. Worker sở hữu event loop và slab. Một số tiện ích process-wide
+được nêu rõ: signal watcher cho shutdown, lựa chọn backend libxev và tham chiếu
+khởi tạo lsquic.
 Chúng được cài trước khi listener bắt đầu và được ghi là process-wide.
 
-Không có connection registry ngầm, không có allocator global trên request path,
-và không có background thread tự ý sửa trạng thái ứng dụng.
+Không có connection registry ngầm, allocator global trên request path hay
+background thread tự ý sửa trạng thái ứng dụng.
 
 ## Bằng chứng thay cho tuyên bố
 
@@ -97,5 +99,5 @@ minh, trang nói rõ.
 
 - [Động lực](/docs/getting-started/motivation) mô tả vấn đề các quy tắc giải
   quyết.
-- [Cài đặt](/docs/getting-started/installation) áp dụng quy tắc vào project.
+- [Cài đặt](/docs/getting-started/installation) áp dụng quy tắc vào dự án.
 - [Thuật ngữ](/docs/getting-started/glossary) định nghĩa các từ dùng trên site.
