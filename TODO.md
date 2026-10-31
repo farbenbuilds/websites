@@ -990,6 +990,11 @@ field.
   viewport; the field fills the viewport behind it. The Blume header is fixed,
   hidden, and `inert` while the hero is in view; it reveals after the reader
   scrolls past the hero. Docs pages and the no-JS path keep the header visible.
+- **Paper grain:** a 100x100 noise tile from the portfolio reference repeats at
+  its native 100px size and blends with `soft-light` at 8% in light mode and 10%
+  in dark mode. It sits below the butterfly canvas and controls, so the art,
+  copy, and the canvas dot matrix stay crisp. The grain is static;
+  reduced-motion behavior is unchanged.
 - **Specimens:** original procedural ASCII butterflies are rasterized into the
   cell grid. Three faceted species use coloured wing tiles from the host
   `--farben-field-wing-*` aliases, with body-locked veins, bands, margins, and

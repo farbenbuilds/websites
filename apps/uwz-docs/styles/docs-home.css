@@ -46,6 +46,19 @@ html:has(.docs-home-hero) #blume-content {
   color: var(--hero-ink);
 }
 
+/* The canvas dot matrix stays above the grain at z-index 2. */
+.docs-home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-image: url("/noise-texture.jpg");
+  background-size: 100px 100px;
+  opacity: 0.08;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
 :root[data-theme="dark"] .docs-home-hero {
   --hero-paper: #1a1917;
   --hero-ink: #fff7f0;
@@ -62,6 +75,10 @@ html:has(.docs-home-hero) #blume-content {
   --hero-wing-3: #ffe08a;
 }
 
+:root[data-theme="dark"] .docs-home-hero::after {
+  opacity: 0.1;
+}
+
 .docs-home-hero > astro-island:has(> .butterfly-hero) {
   display: contents;
 }
@@ -69,7 +86,7 @@ html:has(.docs-home-hero) #blume-content {
 .docs-home-hero .butterfly-hero {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   min-height: 0;
   margin: 0;
   --farben-field-paper: var(--hero-paper);
@@ -88,7 +105,7 @@ html:has(.docs-home-hero) #blume-content {
 
 .docs-home-hero-copy {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   grid-column: 1;
   align-self: end;
@@ -104,7 +121,7 @@ html:has(.docs-home-hero) #blume-content {
   position: absolute;
   right: clamp(1.25rem, 2.5vw, 2rem);
   bottom: clamp(1.75rem, 4vh, 2.5rem);
-  z-index: 2;
+  z-index: 3;
   max-height: min(24rem, 46vh);
   padding-inline-end: 0.15rem;
   color: var(--hero-muted);
