@@ -1,5 +1,6 @@
-import en from "./locales/en.json" with { type: "json" };
-import vi from "./locales/vi.json" with { type: "json" };
+import { localizeLocalePath } from "@farben/docs-components/docs-locale.ts";
+
+import { siteMessages } from "./messages.ts";
 
 export type SiteLocale = "en" | "vi";
 
@@ -8,9 +9,7 @@ export type SiteLink = {
   readonly href: string;
 };
 
-type SiteMessages = typeof en;
-
-const MESSAGES: Record<SiteLocale, SiteMessages> = { en, vi };
+type SiteLinkKey = "author" | "source" | "license";
 
 export const PRODUCT_REPOSITORY_URL = "https://github.com/farbenbuilds/uWebZockets";
 
@@ -18,36 +17,29 @@ export const PRODUCT_LICENSE_URL = "https://github.com/farbenbuilds/uWebZockets/
 
 export const AUTHOR_URL = "https://github.com/Coder-Blue";
 
-export const SITE_LINKS: readonly SiteLink[] = [
-  {
-    label: {
-      en: en.siteLinks.author,
-      vi: vi.siteLinks.author,
-    },
-    href: AUTHOR_URL,
+const SITE_LINK_DEFINITIONS = [
+  { key: "author", href: AUTHOR_URL },
+  { key: "source", href: PRODUCT_REPOSITORY_URL },
+  { key: "license", href: PRODUCT_LICENSE_URL },
+] as const satisfies readonly { readonly key: SiteLinkKey; readonly href: string }[];
+
+const EN_SITE_LINKS = siteMessages("en").siteLinks;
+const VI_SITE_LINKS = siteMessages("vi").siteLinks;
+
+export const SITE_LINKS: readonly SiteLink[] = SITE_LINK_DEFINITIONS.map(({ key, href }) => ({
+  label: {
+    en: EN_SITE_LINKS[key],
+    vi: VI_SITE_LINKS[key],
   },
-  {
-    label: {
-      en: en.siteLinks.source,
-      vi: vi.siteLinks.source,
-    },
-    href: PRODUCT_REPOSITORY_URL,
-  },
-  {
-    label: {
-      en: en.siteLinks.license,
-      vi: vi.siteLinks.license,
-    },
-    href: PRODUCT_LICENSE_URL,
-  },
-];
+  href,
+}));
 
 export function siteFooterNote(locale: SiteLocale): string {
-  return MESSAGES[locale].siteLinks.footerNote;
+  return siteMessages(locale).siteLinks.footerNote;
 }
 
 export function siteColophonLabel(locale: SiteLocale): string {
-  return MESSAGES[locale].siteLinks.colophonLabel;
+  return siteMessages(locale).siteLinks.colophonLabel;
 }
 
 export function resolveLocale(pathname: string): SiteLocale {
@@ -55,6 +47,10 @@ export function resolveLocale(pathname: string): SiteLocale {
 }
 
 export function localizeHref(href: string, locale: SiteLocale): string {
+  if (href.startsWith("#")) {
+    return href;
+  }
+
   if (href.startsWith("https://")) {
     return href;
   }
@@ -63,9 +59,5 @@ export function localizeHref(href: string, locale: SiteLocale): string {
     return "/";
   }
 
-  if (locale === "en") {
-    return href;
-  }
-
-  return href === "/" ? "/vi" : `/vi${href}`;
+  return localizeLocalePath(href, locale);
 }

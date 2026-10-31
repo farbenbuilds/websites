@@ -10,7 +10,8 @@ type Props = {
 };
 
 const { locale = "en" } = Astro.props;
-const copy = landingCopy(locale).hero;
+const landing = landingCopy(locale);
+const copy = landing.hero;
 ---
 
 <LandingHeroChrome client:only="svelte" />
@@ -51,7 +52,7 @@ const copy = landingCopy(locale).hero;
       </a>
     </div>
   </div>
-  <ButterflyHero locale={locale} seed={copy.butterflySeed} client:visible />
+  <ButterflyHero labels={landing.butterfly} seed={copy.butterflySeed} client:visible />
   <aside class="docs-home-dictionary" data-butterfly-avoid aria-label={copy.dictionary.label}>
     <p>
       {copy.dictionary.lines.map((line, index) => (

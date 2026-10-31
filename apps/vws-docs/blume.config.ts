@@ -6,19 +6,17 @@ import {
   renderLandingIntroMarkdown,
   renderLandingNotesMarkdown,
 } from "./components/landing/landing-markdown.ts";
-import { siteLinkLabels } from "./site-links.ts";
+import { siteMessages } from "./messages.ts";
 
-const introMarkdown: ComponentMarkdown = ({ props }) =>
-  renderLandingIntroMarkdown(props.locale === "vi" ? "vi" : "en");
+const markdownFor =
+  (render: (locale: string | undefined) => string): ComponentMarkdown =>
+  ({ props }) =>
+    render(props.locale === "vi" ? "vi" : "en");
 
-const highlightsMarkdown: ComponentMarkdown = ({ props }) =>
-  renderLandingHighlightsMarkdown(props.locale === "vi" ? "vi" : "en");
-
-const exampleMarkdown: ComponentMarkdown = ({ props }) =>
-  renderLandingExampleMarkdown(props.locale === "vi" ? "vi" : "en");
-
-const notesMarkdown: ComponentMarkdown = ({ props }) =>
-  renderLandingNotesMarkdown(props.locale === "vi" ? "vi" : "en");
+const introMarkdown = markdownFor(renderLandingIntroMarkdown);
+const highlightsMarkdown = markdownFor(renderLandingHighlightsMarkdown);
+const exampleMarkdown = markdownFor(renderLandingExampleMarkdown);
+const notesMarkdown = markdownFor(renderLandingNotesMarkdown);
 
 export default defineConfig({
   title: "ventiws",
@@ -65,8 +63,8 @@ export default defineConfig({
     links: [
       {
         label: {
-          en: siteLinkLabels("en").repository,
-          vi: siteLinkLabels("vi").repository,
+          en: siteMessages("en").siteLinks.repository,
+          vi: siteMessages("vi").siteLinks.repository,
         },
         href: "https://github.com/farbenbuilds/ventiws",
       },

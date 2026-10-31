@@ -1,7 +1,9 @@
-import { SITE_LINKS, siteFooterNote, type SiteLocale } from "../../site-links.ts";
+import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
+
+import { SITE_LINKS, siteFooterNote } from "../../site-links.ts";
 
 export function renderSiteColophonMarkdown(locale: string | undefined): string {
-  const resolvedLocale: SiteLocale = locale === "vi" ? "vi" : "en";
+  const resolvedLocale = resolveDocsLocale(locale);
 
   const links = SITE_LINKS.map(({ label, href }) => `- [${label[resolvedLocale]}](${href})`).join(
     "\n",

@@ -14,6 +14,7 @@ describe("site links", () => {
   it("localizes internal links and leaves HTTPS destinations absolute", () => {
     expect(localizeHref("/getting-started", "vi")).toBe("/vi/getting-started");
     expect(localizeHref("/", "vi")).toBe("/vi");
+    expect(localizeHref("#highlights", "vi")).toBe("#highlights");
     expect(localizeHref("/getting-started", "en")).toBe("/getting-started");
     expect(localizeHref("https://github.com/farbenbuilds/uWebZockets", "vi")).toBe(
       "https://github.com/farbenbuilds/uWebZockets",

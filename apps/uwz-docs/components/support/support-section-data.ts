@@ -1,7 +1,7 @@
 import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 
-import en from "../../locales/en.json" with { type: "json" };
-import vi from "../../locales/vi.json" with { type: "json" };
+import { siteMessages, type SiteMessages } from "../../messages.ts";
 
 export type SupportLocale = DocsLocale;
 
@@ -29,24 +29,7 @@ export type SupportCopy = {
   readonly platforms: readonly PlatformRow[];
 };
 
-type SupportMessages = typeof en;
-
-type SupportItemKey = keyof SupportMessages["support"]["items"];
-
-type PlatformKey = keyof SupportMessages["support"]["platforms"];
-
-const MESSAGES: Record<SupportLocale, SupportMessages> = { en, vi };
-
-const SUPPORT_ITEM_KEYS = [
-  "http",
-  "http3",
-  "webSocket",
-  "rpc",
-  "tls",
-  "staticAssets",
-  "workers",
-  "zeroAllocation",
-] as const satisfies readonly SupportItemKey[];
+type PlatformKey = keyof SiteMessages["support"]["platforms"];
 
 const PLATFORM_ROWS: readonly {
   readonly key: PlatformKey;
@@ -61,14 +44,14 @@ const PLATFORM_ROWS: readonly {
 ];
 
 export function supportCopy(locale: string | undefined): SupportCopy {
-  const resolvedLocale: SupportLocale = locale === "vi" ? "vi" : "en";
-  const messages = MESSAGES[resolvedLocale].support;
+  const resolvedLocale = resolveDocsLocale(locale);
+  const messages = siteMessages(resolvedLocale).support;
 
   return {
     label: messages.label,
     heading: messages.heading,
     intro: messages.intro,
-    items: SUPPORT_ITEM_KEYS.map((key) => messages.items[key]),
+    items: Object.values(messages.items),
     platformsLabel: messages.platformsLabel,
     platformNote: messages.platformNote,
     platformHeader: messages.platformHeader,

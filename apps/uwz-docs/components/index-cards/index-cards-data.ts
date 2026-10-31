@@ -1,7 +1,6 @@
-import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 
-import en from "../../locales/en.json" with { type: "json" };
-import vi from "../../locales/vi.json" with { type: "json" };
+import { siteMessages, type SiteMessages } from "../../messages.ts";
 import { localizeHref } from "../../site-links.ts";
 
 export type IndexCardsItem = {
@@ -17,45 +16,28 @@ export type IndexCardsCopy = {
   readonly items: readonly IndexCardsItem[];
 };
 
-type IndexCardsMessages = typeof en;
+type IndexCardKey = keyof SiteMessages["indexCards"]["items"];
 
-type IndexCardKey = keyof IndexCardsMessages["indexCards"]["items"];
-
-const MESSAGES: Record<DocsLocale, IndexCardsMessages> = { en, vi };
-
-const INDEX_CARD_KEYS = [
-  "gettingStarted",
-  "shareNothing",
-  "migrate",
-  "configure",
-  "clusterWorker",
-  "typeSafety",
-] as const satisfies readonly IndexCardKey[];
-
-const INDEX_CARD_HREFS: Record<IndexCardKey, string> = {
-  gettingStarted: "/getting-started",
-  shareNothing: "#",
-  migrate: "#",
-  configure: "#",
-  clusterWorker: "#",
-  typeSafety: "#",
-};
-
-function resolveHref(href: string, locale: DocsLocale): string {
-  return href.startsWith("/") ? localizeHref(href, locale) : href;
-}
+const INDEX_CARD_DEFINITIONS = [
+  { key: "gettingStarted", href: "/getting-started" },
+  { key: "shareNothing", href: "#" },
+  { key: "migrate", href: "#" },
+  { key: "configure", href: "#" },
+  { key: "clusterWorker", href: "#" },
+  { key: "typeSafety", href: "#" },
+] as const satisfies readonly { readonly key: IndexCardKey; readonly href: string }[];
 
 export function indexCardsCopy(locale: string | undefined): IndexCardsCopy {
-  const resolvedLocale: DocsLocale = locale === "vi" ? "vi" : "en";
-  const messages = MESSAGES[resolvedLocale].indexCards;
+  const resolvedLocale = resolveDocsLocale(locale);
+  const messages = siteMessages(resolvedLocale).indexCards;
 
   return {
     label: messages.label,
     heading: messages.heading,
     intro: messages.intro,
-    items: INDEX_CARD_KEYS.map((key) => ({
+    items: INDEX_CARD_DEFINITIONS.map(({ key, href }) => ({
       ...messages.items[key],
-      href: resolveHref(INDEX_CARD_HREFS[key], resolvedLocale),
+      href: localizeHref(href, resolvedLocale),
     })),
   };
 }

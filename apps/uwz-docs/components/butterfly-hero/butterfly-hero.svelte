@@ -4,27 +4,27 @@
   import { PlayPauseButton } from "@farben/ui/components/ui/play-pause-button";
   import { ScrollCue } from "@farben/ui/components/ui/scroll-cue";
 
-  import en from "../../locales/en.json" with { type: "json" };
-  import vi from "../../locales/vi.json" with { type: "json" };
   import { DEFAULT_SPECIMEN_COUNT, fallbackSpecimenCount } from "./butterfly-density";
   import { createButterflyLoop, type ButterflyLoop } from "./butterfly-loop";
   import { generateStill } from "./butterfly-still";
 
   type ButterflyHeroProps = {
-    locale?: "en" | "vi";
+    labels: {
+      readonly pauseLabel: string;
+      readonly resumeLabel: string;
+      readonly scrollLabel: string;
+    };
     seed?: number;
     specimenCount?: number;
     scrollHref?: string;
     scrollLabel?: string;
   };
 
-  const MESSAGES = { en, vi };
-
   const PAUSE_KEY = "farben-butterfly-paused";
   const CONTENT_ROOT_SELECTOR = "[data-butterfly-content-root]";
 
   let {
-    locale = "en",
+    labels,
     seed = 20261029,
     specimenCount = DEFAULT_SPECIMEN_COUNT,
     scrollHref = "#docs-home-main",
@@ -39,7 +39,6 @@
   let paused = $state(false);
   let motionAllowed = $state(true);
 
-  const copy = $derived(MESSAGES[locale].butterfly);
   const still = $derived(generateStill(seed, fallbackSpecimenCount(specimenCount)));
 
   function togglePause(): void {
@@ -106,11 +105,11 @@
       bind:this={canvas}
     ></canvas>
   </div>
-  <ScrollCue href={scrollHref} label={scrollLabel ?? copy.scrollLabel} avoid />
+  <ScrollCue href={scrollHref} label={scrollLabel ?? labels.scrollLabel} avoid />
   {#if ready && motionAllowed}
     <PlayPauseButton
       {paused}
-      labels={{ pause: copy.pauseLabel, resume: copy.resumeLabel }}
+      labels={{ pause: labels.pauseLabel, resume: labels.resumeLabel }}
       onToggle={togglePause}
       avoid
     />

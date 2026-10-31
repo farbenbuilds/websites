@@ -58,6 +58,7 @@ websites/
 │   │   ├── docs/                # English Markdown and MDX source
 │   │   ├── docs/vi/             # Vietnamese translations
 │   │   ├── locales/             # en/vi component UI copy checked by x18n
+│   │   ├── messages.ts          # locale JSON loading and fallback
 │   │   ├── components/          # landing, index-cards, support, benchmark, colophon
 │   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
@@ -69,7 +70,7 @@ websites/
 │       ├── docs/                 # English Markdown and MDX source
 │       ├── docs/vi/              # Vietnamese translations
 │       ├── locales/              # en/vi component UI copy checked by x18n
-│       ├── site-links.ts         # footer labels and internal link localization
+│       ├── messages.ts           # locale JSON loading and fallback
 │       ├── x18n.config.ts        # locale resources for vws-docs
 │       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
 ├── packages/
@@ -139,10 +140,12 @@ API. Keep translated headings pinned to their English anchor ids so fragment
 links resolve in both languages.
 
 Only components use x18n. Component UI copy lives in
-`apps/<app>/locales/{locale}.json`; components read the whole locale object and
-parse inline Markdown into the shared `@farben/docs-components` inline-text
-model. x18n reads the same JSON files through each app's `x18n.config.ts`; run
-`pnpm i18n:check` from the root to check both projects.
+`apps/<app>/locales/{locale}.json`; each app's `messages.ts` loads both locale
+files and applies the English fallback. Section modules map that copy to their
+component shapes and parse inline Markdown into the shared
+`@farben/docs-components` inline-text model. x18n reads the same JSON files
+through each app's `x18n.config.ts`; run `pnpm i18n:check` from the root to check
+both projects.
 
 Documentation content is not UI copy. A page such as `getting-started.mdx` or
 `api.mdx` lives at `docs/<slug>.mdx` with its translation at

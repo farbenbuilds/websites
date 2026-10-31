@@ -1,7 +1,7 @@
 import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 
-import en from "../../locales/en.json" with { type: "json" };
-import vi from "../../locales/vi.json" with { type: "json" };
+import { siteMessages, type SiteMessages } from "../../messages.ts";
 
 export type BenchmarkLocale = DocsLocale;
 
@@ -37,11 +37,7 @@ export type BenchmarkCopy = {
   readonly arenaMetrics: readonly ArenaMetric[];
 };
 
-type BenchmarkMessages = typeof en;
-
-type ArenaMetricKey = keyof BenchmarkMessages["benchmark"]["metrics"];
-
-const MESSAGES: Record<BenchmarkLocale, BenchmarkMessages> = { en, vi };
+type ArenaMetricKey = keyof SiteMessages["benchmark"]["metrics"];
 
 const BARS: readonly BenchmarkBar[] = [
   { name: "µWebZockets", value: "148,237", share: 100, leader: true },
@@ -67,8 +63,8 @@ const ARENA_METRICS: readonly {
 ];
 
 export function benchmarkCopy(locale: string | undefined): BenchmarkCopy {
-  const resolvedLocale: BenchmarkLocale = locale === "vi" ? "vi" : "en";
-  const messages = MESSAGES[resolvedLocale].benchmark;
+  const resolvedLocale = resolveDocsLocale(locale);
+  const messages = siteMessages(resolvedLocale).benchmark;
 
   return {
     label: messages.label,
