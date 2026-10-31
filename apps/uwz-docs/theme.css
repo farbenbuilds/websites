@@ -19,6 +19,14 @@
 @import "../../../styles/docs-home-support.css";
 @import "../../../styles/docs-home-benchmark.css";
 
+/*
+ * Blume enables smooth scrolling on every page. Keep it on the landing page
+ * only; documentation pages jump instantly to anchors.
+ */
+html {
+  scroll-behavior: auto;
+}
+
 :root {
   --blume-background: #f4f0e6;
   --blume-foreground: #171512;

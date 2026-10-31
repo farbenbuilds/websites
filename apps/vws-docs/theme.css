@@ -1,0 +1,17 @@
+/*
+ * Blume enables smooth scrolling on every page. Keep it on the landing page
+ * only; documentation pages jump instantly to anchors.
+ */
+html {
+  scroll-behavior: auto;
+}
+
+html:has([data-vws-landing]) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has([data-vws-landing]) {
+    scroll-behavior: auto;
+  }
+}

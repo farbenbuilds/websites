@@ -57,7 +57,6 @@ export type LandingCopy = {
   readonly author: {
     readonly label: string;
     readonly name: string;
-    readonly avatarSrc: string;
     readonly avatarAlt: string;
     readonly bio: readonly InlinePart[];
     readonly socials: readonly LandingSocial[];
@@ -65,7 +64,6 @@ export type LandingCopy = {
   readonly sponsor: {
     readonly label: string;
     readonly heading: string;
-    readonly logoSrc: string;
     readonly logoAlt: string;
     readonly body: string;
     readonly action: LandingAction;
@@ -128,7 +126,6 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     author: {
       label: landing.author.label,
       name: landing.author.name,
-      avatarSrc: "/author/noah-tran.webp",
       avatarAlt: landing.author.avatarAlt,
       bio: parseInlineMarkdown(landing.author.bio, { linkClassName: "editorial-link" }),
       socials: SOCIAL_KEYS.map((key) => ({
@@ -139,7 +136,6 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     sponsor: {
       label: landing.sponsor.label,
       heading: landing.sponsor.heading,
-      logoSrc: "/sponsor/farben-logo.png",
       logoAlt: landing.sponsor.logoAlt,
       body: landing.sponsor.body,
       action: {
