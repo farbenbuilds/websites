@@ -1,0 +1,24 @@
+---
+import InlineText from "../inline-text/inline-text.astro";
+import type { LandingLocale } from "./landing-copy.ts";
+import { landingCopy } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).highlights;
+---
+
+<ul>
+  {copy.items.map((item) => (
+    <li>
+      <strong>
+        <InlineText parts={item.lead} />
+      </strong>
+      {" — "}
+      <InlineText parts={item.text} />
+    </li>
+  ))}
+</ul>

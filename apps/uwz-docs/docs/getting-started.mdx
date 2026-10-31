@@ -28,9 +28,9 @@ The first build fetches the pinned dependencies (BoringSSL, lsquic, libxev, zsla
 
 µWebZockets is a Zig package. Fetch a released tag or a full commit so dependency resolution stays reproducible:
 
-<CopyCommand
-  command={"zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'"}
-/>
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'
+```
 
 Wire the dependency in `build.zig`:
 

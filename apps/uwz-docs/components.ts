@@ -1,17 +1,15 @@
-import { ButterflyHero } from "./components/butterfly-hero/index.ts";
 import { defineComponents } from "blume";
-
-import CopyCommand from "./components/copy-command.svelte";
-import HeroChrome from "./components/hero-chrome.svelte";
 
 export default defineComponents({
   mdx: {
-    ButterflyHero: { component: ButterflyHero, client: "visible" },
-    HeroChrome: { component: HeroChrome, client: "only" },
-    HomeIndex: "./components/home-index.astro",
-    SupportSection: "./components/support-section.astro",
-    BenchmarkSection: "./components/benchmark-section.astro",
-    CopyCommand: { component: CopyCommand, client: "visible" },
-    SiteColophon: "./components/site-colophon.astro",
+    LandingShell: "./components/landing/landing-shell.astro",
+    LandingHero: "./components/landing/landing-hero.astro",
+    IndexCards: "./components/index-cards/index-cards.astro",
+    SupportSection: "./components/support/support-section.astro",
+    BenchmarkSection: "./components/benchmark/benchmark-section.astro",
+    LandingServer: "./components/landing/landing-server.astro",
+    LandingAuthor: "./components/landing/landing-author.astro",
+    LandingSponsor: "./components/landing/landing-sponsor.astro",
+    SiteColophon: "./components/colophon/site-colophon.astro",
   },
 });

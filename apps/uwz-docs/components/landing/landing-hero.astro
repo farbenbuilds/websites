@@ -1,0 +1,67 @@
+---
+import { landingCopy, type LandingLocale } from "./landing-copy.ts";
+import ButterflyHero from "../butterfly-hero/butterfly-hero.svelte";
+import InlineText from "../inline-text/inline-text.astro";
+import LandingHeroChrome from "./landing-hero-chrome.svelte";
+import LandingNoscript from "./landing-noscript.astro";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).hero;
+---
+
+<LandingHeroChrome client:only="svelte" />
+<LandingNoscript />
+<section class="docs-home-hero" aria-labelledby="uwz-title" data-butterfly-content-root>
+  <div class="docs-home-hero-copy" data-butterfly-avoid>
+    <p class="docs-home-eyebrow editorial-label">{copy.eyebrow}</p>
+    <div class="docs-home-title-row">
+      <img
+        class="docs-home-mark"
+        src={copy.markSrc}
+        alt=""
+        width="72"
+        height="72"
+        aria-hidden="true"
+      />
+      <h1 class="docs-home-title" id="uwz-title">
+        {copy.title}
+      </h1>
+    </div>
+    <p class="docs-home-summary">
+      <InlineText parts={copy.summary} />
+    </p>
+    <div class="docs-home-actions">
+      <a class="editorial-action editorial-action-primary" href={copy.primaryAction.href}>
+        {copy.primaryAction.label}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+      <a
+        class="editorial-action editorial-action-secondary"
+        href={copy.secondaryAction.href}
+        target="_blank"
+        rel="noreferrer"
+        aria-describedby="blume-new-tab-hint"
+      >
+        {copy.secondaryAction.label}
+        <span aria-hidden="true">{"->"}</span>
+      </a>
+    </div>
+  </div>
+  <ButterflyHero locale={locale} seed={copy.butterflySeed} client:visible />
+  <aside class="docs-home-dictionary" data-butterfly-avoid aria-label={copy.dictionary.label}>
+    <p>
+      {copy.dictionary.lines.map((line, index) => (
+        <Fragment>
+          {line}
+          {index < copy.dictionary.lines.length - 1 && <br />}
+        </Fragment>
+      ))}
+      <br />
+      <span class="docs-home-dictionary-status">{copy.dictionary.status}</span>
+    </p>
+  </aside>
+</section>

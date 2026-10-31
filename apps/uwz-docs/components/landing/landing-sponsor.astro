@@ -1,0 +1,39 @@
+---
+import { landingCopy, type LandingLocale } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).sponsor;
+---
+
+<section class="docs-home-section docs-home-sponsor" id="sponsor" aria-labelledby="sponsor-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-author-card">
+      <img
+        class="docs-home-author-avatar"
+        src={copy.logoSrc}
+        alt={copy.logoAlt}
+        width="512"
+        height="512"
+      />
+      <div class="docs-home-author-copy">
+        <h2 id="sponsor-heading">{copy.heading}</h2>
+        <p>{copy.body}</p>
+        <a
+          class="editorial-action editorial-action-secondary"
+          href={copy.action.href}
+          target="_blank"
+          rel="noreferrer"
+          aria-describedby="blume-new-tab-hint"
+        >
+          {copy.action.label}
+          <span aria-hidden="true">{"->"}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

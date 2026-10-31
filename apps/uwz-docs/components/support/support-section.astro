@@ -18,19 +18,17 @@ const copy = supportCopy(locale);
     </div>
   </div>
   <ol class="docs-home-support-grid" role="list">
-    {
-      copy.items.map((item, index) => (
-        <li class="docs-home-support-item">
-          <span class="docs-home-support-number" aria-hidden="true">
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          <div>
-            <h3>{item.title}</h3>
-            <p>{item.text}</p>
-          </div>
-        </li>
-      ))
-    }
+    {copy.items.map((item, index) => (
+      <li class="docs-home-support-item">
+        <span class="docs-home-support-number" aria-hidden="true">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <div>
+          <h3>{item.title}</h3>
+          <p>{item.text}</p>
+        </div>
+      </li>
+    ))}
   </ol>
   <div class="docs-home-platforms">
     <p class="editorial-label" id="platforms-label">
@@ -46,17 +44,15 @@ const copy = supportCopy(locale);
         </tr>
       </thead>
       <tbody>
-        {
-          copy.platforms.map((platform) => (
-            <tr>
-              <th scope="row">{platform.platform}</th>
-              <td>{platform.architecture}</td>
-              <td>
-                <span class="editorial-badge">{platform.status}</span>
-              </td>
-            </tr>
-          ))
-        }
+        {copy.platforms.map((platform) => (
+          <tr>
+            <th scope="row">{platform.platform}</th>
+            <td>{platform.architecture}</td>
+            <td>
+              <span class="editorial-badge">{platform.status}</span>
+            </td>
+          </tr>
+        ))}
       </tbody>
     </table>
   </div>

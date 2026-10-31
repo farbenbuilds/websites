@@ -1,0 +1,15 @@
+---
+import CodeBlock from "blume/components/content/CodeBlock.astro";
+
+import type { LandingLocale } from "./landing-copy.ts";
+import { landingCopy } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).example;
+---
+
+<CodeBlock lang={copy.lang} code={copy.code} />

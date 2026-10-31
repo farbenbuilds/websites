@@ -1,20 +1,26 @@
+import svelte from "@astrojs/svelte";
 import { defineConfig, type ComponentMarkdown } from "blume";
 
-import { renderHomeIndexMarkdown } from "./components/home-index-data.ts";
-import { renderBenchmarkMarkdown } from "./components/benchmark-section-data.ts";
-import { renderSupportMarkdown } from "./components/support-section-data.ts";
+import { renderBenchmarkMarkdown } from "./components/benchmark/benchmark-section-data.ts";
+import { renderIndexCardsMarkdown } from "./components/index-cards/index-cards-data.ts";
+import {
+  renderLandingAuthorMarkdown,
+  renderLandingHeroMarkdown,
+  renderLandingServerMarkdown,
+  renderLandingSponsorMarkdown,
+} from "./components/landing/landing-markdown.ts";
+import { renderSupportMarkdown } from "./components/support/support-section-data.ts";
 import { SITE_LINKS, siteFooterNote } from "./site-links.ts";
 
-const omitDecorative: ComponentMarkdown = () => "";
+const markdownFor =
+  (render: (locale: string | undefined) => string): ComponentMarkdown =>
+  ({ props }) =>
+    render(props.locale === "vi" ? "vi" : "en");
 
-const homeIndexMarkdown: ComponentMarkdown = ({ props }) =>
-  renderHomeIndexMarkdown(props.locale === "vi" ? "vi" : "en");
-
-const supportMarkdown: ComponentMarkdown = ({ props }) =>
-  renderSupportMarkdown(props.locale === "vi" ? "vi" : "en");
-
-const benchmarkMarkdown: ComponentMarkdown = ({ props }) =>
-  renderBenchmarkMarkdown(props.locale === "vi" ? "vi" : "en");
+const landingShellMarkdown: ComponentMarkdown = ({ childBlocks }) =>
+  childBlocks()
+    .map(({ markdown }) => markdown)
+    .join("\n\n");
 
 export default defineConfig({
   title: "µWebZockets",
@@ -36,13 +42,17 @@ export default defineConfig({
       { code: "vi", label: "Tiếng Việt" },
     ],
   },
+  integrations: [svelte()],
   agents: {
     markdownComponents: {
-      ButterflyHero: omitDecorative,
-      HeroChrome: omitDecorative,
-      HomeIndex: homeIndexMarkdown,
-      SupportSection: supportMarkdown,
-      BenchmarkSection: benchmarkMarkdown,
+      LandingShell: landingShellMarkdown,
+      LandingHero: markdownFor(renderLandingHeroMarkdown),
+      IndexCards: markdownFor(renderIndexCardsMarkdown),
+      SupportSection: markdownFor(renderSupportMarkdown),
+      BenchmarkSection: markdownFor(renderBenchmarkMarkdown),
+      LandingServer: markdownFor(renderLandingServerMarkdown),
+      LandingAuthor: markdownFor(renderLandingAuthorMarkdown),
+      LandingSponsor: markdownFor(renderLandingSponsorMarkdown),
     },
   },
   theme: {

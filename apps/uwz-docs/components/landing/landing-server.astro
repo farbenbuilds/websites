@@ -1,0 +1,38 @@
+---
+import { landingCopy, type LandingLocale } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).server;
+---
+
+<section class="docs-home-section" id="server" aria-labelledby="server-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="server-heading">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+    </div>
+  </div>
+  <ol class="docs-home-steps" role="list">
+    {copy.steps.map((step, index) => (
+      <li class="docs-home-step">
+        <span class="docs-home-step-number" aria-hidden="true">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <h3>{step.title}</h3>
+        <p>{step.text}</p>
+      </li>
+    ))}
+  </ol>
+  <div class="docs-home-server-cta">
+    <p>{copy.ctaText}</p>
+    <a class="editorial-link" href={copy.cta.href}>
+      {copy.cta.label}
+      <span aria-hidden="true">{"->"}</span>
+    </a>
+  </div>
+</section>

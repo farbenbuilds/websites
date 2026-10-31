@@ -1,19 +1,19 @@
-export type HomeIndexLocale = "en" | "vi";
+import type { DocsLocale } from "../docs-locale.ts";
 
-export type HomeIndexItem = {
+export type IndexCardsItem = {
   readonly title: string;
   readonly description: string;
   readonly href: string;
 };
 
-export type HomeIndexCopy = {
+export type IndexCardsCopy = {
   readonly label: string;
   readonly heading: string;
   readonly intro: string;
-  readonly items: readonly HomeIndexItem[];
+  readonly items: readonly IndexCardsItem[];
 };
 
-const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
+const INDEX_CARDS: Readonly<Record<DocsLocale, IndexCardsCopy>> = {
   en: {
     label: "01 / Index",
     heading: "Start here.",
@@ -93,12 +93,12 @@ const HOME_INDEX: Readonly<Record<HomeIndexLocale, HomeIndexCopy>> = {
   },
 };
 
-export function homeIndexCopy(locale: string | undefined): HomeIndexCopy {
-  return locale === "vi" ? HOME_INDEX.vi : HOME_INDEX.en;
+export function indexCardsCopy(locale: string | undefined): IndexCardsCopy {
+  return locale === "vi" ? INDEX_CARDS.vi : INDEX_CARDS.en;
 }
 
-export function renderHomeIndexMarkdown(locale: string | undefined): string {
-  const copy = homeIndexCopy(locale);
+export function renderIndexCardsMarkdown(locale: string | undefined): string {
+  const copy = indexCardsCopy(locale);
 
   const items = copy.items
     .map((item) => `- [${item.title}](${item.href}): ${item.description}`)

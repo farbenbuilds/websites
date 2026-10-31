@@ -1,0 +1,18 @@
+---
+import IndexCards from "../index-cards/index-cards.astro";
+import InlineText from "../inline-text/inline-text.astro";
+import type { LandingLocale } from "./landing-copy.ts";
+import { landingCopy } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale);
+---
+
+<p>
+  <InlineText parts={copy.intro} />
+</p>
+<IndexCards locale={locale} />

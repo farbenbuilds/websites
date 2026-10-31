@@ -1,4 +1,6 @@
-export type SupportLocale = "en" | "vi";
+import type { DocsLocale } from "../docs-locale.ts";
+
+export type SupportLocale = DocsLocale;
 
 export type SupportItem = {
   readonly title: string;

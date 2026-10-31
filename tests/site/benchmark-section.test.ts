@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   benchmarkCopy,
   renderBenchmarkMarkdown,
-} from "../../apps/uwz-docs/components/benchmark-section-data.ts";
+} from "../../apps/uwz-docs/components/benchmark/benchmark-section-data.ts";
 
 describe("docs home benchmark section", () => {
   it("keeps both throughput and HTTP Arena data", () => {

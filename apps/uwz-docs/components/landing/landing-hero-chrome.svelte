@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { on } from "svelte/events";
 
   onMount(() => {
     const root = document.documentElement;
@@ -55,16 +56,16 @@
     );
 
     observer.observe(hero);
-    document.addEventListener("keydown", revealForSearch, true);
-    dialog?.addEventListener("toggle", onDialogToggle);
+    const removeKeydown = on(document, "keydown", revealForSearch, { capture: true });
+    const removeDialogToggle = dialog ? on(dialog, "toggle", onDialogToggle) : undefined;
 
     const rect = hero.getBoundingClientRect();
     apply(rect.bottom > 0 && rect.top < window.innerHeight);
 
     return () => {
       observer.disconnect();
-      document.removeEventListener("keydown", revealForSearch, true);
-      dialog?.removeEventListener("toggle", onDialogToggle);
+      removeKeydown();
+      removeDialogToggle?.();
       root.removeAttribute("data-uwz-hero");
       header?.removeAttribute("inert");
     };

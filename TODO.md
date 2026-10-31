@@ -618,27 +618,27 @@ Every `apps/*` path in this table belongs to the two existing docs apps. The
 table does not reserve paths or architecture for the future marketing or shop
 apps.
 
-| Layer                | Responsibility                                                                               | Candidate files                                                                 | Status   |
-| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------- |
-| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export   | New      |
-| Hero component       | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `apps/uwz-docs/components/butterfly-hero/butterfly-hero.svelte` and `index.ts`  | Existing |
-| Hero species         | Species definitions, wing outlines, band phases, vein counts, eyespots, glyph bias           | `butterfly-data.ts` under the same component folder                             | Existing |
-| Hero anatomy         | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                            | Existing |
-| Hero field           | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                            | Existing |
-| Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                       | Existing |
-| Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                         | Existing |
-| Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                             | Existing |
-| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/*/components/site-colophon.astro`, `apps/*/components.ts`                 | New      |
-| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                        | Mixed    |
-| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                | New      |
-| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                               | New      |
-| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                        | Existing |
-| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                             | Existing |
-| Docs home index      | Localized six-entry index and agent markdown serializer                                      | `apps/uwz-docs/components/home-index.astro`, `home-index-data.ts`               | Existing |
-| Docs home support    | Localized capability grid, three-column platform table, agent markdown serializer            | `apps/uwz-docs/components/support-section.astro`, `support-section-data.ts`     | Existing |
-| Docs home benchmark  | bench.zig.bd throughput bars, HTTP Arena metrics, agent markdown serializer                  | `apps/uwz-docs/components/benchmark-section.astro`, `benchmark-section-data.ts` | Existing |
-| Site registry        | Register hero, index, support, benchmark, and colophon for MDX                               | `apps/uwz-docs/components.ts`, new `apps/vws-docs/components.ts`                | Mixed    |
-| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                          | Existing |
+| Layer                | Responsibility                                                                               | Candidate files                                                                           | Status   |
+| -------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------- |
+| Shared editorial CSS | Neutral label, rule, index, and square utilities that do not import Blume                    | `packages/ui/src/lib/styles/editorial.css`, `packages/ui/package.json` export             | New      |
+| Hero component       | Mount the canvas, own lifecycle, typed palette, density, labels, static fallback             | `apps/uwz-docs/components/butterfly-hero/butterfly-hero.svelte` and `index.ts`            | Existing |
+| Hero species         | Species definitions, wing outlines, band phases, vein counts, eyespots, glyph bias           | `butterfly-data.ts` under the same component folder                                       | Existing |
+| Hero anatomy         | Procedural specimen outline, wing and body masks, body-space texture sampling                | `butterfly-shape.ts` under the same component folder                                      | Existing |
+| Hero field           | Spawn, heading, flap-and-glide state, depth, avoidance, breeze, wrapping, seed               | `butterfly-field.ts` under the same component folder                                      | Existing |
+| Hero atmosphere      | Wingbeat downdraft diffusion, pollen motes, air traces, typed buffers                        | `butterfly-atmosphere.ts` under the same component folder                                 | Existing |
+| Hero renderer        | Canvas 2D cell grid, tile and glyph layers, DPR handling, font readiness, theme, still frame | `butterfly-renderer.ts` under the same component folder                                   | Existing |
+| Hero loop            | Fixed-timestep animation frame, resize, visibility, intersection, reduced motion, cleanup    | `butterfly-loop.ts` under the same component folder                                       | Existing |
+| Docs home colophon   | Static per-app footer with the MIT License 2026 note and links                               | `apps/uwz-docs/components/colophon/site-colophon.astro`, `apps/uwz-docs/components.ts`    | New      |
+| Site tokens          | Import shared tokens, map shadcn variables and field palette aliases                         | `apps/uwz-docs/theme.css`, new `apps/vws-docs/theme.css`                                  | Mixed    |
+| Site chrome CSS      | Blume-specific header, sidebar, footer, search, and TOC selectors                            | `apps/*/styles/blume-chrome.css`                                                          | New      |
+| Site component CSS   | Blume-specific cards, callouts, code, tables, tabs, steps, and pagination                    | `apps/*/styles/blume-content.css`                                                         | New      |
+| Site config          | Radius, background, footer content, GitHub links                                             | `apps/*/blume.config.ts`                                                                  | Existing |
+| Docs home content    | Custom-mode hero, support, benchmark, server, author, sponsor, colophon                      | `apps/*/docs/index.mdx`, `apps/*/docs/vi/index.mdx`                                       | Existing |
+| Docs home index      | Localized six-entry index and agent markdown serializer                                      | `apps/uwz-docs/components/index-cards/index-cards.astro`, `index-cards-data.ts`           | Existing |
+| Docs home support    | Localized capability grid, three-column platform table, agent markdown serializer            | `apps/uwz-docs/components/support/support-section.astro`, `support-section-data.ts`       | Existing |
+| Docs home benchmark  | bench.zig.bd throughput bars, HTTP Arena metrics, agent markdown serializer                  | `apps/uwz-docs/components/benchmark/benchmark-section.astro`, `benchmark-section-data.ts` | Existing |
+| Site registry        | Register the landing shell, sections, index, support, benchmark, and colophon for MDX        | `apps/uwz-docs/components.ts`, `apps/vws-docs/components.ts`                              | Mixed    |
+| Site dependency      | Add the shared package to ventiws; no new third-party runtime packages                       | `apps/vws-docs/package.json`, lockfile                                                    | Existing |
 
 Boundaries:
 
@@ -1078,7 +1078,7 @@ keeping Farben's own tokens, fonts, and copy.
   `MIT License 2026` with Author, Source, and License links. Blume additionally
   renders its monorepo GitHub icon on docs pages; the colophon keeps the three
   text links and the license note. Custom mode gets the shared content from
-  `site-colophon.astro`.
+  `components/colophon/site-colophon.astro`.
 
 ## Research references
 
