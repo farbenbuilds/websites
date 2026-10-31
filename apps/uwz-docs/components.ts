@@ -2,6 +2,7 @@ import { defineComponents } from "blume";
 
 export default defineComponents({
   layout: {
+    Breadcrumbs: "./components/nav/breadcrumbs.astro",
     Footer: "./components/colophon/site-colophon.astro",
     Sidebar: "./components/nav/root-sidebar.astro",
   },
