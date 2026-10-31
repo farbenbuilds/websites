@@ -327,6 +327,7 @@ The site should tell one story in this order:
 | `/`                       | Editorial landing page       | Existing landing components | Keep `mode: custom`; update the primary CTA to `/docs/getting-started` |
 | `/docs`                   | Documentation home           | Docs                        | Reader routing page: start, concepts, protocols, operate               |
 | `/docs/getting-started/*` | Onboarding                   | Docs                        | First success path                                                     |
+| `/docs/examples/*`        | Protocol examples            | Docs                        | First HTTP, WebSocket, JSON-RPC, TLS, cluster, and HTTP/3 routes       |
 | `/docs/concepts/*`        | Mental model                 | Docs                        | Cross-protocol explanations                                            |
 | `/docs/http/*`            | HTTP/1.1 and application API | Docs                        | Largest section; includes a nested Helpers group                       |
 | `/docs/websocket/*`       | WebSocket                    | Docs                        | RFC 6455/7692, pub/sub, tunnels                                        |
@@ -504,24 +505,35 @@ What/Why, and every shipped Getting Started page.
 
 ### 5.2 Getting Started
 
-| ID      | Route                                          | Page                        | Type           | Priority | Milestone | Source                              | Status |
-| ------- | ---------------------------------------------- | --------------------------- | -------------- | -------- | --------- | ----------------------------------- | ------ |
-| UWZ-010 | `/docs/getting-started`                        | Getting Started             | Tutorial index | P0       | M1        | `docs/getting_started.md`           | Live   |
-| UWZ-011 | `/docs/getting-started/motivation`             | Motivation                  | Explanation    | P0       | M1        | README, roadmap                     | Live   |
-| UWZ-012 | `/docs/getting-started/philosophy`             | Philosophy                  | Explanation    | P0       | M1        | CODEBASE, CODING_CONVENTION         | Live   |
-| UWZ-013 | `/docs/getting-started/installation`           | Installation                | Tutorial       | P0       | M1        | README, operations                  | Live   |
-| UWZ-014 | `/docs/getting-started/quickstart`             | Quickstart                  | Tutorial       | P0       | M1        | README, examples                    | Live   |
-| UWZ-015 | `/docs/getting-started/project-structure`      | Project structure           | Explanation    | P1       | M1        | CODEBASE                            | Live   |
-| UWZ-016 | `/docs/getting-started/first-http-server`      | Your first HTTP server      | Tutorial       | P0       | M1        | examples/hello_world.zig            | Live   |
-| UWZ-017 | `/docs/getting-started/first-websocket`        | Your first WebSocket        | Tutorial       | P0       | M1        | examples/chat_server.zig            | Live   |
-| UWZ-018 | `/docs/getting-started/first-json-rpc-service` | Your first JSON-RPC service | Tutorial       | P0       | M1        | examples/rpc_server.zig             | Live   |
-| UWZ-019 | `/docs/getting-started/first-tls-server`       | Your first TLS server       | Tutorial       | P1       | M2        | examples/https_server.zig           | Live   |
-| UWZ-020 | `/docs/getting-started/first-cluster`          | Your first cluster          | Tutorial       | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
-| UWZ-021 | `/docs/getting-started/first-http3-server`     | Your first HTTP/3 server    | Tutorial       | P1       | M3        | examples/http3_server.zig           | Live   |
-| UWZ-022 | `/docs/getting-started/examples-tour`          | Examples tour               | Index          | P1       | M1        | examples/readme_examples_test.md    | Live   |
-| UWZ-023 | `/docs/getting-started/faq`                    | FAQ                         | Reference      | P0       | M1        | README, roadmap                     | Live   |
-| UWZ-024 | `/docs/getting-started/glossary`               | Glossary                    | Reference      | P1       | M1        | CODEBASE, docs                      | Live   |
-| UWZ-025 | `/docs/getting-started/learning-paths`         | Learning paths              | Index          | P2       | M5        | This file                           | Live   |
+| ID      | Route                                     | Page              | Type           | Priority | Milestone | Source                      | Status |
+| ------- | ----------------------------------------- | ----------------- | -------------- | -------- | --------- | --------------------------- | ------ |
+| UWZ-010 | `/docs/getting-started`                   | Getting started   | Tutorial index | P0       | M1        | `docs/getting_started.md`   | Live   |
+| UWZ-011 | `/docs/getting-started/motivation`        | Motivation        | Explanation    | P0       | M1        | README, roadmap             | Live   |
+| UWZ-012 | `/docs/getting-started/philosophy`        | Philosophy        | Explanation    | P0       | M1        | CODEBASE, CODING_CONVENTION | Live   |
+| UWZ-013 | `/docs/getting-started/installation`      | Installation      | Tutorial       | P0       | M1        | README, operations          | Live   |
+| UWZ-014 | `/docs/getting-started/quickstart`        | Quickstart        | Tutorial       | P0       | M1        | README                      | Live   |
+| UWZ-015 | `/docs/getting-started/project-structure` | Project structure | Explanation    | P1       | M1        | CODEBASE                    | Live   |
+| UWZ-023 | `/docs/getting-started/faq`               | FAQ               | Reference      | P0       | M1        | README, roadmap             | Live   |
+| UWZ-024 | `/docs/getting-started/glossary`          | Glossary          | Reference      | P1       | M1        | CODEBASE, docs              | Live   |
+
+### 5.2.1 Examples
+
+| ID      | Route                                   | Page                        | Type     | Priority | Milestone | Source                              | Status |
+| ------- | --------------------------------------- | --------------------------- | -------- | -------- | --------- | ----------------------------------- | ------ |
+| UWZ-026 | `/docs/examples`                        | Examples                    | Index    | P0       | M1        | This file                           | Live   |
+| UWZ-016 | `/docs/examples/first-http-server`      | Your first HTTP server      | Tutorial | P0       | M1        | examples/hello_world.zig            | Live   |
+| UWZ-017 | `/docs/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | examples/chat_server.zig            | Live   |
+| UWZ-018 | `/docs/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig             | Live   |
+| UWZ-019 | `/docs/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig           | Live   |
+| UWZ-020 | `/docs/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
+| UWZ-021 | `/docs/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig           | Live   |
+
+### 5.2.2 Deferred pages
+
+| ID      | Route                                  | Page                     | Type  | Priority | Milestone | Source                           | Status   |
+| ------- | -------------------------------------- | ------------------------ | ----- | -------- | --------- | -------------------------------- | -------- |
+| UWZ-022 | `/docs/getting-started/examples-tour`  | Examples tour (removed)  | Index | P1       | M1        | examples/readme_examples_test.md | Deferred |
+| UWZ-025 | `/docs/getting-started/learning-paths` | Learning paths (removed) | Index | P2       | M5        | This file                        | Deferred |
 
 ### 5.3 Concepts
 
@@ -875,30 +887,30 @@ section. The decision and boundary rules are in Section 4.7.
 
 This dashboard is the at-a-glance scope. Update it when a page changes status.
 
-| Section               |   Pages |     P0 |      P1 |     P2 |  Live |
-| --------------------- | ------: | -----: | ------: | -----: | ----: |
-| Landing and docs home |       4 |      3 |       1 |      0 |     1 |
-| Getting Started       |      16 |      9 |       6 |      1 |     1 |
-| Concepts              |      19 |     15 |       3 |      1 |     0 |
-| HTTP                  |      24 |     15 |       7 |      2 |     0 |
-| Helpers               |       9 |      0 |       7 |      2 |     0 |
-| WebSocket             |      14 |      4 |      10 |      0 |     0 |
-| HTTP/2                |      10 |      2 |       4 |      4 |     0 |
-| HTTP/3                |      12 |      2 |       6 |      4 |     0 |
-| JSON-RPC              |      10 |      3 |       5 |      2 |     0 |
-| Type safety           |       9 |      5 |       3 |      1 |     0 |
-| Client                |       7 |      2 |       4 |      1 |     0 |
-| TLS and security      |      16 |      6 |       9 |      1 |     0 |
-| Architecture          |      14 |      4 |       4 |      6 |     0 |
-| Performance           |       8 |      1 |       3 |      4 |     0 |
-| Operations            |      20 |      8 |       7 |      5 |     0 |
-| Deployment            |      15 |      7 |       7 |      1 |     0 |
-| Guides                |      23 |      0 |      17 |      6 |     0 |
-| Migration             |       8 |      0 |       6 |      2 |     0 |
-| Reference             |      11 |      7 |       4 |      0 |     0 |
-| Examples              |      11 |      1 |       8 |      2 |     0 |
-| Project               |       9 |      1 |       5 |      3 |     0 |
-| **Total**             | **269** | **95** | **126** | **48** | **2** |
+| Section               |   Pages |     P0 |      P1 |     P2 |   Live |
+| --------------------- | ------: | -----: | ------: | -----: | -----: |
+| Landing and docs home |       4 |      3 |       1 |      0 |      4 |
+| Getting Started       |      15 |     10 |       5 |      0 |     15 |
+| Concepts              |      19 |     15 |       3 |      1 |      0 |
+| HTTP                  |      24 |     15 |       7 |      2 |      0 |
+| Helpers               |       9 |      0 |       7 |      2 |      0 |
+| WebSocket             |      14 |      4 |      10 |      0 |      0 |
+| HTTP/2                |      10 |      2 |       4 |      4 |      0 |
+| HTTP/3                |      12 |      2 |       6 |      4 |      0 |
+| JSON-RPC              |      10 |      3 |       5 |      2 |      0 |
+| Type safety           |       9 |      5 |       3 |      1 |      0 |
+| Client                |       7 |      2 |       4 |      1 |      0 |
+| TLS and security      |      16 |      6 |       9 |      1 |      0 |
+| Architecture          |      14 |      4 |       4 |      6 |      0 |
+| Performance           |       8 |      1 |       3 |      4 |      0 |
+| Operations            |      20 |      8 |       7 |      5 |      0 |
+| Deployment            |      15 |      7 |       7 |      1 |      0 |
+| Guides                |      23 |      0 |      17 |      6 |      0 |
+| Migration             |       8 |      0 |       6 |      2 |      0 |
+| Reference             |      11 |      7 |       4 |      0 |      0 |
+| Examples              |      11 |      1 |       8 |      2 |      0 |
+| Project               |       9 |      1 |       5 |      3 |      0 |
+| **Total**             | **268** | **96** | **125** | **47** | **19** |
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -948,13 +960,16 @@ Required content:
 - `Philosophy`: bounded by design, explicit ownership, pure parsers, one
   transport-neutral boundary, data-oriented memory, no hidden global state,
   evidence over claims.
-- `Installation`: Nix path, plain Zig path, `zig fetch --save` with a tag or
-  full commit, `build.zig` wiring, package-consumer expectations, no CMake or
-  system zlib, first-build cost, offline cache behavior.
+- `Installation`: the Zig download page, `zig fetch --save` with the pinned
+  v2.1.6 archive URL, `build.zig` wiring, package-consumer expectations, no
+  CMake or system zlib, first-build cost, offline cache behavior.
 - `Quickstart`: one complete program, one command, one `curl`, one expected
   output, one next step. Do not combine six protocols in one page.
-- `Project structure`: generated or hand-written `build.zig`, `src/`, `tests/`,
-  `examples/`, `builds/`, `vendor/`; what a consumer needs; what is internal.
+- `Project structure`: the consumer's `build.zig`, `build.zig.zon`, `src/`, and
+  `tests/`; where handlers, domain code, and assets belong. Do not document the
+  framework repository internals.
+- `Examples` category: an index at `/docs/examples` and the first HTTP,
+  WebSocket, JSON-RPC, TLS, cluster, and HTTP/3 tutorials beneath it.
 - `First HTTP server`: `App(128)`, route, `listen`, `run`, graceful shutdown,
   what happens on startup, how to change the port, how to test with `curl`.
 - `First WebSocket`: `app.ws`, `open`, `message`, `close`, echo, `wscat` or a
@@ -967,8 +982,6 @@ Required content:
   `run`, `SO_REUSEPORT`, one slab per worker, shutdown; no HTTP/3 cluster.
 - `First HTTP/3 server`: `init_http3`, `listen_udp`, `curl --http3`, BBRv1,
   no 0-RTT, no WebTransport live path.
-- `Examples tour`: one table mapping each `zig build <step>` to what it shows,
-  source file, and the site example page.
 - `FAQ`: allocation model, capacity exhaustion, dynamic scaling, Windows,
   WebTransport, HTTP/2 push, h2c, TLS 1.2, request streaming, client scope.
 - `Glossary`: short definitions with links, not a second concepts section.
@@ -3194,7 +3207,7 @@ discoverable only by reading the source.
 | `SECURITY.md`                | `/security`, `/docs/security/*`                                                     |
 | `CONTRIBUTE.md`              | `/contributing`                                                                     |
 | `CI_CD_PIPELINE.md`          | `/docs/operations/*`, `/docs/performance/benchmarking`                              |
-| `examples/*.zig`             | `/examples/*`, `/docs/getting-started/first-*`                                      |
+| `examples/*.zig`             | `/examples/*`, `/docs/examples/first-*`                                             |
 | `src/root.zig`               | `/reference/zig`                                                                    |
 | `include/uWebZockets.h`      | `/reference/c-abi`                                                                  |
 | `builds/*.zig`               | `/reference/build-steps`, `/docs/operations/*`                                      |
@@ -3279,13 +3292,14 @@ source at the time it is written.
 
 ### 18.6 Appendix F: document change log
 
-| Date       | Change                                                                                                     | Author             |
-| ---------- | ---------------------------------------------------------------------------------------------------------- | ------------------ |
-| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices             | Docs planning pass |
-| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                              | Docs planning pass |
-| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                | Docs planning pass |
-| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects             | Docs writing pass  |
-| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean | Docs writing pass  |
+| Date       | Change                                                                                                                                                                                     | Author             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices                                                                                             | Docs planning pass |
+| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                                                                                                              | Docs planning pass |
+| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                                                                                                | Docs planning pass |
+| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                             | Docs writing pass  |
+| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                 | Docs writing pass  |
+| 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

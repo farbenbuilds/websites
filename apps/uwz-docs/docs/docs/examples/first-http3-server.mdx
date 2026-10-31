@@ -2,7 +2,7 @@
 title: Your first HTTP/3 server
 description: Serve a route over QUIC, verify it with curl --http3, and review the live HTTP/3 boundaries, limits, and 0-RTT policy.
 sidebar:
-  order: 11
+  order: 6
 search:
   tags: [getting-started, tutorial, http3, quic]
 ---
@@ -11,14 +11,9 @@ This tutorial serves one route over HTTP/3 on UDP port 8443. It uses the
 in-memory certificate initializer for local development and shows the
 production initializer with PEM files.
 
-The repository base example is `zig build http3_server` in
-`examples/http3_server.zig`. It already installs the shutdown watcher and uses
-`end_with_headers` for the response; the tutorial keeps the watcher and uses
-`text`.
-
 ## Prerequisites
 
-- The TLS server from [Your first TLS server](/docs/getting-started/first-tls-server).
+- The TLS server from [Your first TLS server](/docs/examples/first-tls-server).
 - Zig 0.16.0.
 - A `curl` build with HTTP/3 support. Check with `curl --version` and look for
   `HTTP3` in the features list.
@@ -136,7 +131,7 @@ before the application storage is released. Press Ctrl+C and let `run` return;
 
 ## Next
 
-- [Examples tour](/docs/getting-started/examples-tour) lists the
+- [Examples](/docs/examples) lists the
   `http3_server` step.
 - [FAQ](/docs/getting-started/faq) summarises the QUIC boundaries.
 - [Glossary](/docs/getting-started/glossary) defines QPACK and 0-RTT.

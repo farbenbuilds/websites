@@ -2,7 +2,7 @@
 title: TLS server đầu tiên
 description: Phục vụ HTTPS bằng chứng chỉ trong bộ nhớ, kiểm tra bằng curl -k và chuyển sang file PEM production cùng mTLS.
 sidebar:
-  order: 9
+  order: 4
 search:
   tags: [getting-started, tutorial, tls]
 ---
@@ -11,12 +11,9 @@ Hướng dẫn này khởi động HTTPS server với chứng chỉ được t�
 khởi động. Nó không cần file chứng chỉ và không cần lệnh `openssl`, phù hợp
 cho test local và demo.
 
-Bản base trong repository là `zig build https_server` tại
-`examples/https_server.zig`. Hướng dẫn thêm watcher tín hiệu shutdown.
-
 ## Điều kiện trước
 
-- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -142,9 +139,9 @@ không được hỗ trợ.
 
 ## Tiếp theo
 
-- [Cluster đầu tiên](/docs/getting-started/first-cluster) chạy một worker mỗi
+- [Cluster đầu tiên](/docs/examples/first-cluster) chạy một worker mỗi
   lõi.
-- [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server) dùng QUIC
+- [HTTP/3 server đầu tiên](/docs/examples/first-http3-server) dùng QUIC
   context riêng.
 - [FAQ](/docs/getting-started/faq) trả lời câu hỏi phiên bản TLS và xoay chứng
   chỉ.

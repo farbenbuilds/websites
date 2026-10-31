@@ -2,7 +2,7 @@
 title: Your first JSON-RPC service
 description: Register a typed math.add procedure, mount it on App.rpc, and verify the JSON-RPC request and response with curl.
 sidebar:
-  order: 8
+  order: 3
 search:
   tags: [getting-started, tutorial, json-rpc]
 ---
@@ -11,12 +11,9 @@ This tutorial mounts a typed JSON-RPC 2.0 service on `/rpc`. It defines one
 procedure, decodes named parameters into a Zig struct, and serializes a typed
 result.
 
-The repository base example is `zig build rpc_server` in
-`examples/rpc_server.zig`. The tutorial adds the shutdown signal watcher.
-
 ## Prerequisites
 
-- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -137,8 +134,8 @@ loop. In a worker group, create one service per worker and mount it inside the
 
 ## Next
 
-- [Your first TLS server](/docs/getting-started/first-tls-server) serves the
+- [Your first TLS server](/docs/examples/first-tls-server) serves the
   same routes over HTTPS.
-- [Examples tour](/docs/getting-started/examples-tour) lists the runnable
+- [Examples](/docs/examples) lists the runnable
   `rpc_server` step.
 - [FAQ](/docs/getting-started/faq) covers the batched-request caveat.

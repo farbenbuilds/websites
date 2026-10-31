@@ -2,7 +2,7 @@
 title: Your first cluster
 description: Start four shared-nothing workers, share one port with SO_REUSEPORT, verify the response, and shut down the group with a signal.
 sidebar:
-  order: 10
+  order: 5
 search:
   tags: [getting-started, tutorial, cluster]
 ---
@@ -11,13 +11,9 @@ This tutorial starts a thread-per-core worker group with four workers. Each
 worker owns its event loop, startup slab, and connection state, and binds the
 same port through `SO_REUSEPORT` where the platform supports it.
 
-The repository base example is `zig build shared_nothing_cluster` in
-`examples/shared_nothing_cluster.zig`. The tutorial adds the shutdown signal
-watcher.
-
 ## Prerequisites
 
-- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -160,9 +156,9 @@ A spawn failure records phase `spawn`, an event-loop failure records phase
 
 ## Next
 
-- [Your first HTTP/3 server](/docs/getting-started/first-http3-server) serves
+- [Your first HTTP/3 server](/docs/examples/first-http3-server) serves
   QUIC on a single application.
-- [Your first TLS server](/docs/getting-started/first-tls-server) covers
+- [Your first TLS server](/docs/examples/first-tls-server) covers
   per-worker TLS contexts.
-- [Examples tour](/docs/getting-started/examples-tour) lists the
+- [Examples](/docs/examples) lists the
   `tls_cluster` step.

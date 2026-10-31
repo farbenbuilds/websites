@@ -1,73 +1,70 @@
 ---
 title: Getting started
-description: Install µWebZockets, build a complete server, and verify each protocol tutorial with curl or a WebSocket client.
+description: Install µWebZockets, build a complete server, and verify each core tutorial with curl or a WebSocket client in your own project.
 sidebar:
   order: 0
 search:
   tags: [getting-started, tutorial]
 ---
 
-This section takes you from a clean machine to a running server, then to
-WebSocket, JSON-RPC, TLS, cluster, and HTTP/3 variants. Each tutorial is a
-complete program that you can build and test with `curl` or a WebSocket client.
+This section takes you from a clean machine to a running server. It covers
+installation, the first project, the application model, and the answers readers
+need before adding protocol routes.
 
 ## Before you begin
 
 You need:
 
-- Zig 0.16.0. Check with `zig version`.
+- Zig 0.16.0 from [ziglang.org/download](https://ziglang.org/download/). Check
+  with `zig version`.
 - A Linux or macOS host on `x86_64` or `aarch64`. Windows has compile and
   runtime jobs, but official runtime support follows a green release job.
-- `curl` for the HTTP examples. The HTTP/3 tutorial also needs a `curl` build
-  with HTTP/3 support.
-- Nix only if you choose the Nix path for the repository checkout.
+- `curl` for the HTTP examples.
 
 ## The first-success path
 
 <Steps>
-  <Step title="Install the package">
-    Follow [Installation](/docs/getting-started/installation) to use Nix, a plain Zig checkout, or a
-    dependency in your own project.
+  <Step title="Install Zig and the package">
+    Follow [Installation](/docs/getting-started/installation) to download Zig and add µWebZockets to
+    your own project.
   </Step>
   <Step title="Run the quickstart">
-    [Quickstart](/docs/getting-started/quickstart) builds one complete program and verifies it with
+    [Quickstart](/docs/getting-started/quickstart) creates one complete project and verifies it with
     `curl`.
   </Step>
-  <Step title="Add a real route">
-    [Your first HTTP server](/docs/getting-started/first-http-server) explains the slab, route
-    registration, listen, run, and graceful shutdown.
+  <Step title="Understand the project">
+    [Project structure](/docs/getting-started/project-structure) shows where to put startup,
+    handlers, domain code, tests, and assets.
   </Step>
-  <Step title="Pick the next protocol">
-    Continue with WebSocket, JSON-RPC, TLS, a worker group, or HTTP/3.
+  <Step title="Add protocol routes">
+    Continue to [Examples](/docs/examples) for HTTP, WebSocket, JSON-RPC, TLS, cluster, and HTTP/3
+    tutorials.
   </Step>
 </Steps>
 
-## Tutorials
+## Core tutorials
 
-| Tutorial                                                                    | What you build                       | Prerequisite      |
-| --------------------------------------------------------------------------- | ------------------------------------ | ----------------- |
-| [Motivation](/docs/getting-started/motivation)                              | The reasoning behind bounded design  | None              |
-| [Philosophy](/docs/getting-started/philosophy)                              | The design rules the API follows     | None              |
-| [Installation](/docs/getting-started/installation)                          | A checkout or a package dependency   | Zig 0.16.0        |
-| [Quickstart](/docs/getting-started/quickstart)                              | A complete hello server              | Installation      |
-| [Project structure](/docs/getting-started/project-structure)                | The repository and consumer layout   | Installation      |
-| [Your first HTTP server](/docs/getting-started/first-http-server)           | `App(128)` with a route and shutdown | Quickstart        |
-| [Your first WebSocket](/docs/getting-started/first-websocket)               | An echo route and browser client     | First HTTP server |
-| [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service) | A typed `math.add` procedure         | First HTTP server |
-| [Your first TLS server](/docs/getting-started/first-tls-server)             | HTTPS with an ephemeral certificate  | First HTTP server |
-| [Your first cluster](/docs/getting-started/first-cluster)                   | Four workers, one slab each          | First HTTP server |
-| [Your first HTTP/3 server](/docs/getting-started/first-http3-server)        | QUIC on UDP port 8443                | First TLS server  |
+| Tutorial                                                     | What you learn                       | Prerequisite |
+| ------------------------------------------------------------ | ------------------------------------ | ------------ |
+| [Motivation](/docs/getting-started/motivation)               | The reasoning behind bounded design  | None         |
+| [Philosophy](/docs/getting-started/philosophy)               | The design rules the API follows     | None         |
+| [Installation](/docs/getting-started/installation)           | Zig and the package dependency       | None         |
+| [Quickstart](/docs/getting-started/quickstart)               | A complete hello server              | Installation |
+| [Project structure](/docs/getting-started/project-structure) | The consumer project layout          | Installation |
+| [FAQ](/docs/getting-started/faq)                             | Allocation, capacity, and boundaries | None         |
+| [Glossary](/docs/getting-started/glossary)                   | Slab, capacity, backpressure, token  | None         |
 
-## Reference for the section
+## Examples
 
-- [Examples tour](/docs/getting-started/examples-tour) maps each build step to
-  the behavior it demonstrates.
-- [FAQ](/docs/getting-started/faq) answers allocation, capacity, platform, and
-  unsupported-feature questions.
-- [Glossary](/docs/getting-started/glossary) defines slab, capacity,
-  backpressure, and async token.
-- [Learning paths](/docs/getting-started/learning-paths) groups the pages by
-  reader role.
+The [Examples](/docs/examples) category sits below this section and contains the
+protocol tutorials:
+
+- [Your first HTTP server](/docs/examples/first-http-server)
+- [Your first WebSocket](/docs/examples/first-websocket)
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
+- [Your first TLS server](/docs/examples/first-tls-server)
+- [Your first cluster](/docs/examples/first-cluster)
+- [Your first HTTP/3 server](/docs/examples/first-http3-server)
 
 ## Conventions used in these tutorials
 
@@ -84,5 +81,7 @@ assume the project root unless a step says otherwise.
 
 ## Next
 
+- [Documentation home](/docs)
 - [Motivation](/docs/getting-started/motivation)
 - [Quickstart](/docs/getting-started/quickstart)
+- [Examples](/docs/examples)

@@ -1,71 +1,69 @@
 ---
 title: Bắt đầu
-description: Cài µWebZockets, build server hoàn chỉnh và kiểm tra từng tutorial giao thức bằng curl hoặc một WebSocket client.
+description: Cài µWebZockets, build server hoàn chỉnh và kiểm tra từng tutorial cốt lõi bằng curl hoặc WebSocket client trong project của bạn.
 sidebar:
   order: 0
 search:
   tags: [getting-started, tutorial]
 ---
 
-Phần này đưa bạn từ máy sạch đến server đang chạy, rồi đến các biến thể
-WebSocket, JSON-RPC, TLS, cluster và HTTP/3. Mỗi hướng dẫn là một chương trình
-hoàn chỉnh có thể build và kiểm tra bằng `curl` hoặc WebSocket client.
+Phần này đưa bạn từ máy sạch đến server đang chạy. Nó bao gồm cài đặt, project
+đầu tiên, mô hình ứng dụng và các câu trả lời cần biết trước khi thêm route
+giao thức.
 
 ## Trước khi bắt đầu
 
 Bạn cần:
 
-- Zig 0.16.0. Kiểm tra bằng `zig version`.
+- Zig 0.16.0 từ [ziglang.org/download](https://ziglang.org/download/). Kiểm tra
+  bằng `zig version`.
 - Host Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và
   runtime, nhưng hỗ trợ runtime chính thức chỉ sau khi job phát hành xanh.
-- `curl` cho các ví dụ HTTP. Hướng dẫn HTTP/3 cần bản `curl` có hỗ trợ HTTP/3.
-- Nix chỉ khi chọn đường Nix cho checkout repository.
+- `curl` cho các ví dụ HTTP.
 
 ## Lộ trình thành công đầu tiên
 
 <Steps>
-  <Step title="Cài package">
-    Theo [Cài đặt](/docs/getting-started/installation) để dùng Nix, checkout Zig thuần, hoặc
-    dependency trong project của bạn.
+  <Step title="Cài Zig và package">
+    Theo [Cài đặt](/docs/getting-started/installation) để tải Zig và thêm µWebZockets vào project
+    của bạn.
   </Step>
   <Step title="Chạy quickstart">
-    [Quickstart](/docs/getting-started/quickstart) build một chương trình hoàn chỉnh và kiểm tra
-    bằng `curl`.
+    [Quickstart](/docs/getting-started/quickstart) tạo một project hoàn chỉnh và kiểm tra bằng
+    `curl`.
   </Step>
-  <Step title="Thêm route thật">
-    [HTTP server đầu tiên](/docs/getting-started/first-http-server) giải thích slab, đăng ký route,
-    listen, run và graceful shutdown.
+  <Step title="Hiểu cấu trúc project">
+    [Cấu trúc project](/docs/getting-started/project-structure) chỉ nơi đặt startup, handler, domain
+    code, test và tài nguyên.
   </Step>
-  <Step title="Chọn giao thức tiếp theo">
-    Tiếp tục với WebSocket, JSON-RPC, TLS, nhóm worker hoặc HTTP/3.
+  <Step title="Thêm route giao thức">
+    Tiếp tục với [Ví dụ](/docs/examples) cho HTTP, WebSocket, JSON-RPC, TLS, cluster và HTTP/3.
   </Step>
 </Steps>
 
-## Hướng dẫn
+## Hướng dẫn cốt lõi
 
-| Hướng dẫn                                                                 | Bạn build gì                     | Điều kiện trước      |
-| ------------------------------------------------------------------------- | -------------------------------- | -------------------- |
-| [Động lực](/docs/getting-started/motivation)                              | Lý do của thiết kế có giới hạn   | Không                |
-| [Triết lý](/docs/getting-started/philosophy)                              | Các quy tắc thiết kế API         | Không                |
-| [Cài đặt](/docs/getting-started/installation)                             | Checkout hoặc package dependency | Zig 0.16.0           |
-| [Quickstart](/docs/getting-started/quickstart)                            | Server hello hoàn chỉnh          | Cài đặt              |
-| [Cấu trúc project](/docs/getting-started/project-structure)               | Bố cục repository và consumer    | Cài đặt              |
-| [HTTP server đầu tiên](/docs/getting-started/first-http-server)           | `App(128)` với route và shutdown | Quickstart           |
-| [WebSocket đầu tiên](/docs/getting-started/first-websocket)               | Route echo và client trình duyệt | HTTP server đầu tiên |
-| [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) | Procedure `math.add` có kiểu     | HTTP server đầu tiên |
-| [TLS server đầu tiên](/docs/getting-started/first-tls-server)             | HTTPS với chứng chỉ ephemeral    | HTTP server đầu tiên |
-| [Cluster đầu tiên](/docs/getting-started/first-cluster)                   | Bốn worker, mỗi worker một slab  | HTTP server đầu tiên |
-| [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server)        | QUIC trên UDP port 8443          | TLS server đầu tiên  |
+| Hướng dẫn                                                   | Bạn học gì                          | Điều kiện trước |
+| ----------------------------------------------------------- | ----------------------------------- | --------------- |
+| [Động lực](/docs/getting-started/motivation)                | Lý do của thiết kế có giới hạn      | Không           |
+| [Triết lý](/docs/getting-started/philosophy)                | Các quy tắc thiết kế API            | Không           |
+| [Cài đặt](/docs/getting-started/installation)               | Zig và dependency package           | Không           |
+| [Quickstart](/docs/getting-started/quickstart)              | Server hello hoàn chỉnh             | Cài đặt         |
+| [Cấu trúc project](/docs/getting-started/project-structure) | Bố cục project consumer             | Cài đặt         |
+| [FAQ](/docs/getting-started/faq)                            | Cấp phát, dung lượng và ranh giới   | Không           |
+| [Thuật ngữ](/docs/getting-started/glossary)                 | Slab, capacity, backpressure, token | Không           |
 
-## Tham khảo trong phần
+## Ví dụ
 
-- [Tham quan ví dụ](/docs/getting-started/examples-tour) ánh xạ từng bước build
-  với hành vi nó minh họa.
-- [FAQ](/docs/getting-started/faq) trả lời câu hỏi về cấp phát, dung lượng, nền
-  tảng và tính năng chưa hỗ trợ.
-- [Thuật ngữ](/docs/getting-started/glossary) định nghĩa slab, capacity,
-  backpressure và async token.
-- [Lộ trình học](/docs/getting-started/learning-paths) nhóm trang theo vai trò.
+Danh mục [Ví dụ](/docs/examples) nằm dưới phần này và chứa các hướng dẫn giao
+thức:
+
+- [HTTP server đầu tiên](/docs/examples/first-http-server)
+- [WebSocket đầu tiên](/docs/examples/first-websocket)
+- [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service)
+- [TLS server đầu tiên](/docs/examples/first-tls-server)
+- [Cluster đầu tiên](/docs/examples/first-cluster)
+- [HTTP/3 server đầu tiên](/docs/examples/first-http3-server)
 
 ## Quy ước trong hướng dẫn
 
@@ -82,5 +80,7 @@ thư mục gốc project trừ khi bước nói khác.
 
 ## Tiếp theo
 
+- [Trang tài liệu](/vi/docs)
 - [Động lực](/docs/getting-started/motivation)
 - [Quickstart](/docs/getting-started/quickstart)
+- [Ví dụ](/docs/examples)

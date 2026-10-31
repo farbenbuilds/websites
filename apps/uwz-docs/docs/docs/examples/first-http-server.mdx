@@ -2,7 +2,7 @@
 title: Your first HTTP server
 description: Build a complete App(128) server, add a route and parameter, verify both with curl, and request shutdown with a signal.
 sidebar:
-  order: 6
+  order: 1
 search:
   tags: [getting-started, tutorial, http1]
 ---
@@ -10,10 +10,6 @@ search:
 This tutorial builds a complete HTTP/1.1 server on `App(128)`. It registers a
 static route and a parameterized route, starts the listener, verifies both with
 `curl`, and installs the graceful-shutdown watcher.
-
-The repository base example is `zig build hello_world` in
-`examples/hello_world.zig`. The tutorial adds the `/greet/:name` route and the
-shutdown signal watcher.
 
 ## Prerequisites
 
@@ -146,9 +142,9 @@ recurring timers, closes active connections, and drains completions before
 
 ## Next
 
-- [Your first WebSocket](/docs/getting-started/first-websocket) adds a
+- [Your first WebSocket](/docs/examples/first-websocket) adds a
   bidirectional route.
-- [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service)
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
   serves typed procedures on the same application.
-- [Your first TLS server](/docs/getting-started/first-tls-server) wraps the
+- [Your first TLS server](/docs/examples/first-tls-server) wraps the
   listener in TLS 1.3.

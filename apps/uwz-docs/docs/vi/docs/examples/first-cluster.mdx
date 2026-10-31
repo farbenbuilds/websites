@@ -2,7 +2,7 @@
 title: Cluster đầu tiên
 description: Khởi động bốn worker shared-nothing, chia sẻ một port qua SO_REUSEPORT, kiểm tra phản hồi và shutdown nhóm bằng tín hiệu.
 sidebar:
-  order: 10
+  order: 5
 search:
   tags: [getting-started, tutorial, cluster]
 ---
@@ -11,13 +11,9 @@ Hướng dẫn này khởi động nhóm worker thread-per-core với bốn work
 sở hữu event loop, slab khởi động và trạng thái kết nối riêng, đồng thời bind
 cùng port qua `SO_REUSEPORT` ở nền tảng hỗ trợ.
 
-Bản base trong repository là `zig build shared_nothing_cluster` tại
-`examples/shared_nothing_cluster.zig`. Hướng dẫn thêm watcher tín hiệu
-shutdown.
-
 ## Điều kiện trước
 
-- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -157,9 +153,9 @@ run ghi phase `cleanup`.
 
 ## Tiếp theo
 
-- [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server) phục vụ
+- [HTTP/3 server đầu tiên](/docs/examples/first-http3-server) phục vụ
   QUIC trên một ứng dụng.
-- [TLS server đầu tiên](/docs/getting-started/first-tls-server) bao gồm TLS
+- [TLS server đầu tiên](/docs/examples/first-tls-server) bao gồm TLS
   context mỗi worker.
-- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê bước
+- [Ví dụ](/docs/examples) liệt kê bước
   `tls_cluster`.

@@ -5,5 +5,5 @@ export default defineMeta({
   icon: "book-open",
   order: 1,
   directory: "none",
-  pages: ["what-is-uwebsockets", "why-uwebsockets", "getting-started"],
+  pages: ["what-is-uwebsockets", "why-uwebsockets", "getting-started", "examples"],
 });

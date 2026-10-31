@@ -2,7 +2,7 @@
 title: HTTP/3 server đầu tiên
 description: Phục vụ route trên QUIC, kiểm tra bằng curl --http3 và xem các ranh giới HTTP/3 live cùng chính sách 0-RTT hiện hành.
 sidebar:
-  order: 11
+  order: 6
 search:
   tags: [getting-started, tutorial, http3, quic]
 ---
@@ -11,13 +11,9 @@ Hướng dẫn này phục vụ một route trên HTTP/3 tại UDP port 8443. N�
 initializer chứng chỉ trong bộ nhớ cho phát triển local và giới thiệu
 initializer production với file PEM.
 
-Bản base trong repository là `zig build http3_server` tại
-`examples/http3_server.zig`. Ví dụ đó đã cài watcher shutdown và dùng
-`end_with_headers` cho phản hồi; hướng dẫn giữ watcher và dùng `text`.
-
 ## Điều kiện trước
 
-- TLS server từ [TLS server đầu tiên](/docs/getting-started/first-tls-server).
+- TLS server từ [TLS server đầu tiên](/docs/examples/first-tls-server).
 - Zig 0.16.0.
 - Bản `curl` có hỗ trợ HTTP/3. Kiểm tra bằng `curl --version` và tìm `HTTP3`
   trong danh sách feature.
@@ -133,7 +129,7 @@ sau đó xác nhận mọi pool đã được trả.
 
 ## Tiếp theo
 
-- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê bước
+- [Ví dụ](/docs/examples) liệt kê bước
   `http3_server`.
 - [FAQ](/docs/getting-started/faq) tóm tắt ranh giới QUIC.
 - [Thuật ngữ](/docs/getting-started/glossary) định nghĩa QPACK và 0-RTT.

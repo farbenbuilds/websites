@@ -2,7 +2,7 @@
 title: HTTP server đầu tiên
 description: Build server App(128) hoàn chỉnh, thêm route và parameter, kiểm tra cả hai bằng curl và yêu cầu shutdown bằng tín hiệu.
 sidebar:
-  order: 6
+  order: 1
 search:
   tags: [getting-started, tutorial, http1]
 ---
@@ -10,10 +10,6 @@ search:
 Hướng dẫn này build server HTTP/1.1 hoàn chỉnh trên `App(128)`. Nó đăng ký một
 route tĩnh và một route parameter, khởi động listener, kiểm tra cả hai bằng
 `curl`, và cài watcher graceful shutdown.
-
-Bản base trong repository là `zig build hello_world` tại
-`examples/hello_world.zig`. Hướng dẫn thêm route `/greet/:name` và watcher tín
-hiệu shutdown.
 
 ## Điều kiện trước
 
@@ -143,9 +139,9 @@ slab.
 
 ## Tiếp theo
 
-- [WebSocket đầu tiên](/docs/getting-started/first-websocket) thêm route hai
+- [WebSocket đầu tiên](/docs/examples/first-websocket) thêm route hai
   chiều.
-- [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service)
+- [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service)
   phục vụ procedure có kiểu trên cùng ứng dụng.
-- [TLS server đầu tiên](/docs/getting-started/first-tls-server) bọc listener
+- [TLS server đầu tiên](/docs/examples/first-tls-server) bọc listener
   bằng TLS 1.3.

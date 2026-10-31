@@ -2,7 +2,7 @@
 title: WebSocket đầu tiên
 description: Thêm route WebSocket echo với callback open, message và close, rồi kiểm tra bằng wscat hoặc console trình duyệt.
 sidebar:
-  order: 7
+  order: 2
 search:
   tags: [getting-started, tutorial, websocket]
 ---
@@ -10,13 +10,9 @@ search:
 Hướng dẫn này thêm route WebSocket vào ứng dụng HTTP. Server echo mọi message
 text hoặc binary, gửi welcome khi mở và log khi peer ngắt kết nối.
 
-Bản trong repository là `zig build chat_server` tại
-`examples/chat_server.zig`. Ví dụ đó minh họa pub/sub có giới hạn thay vì
-handler echo bên dưới.
-
 ## Điều kiện trước
 
-- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `npx` cho `wscat`, hoặc trình duyệt có JavaScript console.
 
@@ -164,8 +160,8 @@ worker qua inbox có giới hạn.
 
 ## Tiếp theo
 
-- [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) thêm
+- [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service) thêm
   procedure có kiểu.
-- [Tham quan ví dụ](/docs/getting-started/examples-tour) trỏ đến ví dụ chat
+- [Ví dụ](/docs/examples) trỏ đến ví dụ chat
   pub/sub.
 - [FAQ](/docs/getting-started/faq) liệt kê ranh giới WebSocket.

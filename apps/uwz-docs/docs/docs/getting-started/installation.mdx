@@ -1,18 +1,13 @@
 ---
 title: Installation
-description: Install Zig 0.16.0, run the Nix checkout, or add µWebZockets as a pinned package with a reproducible build graph.
+description: Download Zig 0.16.0 and add µWebZockets 2.1.6 to your own project with a pinned, reproducible package archive URL.
 sidebar:
   order: 3
 search:
   tags: [getting-started, tutorial, operations]
 ---
 
-This page installs everything needed to build and run the tutorials. Choose one
-path:
-
-- Use Nix for a repository checkout with the pinned toolchain.
-- Use a plain Zig 0.16.0 installation for the checkout.
-- Add µWebZockets as a package dependency in your own project.
+This page installs Zig and adds µWebZockets to your own project.
 
 ## Prerequisites
 
@@ -20,64 +15,36 @@ path:
 | --------------- | ------------------------------------------------------------------------------------- |
 | Zig             | 0.16.0 exactly. Check with `zig version`.                                             |
 | Host            | Linux or macOS on `x86_64` or `aarch64`. Windows has native compile and runtime jobs. |
-| Nix             | Optional. The flake pins Nixpkgs 26.05 and Zig 0.16.0.                                |
+| Network         | Zig downloads the pinned dependency sources on the first build.                       |
 | C/C++ toolchain | Not required separately. Zig compiles the pinned dependency sources.                  |
 
-The first build fetches zslay, libxev, BoringSSL, lsquic, ls-qpack, ls-hpack,
-libdeflate, and zlib through Zig's package manager. Later builds reuse the
-global and local caches. No CMake, Ninja, Go, Perl, Python, `patch`, or system
-zlib is required.
+## Download Zig
 
-## Use Nix with a checkout
+Download Zig 0.16.0 from [ziglang.org/download](https://ziglang.org/download/)
+and put `zig` on your `PATH`. Verify the version:
 
 ```sh
-git clone https://github.com/farbenbuilds/uWebZockets.git
-cd uWebZockets
-nix develop
-zig build hello_world -Doptimize=ReleaseSafe
+zig version
 ```
 
-Add `--recurse-submodules` to the clone only when you plan to run the h1spec
-compliance suite. The `vendor/h1spec` submodule is not needed to build or use
-the package.
+```text
+0.16.0
+```
 
-In another terminal, verify the server:
+## Add the package
+
+From the root of your own project, fetch the pinned release:
 
 ```sh
-curl -i http://127.0.0.1:3000/
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
 ```
 
-The response is `HTTP/1.1 200 OK` and the body
-`Hello from µWebZockets! Zero allocation achieved.`
+The command adds the package to `build.zig.zon` under the `uWebZockets` name.
+Use the same URL when you upgrade so the dependency stays reproducible.
 
-## Use plain Zig with a checkout
+## Wire the module
 
-Install Zig 0.16.0, then run the same repository commands without `nix develop`:
-
-```sh
-git clone https://github.com/farbenbuilds/uWebZockets.git
-cd uWebZockets
-zig build test --summary all
-zig build -Doptimize=ReleaseSafe
-```
-
-`zig build -Doptimize=ReleaseSafe` builds the install graph. Individual example
-steps are listed in the [examples tour](/docs/getting-started/examples-tour).
-
-## Add the package to your project
-
-Fetch a released tag or a full commit. Do not use a moving branch if you need
-reproducible dependency resolution.
-
-```sh
-zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#VERSION_OR_COMMIT'
-```
-
-Replace `VERSION_OR_COMMIT` with a release tag such as `v2.1.6`, or with a full
-commit hash. The command adds the package to `build.zig.zon` under the
-`uWebZockets` name.
-
-Wire the module in `build.zig`:
+Add the module to your executable in `build.zig`:
 
 ```zig
 const uz = b.dependency("uWebZockets", .{
@@ -89,71 +56,48 @@ exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
 
 A complete consumer program is in the [quickstart](/docs/getting-started/quickstart).
 
-### Package-consumer expectations
+## Package expectations
 
 - The package exports one module named `uWebZockets`.
-- The module carries its native link metadata and dependency ordering, so a
-  consumer does not link BoringSSL, lsquic, zlib, or libdeflate by hand.
-- Consumers do not need the h1spec submodule, the repository examples, or the
-  Nix flake.
-- Releases are source tags. There are no per-platform binary archives, so the
-  local Zig toolchain compiles the pinned dependencies on first use.
-- The `tests/package_consumer` fixture compiles the documented quickstart
-  against the module surface in CI.
+- The module carries its native link metadata and dependency ordering, so you do
+  not link BoringSSL, lsquic, zlib, or libdeflate by hand.
+- Releases are source archives. There are no per-platform binary archives, so
+  Zig compiles the pinned dependencies on first use.
 
-## First-build cost and offline use
+## First build and offline use
 
 The first build is slower because Zig compiles BoringSSL, lsquic, libdeflate,
 and zlib from source. Later builds reuse `~/.cache/zig` and the project-local
 cache.
 
 To build without network access, populate both caches on a connected machine
-first, then reuse them. The dependency URLs and hashes are pinned in
-`build.zig.zon`; Zig verifies the hashes when it unpacks a package.
+first, then reuse them. The dependency URL and hash are pinned in
+`build.zig.zon`; Zig verifies the hash when it unpacks a package.
 
-## Verify the installation
+## Verify the install
 
-Run the unit suite from the checkout:
-
-```sh
-zig build test --summary all
-```
-
-Run the hello-world example:
+Add the server from [Quickstart](/docs/getting-started/quickstart), then run:
 
 ```sh
-zig build hello_world -Doptimize=ReleaseSafe
+zig build run
 ```
 
-The run step blocks in the foreground. In a terminal, the development log prints
-the ready summary before the first request:
-
-```console
-$ zig build hello_world -Doptimize=ReleaseSafe
-µWebZockets v2.1.6  ready in 0.6 ms
-→ Local: http://127.0.0.1:3000/
-```
-
-The elapsed time varies by host. When output is redirected, the colored
-wordmark and local-address line are omitted and the log falls back to
-`info(server): server listening on 0.0.0.0:3000`. Stop the server with Ctrl+C.
-
-If both commands exit with status 0, the toolchain, dependency cache, and native
-build graph are ready.
+The development log prints the version, startup time, and local address. Stop
+the server with Ctrl+C.
 
 ## Common first-run problems
 
-| Symptom                                   | Cause and fix                                                                                                          |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `error: invalid Zig version`              | The active compiler is not 0.16.0. Run `zig version` and select 0.16.0.                                                |
-| A dependency hash mismatch                | The package cache is corrupt or a URL changed. Remove the cached package and fetch again. Do not edit the pinned hash. |
-| `error: FileNotFound` for `vendor/h1spec` | You ran a compliance step without the submodule. Clone with `--recurse-submodules` or skip that step.                  |
-| The first build appears to hang           | It is compiling vendored C and C++ sources. Check CPU and disk activity before interrupting.                           |
-| `curl: (7) Failed to connect`             | The server is not running, or it bound a different port. Check the terminal output.                                    |
+| Symptom                         | Cause and fix                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `error: invalid Zig version`    | The active compiler is not 0.16.0. Download Zig 0.16.0 and select it.                                                    |
+| A dependency hash mismatch      | The package cache is corrupt or the URL changed. Remove the cached package and fetch again. Do not edit the pinned hash. |
+| The first build appears to hang | It is compiling vendored C and C++ sources. Check CPU and disk activity before interrupting.                             |
+| A dependency download fails     | Check network access to GitHub, then run the same `zig fetch` command again.                                             |
 
 ## Next steps
 
 - [Quickstart](/docs/getting-started/quickstart) builds a complete project.
-- [Project structure](/docs/getting-started/project-structure) explains what a
-  consumer needs and what stays internal.
-- [Examples tour](/docs/getting-started/examples-tour) lists every build step.
+- [Project structure](/docs/getting-started/project-structure) shows the
+  consumer layout.
+- [Examples](/docs/examples) adds a route, WebSocket, JSON-RPC service, TLS,
+  cluster, or HTTP/3 listener.

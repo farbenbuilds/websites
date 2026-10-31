@@ -33,11 +33,10 @@ build.
   </Step>
   <Step title="Thêm dependency">
     ```sh
-    zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#VERSION_OR_COMMIT'
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
     ```
 
-    Thay `VERSION_OR_COMMIT` bằng tag phát hành như `v2.1.6` hoặc hash commit
-    đầy đủ.
+    Lệnh pin phiên bản 2.1.6 trong `build.zig.zon`.
 
   </Step>
   <Step title="Nối module">
@@ -156,9 +155,9 @@ thường.
 
 ## Tiếp theo
 
-- [HTTP server đầu tiên](/docs/getting-started/first-http-server) giải thích
+- [HTTP server đầu tiên](/docs/examples/first-http-server) giải thích
   vòng đời và thêm route parameter.
-- [WebSocket đầu tiên](/docs/getting-started/first-websocket) thêm route hai
+- [WebSocket đầu tiên](/docs/examples/first-websocket) thêm route hai
   chiều.
-- [Cài đặt](/docs/getting-started/installation) bao gồm checkout, cache offline
+- [Cài đặt](/docs/getting-started/installation) bao gồm tải Zig, cache offline
   và pin dependency.

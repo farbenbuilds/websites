@@ -33,11 +33,10 @@ build command.
   </Step>
   <Step title="Add the dependency">
     ```sh
-    zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#VERSION_OR_COMMIT'
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
     ```
 
-    Replace `VERSION_OR_COMMIT` with a release tag such as `v2.1.6` or a full
-    commit hash.
+    The command pins version 2.1.6 in `build.zig.zon`.
 
   </Step>
   <Step title="Wire the module">
@@ -156,9 +155,9 @@ normal stop path.
 
 ## Next
 
-- [Your first HTTP server](/docs/getting-started/first-http-server) explains the
+- [Your first HTTP server](/docs/examples/first-http-server) explains the
   lifecycle and adds route parameters.
-- [Your first WebSocket](/docs/getting-started/first-websocket) adds a
+- [Your first WebSocket](/docs/examples/first-websocket) adds a
   bidirectional route.
-- [Installation](/docs/getting-started/installation) covers the checkout,
+- [Installation](/docs/getting-started/installation) covers the Zig download,
   offline caches, and dependency pinning.

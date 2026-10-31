@@ -1,0 +1,51 @@
+---
+title: Examples
+description: Build a first HTTP server, WebSocket, JSON-RPC service, TLS server, cluster, or HTTP/3 server in your own project.
+sidebar:
+  order: 0
+search:
+  tags: [getting-started, tutorial, http1, websocket, json-rpc, tls, cluster, http3]
+---
+
+These tutorials extend the project from [Quickstart](/docs/getting-started/quickstart).
+Each page is a complete program you add to your own `src/main.zig`.
+
+<CardGroup cols={2}>
+  <Card title="Your first HTTP server" href="/docs/examples/first-http-server" icon="server">
+    Register routes, read a capture, and verify the listener with `curl`.
+  </Card>
+  <Card title="Your first WebSocket" href="/docs/examples/first-websocket" icon="messages-square">
+    Add an echo route with open, message, and close callbacks.
+  </Card>
+  <Card
+    title="Your first JSON-RPC service"
+    href="/docs/examples/first-json-rpc-service"
+    icon="braces"
+  >
+    Mount a typed `math.add` procedure and call it with `curl`.
+  </Card>
+  <Card title="Your first TLS server" href="/docs/examples/first-tls-server" icon="lock">
+    Generate a local certificate in memory, then switch to PEM files.
+  </Card>
+  <Card title="Your first cluster" href="/docs/examples/first-cluster" icon="cpu">
+    Run one worker per core with a shared port and per-worker slabs.
+  </Card>
+  <Card title="Your first HTTP/3 server" href="/docs/examples/first-http3-server" icon="zap">
+    Serve the same handler over QUIC on UDP port 8443.
+  </Card>
+</CardGroup>
+
+## Before you start
+
+Complete [Installation](/docs/getting-started/installation) and
+[Quickstart](/docs/getting-started/quickstart) first. The examples assume:
+
+- Zig 0.16.0 is installed from [ziglang.org/download](https://ziglang.org/download/).
+- Your project already depends on `uWebZockets` version 2.1.6.
+- `src/main.zig` contains the program you want to run.
+- `zig build run` starts the project.
+
+## Next
+
+- [Your first HTTP server](/docs/examples/first-http-server)
+- [FAQ](/docs/getting-started/faq)

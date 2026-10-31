@@ -1,0 +1,51 @@
+---
+title: Ví dụ
+description: Build HTTP server, WebSocket, JSON-RPC service, TLS server, cluster hoặc HTTP/3 server đầu tiên trong project của bạn.
+sidebar:
+  order: 0
+search:
+  tags: [getting-started, tutorial, http1, websocket, json-rpc, tls, cluster, http3]
+---
+
+Các hướng dẫn này mở rộng project từ [Quickstart](/docs/getting-started/quickstart).
+Mỗi trang là một chương trình hoàn chỉnh bạn thêm vào `src/main.zig` của mình.
+
+<CardGroup cols={2}>
+  <Card title="HTTP server đầu tiên" href="/docs/examples/first-http-server" icon="server">
+    Đăng ký route, đọc capture và kiểm tra listener bằng `curl`.
+  </Card>
+  <Card title="WebSocket đầu tiên" href="/docs/examples/first-websocket" icon="messages-square">
+    Thêm route echo với callback open, message và close.
+  </Card>
+  <Card
+    title="JSON-RPC service đầu tiên"
+    href="/docs/examples/first-json-rpc-service"
+    icon="braces"
+  >
+    Mount procedure `math.add` có kiểu và gọi bằng `curl`.
+  </Card>
+  <Card title="TLS server đầu tiên" href="/docs/examples/first-tls-server" icon="lock">
+    Tạo chứng chỉ local trong bộ nhớ, rồi chuyển sang file PEM.
+  </Card>
+  <Card title="Cluster đầu tiên" href="/docs/examples/first-cluster" icon="cpu">
+    Chạy một worker mỗi lõi với port chia sẻ và slab riêng.
+  </Card>
+  <Card title="HTTP/3 server đầu tiên" href="/docs/examples/first-http3-server" icon="zap">
+    Phục vụ cùng handler qua QUIC tại UDP port 8443.
+  </Card>
+</CardGroup>
+
+## Trước khi bắt đầu
+
+Hoàn thành [Cài đặt](/docs/getting-started/installation) và
+[Quickstart](/docs/getting-started/quickstart) trước. Ví dụ giả định:
+
+- Zig 0.16.0 đã cài từ [ziglang.org/download](https://ziglang.org/download/).
+- Project đã phụ thuộc `uWebZockets` phiên bản 2.1.6.
+- `src/main.zig` chứa chương trình bạn muốn chạy.
+- `zig build run` khởi động project.
+
+## Tiếp theo
+
+- [HTTP server đầu tiên](/docs/examples/first-http-server)
+- [FAQ](/docs/getting-started/faq)

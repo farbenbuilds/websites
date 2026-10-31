@@ -2,7 +2,7 @@
 title: Your first WebSocket
 description: Add a WebSocket echo route with open, message, and close callbacks, then test it with wscat or a browser console.
 sidebar:
-  order: 7
+  order: 2
 search:
   tags: [getting-started, tutorial, websocket]
 ---
@@ -11,13 +11,9 @@ This tutorial adds a WebSocket route to the HTTP application. The server echoes
 every text or binary message, sends a welcome message on open, and logs when a
 peer disconnects.
 
-The repository version is `zig build chat_server` in
-`examples/chat_server.zig`. It demonstrates bounded pub/sub instead of the echo
-handler below.
-
 ## Prerequisites
 
-- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `npx` for `wscat`, or a browser with a JavaScript console.
 
@@ -167,8 +163,8 @@ cross-worker publishes through bounded per-worker inboxes.
 
 ## Next
 
-- [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service)
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service)
   adds typed procedures.
-- [Examples tour](/docs/getting-started/examples-tour) points to the pub/sub chat
+- [Examples](/docs/examples) points to the pub/sub chat
   example.
 - [FAQ](/docs/getting-started/faq) lists the WebSocket boundaries.

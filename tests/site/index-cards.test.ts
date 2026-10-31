@@ -22,7 +22,7 @@ describe("docs home index", () => {
     const markdown = renderIndexCardsMarkdown("en");
 
     expect(markdown).toContain("## Start here.");
-    expect(markdown).toContain("[Share nothing rule](/docs/getting-started/first-cluster)");
+    expect(markdown).toContain("[Share nothing rule](/docs/examples/first-cluster)");
     expect(markdown).toContain("[Explore Type-safety](/docs/what-is-uwebsockets)");
     expect(markdown).not.toContain("Semi-production ready.");
   });

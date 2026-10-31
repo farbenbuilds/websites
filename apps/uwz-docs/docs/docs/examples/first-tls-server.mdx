@@ -2,7 +2,7 @@
 title: Your first TLS server
 description: Serve HTTPS with an in-memory certificate, verify it with curl -k, and switch to production PEM files and mTLS.
 sidebar:
-  order: 9
+  order: 4
 search:
   tags: [getting-started, tutorial, tls]
 ---
@@ -11,12 +11,9 @@ This tutorial starts an HTTPS server with a certificate generated in memory at
 startup. It needs no certificate files and no `openssl` command, which makes it
 suitable for local tests and demos.
 
-The repository base example is `zig build https_server` in
-`examples/https_server.zig`. The tutorial adds the shutdown signal watcher.
-
 ## Prerequisites
 
-- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- The server from [Your first HTTP server](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -145,8 +142,8 @@ rotation is a rolling restart; hot reload is not supported.
 
 ## Next
 
-- [Your first cluster](/docs/getting-started/first-cluster) runs one worker per
+- [Your first cluster](/docs/examples/first-cluster) runs one worker per
   core.
-- [Your first HTTP/3 server](/docs/getting-started/first-http3-server) uses a
+- [Your first HTTP/3 server](/docs/examples/first-http3-server) uses a
   separate QUIC context.
 - [FAQ](/docs/getting-started/faq) answers TLS version and rotation questions.

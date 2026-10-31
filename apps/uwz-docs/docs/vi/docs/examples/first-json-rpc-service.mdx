@@ -2,7 +2,7 @@
 title: JSON-RPC service đầu tiên
 description: Đăng ký procedure math.add có kiểu, mount trên App.rpc và kiểm tra request cùng phản hồi JSON-RPC bằng curl và JSON.
 sidebar:
-  order: 8
+  order: 3
 search:
   tags: [getting-started, tutorial, json-rpc]
 ---
@@ -11,12 +11,9 @@ Hướng dẫn này mount service JSON-RPC 2.0 có kiểu trên `/rpc`. Nó đ�
 một procedure, decode tham số có tên vào struct Zig và serialize kết quả có
 kiểu.
 
-Bản base trong repository là `zig build rpc_server` tại
-`examples/rpc_server.zig`. Hướng dẫn thêm watcher tín hiệu shutdown.
-
 ## Điều kiện trước
 
-- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Server từ [HTTP server đầu tiên](/docs/examples/first-http-server).
 - Zig 0.16.0.
 - `curl`.
 
@@ -136,8 +133,8 @@ loop. Trong nhóm worker, tạo một service cho mỗi worker và mount trong c
 
 ## Tiếp theo
 
-- [TLS server đầu tiên](/docs/getting-started/first-tls-server) phục vụ cùng
+- [TLS server đầu tiên](/docs/examples/first-tls-server) phục vụ cùng
   route qua HTTPS.
-- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê bước
+- [Ví dụ](/docs/examples) liệt kê bước
   `rpc_server`.
 - [FAQ](/docs/getting-started/faq) bao gồm lưu ý batch.

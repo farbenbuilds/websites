@@ -130,8 +130,28 @@ html [data-blume-nav-tree] a {
     color 140ms ease;
 }
 
-html [data-blume-nav-tree] > ul > li + li {
-  border-top: 1px solid var(--blume-border);
+html [data-blume-nav-tree] .blume-nav-summary {
+  font-family: var(--blume-font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary {
+  background: color-mix(in srgb, var(--blume-accent) 12%, transparent);
+  box-shadow:
+    inset 2px 0 0 var(--blume-accent),
+    0 0 18px color-mix(in srgb, var(--blume-accent) 22%, transparent);
+  color: var(--blume-accent);
+}
+
+html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary :is(a, span, svg) {
+  color: var(--blume-accent);
 }
 
 html [data-blume-nav-tree] a:hover {
@@ -140,8 +160,8 @@ html [data-blume-nav-tree] a:hover {
 }
 
 html [data-blume-nav-tree] a[aria-current="page"] {
-  background: var(--blume-muted);
-  color: var(--blume-foreground);
+  background: color-mix(in srgb, var(--blume-accent) 8%, transparent);
+  color: var(--blume-accent);
   font-weight: 600;
 }
 
