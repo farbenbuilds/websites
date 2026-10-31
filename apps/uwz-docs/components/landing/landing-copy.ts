@@ -70,7 +70,14 @@ export type LandingCopy = {
 type LandingMessages = typeof en;
 
 const MESSAGES: Record<LandingLocale, LandingMessages> = { en, vi };
-const DICTIONARY_LINE_KEYS = ["headword", "reading", "definitionOne", "definitionTwo"] as const;
+
+const DICTIONARY_LINES = [
+  "速い",
+  "/はやい/ · 形容詞",
+  "1. 動きや動作の速度が大きい。",
+  "2. Zig で HTTP、WebSocket、RPC をゼロアロケーションで処理する。",
+] as const;
+
 const SERVER_STEP_KEYS = ["addPackage", "mountHandlers", "runWhereYouDeploy"] as const;
 const SOCIAL_KEYS = ["facebook", "x"] as const;
 
@@ -98,7 +105,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     },
     dictionary: {
       label: messages.hero.dictionary.label,
-      lines: DICTIONARY_LINE_KEYS.map((key) => messages.hero.dictionary.lines[key]),
+      lines: DICTIONARY_LINES,
       status: messages.hero.dictionary.status,
     },
   };

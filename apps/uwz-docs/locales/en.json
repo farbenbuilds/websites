@@ -13,12 +13,6 @@
       "secondaryAction": "View on GitHub",
       "dictionary": {
         "label": "Dictionary entry for the word fast",
-        "lines": {
-          "headword": "速い",
-          "reading": "/はやい/ · 形容詞",
-          "definitionOne": "1. 動きや動作の速度が大きい。",
-          "definitionTwo": "2. Zig で HTTP、WebSocket、RPC をゼロアロケーションで処理する。"
-        },
         "status": "Semi-production ready."
       }
     },
