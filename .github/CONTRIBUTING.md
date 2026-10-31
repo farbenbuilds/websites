@@ -57,6 +57,7 @@ pnpm lint:fix                           # apply safe lint fixes
 pnpm format                             # Oxfmt with .oxfmtrc.json
 pnpm format:check                       # verify formatting
 pnpm typecheck                          # every workspace check
+pnpm i18n:check                         # component locale key parity and coverage
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
 pnpm check:size                         # enforce the 400-line source limit

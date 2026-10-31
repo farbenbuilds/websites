@@ -44,6 +44,7 @@ pnpm lint:fix
 pnpm format
 pnpm format:check
 pnpm typecheck
+pnpm i18n:check
 pnpm test
 pnpm test:watch
 pnpm check:size
@@ -74,6 +75,9 @@ bindings on musl systems.
 - For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
   `<style>` blocks, Tailwind utilities, and shared tokens. A future app on
   another framework follows its own conventions.
+- x18n owns component UI copy only. Documentation content stays in mirrored
+  `docs/` and `docs/vi/` MDX pages. Never add MDX files, page prose,
+  frontmatter, or docs routes to locale JSON or x18n resources.
 - TypeScript strict. No `any` and no unchecked casts.
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
@@ -86,12 +90,14 @@ The full document is [CODING_CONVENTION.md](CODING_CONVENTION.md).
 ## Documentation Workflow
 
 1. Place content in `apps/<app>/docs/<page>.mdx`.
-2. Add `title` and `description` frontmatter.
-3. Lead with the task, then explanation, then reference detail.
-4. Use root-relative internal links and descriptive external link text.
-5. Declare a language on every code fence.
-6. Verify with the app's `check` and `build` tasks.
-7. Inspect generated `llms.txt` when navigation or page purpose changes.
+2. Add the Vietnamese counterpart at `apps/<app>/docs/vi/<page>.mdx`. Do not add
+   documentation pages to x18n.
+3. Add `title` and `description` frontmatter.
+4. Lead with the task, then explanation, then reference detail.
+5. Use root-relative internal links and descriptive external link text.
+6. Declare a language on every code fence.
+7. Verify with the app's `check` and `build` tasks.
+8. Inspect generated `llms.txt` when navigation or page purpose changes.
 
 Blume owns routing, search, and generated output. Do not hand-roll those.
 
@@ -108,8 +114,10 @@ requirements.
    component only when at least two apps use it. Install from inside `packages/ui`
    with the local CLI, and never re-add or update an existing component.
 4. Keep interaction inside a Svelte island; keep static content in MDX or Astro.
-5. Add labels, focus states, keyboard behavior, and reduced-motion handling.
-6. Verify the shared package type check and every consuming app build.
+5. Keep component UI copy in `locales/{locale}.json` and run `pnpm i18n:check`;
+   keep documentation prose in MDX.
+6. Add labels, focus states, keyboard behavior, and reduced-motion handling.
+7. Verify the shared package type check and every consuming app build.
 
 ## Agent Team
 

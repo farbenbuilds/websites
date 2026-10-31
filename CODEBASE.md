@@ -57,7 +57,7 @@ websites/
 │   ├── uwz-docs/                 # uWebZockets documentation
 │   │   ├── docs/                # English Markdown and MDX source
 │   │   ├── docs/vi/             # Vietnamese translations
-│   │   ├── locales/             # en/vi UI copy checked by x18n
+│   │   ├── locales/             # en/vi component UI copy checked by x18n
 │   │   ├── components/          # landing, index-cards, support, benchmark, colophon
 │   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
@@ -68,7 +68,7 @@ websites/
 │       ├── components.ts         # MDX component registration
 │       ├── docs/                 # English Markdown and MDX source
 │       ├── docs/vi/              # Vietnamese translations
-│       ├── locales/              # en/vi UI copy checked by x18n
+│       ├── locales/              # en/vi component UI copy checked by x18n
 │       ├── site-links.ts         # footer labels and internal link localization
 │       ├── x18n.config.ts        # locale resources for vws-docs
 │       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
@@ -138,12 +138,17 @@ routing, translated UI strings, locale-aware search, `llms.txt`, and the JSON
 API. Keep translated headings pinned to their English anchor ids so fragment
 links resolve in both languages.
 
-UI copy that is not MDX content lives in `apps/<app>/locales/{locale}.json`.
-Components read the whole locale object and parse inline Markdown into the shared
-`@farben/docs-components` inline-text model. x18n reads the same JSON files
-through each app's `x18n.config.ts`; run `pnpm i18n:check` from the root to check
-both projects. This keeps documentation content under Blume and translatable UI
-copy under one key/value source per app.
+Only components use x18n. Component UI copy lives in
+`apps/<app>/locales/{locale}.json`; components read the whole locale object and
+parse inline Markdown into the shared `@farben/docs-components` inline-text
+model. x18n reads the same JSON files through each app's `x18n.config.ts`; run
+`pnpm i18n:check` from the root to check both projects.
+
+Documentation content is not UI copy. A page such as `getting-started.mdx` or
+`api.mdx` lives at `docs/<slug>.mdx` with its translation at
+`docs/vi/<slug>.mdx`. Never add MDX files, page prose, frontmatter, or docs
+routes to locale JSON or an x18n resource pattern. A string belongs to x18n
+only when a component renders it; otherwise it belongs in MDX.
 
 Documentation source is the product. Do not edit generated output under
 `dist/` or generated Blume state under `.blume/`; those directories are

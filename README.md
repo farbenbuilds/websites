@@ -94,19 +94,24 @@ consumers. App-specific composition stays in the app.
 
 ## Internationalization
 
-Each docs app keeps its localized UI copy in `apps/<app>/locales/{locale}.json`
-and its x18n settings in `apps/<app>/x18n.config.ts`. The root
-`x18n.config.ts` declares both apps as projects. Blume still owns documentation
-content under `docs/` and `docs/vi/`; x18n checks the key/value UI copy, not MDX
-pages.
+Only components use x18n. Each docs app keeps its component UI copy in
+`apps/<app>/locales/{locale}.json` and its x18n settings in
+`apps/<app>/x18n.config.ts`. The root `x18n.config.ts` declares both apps as
+projects.
+
+Documentation content belongs to Blume, not x18n. A page such as
+`getting-started.mdx` or `api.mdx` lives at `docs/<slug>.mdx` with its
+translation at `docs/vi/<slug>.mdx`. Do not add MDX files, page prose,
+frontmatter, or docs routes to locale JSON or an x18n resource pattern.
 
 ```bash
 pnpm i18n:check        # x18n check: missing keys and coverage for en and vi
 pnpm exec x18n doctor  # show the detected presets, resources, and scanners
 ```
 
-Add new UI strings to both `en.json` and `vi.json` in the same app. If a locale
-file is not detected, run `x18n doctor` before changing the resource pattern.
+Add new component strings to both `en.json` and `vi.json` in the same app. If a
+locale file is not detected, run `x18n doctor` before changing the resource
+pattern.
 
 ## Contributing
 

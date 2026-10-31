@@ -187,6 +187,19 @@ new primitive.
 - Agent-facing documents describe observable behavior, ownership, and
   verification. They do not duplicate the full codebase.
 
+### Internationalization ownership
+
+- x18n owns component UI copy only. Component strings live in
+  `apps/<app>/locales/{locale}.json` and are checked with `pnpm i18n:check`.
+- Blume owns documentation content. Every docs page is an MDX file at
+  `docs/<slug>.mdx` with its translation at `docs/vi/<slug>.mdx`.
+- Do not add MDX files, page prose, frontmatter, or docs routes to x18n
+  resources, locale JSON, or an `x18n.config.ts` resource pattern.
+- A future page such as `getting-started.mdx` or `api.mdx` follows the mirrored
+  MDX layout and does not need x18n keys.
+- A string belongs to x18n only when a component renders it. If it is part of a
+  document body, it belongs in MDX.
+
 ## 9. Formatting, Linting, and Verification
 
 - Oxfmt formats and Oxlint lints. Do not add a second formatter or linter.
@@ -215,6 +228,8 @@ new primitive.
   claim a check that was not executed.
 - Documentation changes run `pnpm exec vp run uwz-docs#check`,
   `pnpm exec vp run vws-docs#check`, and the affected build.
+- Component UI copy changes run `pnpm i18n:check`. Docs-only MDX changes do not
+  require it because documentation content is not an x18n resource.
 - UI changes run the shared UI type check and both docs builds when the shared
   package is touched.
 

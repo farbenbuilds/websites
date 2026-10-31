@@ -33,6 +33,8 @@ editing.
 - No `<style>` block. Tailwind utilities and shared tokens only.
 - No `{@html}` for user input or remote content.
 - No data fetching in a leaf component.
+- Component UI copy belongs in `apps/<app>/locales/{locale}.json` and must pass
+  `pnpm i18n:check`. Documentation prose stays in MDX, never in locale JSON.
 - No `any`, unchecked cast, or non-null assertion used as a shortcut.
 - Do not change visual direction without `ui-stylist` or copy without
   `docs-writer`.
