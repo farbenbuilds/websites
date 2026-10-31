@@ -12,7 +12,7 @@ const { locale = "en" } = Astro.props;
 const copy = landingCopy(locale);
 ---
 
-<p>
+<p data-vws-landing>
   <InlineText parts={copy.intro} />
 </p>
 <IndexCards locale={locale} />

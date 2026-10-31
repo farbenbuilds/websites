@@ -1,5 +1,8 @@
 ---
+import { Image } from "astro:assets";
+
 import { landingCopy, type LandingLocale } from "./landing-copy.ts";
+import sponsorLogo from "./assets/farben-logo.png";
 
 type Props = {
   locale?: LandingLocale;
@@ -13,12 +16,14 @@ const copy = landingCopy(locale).sponsor;
   <div class="docs-home-section-head">
     <p class="editorial-label">{copy.label}</p>
     <div class="docs-home-author-card">
-      <img
+      <Image
         class="docs-home-author-avatar"
-        src={copy.logoSrc}
+        src={sponsorLogo}
         alt={copy.logoAlt}
-        width="512"
-        height="512"
+        width={256}
+        height={256}
+        loading="lazy"
+        decoding="async"
       />
       <div class="docs-home-author-copy">
         <h2 id="sponsor-heading">{copy.heading}</h2>

@@ -1,6 +1,9 @@
 ---
+import { Image } from "astro:assets";
+
 import { landingCopy, type LandingLocale } from "./landing-copy.ts";
 import InlineText from "@farben/docs-components/inline-text.astro";
+import authorAvatar from "./assets/noah-tran.webp";
 
 type Props = {
   locale?: LandingLocale;
@@ -14,12 +17,13 @@ const copy = landingCopy(locale).author;
   <div class="docs-home-section-head">
     <p class="editorial-label">{copy.label}</p>
     <div class="docs-home-author-card">
-      <img
+      <Image
         class="docs-home-author-avatar"
-        src={copy.avatarSrc}
+        src={authorAvatar}
         alt={copy.avatarAlt}
-        width="512"
-        height="512"
+        width={256}
+        height={256}
+        loading="lazy"
         decoding="async"
       />
       <div class="docs-home-author-copy">
