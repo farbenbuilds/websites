@@ -66,7 +66,7 @@
   "indexCards": {
     "label": "01 / Index",
     "heading": "Start here.",
-    "intro": "Six ways into the runtime: install it, learn the ownership rule, compare the tradeoffs, plan capacities, understand the worker model, or explore type-safety.",
+    "intro": "Six ways into the runtime: install it, learn the ownership rule, compare the tradeoffs, plan capacities, understand the worker model, or explore the examples.",
     "items": {
       "gettingStarted": {
         "title": "Getting Started",
@@ -88,9 +88,9 @@
         "title": "Understand a Cluster/Worker",
         "description": "Follow how workers share ports and own their state."
       },
-      "typeSafety": {
-        "title": "Explore Type-safety",
-        "description": "See how typed requests, responses, and routes stay checked at compile time."
+      "examples": {
+        "title": "Explore the examples",
+        "description": "Build the first HTTP, WebSocket, JSON-RPC, TLS, cluster, or HTTP/3 server."
       }
     }
   },

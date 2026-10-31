@@ -66,7 +66,7 @@
   "indexCards": {
     "label": "01 / Mục lục",
     "heading": "Bắt đầu tại đây.",
-    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, so sánh đánh đổi, tính dung lượng, hiểu mô hình worker hoặc khám phá type-safety.",
+    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, so sánh đánh đổi, tính dung lượng, hiểu mô hình worker hoặc khám phá các ví dụ.",
     "items": {
       "gettingStarted": {
         "title": "Bắt đầu",
@@ -88,9 +88,9 @@
         "title": "Hiểu Cluster/Worker",
         "description": "Theo dõi cách worker chia sẻ cổng và sở hữu trạng thái."
       },
-      "typeSafety": {
-        "title": "Khám phá Type-safety",
-        "description": "Xem cách request, response và route có kiểu được kiểm tra ngay khi biên dịch."
+      "examples": {
+        "title": "Khám phá các ví dụ",
+        "description": "Build server HTTP, WebSocket, JSON-RPC, TLS, cluster hoặc HTTP/3 đầu tiên."
       }
     }
   },
