@@ -22,7 +22,7 @@ nix develop
 ```
 
 `direnv` selects the glibc or musl shell automatically. Without Nix, use
-Node.js 22.19 or newer and pnpm 12.4.2.
+Node.js 22.22.3 or newer and pnpm 12.4.2.
 
 Install dependencies and run the full gate:
 

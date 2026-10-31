@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { on } from "svelte/events";
   import { PlayPauseButton } from "@farben/ui/components/ui/play-pause-button";
   import { ScrollCue } from "@farben/ui/components/ui/scroll-cue";
 
@@ -69,7 +70,7 @@
       motionAllowed = !motionQuery.matches;
     };
 
-    motionQuery.addEventListener("change", onMotionChange);
+    const removeMotionChange = on(motionQuery, "change", onMotionChange);
 
     try {
       paused = sessionStorage.getItem(PAUSE_KEY) === "1";
@@ -97,7 +98,7 @@
     loop.setPaused(paused);
 
     return () => {
-      motionQuery.removeEventListener("change", onMotionChange);
+      removeMotionChange();
       loop?.destroy();
       loop = null;
     };
@@ -117,7 +118,7 @@
   <ScrollCue href={scrollHref} label={scrollLabel ?? copy.scrollLabel} avoid />
   {#if ready && motionAllowed}
     <PlayPauseButton
-      paused={paused}
+      {paused}
       labels={{ pause: copy.pauseLabel, resume: copy.resumeLabel }}
       onToggle={togglePause}
       avoid

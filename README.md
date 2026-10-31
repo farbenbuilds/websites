@@ -13,8 +13,10 @@ Today `apps/` contains only the two documentation sites: `apps/uwz-docs` for [uW
 - [Vite+](https://viteplus.dev) (`vp`) — the unified toolchain: Vite, Rolldown, Vitest, [Oxlint](https://oxc.rs/docs/guide/usage/linter) for linting, [Oxfmt](https://oxc.rs/docs/guide/usage/formatter) for formatting, and task running
 - [Lefthook](https://lefthook.dev) pre-commit hooks, Oxlint anti-slop rules, and a root Vitest suite
 - Documentation sites use [Blume](https://useblume.dev) — Markdown in `docs/`, Astro-generated output, plus search, `llms.txt`, and an MCP server out of the box
-- The current docs apps use TypeScript and Blume. `uwz-docs` adds Astro, Svelte 5 islands, and `@farben/ui`; `vws-docs` is Blume-only today. A future app may choose another framework and owns its build configuration
-- pnpm workspaces (`apps/*`, `packages/*`, `tools/*`)
+- The current docs apps use TypeScript and Blume. `uwz-docs` adds Astro, Svelte 5 islands, and `@farben/ui`; `vws-docs` adds local Astro landing components. A future app may choose another framework and owns its build configuration
+- Oxlint loads `eslint-plugin-svelte` and a local adapter for `eslint-plugin-astro` frontmatter rules. Oxlint's missing custom parser support keeps template-only rules out of scope
+- Oxfmt formats `.astro` and `.svelte` through its `astro` and `svelte` options, with the root `@astrojs/compiler-rs` and `svelte` dev dependencies
+- pnpm workspaces (`apps/*`, `packages/*`, `tools/*`), with `@farben/docs-components` holding the shared docs inline-text renderer
 
 ## Development
 
@@ -57,10 +59,10 @@ pnpm exec vp run -r build                 # build all workspace members
 
 ## Shared UI
 
-`packages/ui` (`@farben/ui`) holds shared [shadcn-svelte](https://www.shadcn-svelte.com) components for the docs apps that use Svelte. `apps/uwz-docs` consumes the package today; `apps/vws-docs` is Blume-only. A future app on another framework can reuse token values, not the Svelte components. Components are consumed as source — there is no build step — so Svelte hosts compile them with their own tooling:
+`packages/ui` (`@farben/ui`) holds shared [shadcn-svelte](https://www.shadcn-svelte.com) components for the docs apps that use Svelte. `apps/uwz-docs` consumes the package today; `apps/vws-docs` uses local Astro components and does not consume the Svelte package yet. A future app on another framework can reuse token values, not the Svelte components. Components are consumed as source — there is no build step — so Svelte hosts compile them with their own tooling:
 
 ```svelte
-import { Button } from "@farben/ui/components/ui/button";
+import {Button} from "@farben/ui/components/ui/button";
 ```
 
 The package ships the shadcn design tokens in `src/lib/styles/theme.css` (`@farben/ui/theme.css`). A Tailwind host imports them from its entry stylesheet and scans the package for the classes its components use:

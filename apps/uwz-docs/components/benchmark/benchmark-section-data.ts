@@ -1,4 +1,6 @@
-export type BenchmarkLocale = "en" | "vi";
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+
+export type BenchmarkLocale = DocsLocale;
 
 export type BenchmarkBar = {
   readonly name: string;

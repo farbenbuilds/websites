@@ -1,0 +1,22 @@
+<noscript>
+  <style is:inline>
+    html:has(.docs-home-hero) [data-blume-header] {
+      position: sticky;
+    }
+    .docs-home-hero {
+      min-height: calc(100svh - 4rem);
+    }
+    .docs-home-hero-copy::before {
+      content: "";
+      position: absolute;
+      inset: -1rem;
+      z-index: -1;
+      background: var(--hero-paper);
+    }
+    .docs-home-hero .butterfly-hero-still:not(.is-hidden) {
+      place-items: start center;
+      padding-block-start: 1rem;
+      opacity: 0.4;
+    }
+  </style>
+</noscript>

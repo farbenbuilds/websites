@@ -1,0 +1,49 @@
+---
+import { landingCopy, type LandingLocale } from "./landing-copy.ts";
+import InlineText from "@farben/docs-components/inline-text.astro";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).author;
+---
+
+<section class="docs-home-section" id="author" aria-labelledby="author-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-author-card">
+      <img
+        class="docs-home-author-avatar"
+        src={copy.avatarSrc}
+        alt={copy.avatarAlt}
+        width="512"
+        height="512"
+        decoding="async"
+      />
+      <div class="docs-home-author-copy">
+        <h2 id="author-heading">{copy.name}</h2>
+        <p>
+          <InlineText parts={copy.bio} />
+        </p>
+        <ul class="docs-home-author-socials" role="list">
+          {copy.socials.map((social) => (
+            <li>
+              <span class="editorial-label">{social.label}</span>
+              <a
+                href={social.href}
+                aria-label={social.ariaLabel}
+                target="_blank"
+                rel="noreferrer"
+                aria-describedby="blume-new-tab-hint"
+              >
+                {social.value}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

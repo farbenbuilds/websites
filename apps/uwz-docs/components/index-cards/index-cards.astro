@@ -1,0 +1,39 @@
+---
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import { indexCardsCopy } from "./index-cards-data";
+
+type Props = {
+  locale?: DocsLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = indexCardsCopy(locale);
+---
+
+<div class="docs-home-index-anchor" id="docs-home-main"></div>
+
+<section class="docs-home-section" id="index" aria-labelledby="index-heading">
+  <div class="docs-home-section-head">
+    <p class="editorial-label">{copy.label}</p>
+    <div class="docs-home-section-intro">
+      <h2 id="index-heading">{copy.heading}</h2>
+      <p>{copy.intro}</p>
+    </div>
+  </div>
+  <ol class="editorial-index docs-home-index" role="list">
+    {copy.items.map((item) => (
+      <li class="editorial-index-item">
+        <a class="editorial-index-link" href={item.href}>
+          <span class="editorial-index-number" aria-hidden="true" />
+          <span class="editorial-index-body">
+            <span class="editorial-index-title">{item.title}</span>
+            <span class="editorial-index-text">{item.description}</span>
+          </span>
+          <span class="editorial-index-arrow" aria-hidden="true">
+            {"->"}
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+</section>

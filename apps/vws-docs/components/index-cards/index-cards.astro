@@ -1,0 +1,22 @@
+---
+import Card from "blume/components/content/Card.astro";
+import CardGroup from "blume/components/content/CardGroup.astro";
+
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import { indexCardsCopy } from "./index-cards-data";
+
+type Props = {
+  locale?: DocsLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = indexCardsCopy(locale);
+---
+
+<CardGroup cols={2}>
+  {copy.cards.map((card) => (
+    <Card title={card.title} href={card.href} icon={card.icon}>
+      {card.description}
+    </Card>
+  ))}
+</CardGroup>

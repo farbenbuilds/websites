@@ -30,27 +30,24 @@ const copy = benchmarkCopy(locale);
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
       >
-        {"bench.zig.bd "}<span aria-hidden="true">{"->"}</span>
+        {"bench.zig.bd "}
+        <span aria-hidden="true">{"->"}</span>
       </a>
     </div>
     <p class="docs-home-benchmark-meta">{copy.benchMeta}</p>
     <ol class="docs-home-bars" aria-label={copy.benchAria}>
-      {
-        copy.bars.map((bar) => (
-          <li
-            class={`docs-home-bar-row${bar.leader ? " docs-home-bar-row-leader" : ""}`}
-          >
-            <span class="docs-home-bar-name">{bar.name}</span>
-            <span class="docs-home-bar-track" aria-hidden="true">
-              <span
-                class={`docs-home-bar-fill${bar.leader ? " docs-home-bar-leader" : ""}`}
-                style={`--bar-width: ${bar.share}%`}
-              />
-            </span>
-            <span class="docs-home-bar-value">{bar.value}</span>
-          </li>
-        ))
-      }
+      {copy.bars.map((bar) => (
+        <li class={`docs-home-bar-row${bar.leader ? " docs-home-bar-row-leader" : ""}`}>
+          <span class="docs-home-bar-name">{bar.name}</span>
+          <span class="docs-home-bar-track" aria-hidden="true">
+            <span
+              class={`docs-home-bar-fill${bar.leader ? " docs-home-bar-leader" : ""}`}
+              style={`--bar-width: ${bar.share}%`}
+            />
+          </span>
+          <span class="docs-home-bar-value">{bar.value}</span>
+        </li>
+      ))}
     </ol>
     <p class="docs-home-benchmark-source">{copy.benchSource}</p>
   </div>
@@ -67,23 +64,22 @@ const copy = benchmarkCopy(locale);
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
       >
-        {copy.arenaLink}<span aria-hidden="true">{" ->"}</span>
+        {copy.arenaLink}
+        <span aria-hidden="true">{" ->"}</span>
       </a>
     </div>
     <p class="docs-home-benchmark-meta">{copy.arenaMeta}</p>
     <dl class="docs-home-arena-metrics">
-      {
-        copy.arenaMetrics.map((metric) => (
-          <div class="docs-home-arena-metric">
-            <dt>{metric.label}</dt>
-            <dd>
-              <span class="docs-home-arena-value">{metric.value}</span>
-              <span class="docs-home-arena-unit">{metric.unit}</span>
-            </dd>
-            <p>{metric.detail}</p>
-          </div>
-        ))
-      }
+      {copy.arenaMetrics.map((metric) => (
+        <div class="docs-home-arena-metric">
+          <dt>{metric.label}</dt>
+          <dd>
+            <span class="docs-home-arena-value">{metric.value}</span>
+            <span class="docs-home-arena-unit">{metric.unit}</span>
+          </dd>
+          <p>{metric.detail}</p>
+        </div>
+      ))}
     </dl>
     <p class="docs-home-benchmark-source">{copy.arenaSource}</p>
   </div>

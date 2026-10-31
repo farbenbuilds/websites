@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   renderSupportMarkdown,
   supportCopy,
-} from "../../apps/uwz-docs/components/support-section-data.ts";
+} from "../../apps/uwz-docs/components/support/support-section-data.ts";
 
 describe("docs home support section", () => {
   it("keeps localized capabilities and platform rows", () => {

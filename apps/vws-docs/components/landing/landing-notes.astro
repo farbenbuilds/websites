@@ -1,0 +1,21 @@
+---
+import Callout from "blume/components/content/Callout.astro";
+
+import InlineText from "@farben/docs-components/inline-text.astro";
+import type { LandingLocale } from "./landing-copy.ts";
+import { landingCopy } from "./landing-copy.ts";
+
+type Props = {
+  locale?: LandingLocale;
+};
+
+const { locale = "en" } = Astro.props;
+const copy = landingCopy(locale).notes;
+---
+
+<Callout type="warning">
+  <InlineText parts={copy.warning} />
+</Callout>
+<Callout type="note">
+  <InlineText parts={copy.note} />
+</Callout>

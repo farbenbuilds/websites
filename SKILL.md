@@ -31,7 +31,7 @@ project skill for a single surface:
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte source components and theme
   tokens. A future app on another framework can share tokens, not the Svelte
   components.
-- Toolchain: Vite+ through pnpm, Node.js 22.19 or newer, pnpm 12.4.2, Nix flake
+- Toolchain: Vite+ through pnpm, Node.js 22.22.3 or newer, pnpm 12.4.2, Nix flake
   with glibc and musl shells.
 
 ## Commands

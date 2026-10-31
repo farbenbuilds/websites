@@ -1,4 +1,23 @@
-import { defineConfig } from "blume";
+import { defineConfig, type ComponentMarkdown } from "blume";
+
+import {
+  renderLandingExampleMarkdown,
+  renderLandingHighlightsMarkdown,
+  renderLandingIntroMarkdown,
+  renderLandingNotesMarkdown,
+} from "./components/landing/landing-markdown.ts";
+
+const introMarkdown: ComponentMarkdown = ({ props }) =>
+  renderLandingIntroMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const highlightsMarkdown: ComponentMarkdown = ({ props }) =>
+  renderLandingHighlightsMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const exampleMarkdown: ComponentMarkdown = ({ props }) =>
+  renderLandingExampleMarkdown(props.locale === "vi" ? "vi" : "en");
+
+const notesMarkdown: ComponentMarkdown = ({ props }) =>
+  renderLandingNotesMarkdown(props.locale === "vi" ? "vi" : "en");
 
 export default defineConfig({
   title: "ventiws",
@@ -16,6 +35,14 @@ export default defineConfig({
       { code: "en", label: "English" },
       { code: "vi", label: "Tiếng Việt" },
     ],
+  },
+  agents: {
+    markdownComponents: {
+      LandingIntro: introMarkdown,
+      LandingHighlights: highlightsMarkdown,
+      LandingExample: exampleMarkdown,
+      LandingNotes: notesMarkdown,
+    },
   },
   theme: {
     accent: "teal",

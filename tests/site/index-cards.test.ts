@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  homeIndexCopy,
-  renderHomeIndexMarkdown,
-} from "../../apps/uwz-docs/components/home-index-data.ts";
+  indexCardsCopy,
+  renderIndexCardsMarkdown,
+} from "../../apps/uwz-docs/components/index-cards/index-cards-data.ts";
 
 describe("docs home index", () => {
   it("keeps six localized entries", () => {
-    const english = homeIndexCopy("en");
-    const vietnamese = homeIndexCopy("vi");
+    const english = indexCardsCopy("en");
+    const vietnamese = indexCardsCopy("vi");
 
     expect(english.items).toHaveLength(6);
     expect(vietnamese.items).toHaveLength(6);
@@ -19,7 +19,7 @@ describe("docs home index", () => {
   });
 
   it("renders the same entries for agent-facing markdown", () => {
-    const markdown = renderHomeIndexMarkdown("en");
+    const markdown = renderIndexCardsMarkdown("en");
 
     expect(markdown).toContain("## Start here.");
     expect(markdown).toContain("[Share nothing rule](#)");

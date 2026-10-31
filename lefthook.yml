@@ -8,7 +8,7 @@ pre-commit:
   parallel: true
   jobs:
     - name: lint
-      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,svelte}"
+      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,svelte,astro}"
       exclude:
         - ".agents/**"
         - "tools/oxlint/anti-slop/**"
@@ -16,7 +16,7 @@ pre-commit:
       stage_fixed: true
 
     - name: format
-      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,md,mdx,yaml,yml,css}"
+      glob: "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,md,mdx,yaml,yml,css,svelte,astro}"
       exclude:
         - ".agents/**"
         - "tools/oxlint/anti-slop/**"
@@ -27,7 +27,7 @@ pre-commit:
       run: pnpm check:size
 
     - name: typecheck
-      glob: "**/*.{ts,tsx,mts,cts,svelte}"
+      glob: "**/*.{ts,tsx,mts,cts,svelte,astro}"
       exclude:
         - ".agents/**"
         - "tools/oxlint/anti-slop/**"
