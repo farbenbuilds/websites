@@ -14,17 +14,6 @@
   raises the outline weight from 16.63 to 24 for legibility at tab sizes. The
   512px Farben logo is copied unchanged as the sponsor avatar.
 
-## Portfolio noise texture
-
-- Source: https://github.com/Coder-Blue/portfolio
-- Source path: `static/noisetexture.jpg`
-- Author: Noah Trần
-- License: MIT
-- License text: [LICENSES/portfolio-MIT.txt](LICENSES/portfolio-MIT.txt)
-- Vendored path: `apps/uwz-docs/public/noise-texture.jpg`
-- Local changes: none. The tile is used as a repeating soft-light background
-  layer on the uWebZockets hero.
-
 ## Graphify
 
 - Source: https://github.com/Graphify-Labs/graphify

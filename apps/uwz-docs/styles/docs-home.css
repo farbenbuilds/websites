@@ -52,9 +52,9 @@ html:has(.docs-home-hero) #blume-content {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background-image: url("/noise-texture.jpg");
+  background-image: var(--farben-noise-texture);
   background-size: 100px 100px;
-  opacity: 0.08;
+  opacity: 0.12;
   mix-blend-mode: soft-light;
   pointer-events: none;
 }
@@ -76,7 +76,7 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 :root[data-theme="dark"] .docs-home-hero::after {
-  opacity: 0.1;
+  opacity: 0.12;
 }
 
 .docs-home-hero > astro-island:has(> .butterfly-hero) {
