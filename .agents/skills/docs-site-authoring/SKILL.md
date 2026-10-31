@@ -115,6 +115,10 @@ Documentation content is localized by mirrored MDX, not x18n.
 
 ## Navigation and Discovery
 
+- Do not set `sidebar.order` on a folder `index` page. Blume places the index
+  first by default; an explicit `order: 0` ties with the first page ranked by
+  `meta.ts` and falls back to label sorting, which can move the index below a
+  child in Vietnamese.
 - Check that a new page appears in the expected navigation group.
 - Check previous and next links at the top and bottom of the reading flow.
 - Search for the page title and a distinctive phrase after the build.
