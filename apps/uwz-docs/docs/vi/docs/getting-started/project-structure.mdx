@@ -1,0 +1,135 @@
+---
+title: Cấu trúc project
+description: Xem consumer uWebZockets cần gì, repository sở hữu gì và thư mục nào chỉ dành cho nội bộ project và build graph.
+sidebar:
+  order: 5
+search:
+  tags: [getting-started, concept, operations]
+---
+
+Consumer µWebZockets cần hai file: `build.zig` nối package và một file Zig
+khởi động ứng dụng. Repository có nhiều thư mục hơn vì nó còn sở hữu build
+graph, ví dụ, test tuân thủ và bằng chứng phát hành.
+
+## Project consumer
+
+Một project nhỏ trông như sau:
+
+```text
+hello-uwz/
+├── build.zig
+├── build.zig.zon
+└── src/
+    └── main.zig
+```
+
+| Đường dẫn       | Mục đích                                                   |
+| --------------- | ---------------------------------------------------------- |
+| `build.zig`     | Thêm module `uWebZockets`, định nghĩa bước install và run. |
+| `build.zig.zon` | Pin phiên bản hoặc commit và hash dependency.              |
+| `src/main.zig`  | Tạo ứng dụng, đăng ký route, listen và run.                |
+
+Bạn không cần `examples/`, `tests/`, `fuzz/`, `builds/` hay `vendor/` trong
+project consumer. Các thư mục đó phục vụ chính repository.
+
+## Bố cục repository
+
+```text
+uWebZockets/
+├── build.zig
+├── build.zig.zon
+├── builds/
+│   ├── orchestrator.zig
+│   ├── examples.zig
+│   ├── testing.zig
+│   ├── sanitizers.zig
+│   ├── fuzzing.zig
+│   ├── vendor/
+│   └── targets/
+├── src/
+│   ├── root.zig
+│   ├── router/
+│   ├── http/
+│   ├── http2/
+│   ├── quic/
+│   ├── ws/
+│   ├── rpc/
+│   ├── core/
+│   ├── crypto/
+│   ├── observability/
+│   └── tests/
+├── examples/
+├── tests/
+├── fuzz/
+├── include/
+├── docs/
+└── vendor/
+```
+
+| Thư mục              | Trách nhiệm                                                         | Consumer?            |
+| -------------------- | ------------------------------------------------------------------- | -------------------- |
+| `builds/`            | Build graph, chọn target, nối C/C++ đi kèm, sanitizer, fuzz, ví dụ. | Không                |
+| `src/root.zig`       | Bề mặt module công khai.                                            | Được import          |
+| `src/router/`        | Kiểu ứng dụng, builder, router, cluster, middleware.                | Được import          |
+| `src/http/`          | Parser HTTP/1.1, response writer, request helper.                   | Được import          |
+| `src/http2/`         | Frame, HPACK, trạng thái stream, server có giới hạn.                | Được import khi dùng |
+| `src/quic/`          | Adapter HTTP/3, QPACK, pool QUIC.                                   | Được import khi dùng |
+| `src/ws/`            | WebSocket, framing, pub/sub, stream.                                | Được import khi dùng |
+| `src/rpc/`           | Registry JSON-RPC, adapter có kiểu, dispatcher.                     | Được import khi dùng |
+| `src/core/`          | Loop libxev, transport TCP và UDP, affinity, signal.                | Nội bộ               |
+| `src/crypto/`        | TLS context BoringSSL, chứng chỉ, tập con Web Crypto.               | Được import khi dùng |
+| `src/observability/` | Metrics registry và development log.                                | Được import khi dùng |
+| `examples/`          | Ví dụ chạy được và bước build.                                      | Không                |
+| `tests/`             | Target tuân thủ Autobahn và h1spec.                                 | Không                |
+| `fuzz/`              | Target libFuzzer và driver smoke local.                             | Không                |
+| `include/`           | Header C ABI và artifact cài đặt.                                   | Tùy chọn             |
+| `docs/`              | Tài liệu nguồn cho website và người đọc repository.                 | Không                |
+| `vendor/`            | Submodule h1spec cho bộ tuân thủ.                                   | Không                |
+
+## `root.zig` export gì
+
+`src/root.zig` là bề mặt công khai. Nó re-export kiểu ứng dụng, request và
+response, middleware, WebSocket, TLS, module HTTP/2 và HTTP/3, JSON-RPC,
+client, metrics và entry point C ABI. Module nội bộ dưới `src/core/` và build
+graph không thuộc bề mặt đó.
+
+Khi một trang nêu tên API, tên đó phải xuất hiện trong `src/root.zig` hoặc
+trong module được nó re-export. Symbol chỉ tồn tại trong module nội bộ không
+phải API ứng dụng được hỗ trợ.
+
+## Ranh giới build graph
+
+`build.zig` cố ý mỏng. `builds/orchestrator.zig` chọn graph target, và các
+module chuyên trách thêm bước:
+
+- `builds/vendor/` build BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và
+  zlib từ source được pin.
+- `builds/examples.zig` tạo executable ví dụ và bước run.
+- `builds/testing.zig` tạo bước unit, C ABI, h1spec và Autobahn.
+- `builds/fuzzing.zig` tạo target deterministic và OSS-Fuzz.
+- `builds/targets/` chọn graph native, WASM và eBPF.
+
+Consumer không bao giờ import các module này. Package manifest mang metadata
+link mà dependency cần.
+
+## Đặt code ứng dụng ở đâu
+
+| Code               | Vị trí                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| Route và handler   | `src/main.zig` hoặc module được nó import                    |
+| Logic domain thuần | Module không import kiểu server                              |
+| Cấu hình           | Hằng số hoặc giá trị config có kiểu truyền cho builder       |
+| Test               | Thư mục `tests/` của bạn; không thêm file vào source package |
+| Tài nguyên tĩnh    | Thư mục truyền cho `app.static`                              |
+
+Giữ logic domain độc lập với `uz.Request` và `uz.Response` khi không cần chúng.
+Hàm thuần dễ test hơn và dùng lại được cho handler HTTP, callback WebSocket
+hoặc procedure JSON-RPC.
+
+## Bước tiếp theo
+
+- [HTTP server đầu tiên](/docs/getting-started/first-http-server) dùng bố cục
+  này.
+- [Cài đặt](/docs/getting-started/installation) giải thích pin dependency.
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) ánh xạ ví dụ
+  repository với bước build.

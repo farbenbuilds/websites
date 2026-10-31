@@ -1,0 +1,92 @@
+---
+title: Tham quan ví dụ
+description: Ánh xạ chi tiết từng bước build uWebZockets với hành vi nó minh họa, file source phía sau và trang site liên quan.
+sidebar:
+  order: 12
+search:
+  tags: [getting-started, tutorial, operations]
+---
+
+Repository cung cấp ví dụ chạy được cho từng bề mặt được hỗ trợ. Mọi bước nhận
+`-Doptimize=ReleaseSafe` cho bản build dạng production.
+
+```sh
+zig build -Doptimize=ReleaseSafe
+```
+
+Install mặc định ghi binary ví dụ vào `zig-out/bin`. Bảng ánh xạ mỗi bước với
+hành vi, file source và trang site liên quan.
+
+## HTTP và HTTPS
+
+| Bước                           | Minh họa                                                   | Source                                                                                                            | Trang site                                                      |
+| ------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `zig build hello_world`        | Route HTTP/1.1 tối thiểu trên `App(128)`, port 3000.       | [`hello_world.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/hello_world.zig)               | [HTTP server đầu tiên](/docs/getting-started/first-http-server) |
+| `zig build https_server`       | HTTPS trên port 3443 với chứng chỉ trong bộ nhớ.           | [`https_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/https_server.zig)             | [TLS server đầu tiên](/docs/getting-started/first-tls-server)   |
+| `zig build basic_microservice` | `Presets.microservice` với JSON helper và route `/health`. | [`basic_microservice.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/basic_microservice.zig) | [Cài đặt](/docs/getting-started/installation)                   |
+| `zig build custom_builder`     | Ghi đè fluent và đường request body 50 MiB trên port 3001. | [`custom_builder.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/custom_builder.zig)         | [Cài đặt](/docs/getting-started/installation)                   |
+
+## WebSocket và JSON-RPC
+
+| Bước                    | Minh họa                                                      | Source                                                                                              | Trang site                                                                |
+| ----------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `zig build chat_server` | Pub/sub WebSocket trên topic `global` có giới hạn, port 3000. | [`chat_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/chat_server.zig) | [WebSocket đầu tiên](/docs/getting-started/first-websocket)               |
+| `zig build rpc_server`  | JSON-RPC `math.add` có kiểu trên `/rpc`, port 3000.           | [`rpc_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/rpc_server.zig)   | [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) |
+
+## Worker và QUIC
+
+| Bước                               | Minh họa                                                             | Source                                                                                                                    | Trang site                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `zig build shared_nothing_cluster` | Bốn worker được pin, mỗi worker một slab, chia sẻ port 3000.         | [`shared_nothing_cluster.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/shared_nothing_cluster.zig) | [Cluster đầu tiên](/docs/getting-started/first-cluster)                    |
+| `zig build tls_cluster`            | TLS worker chọn lúc runtime trên port 8443 với chứng chỉ mỗi worker. | [`tls_cluster.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/tls_cluster.zig)                       | [TLS server đầu tiên](/docs/getting-started/first-tls-server#tls-clusters) |
+| `zig build http3_server`           | HTTP/3 trên QUIC tại UDP port 8443 với chứng chỉ trong bộ nhớ.       | [`http3_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/http3_server.zig)                     | [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server)         |
+
+## Target tuân thủ
+
+Các target này dành cho xác minh repository, không phải onboarding ứng dụng:
+
+| Bước                           | Mục đích                                 |
+| ------------------------------ | ---------------------------------------- |
+| `zig build h1spec`             | Bộ tuân thủ HTTP/1.1 trên port 8000.     |
+| `zig build autobahn`           | Target tuân thủ RFC 6455 trên port 9001. |
+| `zig build test --summary all` | Unit, C ABI và test giao thức.           |
+| `zig build fuzz --fuzz=100K`   | Fuzz giao thức deterministic.            |
+
+## Chạy một ví dụ
+
+```sh
+zig build hello_world -Doptimize=ReleaseSafe
+./zig-out/bin/hello_world
+```
+
+Trong terminal khác:
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+Phản hồi là `HTTP/1.1 200 OK` với body từ `examples/hello_world.zig`. Dùng cùng
+cách cho mọi bước: build bước, chạy binary và gửi request được hiển thị trên
+trang site của nó.
+
+## Port tổng hợp
+
+| Port |         Giao thức | Ví dụ                                                                                      |
+| ---- | ----------------: | ------------------------------------------------------------------------------------------ |
+| 3000 |          HTTP/1.1 | `hello_world`, `chat_server`, `rpc_server`, `shared_nothing_cluster`, `basic_microservice` |
+| 3001 |          HTTP/1.1 | `custom_builder`                                                                           |
+| 3443 |             HTTPS | `https_server`                                                                             |
+| 8000 |          HTTP/1.1 | `h1spec`                                                                                   |
+| 8443 | HTTPS hoặc HTTP/3 | `tls_cluster`, `http3_server`                                                              |
+| 9001 |         WebSocket | `autobahn_server`                                                                          |
+
+Chỉ một process bind được một port tại một thời điểm. Dừng ví dụ trước trước
+khi chạy ví dụ khác trên cùng port.
+
+## Tiếp theo
+
+- [HTTP server đầu tiên](/docs/getting-started/first-http-server) giải thích ví
+  dụ nhỏ nhất.
+- [Cấu trúc project](/docs/getting-started/project-structure) cho thấy ví dụ
+  nằm ở đâu.
+- [FAQ](/docs/getting-started/faq) bao gồm các bề mặt chưa hỗ trợ.

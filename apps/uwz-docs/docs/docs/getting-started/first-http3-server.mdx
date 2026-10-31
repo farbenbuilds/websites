@@ -1,0 +1,137 @@
+---
+title: Your first HTTP/3 server
+description: Serve a route over QUIC, verify it with curl --http3, and review the live HTTP/3 boundaries, limits, and 0-RTT policy.
+sidebar:
+  order: 11
+search:
+  tags: [getting-started, tutorial, http3, quic]
+---
+
+This tutorial serves one route over HTTP/3 on UDP port 8443. It uses the
+in-memory certificate initializer for local development and shows the
+production initializer with PEM files.
+
+## Prerequisites
+
+- The TLS server from [Your first TLS server](/docs/getting-started/first-tls-server).
+- Zig 0.16.0.
+- A `curl` build with HTTP/3 support. Check with `curl --version` and look for
+  `HTTP3` in the features list.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("Hello from bounded HTTP/3") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_http3_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+
+    try server.listen_udp("0.0.0.0", 8443);
+    try server.catch_shutdown_signals();
+    try server.run();
+}
+```
+
+`init_http3_ephemeral` creates isolated TLS 1.3 contexts: the TCP side would
+advertise `h2` and `http/1.1`, while QUIC advertises only `h3`. This program
+uses only the UDP listener.
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify it
+
+```sh
+curl --http3 -k https://127.0.0.1:8443/
+```
+
+```text
+Hello from bounded HTTP/3
+```
+
+The `-k` flag is required because the generated certificate is self-signed. If
+`curl` was built without HTTP/3 support, the command fails before it reaches the
+server. Use a client built with ngtcp2 or quiche, or install an HTTP/3-enabled
+`curl`.
+
+## Use production certificates
+
+Replace the ephemeral initializer with PEM files:
+
+```zig
+var server = try uz.App(128).init_http3(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen_udp("0.0.0.0", 8443);
+try server.catch_shutdown_signals();
+try server.run();
+```
+
+`init_http3` loads the same certificate and key into the TCP and QUIC contexts.
+The QUIC context advertises `h3` only.
+
+## What the HTTP/3 path uses
+
+| Resource                            | Bound                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| QUIC connections and active streams | Configured connection capacity.                                                       |
+| Decoded request headers             | `max_header_size` and `max_header_count`; at most 65535 bytes when HTTP/3 is enabled. |
+| Request body                        | `max_h3_body_size`.                                                                   |
+| Response metadata                   | `max_h3_response_header_size` and `max_h3_response_header_count`.                     |
+| Response body                       | Configured write-queue capacity.                                                      |
+| QUIC UDP payload                    | 2 KiB.                                                                                |
+
+QPACK state, stream state, packet buffers, and bodies come from
+startup-allocated pools. Linux transmit batching coalesces equal-sized packets
+for one destination into one `sendmsg` with `UDP_SEGMENT`; mixed sizes and other
+platforms use the per-packet path. Receive-side `UDP_GRO` is disabled because
+the event loop does not expose ancillary segment boundaries.
+
+## Boundaries
+
+- **Congestion control:** BBRv1 with per-connection pacing. It is not
+  configurable through the public API.
+- **0-RTT:** rejected on the live listener. Replayable application requests
+  never reach a handler.
+- **WebTransport:** the helper modules exist, but the live lsquic listener is not
+  connected to them. Extended CONNECT is answered with `501 Not Implemented`.
+- **Clustering:** HTTP/3 and QUIC clustering are not supported.
+  `init_http3` and `listen_udp` remain single-application APIs.
+- **Metrics:** HTTP/3 emits one `http_request` development-log record per
+  completed exchange but does not advance the counter registry in this release.
+- **Request validation:** pseudo-fields must precede regular fields and stay
+  unique. Connection-specific fields are rejected with a stream-scoped
+  `H3_MESSAGE_ERROR`.
+
+## Stop it cleanly
+
+The UDP listener, timer, cancellation, close completions, and engine pools drain
+before the application storage is released. Press Ctrl+C and let `run` return;
+`deinit` then asserts that every pool was returned.
+
+## Next
+
+- [Examples tour](/docs/getting-started/examples-tour) lists the
+  `http3_server` step.
+- [FAQ](/docs/getting-started/faq) summarises the QUIC boundaries.
+- [Glossary](/docs/getting-started/glossary) defines QPACK and 0-RTT.

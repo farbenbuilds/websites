@@ -1,0 +1,135 @@
+---
+title: HTTP/3 server đầu tiên
+description: Phục vụ route trên QUIC, kiểm tra bằng curl --http3 và xem các ranh giới HTTP/3 live cùng chính sách 0-RTT hiện hành.
+sidebar:
+  order: 11
+search:
+  tags: [getting-started, tutorial, http3, quic]
+---
+
+Hướng dẫn này phục vụ một route trên HTTP/3 tại UDP port 8443. Nó dùng
+initializer chứng chỉ trong bộ nhớ cho phát triển local và chỉ initializer
+production với file PEM.
+
+## Điều kiện trước
+
+- TLS server từ [TLS server đầu tiên](/docs/getting-started/first-tls-server).
+- Zig 0.16.0.
+- Bản `curl` có hỗ trợ HTTP/3. Kiểm tra bằng `curl --version` và tìm `HTTP3`
+  trong danh sách feature.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("Hello from bounded HTTP/3") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_http3_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+
+    try server.listen_udp("0.0.0.0", 8443);
+    try server.catch_shutdown_signals();
+    try server.run();
+}
+```
+
+`init_http3_ephemeral` tạo TLS 1.3 context tách biệt: phía TCP sẽ quảng bá `h2`
+và `http/1.1`, còn QUIC chỉ quảng bá `h3`. Chương trình này chỉ dùng UDP
+listener.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra
+
+```sh
+curl --http3 -k https://127.0.0.1:8443/
+```
+
+```text
+Hello from bounded HTTP/3
+```
+
+Cờ `-k` là bắt buộc vì chứng chỉ được tạo là tự ký. Nếu `curl` không có hỗ trợ
+HTTP/3, lệnh fail trước khi đến server. Dùng client build với ngtcp2 hoặc
+quiche, hoặc cài `curl` có HTTP/3.
+
+## Dùng chứng chỉ production
+
+Thay initializer ephemeral bằng file PEM:
+
+```zig
+var server = try uz.App(128).init_http3(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen_udp("0.0.0.0", 8443);
+try server.catch_shutdown_signals();
+try server.run();
+```
+
+`init_http3` load cùng chứng chỉ và key vào context TCP và QUIC. QUIC context
+chỉ quảng bá `h3`.
+
+## Đường HTTP/3 dùng gì
+
+| Tài nguyên                    | Giới hạn                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| Kết nối QUIC và stream active | Dung lượng kết nối đã cấu hình.                                            |
+| Header request đã decode      | `max_header_size` và `max_header_count`; tối đa 65535 byte khi bật HTTP/3. |
+| Request body                  | `max_h3_body_size`.                                                        |
+| Metadata phản hồi             | `max_h3_response_header_size` và `max_h3_response_header_count`.           |
+| Body phản hồi                 | Dung lượng write queue đã cấu hình.                                        |
+| UDP payload QUIC              | 2 KiB.                                                                     |
+
+Trạng thái QPACK, stream, packet buffer và body đến từ pool cấp lúc khởi động.
+Linux gộp packet cùng kích thước cho một đích vào một `sendmsg` với
+`UDP_SEGMENT`; kích thước hỗn hợp và nền tảng khác dùng đường từng packet.
+`UDP_GRO` phía nhận bị tắt vì event loop không phơi ranh giới segment phụ.
+
+## Ranh giới [#boundaries]
+
+- **Congestion control:** BBRv1 với pacing mỗi kết nối. Không cấu hình được qua
+  API công khai.
+- **0-RTT:** bị từ chối trên listener live. Request ứng dụng có thể replay
+  không bao giờ đến handler.
+- **WebTransport:** module helper tồn tại, nhưng listener lsquic live chưa nối
+  với chúng. Extended CONNECT nhận `501 Not Implemented`.
+- **Cluster:** cluster HTTP/3 và QUIC không được hỗ trợ. `init_http3` và
+  `listen_udp` vẫn là API single-application.
+- **Metrics:** HTTP/3 phát một record development-log `http_request` mỗi
+  exchange hoàn tất nhưng không tăng counter registry trong bản này.
+- **Validation request:** pseudo-field phải đứng trước field thường và không
+  trùng. Field riêng của kết nối bị từ chối với `H3_MESSAGE_ERROR` phạm vi
+  stream.
+
+## Dừng sạch
+
+UDP listener, timer, cancellation, close completion và engine pool drain trước
+khi lưu trữ ứng dụng được giải phóng. Nhấn Ctrl+C và để `run` trả về; `deinit`
+sau đó xác nhận mọi pool đã được trả.
+
+## Tiếp theo
+
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê bước
+  `http3_server`.
+- [FAQ](/docs/getting-started/faq) tóm tắt ranh giới QUIC.
+- [Thuật ngữ](/docs/getting-started/glossary) định nghĩa QPACK và 0-RTT.

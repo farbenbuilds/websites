@@ -1,0 +1,165 @@
+---
+title: WebSocket đầu tiên
+description: Thêm route WebSocket echo với callback open, message và close, rồi kiểm tra bằng wscat hoặc console trình duyệt.
+sidebar:
+  order: 7
+search:
+  tags: [getting-started, tutorial, websocket]
+---
+
+Hướng dẫn này thêm route WebSocket vào ứng dụng HTTP. Server echo mọi message
+text hoặc binary, gửi welcome khi mở và log khi peer ngắt kết nối.
+
+## Điều kiện trước
+
+- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Zig 0.16.0.
+- `npx` cho `wscat`, hoặc trình duyệt có JavaScript console.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.send("welcome", .text) catch |err| {
+        std.log.err("welcome failed: {}", .{err});
+    };
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| {
+        std.log.err("echo failed: {}", .{err});
+    };
+}
+
+fn on_close(_: *uz.WebSocket) void {
+    std.log.info("websocket closed", .{});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/echo", .{
+        .open = on_open,
+        .message = on_message,
+        .close = on_close,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`app.ws` đăng ký route upgrade HTTP/1.1. Route dùng cùng giá trị ứng dụng và
+cùng slab kết nối có giới hạn như route HTTP.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra với wscat
+
+Trong terminal khác:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+Gửi message tại prompt:
+
+```console
+Connected (press CTRL+C to quit)
+< welcome
+> hello
+< hello
+```
+
+Dòng đầu là welcome từ server. Dòng thứ hai là echo của text bạn gửi. Message
+binary đi cùng đường và giữ opcode.
+
+## Kiểm tra bằng trình duyệt
+
+Mở developer console trên một trang bất kỳ và chạy:
+
+```js
+const socket = new WebSocket("ws://127.0.0.1:3000/echo");
+socket.addEventListener("open", () => socket.send("hello from the browser"));
+socket.addEventListener("message", (event) => console.log(event.data));
+```
+
+Console in `welcome` rồi `hello from the browser`.
+
+## Callback sở hữu gì
+
+| Callback  | Chữ ký                                           | Quy tắc vòng đời                            |
+| --------- | ------------------------------------------------ | ------------------------------------------- |
+| `open`    | `fn (*uz.WebSocket) void`                        | Chạy sau khi upgrade thành công.            |
+| `message` | `fn (*uz.WebSocket, []const u8, uz.Opcode) void` | Slice message chỉ hợp lệ trong lần gọi này. |
+| `close`   | `fn (*uz.WebSocket) void`                        | Chạy một lần khi socket đóng.               |
+
+Copy message vào lưu trữ thuộc ứng dụng trước khi bắt đầu công việc sống lâu
+hơn callback. `ws.send` copy byte vào write queue có giới hạn trước khi trả về,
+nên bản thân lệnh gửi không mượn slice message.
+
+## Backpressure [#backpressure]
+
+`ws.send` trả `error.WouldBlock` khi write queue của kết nối đầy. Không bỏ
+message một cách âm thầm và không block event loop. Dùng callback `drain` để
+tiếp tục producer:
+
+```zig
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("resume after {d} buffered bytes", .{ws.buffered_amount()});
+}
+
+_ = try app.ws("/echo", .{
+    .open = on_open,
+    .message = on_message,
+    .drain = on_drain,
+});
+```
+
+Producer production giữ byte chưa gửi trong lưu trữ ứng dụng có giới hạn và
+thử lại từ `drain`. Write queue thuộc từng kết nối và được định cỡ bởi cấu
+hình ứng dụng.
+
+## Pub/sub [#pubsub]
+
+Đối tượng WebSocket cũng phơi pub/sub engine có giới hạn:
+
+```zig
+fn on_chat_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("global", message, opcode == .text);
+}
+```
+
+`subscribe`, `publish` và `unsubscribe` thao tác trên topic dung lượng cố
+định. Publish báo số subscriber đã nhận. `App.cluster` phối hợp publish giữa
+worker qua inbox có giới hạn.
+
+## Ranh giới
+
+- Thư viện chưa có WebSocket client. Dùng trình duyệt, `wscat` hoặc client
+  khác để test.
+- Per-message deflate là opt-in với `.compression = .permessage_deflate` và cần
+  scratch nén. Đường tunnel HTTP/2 mang frame không nén.
+- Message đến bị giới hạn bởi `max_frame_size` và `max_message_size`. Mặc định
+  là 16 KiB.
+- Route có giới hạn vượt dung lượng message đã cấu hình sẽ fail đăng ký với
+  `500 Internal Server Error` thay vì nhận peer không phục vụ được.
+
+## Tiếp theo
+
+- [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) thêm
+  procedure có kiểu.
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) trỏ đến ví dụ chat
+  pub/sub.
+- [FAQ](/docs/getting-started/faq) liệt kê ranh giới WebSocket.

@@ -1,0 +1,141 @@
+---
+title: Cài đặt
+description: Cài Zig 0.16.0, chạy checkout Nix hoặc thêm uWebZockets làm package được pin với build graph tái lập và cache rõ ràng.
+sidebar:
+  order: 3
+search:
+  tags: [getting-started, tutorial, operations]
+---
+
+Trang này cài mọi thứ cần để build và chạy các hướng dẫn. Chọn một đường:
+
+- Dùng Nix cho checkout repository với toolchain được pin.
+- Dùng Zig 0.16.0 thuần cho checkout.
+- Thêm µWebZockets làm package dependency trong project của bạn.
+
+## Điều kiện trước
+
+| Yêu cầu         | Chi tiết                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| Zig             | Đúng 0.16.0. Kiểm tra bằng `zig version`.                                                |
+| Host            | Linux hoặc macOS trên `x86_64` hoặc `aarch64`. Windows có job compile và runtime native. |
+| Nix             | Tùy chọn. Flake pin Nixpkgs 26.05 và Zig 0.16.0.                                         |
+| Toolchain C/C++ | Không cần riêng. Zig biên dịch source dependency được pin.                               |
+
+Build đầu tiên tải zslay, libxev, BoringSSL, lsquic, ls-qpack, ls-hpack,
+libdeflate và zlib qua package manager của Zig. Build sau dùng lại cache global
+và local. Không cần CMake, Ninja, Go, Perl, Python, `patch` hay zlib hệ thống.
+
+## Dùng Nix với checkout
+
+```sh
+git clone https://github.com/farbenbuilds/uWebZockets.git
+cd uWebZockets
+nix develop
+zig build hello_world -Doptimize=ReleaseSafe
+```
+
+Chỉ thêm `--recurse-submodules` vào lệnh clone khi định chạy bộ tuân thủ
+h1spec. Submodule `vendor/h1spec` không cần để build hoặc dùng package.
+
+Trong terminal khác, kiểm tra server:
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+Phản hồi là `HTTP/1.1 200 OK` với body
+`Hello from µWebZockets! Zero allocation achieved.`
+
+## Dùng Zig thuần với checkout
+
+Cài Zig 0.16.0, rồi chạy các lệnh repository tương tự mà không có
+`nix develop`:
+
+```sh
+git clone https://github.com/farbenbuilds/uWebZockets.git
+cd uWebZockets
+zig build test --summary all
+zig build -Doptimize=ReleaseSafe
+```
+
+`zig build -Doptimize=ReleaseSafe` build install graph. Từng bước ví dụ được
+liệt kê trong [tham quan ví dụ](/docs/getting-started/examples-tour).
+
+## Thêm package vào project
+
+Fetch tag phát hành hoặc commit đầy đủ. Không dùng branch đang di chuyển nếu
+cần dependency resolution tái lập được.
+
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#VERSION_OR_COMMIT'
+```
+
+Thay `VERSION_OR_COMMIT` bằng tag phát hành như `v2.1.6`, hoặc hash commit đầy
+đủ. Lệnh thêm package vào `build.zig.zon` dưới tên `uWebZockets`.
+
+Nối module trong `build.zig`:
+
+```zig
+const uz = b.dependency("uWebZockets", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+```
+
+Chương trình consumer hoàn chỉnh nằm trong [quickstart](/docs/getting-started/quickstart).
+
+### Kỳ vọng với package consumer
+
+- Package export một module tên `uWebZockets`.
+- Module mang metadata link native và thứ tự dependency, nên consumer không
+  phải link BoringSSL, lsquic, zlib hay libdeflate bằng tay.
+- Consumer không cần submodule h1spec, ví dụ repository hay flake Nix.
+- Bản phát hành là source tag. Không có archive binary theo nền tảng, nên
+  toolchain Zig local biên dịch dependency được pin trong lần dùng đầu.
+- Fixture `tests/package_consumer` biên dịch quickstart được ghi trong CI.
+
+## Chi phí build đầu và dùng offline
+
+Build đầu chậm hơn vì Zig biên dịch BoringSSL, lsquic, libdeflate và zlib từ
+source. Dự kiến vài phút trên laptop và lâu hơn trên CI runner chia sẻ. Build
+sau dùng lại `~/.cache/zig` và cache trong project.
+
+Để build không cần mạng, nạp cả hai cache trên máy có mạng trước, rồi dùng
+lại. URL và hash dependency được pin trong `build.zig.zon`; Zig xác minh hash
+khi giải nén package.
+
+## Kiểm tra cài đặt
+
+Chạy bộ unit test từ checkout:
+
+```sh
+zig build test --summary all
+```
+
+Chạy ví dụ hello-world:
+
+```sh
+zig build hello_world -Doptimize=ReleaseSafe
+```
+
+Nếu cả hai lệnh thoát với status 0, toolchain, cache dependency và build graph
+native đã sẵn sàng.
+
+## Lỗi thường gặp lần đầu
+
+| Triệu chứng                               | Nguyên nhân và cách sửa                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `error: invalid Zig version`              | Compiler đang dùng không phải 0.16.0. Chạy `zig version` và chọn 0.16.0.                         |
+| Hash dependency không khớp                | Cache package hỏng hoặc URL đổi. Xóa package đã cache và fetch lại. Không sửa hash được pin.     |
+| `error: FileNotFound` cho `vendor/h1spec` | Bạn chạy bước tuân thủ mà thiếu submodule. Clone với `--recurse-submodules` hoặc bỏ qua bước đó. |
+| Build đầu có vẻ treo                      | Đang biên dịch source C và C++ đi kèm. Kiểm tra CPU và đĩa trước khi ngắt.                       |
+| `curl: (7) Failed to connect`             | Server chưa chạy hoặc bind port khác. Kiểm tra output terminal.                                  |
+
+## Bước tiếp theo
+
+- [Quickstart](/docs/getting-started/quickstart) build một project hoàn chỉnh.
+- [Cấu trúc project](/docs/getting-started/project-structure) giải thích
+  consumer cần gì và phần nào là nội bộ.
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê mọi bước build.

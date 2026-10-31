@@ -1,0 +1,149 @@
+---
+title: Your first TLS server
+description: Serve HTTPS with an in-memory certificate, verify it with curl -k, and switch to production PEM files and mTLS.
+sidebar:
+  order: 9
+search:
+  tags: [getting-started, tutorial, tls]
+---
+
+This tutorial starts an HTTPS server with a certificate generated in memory at
+startup. It needs no certificate files and no `openssl` command, which makes it
+suitable for local tests and demos.
+
+## Prerequisites
+
+- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from ephemeral TLS") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+`init_https_ephemeral` generates an ECDSA P-256 key and a self-signed X.509
+certificate with BoringSSL before the loop starts. The certificate covers
+`localhost`, `127.0.0.1`, and `::1`, carries the `serverAuth` extended key
+usage, and is valid for 90 days from startup.
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify it
+
+```sh
+curl -k https://127.0.0.1:3443/
+```
+
+```text
+hello from ephemeral TLS
+```
+
+The `-k` flag disables certificate verification. The certificate is
+self-signed, so no client trusts it automatically. `curl -k` and the browser
+"proceed anyway" action are appropriate for a local smoke test only.
+
+To inspect the negotiated protocol:
+
+```sh
+curl -k -v https://127.0.0.1:3443/
+```
+
+Look for the ALPN line. A `curl` build with HTTP/2 support negotiates `h2`; a
+build without it negotiates `http/1.1`:
+
+```text
+* ALPN: server accepted h2
+```
+
+The TLS context is TLS 1.3 only and advertises `h2` then `http/1.1`. HTTP/3 uses
+a separate context that advertises `h3`.
+
+## Use production certificates
+
+Replace the ephemeral initializer with PEM files:
+
+```zig
+var server = try uz.App(128).init_https(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer server.deinit();
+```
+
+The certificate argument is a PEM chain with the leaf first. The key argument is
+a PEM private key. BoringSSL checks that the key matches the certificate while
+loading, so a mismatch fails at startup with `error.PrivateKeyLoadFailed`
+instead of during the first handshake.
+
+Paths are NUL-terminated Zig slices. In a literal call, string literals already
+have the required type.
+
+## Why not trust the generated certificate
+
+The generated certificate is self-signed and deliberately not exportable. It is
+not in any trust store, and a new certificate is created on every start, so
+cached sessions do not survive a restart. When a local workflow needs a trusted
+certificate, such as a service worker or a mobile device on the same LAN,
+generate one with `mkcert` or your internal CA and pass the files to
+`init_https`.
+
+## Mutual TLS
+
+When the client must present a certificate, use `init_https_mtls` with a client
+CA bundle:
+
+```zig
+var server = try uz.App(128).init_https_mtls(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+    .{ .mode = .required, .ca_path = "certs/client-ca.pem" },
+);
+defer server.deinit();
+```
+
+Client-certificate modes keep TLS 1.3 early data disabled because the client
+certificate is checked after the first flight. The handshake fails closed before
+the HTTP parser sees a request when verification fails.
+
+## TLS clusters
+
+A worker group terminates TLS with `enable_https` or
+`enable_https_ephemeral` after `configure` and before `listen`. Each worker owns
+its own TLS context and loads the credentials once at startup. Certificate
+rotation is a rolling restart; hot reload is not supported.
+
+## Next
+
+- [Your first cluster](/docs/getting-started/first-cluster) runs one worker per
+  core.
+- [Your first HTTP/3 server](/docs/getting-started/first-http3-server) uses a
+  separate QUIC context.
+- [FAQ](/docs/getting-started/faq) answers TLS version and rotation questions.

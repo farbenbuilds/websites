@@ -1,0 +1,137 @@
+---
+title: Project structure
+description: See what a uWebZockets consumer needs, what the repository owns, and which directories stay internal to the project.
+sidebar:
+  order: 5
+search:
+  tags: [getting-started, concept, operations]
+---
+
+A µWebZockets consumer needs two files: a `build.zig` that wires the package
+and a Zig source file that starts an application. The repository has more
+directories because it also owns the build graph, examples, compliance tests,
+and release evidence.
+
+## Consumer project
+
+A small project looks like this:
+
+```text
+hello-uwz/
+├── build.zig
+├── build.zig.zon
+└── src/
+    └── main.zig
+```
+
+| Path            | Purpose                                                          |
+| --------------- | ---------------------------------------------------------------- |
+| `build.zig`     | Adds the `uWebZockets` module and defines install and run steps. |
+| `build.zig.zon` | Pins the package version or commit and the dependency hashes.    |
+| `src/main.zig`  | Creates the application, registers routes, listens, and runs.    |
+
+You do not need `examples/`, `tests/`, `fuzz/`, `builds/`, or `vendor/` in a
+consumer project. Those directories support the repository itself.
+
+## Repository layout
+
+```text
+uWebZockets/
+├── build.zig
+├── build.zig.zon
+├── builds/
+│   ├── orchestrator.zig
+│   ├── examples.zig
+│   ├── testing.zig
+│   ├── sanitizers.zig
+│   ├── fuzzing.zig
+│   ├── vendor/
+│   └── targets/
+├── src/
+│   ├── root.zig
+│   ├── router/
+│   ├── http/
+│   ├── http2/
+│   ├── quic/
+│   ├── ws/
+│   ├── rpc/
+│   ├── core/
+│   ├── crypto/
+│   ├── observability/
+│   └── tests/
+├── examples/
+├── tests/
+├── fuzz/
+├── include/
+├── docs/
+└── vendor/
+```
+
+| Directory            | Responsibility                                                                       | Consumer?           |
+| -------------------- | ------------------------------------------------------------------------------------ | ------------------- |
+| `builds/`            | Build graph, target selection, vendored C/C++ wiring, sanitizers, fuzzing, examples. | No                  |
+| `src/root.zig`       | Public module surface.                                                               | Imported            |
+| `src/router/`        | Application types, builder, router, cluster, middleware.                             | Imported            |
+| `src/http/`          | HTTP/1.1 parser, response writer, request helpers.                                   | Imported            |
+| `src/http2/`         | Frames, HPACK, stream state, bounded server.                                         | Imported where used |
+| `src/quic/`          | HTTP/3 adapter, QPACK, QUIC pools.                                                   | Imported where used |
+| `src/ws/`            | WebSocket socket, framing, pub/sub, streams.                                         | Imported where used |
+| `src/rpc/`           | JSON-RPC registry, typed adapter, dispatcher.                                        | Imported where used |
+| `src/core/`          | libxev loop, TCP and UDP transports, affinity, signals.                              | Internal            |
+| `src/crypto/`        | BoringSSL TLS contexts, certificates, Web Crypto subset.                             | Imported where used |
+| `src/observability/` | Metrics registry and development log.                                                | Imported where used |
+| `examples/`          | Runnable examples and build steps.                                                   | No                  |
+| `tests/`             | Compliance targets for Autobahn and h1spec.                                          | No                  |
+| `fuzz/`              | libFuzzer targets and local smoke drivers.                                           | No                  |
+| `include/`           | C ABI header and installed artifacts.                                                | Optional            |
+| `docs/`              | Source documents for the website and repository readers.                             | No                  |
+| `vendor/`            | h1spec submodule for the compliance suite.                                           | No                  |
+
+## What `root.zig` exposes
+
+`src/root.zig` is the public surface. It re-exports the application types,
+request and response types, middleware, WebSocket, TLS, HTTP/2 and HTTP/3
+modules, JSON-RPC, client, metrics, and the C ABI entry points. Internal modules
+under `src/core/` and the build graph are not part of that surface.
+
+When a page names an API, the name should appear in `src/root.zig` or in one of
+the modules it re-exports. A symbol that exists only in an internal module is
+not a supported application API.
+
+## Build graph boundaries
+
+`build.zig` is intentionally thin. `builds/orchestrator.zig` selects the target
+graph, and the focused modules add the steps:
+
+- `builds/vendor/` builds BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate,
+  and zlib from pinned sources.
+- `builds/examples.zig` creates the example executables and run steps.
+- `builds/testing.zig` creates unit, C ABI, h1spec, and Autobahn steps.
+- `builds/fuzzing.zig` creates the deterministic and OSS-Fuzz targets.
+- `builds/targets/` selects native, WASM, and eBPF graphs.
+
+A consumer never imports these modules. The package manifest carries the link
+metadata that the dependency needs.
+
+## Where to put application code
+
+| Code                | Location                                                            |
+| ------------------- | ------------------------------------------------------------------- |
+| Routes and handlers | `src/main.zig` or a module imported by it                           |
+| Pure domain logic   | Any module that does not import the server types                    |
+| Configuration       | Constants or a typed config value passed to the builder             |
+| Tests               | Your own `tests/` directory; do not add files to the package source |
+| Static assets       | A directory passed to `app.static`                                  |
+
+Keep domain logic independent of `uz.Request` and `uz.Response` when it does not
+need them. A pure function is easier to test and can be reused by an HTTP
+handler, a WebSocket callback, or a JSON-RPC procedure.
+
+## Next steps
+
+- [Your first HTTP server](/docs/getting-started/first-http-server) uses this
+  layout.
+- [Installation](/docs/getting-started/installation) explains dependency
+  pinning.
+- [Examples tour](/docs/getting-started/examples-tour) maps the repository
+  examples to their build steps.

@@ -1,0 +1,92 @@
+---
+title: Examples tour
+description: Map every uWebZockets build step to the behavior it demonstrates, the source file behind it, and the related guide.
+sidebar:
+  order: 12
+search:
+  tags: [getting-started, tutorial, operations]
+---
+
+The repository ships runnable examples for each supported surface. Every step
+accepts `-Doptimize=ReleaseSafe` for a production-shaped build.
+
+```sh
+zig build -Doptimize=ReleaseSafe
+```
+
+The default install writes the example binaries to `zig-out/bin`. The table maps
+each step to its behavior, source file, and the related site page.
+
+## HTTP and HTTPS
+
+| Step                           | Shows                                                           | Source                                                                                                            | Site page                                                         |
+| ------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `zig build hello_world`        | Minimal HTTP/1.1 route on `App(128)`, port 3000.                | [`hello_world.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/hello_world.zig)               | [Your first HTTP server](/docs/getting-started/first-http-server) |
+| `zig build https_server`       | HTTPS on port 3443 with an in-memory certificate.               | [`https_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/https_server.zig)             | [Your first TLS server](/docs/getting-started/first-tls-server)   |
+| `zig build basic_microservice` | `Presets.microservice` with JSON helpers and a `/health` route. | [`basic_microservice.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/basic_microservice.zig) | [Installation](/docs/getting-started/installation)                |
+| `zig build custom_builder`     | Fluent overrides and a 50 MiB request body path on port 3001.   | [`custom_builder.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/custom_builder.zig)         | [Installation](/docs/getting-started/installation)                |
+
+## WebSocket and JSON-RPC
+
+| Step                    | Shows                                                     | Source                                                                                              | Site page                                                                   |
+| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `zig build chat_server` | WebSocket pub/sub on a bounded `global` topic, port 3000. | [`chat_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/chat_server.zig) | [Your first WebSocket](/docs/getting-started/first-websocket)               |
+| `zig build rpc_server`  | Typed JSON-RPC `math.add` on `/rpc`, port 3000.           | [`rpc_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/rpc_server.zig)   | [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service) |
+
+## Workers and QUIC
+
+| Step                               | Shows                                                                   | Source                                                                                                                    | Site page                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `zig build shared_nothing_cluster` | Four pinned workers, one slab each, shared port 3000.                   | [`shared_nothing_cluster.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/shared_nothing_cluster.zig) | [Your first cluster](/docs/getting-started/first-cluster)                    |
+| `zig build tls_cluster`            | Runtime-selected TLS workers on port 8443 with per-worker certificates. | [`tls_cluster.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/tls_cluster.zig)                       | [Your first TLS server](/docs/getting-started/first-tls-server#tls-clusters) |
+| `zig build http3_server`           | HTTP/3 over QUIC on UDP port 8443 with an in-memory certificate.        | [`http3_server.zig`](https://github.com/farbenbuilds/uWebZockets/blob/main/examples/http3_server.zig)                     | [Your first HTTP/3 server](/docs/getting-started/first-http3-server)         |
+
+## Compliance targets
+
+These targets are for repository verification, not application onboarding:
+
+| Step                           | Purpose                                  |
+| ------------------------------ | ---------------------------------------- |
+| `zig build h1spec`             | HTTP/1.1 conformance suite on port 8000. |
+| `zig build autobahn`           | RFC 6455 compliance target on port 9001. |
+| `zig build test --summary all` | Unit, C ABI, and protocol tests.         |
+| `zig build fuzz --fuzz=100K`   | Deterministic protocol fuzzing.          |
+
+## Run one example
+
+```sh
+zig build hello_world -Doptimize=ReleaseSafe
+./zig-out/bin/hello_world
+```
+
+In another terminal:
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+The response is `HTTP/1.1 200 OK` with the body from
+`examples/hello_world.zig`. Use the same pattern for every step: build the
+step, run the binary, and send the request shown on its site page.
+
+## Ports at a glance
+
+| Port |        Protocol | Examples                                                                                   |
+| ---- | --------------: | ------------------------------------------------------------------------------------------ |
+| 3000 |        HTTP/1.1 | `hello_world`, `chat_server`, `rpc_server`, `shared_nothing_cluster`, `basic_microservice` |
+| 3001 |        HTTP/1.1 | `custom_builder`                                                                           |
+| 3443 |           HTTPS | `https_server`                                                                             |
+| 8000 |        HTTP/1.1 | `h1spec`                                                                                   |
+| 8443 | HTTPS or HTTP/3 | `tls_cluster`, `http3_server`                                                              |
+| 9001 |       WebSocket | `autobahn_server`                                                                          |
+
+Only one process can bind a port at a time. Stop the previous example before
+starting another one on the same port.
+
+## Next
+
+- [Your first HTTP server](/docs/getting-started/first-http-server) explains the
+  smallest example in detail.
+- [Project structure](/docs/getting-started/project-structure) shows where the
+  examples live.
+- [FAQ](/docs/getting-started/faq) covers the unsupported surfaces.

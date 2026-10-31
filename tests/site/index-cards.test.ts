@@ -12,8 +12,8 @@ describe("docs home index", () => {
 
     expect(english.items).toHaveLength(6);
     expect(vietnamese.items).toHaveLength(6);
-    expect(english.items[0]?.href).toBe("/getting-started");
-    expect(english.items.slice(1).every(({ href }) => href === "#")).toBe(true);
+    expect(english.items[0]?.href).toBe("/docs/getting-started");
+    expect(english.items.every(({ href }) => href.startsWith("/docs/"))).toBe(true);
     expect(english.items[5]?.title).toBe("Explore Type-safety");
     expect(vietnamese.items[5]?.title).toBe("Khám phá Type-safety");
   });
@@ -22,8 +22,8 @@ describe("docs home index", () => {
     const markdown = renderIndexCardsMarkdown("en");
 
     expect(markdown).toContain("## Start here.");
-    expect(markdown).toContain("[Share nothing rule](#)");
-    expect(markdown).toContain("[Explore Type-safety](#)");
+    expect(markdown).toContain("[Share nothing rule](/docs/getting-started/first-cluster)");
+    expect(markdown).toContain("[Explore Type-safety](/docs/what-is-uwebsockets)");
     expect(markdown).not.toContain("Semi-production ready.");
   });
 });

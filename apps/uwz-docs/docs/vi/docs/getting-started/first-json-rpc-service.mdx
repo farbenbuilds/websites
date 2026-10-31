@@ -1,0 +1,138 @@
+---
+title: JSON-RPC service đầu tiên
+description: Đăng ký procedure math.add có kiểu, mount trên App.rpc và kiểm tra request cùng phản hồi JSON-RPC bằng curl và JSON.
+sidebar:
+  order: 8
+search:
+  tags: [getting-started, tutorial, json-rpc]
+---
+
+Hướng dẫn này mount service JSON-RPC 2.0 có kiểu trên `/rpc`. Nó định nghĩa
+một procedure, decode tham số có tên vào struct Zig và serialize kết quả có
+kiểu.
+
+## Điều kiện trước
+
+- Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct {
+    left: i64,
+    right: i64,
+};
+
+const AddResult = struct {
+    sum: i64,
+};
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init(init.io);
+    defer server.deinit();
+
+    var rpc = uz.json_rpc.Service{};
+    try rpc.register_typed("math.add", AddParams, AddResult, add);
+    _ = try server.rpc("/rpc", &rpc);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3000);
+    try server.run();
+}
+```
+
+`register_typed` tạo bộ decode tham số và writer kết quả lúc compile. Handler
+nhận giá trị `AddParams` đã decode và trả `AddResult` hoặc một trong các giá
+trị `HandlerError`.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra
+
+```sh
+curl http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```json
+{ "jsonrpc": "2.0", "result": { "sum": 5 }, "id": 1 }
+```
+
+Phản hồi là HTTP 200 với một kết quả JSON-RPC. Notification không có `id` trả
+HTTP 204 vì không yêu cầu body phản hồi.
+
+## Quy tắc request
+
+| Quy tắc            | Hành vi                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| Content type       | Request phải có đúng một header `application/json` hoặc `application/json-rpc`. |
+| Tên method         | Được copy lúc đăng ký; registry bị seal khi service được mount.                 |
+| Vòng đời tham số   | Tham số được mượn chỉ trong callback.                                           |
+| Scratch có kiểu    | Adapter có kiểu dùng 4 KiB stack cố định cho tham số đã decode.                 |
+| Dung lượng kết quả | Buffer phản hồi mặc định của service là 16 KiB.                                 |
+| Batch              | Hỗ trợ single call, notification và batch.                                      |
+
+Cú pháp JSON đầy đủ được validate trước khi batch gọi procedure đầu tiên. Nếu
+batch sai, không procedure nào chạy. Tên method thiếu, trùng hoặc quá dài fail
+đăng ký với lỗi có tên.
+
+## Tham số lớn hơn
+
+Adapter có kiểu vừa tham số trong 4 KiB. Với kiểu lớn hơn, dùng API cấp thấp
+`register` với `Call.parse_params` và allocator tường minh:
+
+```zig
+fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+    try call.result(.{ .sum = parsed.value.left + parsed.value.right });
+}
+
+try rpc.register("math.add", custom);
+```
+
+Allocator do caller chọn. Request path vẫn có giới hạn khi procedure dùng lưu
+trữ cố định hoặc allocator có giới hạn.
+
+## Lỗi ứng dụng
+
+Trả lỗi ứng dụng JSON-RPC bằng `Call.fail`:
+
+```zig
+fn divide(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    return call.fail(-32001, "division by zero");
+}
+```
+
+Dispatcher biến fault thành object lỗi JSON-RPC với code và message được cung
+cấp. Mã chuẩn có trong `uz.json_rpc.StandardError`.
+
+## Ghi chú cluster
+
+Một service được mount sở hữu một buffer phản hồi HTTP và thuộc một event
+loop. Trong nhóm worker, tạo một service cho mỗi worker và mount trong callback
+`configure`. Không chia sẻ service giữa các worker.
+
+## Tiếp theo
+
+- [TLS server đầu tiên](/docs/getting-started/first-tls-server) phục vụ cùng
+  route qua HTTPS.
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) liệt kê bước
+  `rpc_server`.
+- [FAQ](/docs/getting-started/faq) bao gồm lưu ý batch.

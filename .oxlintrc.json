@@ -55,6 +55,7 @@
     {
       "files": [
         "**/*.config.{js,mjs,ts}",
+        "**/meta.ts",
         "apps/*/components.ts",
         "scripts/oxlint-plugin.mjs",
         "tools/oxlint/astro-plugin/index.mjs"

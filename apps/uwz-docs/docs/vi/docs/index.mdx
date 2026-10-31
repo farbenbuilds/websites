@@ -1,0 +1,96 @@
+---
+title: Tài liệu
+description: Tìm hướng dẫn uWebZockets phù hợp cho server đầu tiên, tutorial giao thức, nhóm worker hoặc vận hành production.
+sidebar:
+  order: 0
+search:
+  tags: [getting-started, reference]
+seo:
+  title: Tài liệu uWebZockets
+---
+
+µWebZockets 2.1.6 là framework server zero-allocation, shared-nothing cho Zig
+0.16.0. Một API `Request` và `Response` phục vụ HTTP/1.1, HTTP/2, HTTP/3,
+WebSocket và JSON-RPC từ các slab có giới hạn được cấp phát một lần lúc khởi
+động.
+
+Trang này là điểm vào theo tác vụ. Repository vẫn là nguồn chuẩn cho hành vi
+wire, giới hạn và bằng chứng phát hành.
+
+## Chọn lộ trình đọc
+
+<CardGroup cols={3}>
+  <Card title="Tôi mới bắt đầu" href="/docs/getting-started" icon="rocket">
+    Cài Zig 0.16.0, chạy quickstart và thêm route trong khoảng mười phút.
+  </Card>
+  <Card title="Tôi đang đánh giá" href="/docs/what-is-uwebsockets" icon="search">
+    Hiểu mô hình lập trình, bề mặt giao thức và các ranh giới có chủ đích.
+  </Card>
+  <Card title="Tôi đang vận hành" href="/docs/getting-started/first-cluster" icon="server">
+    Khởi động nhóm worker, tính dung lượng và drain khi nhận tín hiệu.
+  </Card>
+</CardGroup>
+
+## Bắt đầu tại đây
+
+| Tác vụ                                   | Trang                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| Cài package và build ví dụ               | [Cài đặt](/docs/getting-started/installation)                             |
+| Đạt HTTP server đang chạy bằng một lệnh  | [Quickstart](/docs/getting-started/quickstart)                            |
+| Thêm route HTTP và kiểm tra bằng `curl`  | [HTTP server đầu tiên](/docs/getting-started/first-http-server)           |
+| Thêm route WebSocket echo                | [WebSocket đầu tiên](/docs/getting-started/first-websocket)               |
+| Phục vụ procedure JSON-RPC có kiểu       | [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) |
+| Kết thúc TLS bằng chứng chỉ trong bộ nhớ | [TLS server đầu tiên](/docs/getting-started/first-tls-server)             |
+| Chạy một worker mỗi lõi                  | [Cluster đầu tiên](/docs/getting-started/first-cluster)                   |
+| Phục vụ HTTP/3 trên QUIC                 | [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server)        |
+
+:::tip[Tìm kiếm trên site]
+Dùng nút tìm kiếm ở header để tìm trang theo tiêu đề hoặc theo một cụm trong
+nội dung. Tìm kiếm chạy cục bộ trong trình duyệt và không cần tài khoản hay
+request mạng sau khi trang tải xong.
+:::
+
+## Helpers
+
+Các tiện ích nhỏ, có thể kết hợp nằm trong lớp HTTP helper. Phân tích query và
+form, multipart, cookie, nén, ETag và conditional GET, thương lượng `Accept`,
+primitive fetch và stream, cùng adapter WebSocket stream được ghi trong
+repository cho đến khi Helpers hub có trên site này.
+
+[Đọc request và response helpers](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/http.md#request-and-response-helpers)
+
+## Phạm vi tính năng [#feature-coverage]
+
+Bảng này tóm tắt bề mặt ra mắt. Ma trận đầy đủ, gồm các module helper-only và
+experimental, nằm trong roadmap của repository.
+
+| Bề mặt                  | Trạng thái         | Bắt đầu tại                                                               |
+| ----------------------- | ------------------ | ------------------------------------------------------------------------- |
+| Định tuyến HTTP/1.1     | Supported          | [HTTP server đầu tiên](/docs/getting-started/first-http-server)           |
+| WebSocket server        | Supported          | [WebSocket đầu tiên](/docs/getting-started/first-websocket)               |
+| JSON-RPC 2.0            | Supported          | [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service) |
+| Kết thúc TLS 1.3        | Supported          | [TLS server đầu tiên](/docs/getting-started/first-tls-server)             |
+| Cluster thread-per-core | Supported trên TCP | [Cluster đầu tiên](/docs/getting-started/first-cluster)                   |
+| Định tuyến HTTP/3       | Supported          | [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server)        |
+| Cluster HTTP/3          | Not supported      | [Ranh giới HTTP/3](/docs/getting-started/first-http3-server#boundaries)   |
+| WebTransport live       | Not supported      | [Ranh giới HTTP/3](/docs/getting-started/first-http3-server#boundaries)   |
+| WebSocket client        | Not supported      | [FAQ](/docs/getting-started/faq#client-scope)                             |
+
+[Đọc ma trận tính năng và roadmap đầy đủ](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
+
+## Đọc tiếp
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/docs/getting-started/quickstart" icon="play">
+    Build một server hoàn chỉnh, chạy và kiểm tra phản hồi.
+  </Card>
+  <Card title="Tham quan ví dụ" href="/docs/getting-started/examples-tour" icon="boxes">
+    Ánh xạ từng bước build với hành vi nó minh họa.
+  </Card>
+  <Card title="FAQ" href="/docs/getting-started/faq" icon="circle-help">
+    Kiểm tra mô hình cấp phát, nền tảng và tính năng chưa hỗ trợ.
+  </Card>
+  <Card title="Thuật ngữ" href="/docs/getting-started/glossary" icon="book-marked">
+    Tra slab, capacity, backpressure và async token.
+  </Card>
+</CardGroup>

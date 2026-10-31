@@ -1,0 +1,162 @@
+---
+title: Your first cluster
+description: Start four shared-nothing workers, share one port with SO_REUSEPORT, verify the response, and drain the group cleanly.
+sidebar:
+  order: 10
+search:
+  tags: [getting-started, tutorial, cluster]
+---
+
+This tutorial starts a thread-per-core worker group with four workers. Each
+worker owns its event loop, startup slab, and connection state, and binds the
+same port through `SO_REUSEPORT` where the platform supports it.
+
+## Prerequisites
+
+- The server from [Your first HTTP server](/docs/getting-started/first-http-server).
+- Zig 0.16.0.
+- `curl`.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const worker_count = 4;
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a pinned shared-nothing worker") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(128)
+        .with_write_queue_size(32 * 1024)
+        .with_idle_timeout_ms(60_000)
+        .build_cluster(std.heap.page_allocator, worker_count, .{});
+    defer group.deinit();
+
+    const Cluster = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Cluster.Worker, index: usize) !void {
+            _ = index;
+            _ = try worker.get("/", hello);
+        }
+    }.routes);
+
+    try group.catch_shutdown_signals();
+    try group.listen("0.0.0.0", 3000);
+    try group.run();
+}
+```
+
+`build_cluster` takes the compiled worker capacity. The fourth argument is
+`ClusterOptions`, which can select a smaller active count and other cluster
+behavior. Use `build_cluster_from_environment` when `UWEBZOCKETS_WORKERS`
+should override the default.
+
+## Run it
+
+```sh
+zig build run
+```
+
+The process starts four worker threads. Each worker prints its own development
+log records, and each owns one slab.
+
+## Verify it
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+```text
+hello from a pinned shared-nothing worker
+```
+
+Repeat the request several times. The kernel load-balances accepted connections
+across the listening sockets; an individual TCP connection stays on the worker
+that accepted it.
+
+## What the group owns
+
+| Item                  | Ownership                                             |
+| --------------------- | ----------------------------------------------------- |
+| Event loop            | One per worker.                                       |
+| Application slab      | One per worker, sized from the builder configuration. |
+| Connection slots      | Owned by the accepting worker.                        |
+| Routes                | Registered once per worker through `configure`.       |
+| Cross-worker messages | Bounded lock-free inbox per worker.                   |
+| TLS context           | One per worker when TLS is enabled.                   |
+
+No connection state, request buffer, write queue, or completion is shared
+between workers. Pinning is best effort: Linux uses physical-core affinity,
+Windows uses the process affinity mask, and macOS runs unpinned because the
+platform exposes no hard-affinity API.
+
+## Lifecycle
+
+The supported order is:
+
+```text
+build_cluster -> configure -> enable_https (optional) -> listen -> run
+-> request_shutdown or signal -> deinit
+```
+
+| Call                     | Rule                                                           |
+| ------------------------ | -------------------------------------------------------------- |
+| `configure`              | Register routes on each worker before any thread starts.       |
+| `enable_https`           | Optional TLS setup, after `configure` and before `listen`.     |
+| `listen`                 | Bind the shared port and start accepting.                      |
+| `run`                    | Spawn workers, join them, and return the first failure.        |
+| `catch_shutdown_signals` | Install one process-wide SIGINT/SIGTERM watcher for the group. |
+| `request_shutdown`       | Ask every worker to drain.                                     |
+| `deinit`                 | Release worker storage after the loops stop.                   |
+
+`state()` reports `configured`, `running`, `stopped`, `releasing`, or
+`released`. When `run` returns a worker failure, `first_failure()` reports the
+worker index, the failure phase, and the original error. The first failure wins
+so a shutdown cascade does not replace the root cause.
+
+## Inspect a failure
+
+```zig
+group.run() catch |err| {
+    if (group.first_failure()) |failure| {
+        std.log.err("worker {d} ({s}): {s}", .{
+            failure.index,
+            @tagName(failure.phase),
+            @errorName(failure.err),
+        });
+    }
+    return err;
+};
+```
+
+A spawn failure records phase `spawn`, an event-loop failure records phase
+`run`, and a post-run drain failure records phase `cleanup`.
+
+## Boundaries
+
+- HTTP/3 and QUIC clustering are not supported. `init_http3` and `listen_udp`
+  remain single-application APIs.
+- TLS clusters cover HTTP/1.1 and HTTP/2 over TCP. `enable_https` does not
+  configure client certificates; use `init_https_mtls` for mTLS.
+- The Windows cluster uses `SO_REUSEADDR` because `SO_REUSEPORT` is not
+  available there. Kernel distribution across listeners is unspecified.
+- A worker count larger than the physical core count wraps over the selected
+  cores instead of reserving unused slabs.
+
+## Next
+
+- [Your first HTTP/3 server](/docs/getting-started/first-http3-server) serves
+  QUIC on a single application.
+- [Your first TLS server](/docs/getting-started/first-tls-server) covers
+  per-worker TLS contexts.
+- [Examples tour](/docs/getting-started/examples-tour) lists the
+  `tls_cluster` step.

@@ -1,0 +1,101 @@
+---
+title: Motivation
+description: See why bounded allocation, explicit ownership, and one handler API make uWebZockets server behavior predictable.
+sidebar:
+  order: 1
+search:
+  tags: [getting-started, concept, capacity]
+---
+
+Most server frameworks make throughput easy to start and capacity hard to
+reason about. µWebZockets starts from the opposite direction: decide the
+resource bounds first, then make the hot path reuse them.
+
+## The problem with unbounded allocation
+
+A conventional request path allocates for the request, headers, body, parsed
+values, response parts, and any queued output. Each allocation adds a failure
+mode:
+
+- The allocator can be slow or contended under load.
+- Memory can grow until the process is killed.
+- Latency depends on the allocator and the garbage collector or page faults.
+- Overload arrives as a timeout, a reset, or an out-of-memory kill rather than a
+  named error.
+
+µWebZockets removes those allocations from the request path. `App(N)` and
+`Server.builder` allocate one slab at startup. Request buffers, connection
+slots, message regions, write queues, and router storage come from that slab and
+return to it when a connection closes.
+
+## The problem with shared mutable state
+
+A shared connection table or output queue needs a lock or an atomic protocol on
+every access. Under many cores, that coordination becomes the hot path. The
+shared-nothing model gives each worker its own event loop, slab, and connection
+state. Cross-worker communication uses bounded lock-free rings, and a connection
+is touched only by the worker that accepted it.
+
+The cost is that state is not magically visible everywhere. If a message must
+reach every worker, use the cluster publish API and handle a full inbox as a
+named outcome.
+
+## The problem with protocol-specific APIs
+
+HTTP/1.1, HTTP/2, HTTP/3, and WebSocket have different framing, flow control,
+and lifetime rules. Exposing a separate handler API for each one duplicates
+routing, validation, and response code. µWebZockets keeps one `Request` and
+`Response` boundary and moves the protocol differences into the transport:
+
+| Layer     | Owns                                                      |
+| --------- | --------------------------------------------------------- |
+| Handler   | Application method, target, headers, body, captures       |
+| Router    | Static, parameter, and wildcard matching; method dispatch |
+| HTTP/1.1  | Bounded parsing, pipelining, keep-alive, write queue      |
+| HTTP/2    | Frames, HPACK, stream storage, flow control               |
+| HTTP/3    | QUIC streams, QPACK, request validation                   |
+| WebSocket | Upgrade, framing, compression, pub/sub                    |
+
+The handler still sees protocol-specific facts when they matter, such as the
+HTTP method or a WebSocket opcode. It does not need a second application
+structure to serve them.
+
+## What µWebZockets changes
+
+1. **Capacity is explicit.** Connections, bodies, headers, routes, middleware,
+   messages, and queues have named bounds.
+2. **Ownership is explicit.** Request slices are borrowed for the callback;
+   `Request.clone` and `req.json(T, allocator)` are the documented allocating
+   escape hatches.
+3. **Backpressure is a value.** `error.WouldBlock` tells a producer to resume
+   later instead of growing a queue.
+4. **Shutdown is deterministic.** A signal or `request_shutdown` drains the
+   loop, releases completions, and returns to the caller.
+5. **One API serves several protocols.** The same route can answer HTTP/1.1,
+   HTTP/2, and HTTP/3 requests, and a WebSocket route uses the same application
+   value.
+
+## What it costs
+
+The model asks more from the application author:
+
+- You must estimate capacities before deployment.
+- Fixed limits do not grow with traffic; a capacity increase needs a restart.
+- A slow consumer must implement drain handling instead of relying on an
+  unbounded buffer.
+- Request bodies are buffered, so large uploads need a larger body capacity or a
+  different design.
+- A callback runs on the owning loop; blocking work belongs on another thread
+  with an async token.
+
+These are deliberate constraints. The [capacity model](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+explains how the slab is sized, and [Why uWebZockets](/docs/why-uwebsockets)
+compares the trade with alternative designs.
+
+## Next steps
+
+- [Philosophy](/docs/getting-started/philosophy) turns these problems into
+  design rules.
+- [Installation](/docs/getting-started/installation) adds the package.
+- [Your first HTTP server](/docs/getting-started/first-http-server) shows the
+  model in a complete program.

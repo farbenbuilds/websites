@@ -1,0 +1,86 @@
+---
+title: Lộ trình học
+description: Chọn thứ tự đọc để đánh giá, xây dựng, vận hành hoặc đóng góp cho uWebZockets mà không bỏ sót bước quan trọng.
+sidebar:
+  order: 15
+search:
+  tags: [getting-started, concept]
+---
+
+Có thể đọc các trang trong phần này theo thứ tự, nhưng phần lớn người đọc đến
+với một công việc cụ thể. Chọn lộ trình khớp với mục tiêu.
+
+## Đánh giá framework
+
+Đọc các trang này trước khi cam kết làm prototype:
+
+1. [uWebZockets là gì](/docs/what-is-uwebsockets)
+2. [Vì sao uWebZockets](/docs/why-uwebsockets)
+3. [Động lực](/docs/getting-started/motivation)
+4. [FAQ](/docs/getting-started/faq)
+
+Bạn nên trả lời được ba câu: mô hình có giới hạn có phù hợp workload không, bề
+mặt giao thức có bao phủ service không, và các tính năng chưa hỗ trợ có chấp
+nhận được không.
+
+## Build server đầu tiên
+
+Đây là đường ngắn nhất đến process đang chạy:
+
+1. [Cài đặt](/docs/getting-started/installation)
+2. [Quickstart](/docs/getting-started/quickstart)
+3. [HTTP server đầu tiên](/docs/getting-started/first-http-server)
+4. [Cấu trúc project](/docs/getting-started/project-structure)
+
+Sau đó chọn bề mặt tiếp theo:
+
+- Realtime: [WebSocket đầu tiên](/docs/getting-started/first-websocket)
+- API có kiểu: [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service)
+- HTTPS: [TLS server đầu tiên](/docs/getting-started/first-tls-server)
+- Đa lõi: [Cluster đầu tiên](/docs/getting-started/first-cluster)
+- QUIC: [HTTP/3 server đầu tiên](/docs/getting-started/first-http3-server)
+
+## Vận hành service
+
+Đọc tài liệu dung lượng và vòng đời trước production:
+
+1. [Động lực](/docs/getting-started/motivation)
+2. [HTTP server đầu tiên](/docs/getting-started/first-http-server)
+3. [TLS server đầu tiên](/docs/getting-started/first-tls-server)
+4. [Cluster đầu tiên](/docs/getting-started/first-cluster)
+5. [FAQ](/docs/getting-started/faq)
+6. [Thuật ngữ](/docs/getting-started/glossary)
+
+[Hướng dẫn deployment](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/deployment.md)
+và [hướng dẫn operations](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/operations.md)
+của repository sở hữu checklist production, sanitizer matrix và platform tier.
+
+## Đóng góp cho repository
+
+1. [Cấu trúc project](/docs/getting-started/project-structure)
+2. [Tham quan ví dụ](/docs/getting-started/examples-tour)
+3. [Cài đặt](/docs/getting-started/installation)
+4. [Hướng dẫn đóng góp](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
+   của repository
+
+Build graph, target tuân thủ và quy trình phát hành được ghi trong `CODEBASE.md`,
+`CI_CD_PIPELINE.md` và `docs/operations.md`.
+
+## Dùng site như agent
+
+Mọi trang có bản Markdown và xuất hiện trong index `llms.txt` được tạo. Bắt đầu
+với:
+
+1. [Quickstart](/docs/getting-started/quickstart)
+2. [FAQ](/docs/getting-started/faq)
+3. [Thuật ngữ](/docs/getting-started/glossary)
+
+[Bảng phạm vi tính năng](/docs#feature-coverage) tách bề mặt được hỗ trợ khỏi
+ranh giới có chủ đích để agent không trình bày module helper-only như tính năng
+live.
+
+## Tiếp theo
+
+- [Tham quan ví dụ](/docs/getting-started/examples-tour) ánh xạ code chạy được.
+- [FAQ](/docs/getting-started/faq) trả lời câu hỏi ranh giới.
+- [Thuật ngữ](/docs/getting-started/glossary) định nghĩa các từ.

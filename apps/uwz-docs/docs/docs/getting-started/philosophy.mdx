@@ -1,0 +1,106 @@
+---
+title: Philosophy
+description: Read the design rules behind bounded slabs, borrowed data, pure parsers, no hidden global state, and evidence-based claims.
+sidebar:
+  order: 2
+search:
+  tags: [getting-started, concept, capacity]
+---
+
+The µWebZockets API follows a small set of rules. They explain why functions
+return `error.WouldBlock`, why request slices expire with the callback, and why
+some features are deliberately absent.
+
+## Bounded by design
+
+Every hot-path resource has a startup or compile-time bound. The application
+slab holds connection slots, request buffers, WebSocket message regions, write
+queues, and router storage. Protocol tables such as HTTP/2 stream state, HPACK
+storage, and HTTP/3 pools are also sized before the listener starts.
+
+When the bound is reached, the library reports it:
+
+- A full write queue returns `error.WouldBlock`.
+- An oversized body returns `413` with a structured JSON document.
+- An oversized header block returns `431`.
+- A full cluster inbox reports dropped messages and wakeup failures instead of
+  blocking the publisher.
+
+The benefit is a predictable failure mode. The cost is that you cannot grow
+capacity without a restart.
+
+## Explicit ownership
+
+The library distinguishes borrowed and owned memory. Request headers, route
+captures, WebSocket messages, and query pairs point into connection-owned
+storage and are valid only for the callback. `Request.clone(allocator)` creates
+an `OwnedRequest` when work must outlive the callback, and
+`req.json(T, allocator)` returns parsed data owned by the caller.
+
+A handler that stores a borrowed slice without copying it has a lifetime bug,
+not a framework bug. The same rule applies to a WebSocket `message` slice and to
+async-token fields that are not parked with `sleep_complete`.
+
+## Pure parsers and transforms
+
+Parsing, percent decoding, `Accept` scoring, ETag matching, cookie scanning, and
+schema validation are small functions with explicit inputs and outputs. They do
+not read global state, allocate, or perform I/O. Stateful I/O stays at the
+transport boundary, where completions and connection slots are owned.
+
+This separation makes protocol code testable with byte slices and fixed buffers.
+It also keeps the handler boundary free of hidden state.
+
+## One transport-neutral boundary
+
+`Request` and `Response` are the same types whether the bytes arrived over
+HTTP/1.1, HTTP/2, HTTP/3, or a WebSocket upgrade. The router and middleware see
+one shape. Protocol-specific behavior remains in the transport and in the
+fields that genuinely differ, such as the method or WebSocket opcode.
+
+The cost is that some protocol details are not exposed as separate handler
+types. When a feature cannot be expressed safely across transports, it stays a
+helper-only module or a documented boundary rather than a leaky abstraction.
+
+## Data-oriented memory
+
+Large collections use parallel arrays and fixed-capacity indexes. The connection
+pool keeps an activity bitmap and a freelist separate from cold fields. The
+router keeps segment, child, sibling, parent, method, and handler arrays in
+parallel so a scan touches only what it needs. The cluster inbox keeps producer
+and consumer state on separate cache lines.
+
+This is a performance choice, but it also makes ownership visible: each array
+has one owner and one lifetime.
+
+## No hidden global state
+
+The application owns its router, pub/sub engine, metrics registry, development
+log sink, and protocol pools. Workers own their loops and slabs. The few
+process-wide facilities are explicit: the shutdown signal watcher, the libxev
+backend selection, and the lsquic initialization reference. They are installed
+before listeners start and documented as process-wide.
+
+There is no implicit connection registry, no global allocator on the request
+path, and no background thread that mutates application state.
+
+## Evidence over claims
+
+The repository treats compliance and performance as evidence, not marketing.
+Autobahn results, h1spec results, sanitizer runs, fuzz targets, and benchmark
+artifacts are recorded with the commit and host that produced them. A claim
+without a source belongs in the roadmap as planned work, not in a guide as
+shipped behavior.
+
+The same rule applies to this site: every API name, default, limit, and error
+maps to the current source or the repository documents. When a fact is not
+verified, the page says so.
+
+## Next steps
+
+- [Motivation](/docs/getting-started/motivation) describes the problems these
+  rules solve.
+- [Installation](/docs/getting-started/installation) applies the rules to a
+  project.
+- [Glossary](/docs/getting-started/glossary) defines the terms used across the
+  site.

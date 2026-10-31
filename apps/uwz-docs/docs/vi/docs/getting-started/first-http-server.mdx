@@ -1,0 +1,145 @@
+---
+title: HTTP server đầu tiên
+description: Build server App(128) hoàn chỉnh, thêm route và parameter, kiểm tra cả hai bằng curl và drain khi nhận tín hiệu.
+sidebar:
+  order: 6
+search:
+  tags: [getting-started, tutorial, http1]
+---
+
+Hướng dẫn này build server HTTP/1.1 hoàn chỉnh trên `App(128)`. Nó đăng ký một
+route tĩnh và một route parameter, khởi động listener, kiểm tra cả hai bằng
+`curl`, và cài watcher graceful shutdown.
+
+## Điều kiện trước
+
+- Project có dependency `uWebZockets`, như mô tả trong
+  [Quickstart](/docs/getting-started/quickstart).
+- Zig 0.16.0.
+- `curl`.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("Hello from µWebZockets! Zero allocation achieved.") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| {
+            std.log.err("response failed: {}", .{res_err});
+        };
+        return;
+    };
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.get("/greet/:name", greet);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Chạy
+
+```sh
+zig build run
+```
+
+Development log in phiên bản, thời gian khởi động và địa chỉ local trước khi
+request đầu tiên đến. Thời gian chính xác thay đổi theo host.
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+```text
+Hello from µWebZockets! Zero allocation achieved.
+```
+
+```sh
+curl -s http://127.0.0.1:3000/greet/Ada
+```
+
+```text
+hello Ada
+```
+
+`/greet` không khớp `/greet/:name` vì parameter yêu cầu một segment không rỗng.
+Đăng ký `/greet` riêng nếu muốn route không có capture. Fallback `orelse "world"`
+trong `greet` xử lý trường hợp thiếu giá trị capture, không phải thiếu route.
+
+## Chuyện gì xảy ra lúc khởi động
+
+| Bước                     | Chi tiết                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `App(128).init`          | Tính bố cục slab và cấp một lần cho 128 slot kết nối, buffer request, write queue và lưu trữ router. |
+| `app.get`                | Ghi route vào lưu trữ router cố định. Đăng ký trước `listen` giữ mảng bất biến khi worker chạy.      |
+| `catch_shutdown_signals` | Cài watcher SIGINT và SIGTERM process-wide. Nó yêu cầu đường drain bình thường.                      |
+| `listen`                 | Bind socket, bắt đầu accept và khóa đăng ký route.                                                   |
+| `run`                    | Chạy event loop đến khi shutdown drain mọi completion.                                               |
+| `deinit`                 | Giải phóng slab đúng một lần. Nó panic nếu gọi từ trong loop.                                        |
+
+## Đổi địa chỉ hoặc port
+
+```zig
+try app.listen("127.0.0.1", 8080);
+```
+
+`0.0.0.0` bind mọi interface local. `127.0.0.1` chỉ bind loopback. Port phải
+trống trước khi gọi `listen`; bind thất bại trả lỗi thay vì khởi động listener
+dở dang.
+
+## Thêm method khác
+
+Helper đăng ký theo tên method:
+
+```zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.post("/items", create);
+```
+
+`req.text()` trả body đã buffer. Dung lượng body mặc định là 16 KiB; nâng bằng
+`ServerConfig` hoặc `with_max_body_size` khi ứng dụng cần upload lớn hơn.
+
+## Dừng sạch [#stop-it-cleanly]
+
+Nhấn Ctrl+C. Watcher yêu cầu drain, request hiện có hoàn tất, timer định kỳ
+dừng và `run` trả về. `defer app.deinit()` sau đó giải phóng slab.
+
+## Tiếp theo
+
+- [WebSocket đầu tiên](/docs/getting-started/first-websocket) thêm route hai
+  chiều.
+- [JSON-RPC service đầu tiên](/docs/getting-started/first-json-rpc-service)
+  phục vụ procedure có kiểu trên cùng ứng dụng.
+- [TLS server đầu tiên](/docs/getting-started/first-tls-server) bọc listener
+  bằng TLS 1.3.

@@ -1,0 +1,85 @@
+---
+title: Learning paths
+description: Choose a reading order for evaluating, building, operating, or contributing to uWebZockets without missing a step.
+sidebar:
+  order: 15
+search:
+  tags: [getting-started, concept]
+---
+
+The pages in this section can be read in order, but most readers arrive with a
+specific job. Pick the path that matches your goal.
+
+## Evaluate the framework
+
+Read these pages before committing to a prototype:
+
+1. [What is uWebZockets](/docs/what-is-uwebsockets)
+2. [Why uWebZockets](/docs/why-uwebsockets)
+3. [Motivation](/docs/getting-started/motivation)
+4. [FAQ](/docs/getting-started/faq)
+
+You should be able to answer three questions: does the bounded model fit the
+workload, does the protocol surface cover the service, and are the unsupported
+features acceptable?
+
+## Build the first server
+
+This is the shortest path to a running process:
+
+1. [Installation](/docs/getting-started/installation)
+2. [Quickstart](/docs/getting-started/quickstart)
+3. [Your first HTTP server](/docs/getting-started/first-http-server)
+4. [Project structure](/docs/getting-started/project-structure)
+
+Then choose the next surface:
+
+- Realtime: [Your first WebSocket](/docs/getting-started/first-websocket)
+- Typed APIs: [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service)
+- HTTPS: [Your first TLS server](/docs/getting-started/first-tls-server)
+- Multi-core: [Your first cluster](/docs/getting-started/first-cluster)
+- QUIC: [Your first HTTP/3 server](/docs/getting-started/first-http3-server)
+
+## Operate a service
+
+Read the capacity and lifecycle material before production:
+
+1. [Motivation](/docs/getting-started/motivation)
+2. [Your first HTTP server](/docs/getting-started/first-http-server)
+3. [Your first TLS server](/docs/getting-started/first-tls-server)
+4. [Your first cluster](/docs/getting-started/first-cluster)
+5. [FAQ](/docs/getting-started/faq)
+6. [Glossary](/docs/getting-started/glossary)
+
+The repository [deployment guide](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/deployment.md)
+and [operations guide](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/operations.md)
+own the production checklist, sanitizer matrix, and platform tiers.
+
+## Contribute to the repository
+
+1. [Project structure](/docs/getting-started/project-structure)
+2. [Examples tour](/docs/getting-started/examples-tour)
+3. [Installation](/docs/getting-started/installation)
+4. The repository [contribution guide](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
+
+The repository build graph, compliance targets, and release process are
+documented in `CODEBASE.md`, `CI_CD_PIPELINE.md`, and `docs/operations.md`.
+
+## Use the site as an agent
+
+Every page has a Markdown mirror and appears in the generated `llms.txt` index.
+Start with:
+
+1. [Quickstart](/docs/getting-started/quickstart)
+2. [FAQ](/docs/getting-started/faq)
+3. [Glossary](/docs/getting-started/glossary)
+
+The [feature coverage table](/docs#feature-coverage) separates supported
+surfaces from deliberate boundaries so an agent does not present a helper-only
+module as a live feature.
+
+## Next
+
+- [Examples tour](/docs/getting-started/examples-tour) maps the runnable code.
+- [FAQ](/docs/getting-started/faq) answers the boundary questions.
+- [Glossary](/docs/getting-started/glossary) defines the terms.

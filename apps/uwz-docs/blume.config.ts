@@ -43,6 +43,15 @@ export default defineConfig({
       { code: "vi", label: "Tiếng Việt" },
     ],
   },
+  navigation: {
+    tabs: [{ label: "Docs", path: "/docs", icon: "book-open" }],
+  },
+  redirects: [
+    { from: "/getting-started", to: "/docs/getting-started", status: 301 },
+    { from: "/getting-started/:slug*", to: "/docs/getting-started/:slug*", status: 301 },
+    { from: "/vi/getting-started", to: "/vi/docs/getting-started", status: 301 },
+    { from: "/vi/getting-started/:slug*", to: "/vi/docs/getting-started/:slug*", status: 301 },
+  ],
   integrations: [svelte()],
   agents: {
     markdownComponents: {
