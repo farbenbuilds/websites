@@ -5,7 +5,7 @@ export type InlinePart =
   | { readonly kind: "link"; readonly value: string; readonly href: string };
 
 export function isExternalHref(href: string): boolean {
-  return href.startsWith("https://");
+  return href.startsWith("https://") || href.startsWith("http://") || href.startsWith("//");
 }
 
 export function inlinePartsToMarkdown(parts: readonly InlinePart[]): string {
