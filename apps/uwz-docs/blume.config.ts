@@ -2,6 +2,7 @@ import svelte from "@astrojs/svelte";
 import { defineConfig, type ComponentMarkdown } from "blume";
 
 import { renderBenchmarkMarkdown } from "./components/benchmark/benchmark-section-data.ts";
+import { renderSiteColophonMarkdown } from "./components/colophon/site-colophon-markdown.ts";
 import { renderIndexCardsMarkdown } from "./components/index-cards/index-cards-data.ts";
 import {
   renderLandingAuthorMarkdown,
@@ -53,6 +54,7 @@ export default defineConfig({
       LandingServer: markdownFor(renderLandingServerMarkdown),
       LandingAuthor: markdownFor(renderLandingAuthorMarkdown),
       LandingSponsor: markdownFor(renderLandingSponsorMarkdown),
+      SiteColophon: markdownFor(renderSiteColophonMarkdown),
     },
   },
   theme: {
