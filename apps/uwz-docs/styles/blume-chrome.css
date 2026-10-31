@@ -139,6 +139,7 @@ html [data-blume-nav-tree] .blume-nav-summary {
   min-height: 2.65rem;
   padding: 0.65rem 0.75rem;
   gap: 0.6rem;
+  color: var(--blume-muted-foreground);
   font-family: var(--blume-font-body);
   font-size: 0.875rem;
   font-weight: 600;
@@ -150,6 +151,11 @@ html [data-blume-nav-tree] .blume-nav-summary {
     color 160ms ease;
 }
 
+html [data-blume-nav-tree] .blume-nav-summary:hover {
+  background: transparent;
+  color: var(--blume-muted-foreground);
+}
+
 html [data-blume-nav-tree] details > div {
   margin-block-start: 0.25rem;
   padding-inline-start: 1rem;
@@ -157,6 +163,11 @@ html [data-blume-nav-tree] details > div {
 
 html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary {
   border-color: color-mix(in srgb, var(--blume-accent) 30%, var(--blume-border));
+  background: color-mix(in srgb, var(--blume-accent) 9%, var(--blume-background));
+  color: var(--blume-foreground);
+}
+
+html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary:hover {
   background: color-mix(in srgb, var(--blume-accent) 9%, var(--blume-background));
   color: var(--blume-foreground);
 }
@@ -181,6 +192,11 @@ html
 html [data-blume-nav-tree] a:hover {
   background: var(--blume-muted);
   color: var(--blume-foreground);
+}
+
+html [data-blume-nav-tree] .blume-nav-summary-link:hover {
+  background: transparent;
+  color: inherit;
 }
 
 html [data-blume-nav-tree] a[aria-current="page"] {
