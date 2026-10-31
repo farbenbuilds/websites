@@ -1,4 +1,6 @@
 ---
+import { isExternalHref } from "@farben/docs-components/inline-text.ts";
+
 import {
   SITE_LINKS,
   localizeHref,
@@ -16,9 +18,6 @@ const { locale } = Astro.props;
 const resolvedLocale = locale ?? resolveLocale(Astro.url.pathname);
 
 const label = siteColophonLabel(resolvedLocale);
-
-const isExternal = (href: string): boolean =>
-  href.startsWith("http://") || href.startsWith("https://");
 ---
 
 <footer class="docs-home-colophon" aria-label={label}>
@@ -27,9 +26,9 @@ const isExternal = (href: string): boolean =>
       <li>
         <a
           href={localizeHref(link.href, resolvedLocale)}
-          target={isExternal(link.href) ? "_blank" : undefined}
-          rel={isExternal(link.href) ? "noreferrer" : undefined}
-          aria-describedby={isExternal(link.href) ? "blume-new-tab-hint" : undefined}
+          target={isExternalHref(link.href) ? "_blank" : undefined}
+          rel={isExternalHref(link.href) ? "noreferrer" : undefined}
+          aria-describedby={isExternalHref(link.href) ? "blume-new-tab-hint" : undefined}
         >
           {link.label[resolvedLocale]}
         </a>

@@ -1,5 +1,7 @@
 ---
 import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+
+import SectionHeader from "../section-header/section-header.astro";
 import { indexCardsCopy } from "./index-cards-data";
 
 type Props = {
@@ -13,13 +15,12 @@ const copy = indexCardsCopy(locale);
 <div class="docs-home-index-anchor" id="docs-home-main"></div>
 
 <section class="docs-home-section" id="index" aria-labelledby="index-heading">
-  <div class="docs-home-section-head">
-    <p class="editorial-label">{copy.label}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="index-heading">{copy.heading}</h2>
-      <p>{copy.intro}</p>
-    </div>
-  </div>
+  <SectionHeader
+    headingId="index-heading"
+    label={copy.label}
+    heading={copy.heading}
+    intro={copy.intro}
+  />
   <ol class="editorial-index docs-home-index" role="list">
     {copy.items.map((item) => (
       <li class="editorial-index-item">

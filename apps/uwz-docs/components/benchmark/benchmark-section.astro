@@ -1,4 +1,5 @@
 ---
+import SectionHeader from "../section-header/section-header.astro";
 import { benchmarkCopy, type BenchmarkLocale } from "./benchmark-section-data";
 
 type Props = {
@@ -10,13 +11,12 @@ const copy = benchmarkCopy(locale);
 ---
 
 <section class="docs-home-section" id="benchmark" aria-labelledby="benchmark-heading">
-  <div class="docs-home-section-head">
-    <p class="editorial-label">{copy.label}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="benchmark-heading">{copy.heading}</h2>
-      <p>{copy.intro}</p>
-    </div>
-  </div>
+  <SectionHeader
+    headingId="benchmark-heading"
+    label={copy.label}
+    heading={copy.heading}
+    intro={copy.intro}
+  />
   <div class="docs-home-benchmark">
     <div class="docs-home-benchmark-head">
       <div>
