@@ -1,0 +1,51 @@
+---
+import type { UIStrings } from "blume";
+import { withMountedBase } from "blume/components/islands/base-path.ts";
+
+type Crumb = {
+  label: string;
+  route?: string;
+};
+
+type Props = {
+  crumbs: Crumb[];
+  strings?: UIStrings["nav"];
+  wide?: boolean;
+  centered?: boolean;
+};
+
+const { crumbs, strings, wide = false, centered = false } = Astro.props;
+
+// Blume's default shows only the parent group. Render the full ancestor trail
+// so every level links back to its own route, including the docs home.
+const trail = crumbs.length > 1 ? crumbs : [];
+const label = strings?.breadcrumb ?? "Breadcrumb";
+---
+
+{trail.length > 0 && (
+  <nav
+    aria-label={label}
+    class:list={[
+      "mb-2 text-muted-foreground text-sm",
+      wide ? "max-w-none" : ["mx-auto", centered ? "max-w-[54rem]" : "max-w-content"],
+    ]}
+  >
+    <ol class="flex flex-wrap items-center gap-1.5">
+      {trail.map((crumb, index) => {
+        const isCurrent = index === trail.length - 1;
+        return (
+          <li class="flex items-center gap-1.5">
+            {index > 0 && <span aria-hidden="true">/</span>}
+            {isCurrent || !crumb.route ? (
+              <span aria-current={isCurrent ? "page" : undefined}>{crumb.label}</span>
+            ) : (
+              <a class="hover:text-foreground" href={withMountedBase(crumb.route)}>
+                {crumb.label}
+              </a>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  </nav>
+)}

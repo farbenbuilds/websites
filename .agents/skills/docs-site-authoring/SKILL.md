@@ -97,6 +97,10 @@ Documentation content is localized by mirrored MDX, not x18n.
 
 ## Documentation UI
 
+- Keep breadcrumbs as a full ancestor trail from `Documentation` down to the
+  current page. Every ancestor crumb links to its own route; the current page is
+  plain text with `aria-current="page"`. Vietnamese trails use `/vi` routes and
+  labels.
 - Use generated sidebar groups for sections. Keep them collapsible, with the
   active group open and visually marked by a warm accent surface and a one-pixel
   tinted border, not a blurred halo.
