@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { PlayPauseButton } from "@farben/ui/components/ui/play-pause-button";
+  import { ScrollCue } from "@farben/ui/components/ui/scroll-cue";
 
   import { DEFAULT_SPECIMEN_COUNT, fallbackSpecimenCount } from "./butterfly-density";
   import { createButterflyLoop, type ButterflyLoop } from "./butterfly-loop";
@@ -9,20 +11,20 @@
     locale?: "en" | "vi";
     seed?: number;
     specimenCount?: number;
+    scrollHref?: string;
+    scrollLabel?: string;
   };
 
   const COPY = {
     en: {
-      pause: "Pause",
-      resume: "Resume",
       pauseLabel: "Pause butterfly animation",
       resumeLabel: "Resume butterfly animation",
+      scrollLabel: "Scroll to the documentation index",
     },
     vi: {
-      pause: "Tạm dừng",
-      resume: "Tiếp tục",
       pauseLabel: "Tạm dừng hoạt ảnh bướm",
       resumeLabel: "Tiếp tục hoạt ảnh bướm",
+      scrollLabel: "Cuộn đến mục lục tài liệu",
     },
   } as const;
 
@@ -33,6 +35,8 @@
     locale = "en",
     seed = 20261029,
     specimenCount = DEFAULT_SPECIMEN_COUNT,
+    scrollHref = "#docs-home-main",
+    scrollLabel,
   }: ButterflyHeroProps = $props();
 
   let root: HTMLDivElement;
@@ -110,15 +114,13 @@
       bind:this={canvas}
     ></canvas>
   </div>
+  <ScrollCue href={scrollHref} label={scrollLabel ?? copy.scrollLabel} avoid />
   {#if ready && motionAllowed}
-    <button
-      type="button"
-      class="editorial-square pointer-events-auto absolute bottom-3 end-3 z-10 gap-2 bg-background px-3 font-mono text-[0.62rem] uppercase tracking-[0.1em]"
-      aria-label={paused ? copy.resumeLabel : copy.pauseLabel}
-      aria-pressed={paused}
-      onclick={togglePause}
-    >
-      {paused ? copy.resume : copy.pause}
-    </button>
+    <PlayPauseButton
+      paused={paused}
+      labels={{ pause: copy.pauseLabel, resume: copy.resumeLabel }}
+      onToggle={togglePause}
+      avoid
+    />
   {/if}
 </div>

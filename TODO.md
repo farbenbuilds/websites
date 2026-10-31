@@ -676,6 +676,7 @@ primitives and tokens. Do not move the hero or the Blume chrome into it.
 | Surface        | Shared package           | Stays in the app                                      |
 | -------------- | ------------------------ | ----------------------------------------------------- |
 | Butterfly hero | `@farben/butterfly-hero` | Seed, locale, palette aliases, hero copy, page layout |
+| Hero controls  | `@farben/ui`             | Target href, localized labels, placement              |
 | Navbar         | `@farben/docs-chrome`    | Product title, logo, GitHub target, locale labels     |
 | Footer         | `@farben/docs-chrome`    | Product links, license URL, copyright                 |
 | UI primitives  | `@farben/ui`             | Component composition and product-specific markup     |
@@ -700,6 +701,12 @@ CSS and config defaults, not a replacement header.
 Footer note: share the link builder, license line, colophon component, and
 Blume footer config helper. Pass the product links in from each app so no
 uWebZockets URL or copy leaks into the shared package.
+
+Control note: `ScrollCue` and `PlayPauseButton` ship in `@farben/ui` under
+`components/ui`. The hero composes them and passes the target href and localized
+labels. They are generic controls, not hero-engine code, and they use the
+`--farben-field-*` aliases with `currentColor` fallbacks instead of Blume
+selectors. ventiws can import the same components when it adopts the hero.
 
 Hero note: the palette is already a CSS contract
 (`--farben-field-paper`, `--farben-field-ink`, `--farben-field-muted`,
@@ -1020,9 +1027,15 @@ field.
 - **Fallback:** one server-rendered ASCII `<pre>` generated from the same seed as
   the canvas stands in until the first successful canvas frame. The old
   image-based fallback and its public assets are retired.
-- **Motion controls:** pause persists in `sessionStorage`; reduced motion holds a
-  settled still and hides the play control. The canvas still respects DPR caps,
-  visibility, intersection, and unmount cleanup.
+- **Controls:** the scroll cue is a 44px transparent link around an 18x32
+  rectangle with a 6px square indicator. It sits bottom-center, moves bottom-right
+  below 40rem, and animates only when motion is allowed. The pause/resume control
+  is a 36px icon-only square with inline pause/play SVGs, an accessible name, and
+  `aria-pressed`. Both are shared `@farben/ui` components (`ScrollCue`,
+  `PlayPauseButton`) and both carry `data-butterfly-avoid`. Pause persists in
+  `sessionStorage`; reduced motion hides the pause control and stops the cue
+  animation. The canvas still respects DPR caps, visibility, intersection, and
+  unmount cleanup.
 - **Reference boundary:** Dao-Ho's koi pond informed the full-screen canvas,
   waypoint curiosity, content avoidance, and reduced-motion settle; ascii-sharks
   informed the bounded-loop engineering; asciiart.eu and the user's Pinterest
