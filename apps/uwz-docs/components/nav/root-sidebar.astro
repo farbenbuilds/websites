@@ -1,0 +1,31 @@
+---
+import type { NavNode, UIStrings } from "blume";
+import NavTree from "blume/components/layout/NavTree.astro";
+
+type Props = {
+  items: NavNode[];
+  currentRoute: string;
+  fragmentBase?: string;
+  ids?: Map<NavNode, string>;
+  strings?: UIStrings["nav"];
+};
+
+const { items, currentRoute, fragmentBase, ids, strings } = Astro.props;
+
+const isDocsGroup = (item: NavNode): boolean =>
+  item.kind === "group" && (item.route === "/docs" || item.route === "/vi/docs");
+
+// Blume wraps the /docs folder in a "Documentation" group. Flatten it so its
+// pages and subgroups sit at the sidebar root without changing their routes.
+const rootItems = items.flatMap((item) =>
+  isDocsGroup(item) && item.kind === "group" ? item.children : [item],
+);
+---
+
+<NavTree
+  currentRoute={currentRoute}
+  fragmentBase={fragmentBase}
+  ids={ids}
+  items={rootItems}
+  strings={strings}
+/>

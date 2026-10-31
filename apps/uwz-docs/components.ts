@@ -3,6 +3,7 @@ import { defineComponents } from "blume";
 export default defineComponents({
   layout: {
     Footer: "./components/colophon/site-footer.astro",
+    Sidebar: "./components/nav/root-sidebar.astro",
   },
   mdx: {
     LandingShell: "./components/landing/landing-shell.astro",
