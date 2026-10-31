@@ -17,7 +17,7 @@ sinh thái client được quản lý, hoặc hành vi giao thức nằm ngoài 
 
 ## Vấn đề thiết kế giải quyết
 
-| Vấn đề                           | Hệ quả ở server thông thường                               | Cách uWebZockets xử lý                                            |
+| Vấn đề                           | Hệ quả ở server thông thường                               | Cách µWebZockets xử lý                                            |
 | -------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
 | Cấp phát mỗi request             | Độ trễ tăng vọt, tranh chấp allocator, bộ nhớ khó đoán     | Một slab lúc khởi động; buffer request và write queue có giới hạn |
 | Queue không giới hạn             | Bộ nhớ tăng đến khi process bị kill                        | Write queue cố định; producer nhận `error.WouldBlock`             |

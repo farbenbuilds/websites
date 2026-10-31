@@ -8,8 +8,12 @@ search:
 ---
 
 Hướng dẫn này phục vụ một route trên HTTP/3 tại UDP port 8443. Nó dùng
-initializer chứng chỉ trong bộ nhớ cho phát triển local và chỉ initializer
-production với file PEM.
+initializer chứng chỉ trong bộ nhớ cho phát triển local và giới thiệu
+initializer production với file PEM.
+
+Bản base trong repository là `zig build http3_server` tại
+`examples/http3_server.zig`. Ví dụ đó đã cài watcher shutdown và dùng
+`end_with_headers` cho phản hồi; hướng dẫn giữ watcher và dùng `text`.
 
 ## Điều kiện trước
 

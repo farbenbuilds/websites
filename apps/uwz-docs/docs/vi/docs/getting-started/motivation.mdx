@@ -1,6 +1,6 @@
 ---
 title: Động lực
-description: Hiểu vì sao cấp phát có giới hạn, sở hữu tường minh và một API handler giúp hành vi server uWebZockets dễ đoán.
+description: Hiểu vì sao cấp phát có giới hạn, sở hữu tường minh và một API handler giúp hành vi server µWebZockets dễ đoán.
 sidebar:
   order: 1
 search:
@@ -57,7 +57,7 @@ validation và code phản hồi. µWebZockets giữ một ranh giới `Request`
 Handler vẫn thấy dữ kiện riêng của giao thức khi cần, như HTTP method hoặc
 WebSocket opcode. Nó không cần cấu trúc ứng dụng thứ hai để phục vụ chúng.
 
-## uWebZockets thay đổi gì
+## µWebZockets thay đổi gì
 
 1. **Dung lượng là tường minh.** Kết nối, body, header, route, middleware,
    message và queue có giới hạn có tên.
@@ -83,7 +83,7 @@ Mô hình đòi hỏi nhiều hơn từ người viết ứng dụng:
   async token.
 
 Đây là các ràng buộc có chủ đích. [Mô hình dung lượng](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
-giải thích cách tính slab, và [Vì sao uWebZockets](/docs/why-uwebsockets) so
+giải thích cách tính slab, và [Vì sao µWebZockets](/docs/why-uwebsockets) so
 sánh đánh đổi với thiết kế khác.
 
 ## Bước tiếp theo

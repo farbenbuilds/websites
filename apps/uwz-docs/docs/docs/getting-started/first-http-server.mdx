@@ -1,6 +1,6 @@
 ---
 title: Your first HTTP server
-description: Build a complete App(128) server, add a route and parameter, verify both with curl, and drain it on a shutdown signal.
+description: Build a complete App(128) server, add a route and parameter, verify both with curl, and request shutdown with a signal.
 sidebar:
   order: 6
 search:
@@ -10,6 +10,10 @@ search:
 This tutorial builds a complete HTTP/1.1 server on `App(128)`. It registers a
 static route and a parameterized route, starts the listener, verifies both with
 `curl`, and installs the graceful-shutdown watcher.
+
+The repository base example is `zig build hello_world` in
+`examples/hello_world.zig`. The tutorial adds the `/greet/:name` route and the
+shutdown signal watcher.
 
 ## Prerequisites
 
@@ -99,9 +103,9 @@ not a missing route.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | `App(128).init`          | Computes the slab layout and makes one allocation for 128 connection slots, request buffers, write queues, and router storage. |
 | `app.get`                | Writes the route into fixed router storage. Registration before `listen` keeps the arrays immutable while workers run.         |
-| `catch_shutdown_signals` | Installs the process-wide SIGINT and SIGTERM watcher. It requests the normal drain path.                                       |
+| `catch_shutdown_signals` | Installs the process-wide SIGINT and SIGTERM watcher. It requests shutdown.                                                    |
 | `listen`                 | Binds the socket, starts accepting, and locks route registration.                                                              |
-| `run`                    | Drives the event loop until shutdown drains every completion.                                                                  |
+| `run`                    | Drives the event loop until shutdown completes.                                                                                |
 | `deinit`                 | Releases the slab exactly once. It panics if called from inside the loop.                                                      |
 
 ## Change the address or port
@@ -135,8 +139,10 @@ larger uploads.
 
 ## Stop it cleanly
 
-Press Ctrl+C. The watcher requests a drain, existing requests finish, recurring
-timers stop, and `run` returns. The `defer app.deinit()` then releases the slab.
+Press Ctrl+C. The watcher requests shutdown, which stops accepting, cancels
+recurring timers, closes active connections, and drains completions before
+`run` returns. In-flight requests are not guaranteed to finish. The
+`defer app.deinit()` then releases the slab.
 
 ## Next
 

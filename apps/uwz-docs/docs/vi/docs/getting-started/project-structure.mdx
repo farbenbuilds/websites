@@ -1,15 +1,15 @@
 ---
 title: Cấu trúc project
-description: Xem consumer uWebZockets cần gì, repository sở hữu gì và thư mục nào chỉ dành cho nội bộ project và build graph.
+description: Xem consumer µWebZockets cần gì, repository sở hữu gì và thư mục nào chỉ dành cho nội bộ project và build graph.
 sidebar:
   order: 5
 search:
   tags: [getting-started, concept, operations]
 ---
 
-Consumer µWebZockets cần hai file: `build.zig` nối package và một file Zig
-khởi động ứng dụng. Repository có nhiều thư mục hơn vì nó còn sở hữu build
-graph, ví dụ, test tuân thủ và bằng chứng phát hành.
+Consumer µWebZockets cần ba file: `build.zig` nối package, `build.zig.zon` pin
+dependency và một file Zig khởi động ứng dụng. Repository có nhiều thư mục hơn
+vì nó còn sở hữu build graph, ví dụ, test tuân thủ và bằng chứng phát hành.
 
 ## Project consumer
 
@@ -66,32 +66,33 @@ uWebZockets/
 └── vendor/
 ```
 
-| Thư mục              | Trách nhiệm                                                         | Consumer?            |
-| -------------------- | ------------------------------------------------------------------- | -------------------- |
-| `builds/`            | Build graph, chọn target, nối C/C++ đi kèm, sanitizer, fuzz, ví dụ. | Không                |
-| `src/root.zig`       | Bề mặt module công khai.                                            | Được import          |
-| `src/router/`        | Kiểu ứng dụng, builder, router, cluster, middleware.                | Được import          |
-| `src/http/`          | Parser HTTP/1.1, response writer, request helper.                   | Được import          |
-| `src/http2/`         | Frame, HPACK, trạng thái stream, server có giới hạn.                | Được import khi dùng |
-| `src/quic/`          | Adapter HTTP/3, QPACK, pool QUIC.                                   | Được import khi dùng |
-| `src/ws/`            | WebSocket, framing, pub/sub, stream.                                | Được import khi dùng |
-| `src/rpc/`           | Registry JSON-RPC, adapter có kiểu, dispatcher.                     | Được import khi dùng |
-| `src/core/`          | Loop libxev, transport TCP và UDP, affinity, signal.                | Nội bộ               |
-| `src/crypto/`        | TLS context BoringSSL, chứng chỉ, tập con Web Crypto.               | Được import khi dùng |
-| `src/observability/` | Metrics registry và development log.                                | Được import khi dùng |
-| `examples/`          | Ví dụ chạy được và bước build.                                      | Không                |
-| `tests/`             | Target tuân thủ Autobahn và h1spec.                                 | Không                |
-| `fuzz/`              | Target libFuzzer và driver smoke local.                             | Không                |
-| `include/`           | Header C ABI và artifact cài đặt.                                   | Tùy chọn             |
-| `docs/`              | Tài liệu nguồn cho website và người đọc repository.                 | Không                |
-| `vendor/`            | Submodule h1spec cho bộ tuân thủ.                                   | Không                |
+| Thư mục              | Trách nhiệm                                                                     | Consumer?            |
+| -------------------- | ------------------------------------------------------------------------------- | -------------------- |
+| `builds/`            | Build graph, chọn target, nối C/C++ đi kèm, sanitizer, fuzz, ví dụ.             | Không                |
+| `src/root.zig`       | Bề mặt module công khai.                                                        | Được import          |
+| `src/router/`        | Kiểu ứng dụng, builder, router, cluster, datagram route.                        | Được import          |
+| `src/http/`          | Parser HTTP/1.1, response writer, request helper, middleware.                   | Được import          |
+| `src/http2/`         | Frame, HPACK, trạng thái stream, server có giới hạn.                            | Được import khi dùng |
+| `src/quic/`          | Adapter HTTP/3, QPACK, pool QUIC.                                               | Được import khi dùng |
+| `src/ws/`            | WebSocket, framing, pub/sub, stream.                                            | Được import khi dùng |
+| `src/rpc/`           | Registry JSON-RPC, adapter có kiểu, dispatcher.                                 | Được import khi dùng |
+| `src/core/`          | Loop libxev, transport, affinity, signal; `transport`, `ktls`, `udp` công khai. | Hỗn hợp              |
+| `src/crypto/`        | TLS context BoringSSL, chứng chỉ, tập con Web Crypto.                           | Được import khi dùng |
+| `src/observability/` | Metrics registry và development log.                                            | Được import khi dùng |
+| `examples/`          | Ví dụ chạy được và bước build.                                                  | Không                |
+| `tests/`             | Target tuân thủ Autobahn và h1spec.                                             | Không                |
+| `fuzz/`              | Target libFuzzer và driver smoke local.                                         | Không                |
+| `include/`           | Header C ABI và artifact cài đặt.                                               | Tùy chọn             |
+| `docs/`              | Tài liệu nguồn cho website và người đọc repository.                             | Không                |
+| `vendor/`            | Submodule h1spec cho bộ tuân thủ.                                               | Không                |
 
 ## `root.zig` export gì
 
 `src/root.zig` là bề mặt công khai. Nó re-export kiểu ứng dụng, request và
 response, middleware, WebSocket, TLS, module HTTP/2 và HTTP/3, JSON-RPC,
-client, metrics và entry point C ABI. Module nội bộ dưới `src/core/` và build
-graph không thuộc bề mặt đó.
+client, metrics, transport helper và entry point C ABI. Module dưới `src/core/`
+phần lớn là nội bộ, nhưng `uz.transport`, `uz.ktls` và `uz.udp` là export công
+khai tường minh. Build graph không thuộc bề mặt đó.
 
 Khi một trang nêu tên API, tên đó phải xuất hiện trong `src/root.zig` hoặc
 trong module được nó re-export. Symbol chỉ tồn tại trong module nội bộ không

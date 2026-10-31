@@ -61,7 +61,7 @@ chính thức chỉ được công bố sau khi job runtime xanh cho commit phá
 Không có binary Windows được phát hành; consumer build từ source.
 
 Cluster Windows dùng `SO_REUSEADDR` vì không có `SO_REUSEPORT`. Phân phối của
-kernel across listener là không xác định. Affinity dùng
+kernel trên các listener là không xác định. Affinity dùng
 `SetThreadAffinityMask`.
 
 ## Hệ điều hành nào được hỗ trợ?
@@ -90,7 +90,7 @@ RFC 9113 không được triển khai.
 
 ## Có hỗ trợ TLS 1.2 không?
 
-Không. TLS chỉ 1.3. Đây là thế trận bảo mật có chủ đích, không phải cấu hình
+Không. TLS chỉ 1.3. Đây là lập trường bảo mật có chủ đích, không phải cấu hình
 thiếu. Chứng chỉ ephemeral dùng ECDSA P-256 và SHA-256.
 
 ## Có thể reload chứng chỉ mà không restart không?
@@ -142,6 +142,6 @@ của repository. Không mở issue công khai cho lỗ hổng.
 ## Tiếp theo
 
 - [Thuật ngữ](/docs/getting-started/glossary) định nghĩa các từ dùng ở đây.
-- [Vì sao uWebZockets](/docs/why-uwebsockets) so sánh đánh đổi.
+- [Vì sao µWebZockets](/docs/why-uwebsockets) so sánh đánh đổi.
 - [HTTP server đầu tiên](/docs/getting-started/first-http-server) bắt đầu đường
   thực hành.

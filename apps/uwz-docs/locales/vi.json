@@ -66,7 +66,7 @@
   "indexCards": {
     "label": "01 / Mục lục",
     "heading": "Bắt đầu tại đây.",
-    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, chuyển dự án hiện có, cấu hình máy chủ, hiểu mô hình worker hoặc khám phá type-safety.",
+    "intro": "Sáu lối vào runtime: cài đặt, nắm quy tắc sở hữu, so sánh đánh đổi, tính dung lượng, hiểu mô hình worker hoặc khám phá type-safety.",
     "items": {
       "gettingStarted": {
         "title": "Bắt đầu",
@@ -77,12 +77,12 @@
         "description": "Mỗi worker một event loop, một bộ slab, không chia sẻ trạng thái."
       },
       "migrate": {
-        "title": "Chuyển dự án hiện có",
-        "description": "Đưa dịch vụ Zig hiện tại lên runtime."
+        "title": "So sánh đánh đổi",
+        "description": "Xem điều gì thay đổi khi dịch vụ dùng cấp phát có giới hạn."
       },
       "configure": {
-        "title": "Cấu hình máy chủ uWZ",
-        "description": "Đặt dung lượng, TLS, route và vòng đời một cách tường minh."
+        "title": "Tính dung lượng",
+        "description": "Hiểu vì sao slab cố định và giới hạn có tên thay thế cấp phát mỗi request."
       },
       "clusterWorker": {
         "title": "Hiểu Cluster/Worker",

@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Tạo project Zig, thêm uWebZockets, chạy một server hoàn chỉnh và đạt phản hồi HTTP đã kiểm tra trong khoảng mười phút.
+description: Tạo project Zig từ đầu, thêm µWebZockets, chạy một server hoàn chỉnh và đạt phản hồi HTTP đã kiểm tra bằng curl.
 sidebar:
   order: 4
 search:
@@ -126,7 +126,7 @@ build.
 | ------------------------------ | --------------------------------------------------- |
 | `uz.App(128).init(init.io)`    | Cấp một slab cho 128 kết nối đồng thời và tạo loop. |
 | `app.get("/", hello)`          | Đăng ký route `GET /` đồng bộ trước khi listen.     |
-| `app.catch_shutdown_signals()` | Cài watcher SIGINT và SIGTERM để drain server.      |
+| `app.catch_shutdown_signals()` | Cài watcher SIGINT và SIGTERM để yêu cầu shutdown.  |
 | `app.listen("0.0.0.0", 3000)`  | Bind listener TCP và khóa đăng ký route.            |
 | `app.run()`                    | Chạy event loop đến khi shutdown hoàn tất.          |
 | `app.deinit()`                 | Giải phóng slab sau khi loop đã drain.              |
@@ -148,9 +148,11 @@ nối trên mọi interface local.
 
 ## Dừng server
 
-Nhấn Ctrl+C trong terminal server. Signal watcher yêu cầu đường drain bình
-thường, nên kết nối đang mở hoàn tất và `deinit` giải phóng slab. Kill cưỡng
-bức bỏ qua drain và không phải đường dừng bình thường.
+Nhấn Ctrl+C trong terminal server. Signal watcher yêu cầu đường shutdown bình
+thường: ngừng accept, hủy timer, đóng kết nối đang hoạt động và drain
+completion trước khi `deinit` giải phóng slab. Request đang xử lý không được
+đảm bảo hoàn tất. Kill cưỡng bức bỏ qua drain và không phải đường dừng bình
+thường.
 
 ## Tiếp theo
 

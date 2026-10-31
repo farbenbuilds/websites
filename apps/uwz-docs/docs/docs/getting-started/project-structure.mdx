@@ -1,16 +1,16 @@
 ---
 title: Project structure
-description: See what a uWebZockets consumer needs, what the repository owns, and which directories stay internal to the project.
+description: See what a µWebZockets consumer needs, what the repository owns, and which directories stay internal to the project.
 sidebar:
   order: 5
 search:
   tags: [getting-started, concept, operations]
 ---
 
-A µWebZockets consumer needs two files: a `build.zig` that wires the package
-and a Zig source file that starts an application. The repository has more
-directories because it also owns the build graph, examples, compliance tests,
-and release evidence.
+A µWebZockets consumer needs three files: `build.zig` to wire the package,
+`build.zig.zon` to pin the dependency, and a Zig source file that starts an
+application. The repository has more directories because it also owns the build
+graph, examples, compliance tests, and release evidence.
 
 ## Consumer project
 
@@ -67,32 +67,34 @@ uWebZockets/
 └── vendor/
 ```
 
-| Directory            | Responsibility                                                                       | Consumer?           |
-| -------------------- | ------------------------------------------------------------------------------------ | ------------------- |
-| `builds/`            | Build graph, target selection, vendored C/C++ wiring, sanitizers, fuzzing, examples. | No                  |
-| `src/root.zig`       | Public module surface.                                                               | Imported            |
-| `src/router/`        | Application types, builder, router, cluster, middleware.                             | Imported            |
-| `src/http/`          | HTTP/1.1 parser, response writer, request helpers.                                   | Imported            |
-| `src/http2/`         | Frames, HPACK, stream state, bounded server.                                         | Imported where used |
-| `src/quic/`          | HTTP/3 adapter, QPACK, QUIC pools.                                                   | Imported where used |
-| `src/ws/`            | WebSocket socket, framing, pub/sub, streams.                                         | Imported where used |
-| `src/rpc/`           | JSON-RPC registry, typed adapter, dispatcher.                                        | Imported where used |
-| `src/core/`          | libxev loop, TCP and UDP transports, affinity, signals.                              | Internal            |
-| `src/crypto/`        | BoringSSL TLS contexts, certificates, Web Crypto subset.                             | Imported where used |
-| `src/observability/` | Metrics registry and development log.                                                | Imported where used |
-| `examples/`          | Runnable examples and build steps.                                                   | No                  |
-| `tests/`             | Compliance targets for Autobahn and h1spec.                                          | No                  |
-| `fuzz/`              | libFuzzer targets and local smoke drivers.                                           | No                  |
-| `include/`           | C ABI header and installed artifacts.                                                | Optional            |
-| `docs/`              | Source documents for the website and repository readers.                             | No                  |
-| `vendor/`            | h1spec submodule for the compliance suite.                                           | No                  |
+| Directory            | Responsibility                                                                         | Consumer?           |
+| -------------------- | -------------------------------------------------------------------------------------- | ------------------- |
+| `builds/`            | Build graph, target selection, vendored C/C++ wiring, sanitizers, fuzzing, examples.   | No                  |
+| `src/root.zig`       | Public module surface.                                                                 | Imported            |
+| `src/router/`        | Application types, builder, router, cluster, datagram routes.                          | Imported            |
+| `src/http/`          | HTTP/1.1 parser, response writer, request helpers, middleware.                         | Imported            |
+| `src/http2/`         | Frames, HPACK, stream state, bounded server.                                           | Imported where used |
+| `src/quic/`          | HTTP/3 adapter, QPACK, QUIC pools.                                                     | Imported where used |
+| `src/ws/`            | WebSocket socket, framing, pub/sub, streams.                                           | Imported where used |
+| `src/rpc/`           | JSON-RPC registry, typed adapter, dispatcher.                                          | Imported where used |
+| `src/core/`          | libxev loop, transports, affinity, signals; `transport`, `ktls`, and `udp` are public. | Mixed               |
+| `src/crypto/`        | BoringSSL TLS contexts, certificates, Web Crypto subset.                               | Imported where used |
+| `src/observability/` | Metrics registry and development log.                                                  | Imported where used |
+| `examples/`          | Runnable examples and build steps.                                                     | No                  |
+| `tests/`             | Compliance targets for Autobahn and h1spec.                                            | No                  |
+| `fuzz/`              | libFuzzer targets and local smoke drivers.                                             | No                  |
+| `include/`           | C ABI header and installed artifacts.                                                  | Optional            |
+| `docs/`              | Source documents for the website and repository readers.                               | No                  |
+| `vendor/`            | h1spec submodule for the compliance suite.                                             | No                  |
 
 ## What `root.zig` exposes
 
 `src/root.zig` is the public surface. It re-exports the application types,
 request and response types, middleware, WebSocket, TLS, HTTP/2 and HTTP/3
-modules, JSON-RPC, client, metrics, and the C ABI entry points. Internal modules
-under `src/core/` and the build graph are not part of that surface.
+modules, JSON-RPC, client, metrics, transport helpers, and the C ABI entry
+points. Modules under `src/core/` are mostly internal, but `uz.transport`,
+`uz.ktls`, and `uz.udp` are explicit public exports. The build graph is not part
+of the public surface.
 
 When a page names an API, the name should appear in `src/root.zig` or in one of
 the modules it re-exports. A symbol that exists only in an internal module is

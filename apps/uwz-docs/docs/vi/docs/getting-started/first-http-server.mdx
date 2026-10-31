@@ -1,6 +1,6 @@
 ---
 title: HTTP server đầu tiên
-description: Build server App(128) hoàn chỉnh, thêm route và parameter, kiểm tra cả hai bằng curl và drain khi nhận tín hiệu.
+description: Build server App(128) hoàn chỉnh, thêm route và parameter, kiểm tra cả hai bằng curl và yêu cầu shutdown bằng tín hiệu.
 sidebar:
   order: 6
 search:
@@ -10,6 +10,10 @@ search:
 Hướng dẫn này build server HTTP/1.1 hoàn chỉnh trên `App(128)`. Nó đăng ký một
 route tĩnh và một route parameter, khởi động listener, kiểm tra cả hai bằng
 `curl`, và cài watcher graceful shutdown.
+
+Bản base trong repository là `zig build hello_world` tại
+`examples/hello_world.zig`. Hướng dẫn thêm route `/greet/:name` và watcher tín
+hiệu shutdown.
 
 ## Điều kiện trước
 
@@ -66,7 +70,7 @@ pub fn main(init: std.process.Init) !void {
 zig build run
 ```
 
-Development log in phiên bản, thời gian khởi động và địa chỉ local trước khi
+Development log in ra phiên bản, thời gian khởi động và địa chỉ local trước khi
 request đầu tiên đến. Thời gian chính xác thay đổi theo host.
 
 ## Kiểm tra
@@ -97,9 +101,9 @@ trong `greet` xử lý trường hợp thiếu giá trị capture, không phải
 | ------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `App(128).init`          | Tính bố cục slab và cấp một lần cho 128 slot kết nối, buffer request, write queue và lưu trữ router. |
 | `app.get`                | Ghi route vào lưu trữ router cố định. Đăng ký trước `listen` giữ mảng bất biến khi worker chạy.      |
-| `catch_shutdown_signals` | Cài watcher SIGINT và SIGTERM process-wide. Nó yêu cầu đường drain bình thường.                      |
+| `catch_shutdown_signals` | Cài watcher SIGINT và SIGTERM process-wide. Nó yêu cầu shutdown.                                     |
 | `listen`                 | Bind socket, bắt đầu accept và khóa đăng ký route.                                                   |
-| `run`                    | Chạy event loop đến khi shutdown drain mọi completion.                                               |
+| `run`                    | Chạy event loop đến khi shutdown hoàn tất.                                                           |
 | `deinit`                 | Giải phóng slab đúng một lần. Nó panic nếu gọi từ trong loop.                                        |
 
 ## Đổi địa chỉ hoặc port
@@ -132,8 +136,10 @@ _ = try app.post("/items", create);
 
 ## Dừng sạch [#stop-it-cleanly]
 
-Nhấn Ctrl+C. Watcher yêu cầu drain, request hiện có hoàn tất, timer định kỳ
-dừng và `run` trả về. `defer app.deinit()` sau đó giải phóng slab.
+Nhấn Ctrl+C. Watcher yêu cầu shutdown: ngừng accept, hủy timer định kỳ, đóng
+kết nối đang hoạt động và drain completion trước khi `run` trả về. Request
+đang xử lý không được đảm bảo hoàn tất. `defer app.deinit()` sau đó giải phóng
+slab.
 
 ## Tiếp theo
 

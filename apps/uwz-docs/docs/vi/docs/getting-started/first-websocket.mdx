@@ -10,6 +10,10 @@ search:
 Hướng dẫn này thêm route WebSocket vào ứng dụng HTTP. Server echo mọi message
 text hoặc binary, gửi welcome khi mở và log khi peer ngắt kết nối.
 
+Bản trong repository là `zig build chat_server` tại
+`examples/chat_server.zig`. Ví dụ đó minh họa pub/sub có giới hạn thay vì
+handler echo bên dưới.
+
 ## Điều kiện trước
 
 - Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
@@ -112,8 +116,8 @@ nên bản thân lệnh gửi không mượn slice message.
 ## Backpressure [#backpressure]
 
 `ws.send` trả `error.WouldBlock` khi write queue của kết nối đầy. Không bỏ
-message một cách âm thầm và không block event loop. Dùng callback `drain` để
-tiếp tục producer:
+message một cách âm thầm và không block event loop. Thêm callback `drain` vào
+đăng ký `/echo` hiện có để tiếp tục producer:
 
 ```zig
 fn on_drain(ws: *uz.WebSocket) void {
@@ -123,6 +127,7 @@ fn on_drain(ws: *uz.WebSocket) void {
 _ = try app.ws("/echo", .{
     .open = on_open,
     .message = on_message,
+    .close = on_close,
     .drain = on_drain,
 });
 ```
@@ -154,7 +159,8 @@ worker qua inbox có giới hạn.
 - Message đến bị giới hạn bởi `max_frame_size` và `max_message_size`. Mặc định
   là 16 KiB.
 - Route có giới hạn vượt dung lượng message đã cấu hình sẽ fail đăng ký với
-  `500 Internal Server Error` thay vì nhận peer không phục vụ được.
+  `error.InvalidWebSocketLimits` trước khi listener bắt đầu. Process không bao
+  giờ nhận peer không phục vụ được, và lỗi cấu hình không gửi HTTP status.
 
 ## Tiếp theo
 

@@ -11,6 +11,9 @@ Hướng dẫn này mount service JSON-RPC 2.0 có kiểu trên `/rpc`. Nó đ�
 một procedure, decode tham số có tên vào struct Zig và serialize kết quả có
 kiểu.
 
+Bản base trong repository là `zig build rpc_server` tại
+`examples/rpc_server.zig`. Hướng dẫn thêm watcher tín hiệu shutdown.
+
 ## Điều kiện trước
 
 - Server từ [HTTP server đầu tiên](/docs/getting-started/first-http-server).
@@ -95,7 +98,9 @@ batch sai, không procedure nào chạy. Tên method thiếu, trùng hoặc quá
 ## Tham số lớn hơn
 
 Adapter có kiểu vừa tham số trong 4 KiB. Với kiểu lớn hơn, dùng API cấp thấp
-`register` với `Call.parse_params` và allocator tường minh:
+`register` với `Call.parse_params` và allocator tường minh. Đăng ký procedure
+trước khi `server.rpc` mount service; ví dụ dùng tên method khác vì `math.add`
+đã được đăng ký ở trên:
 
 ```zig
 fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
@@ -104,7 +109,7 @@ fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
     try call.result(.{ .sum = parsed.value.left + parsed.value.right });
 }
 
-try rpc.register("math.add", custom);
+try rpc.register("math.add_large", custom);
 ```
 
 Allocator do caller chọn. Request path vẫn có giới hạn khi procedure dùng lưu

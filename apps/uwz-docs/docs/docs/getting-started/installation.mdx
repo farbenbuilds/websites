@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install Zig 0.16.0, run the Nix checkout, or add uWebZockets as a pinned package with a reproducible build graph.
+description: Install Zig 0.16.0, run the Nix checkout, or add µWebZockets as a pinned package with a reproducible build graph.
 sidebar:
   order: 3
 search:
@@ -104,8 +104,8 @@ A complete consumer program is in the [quickstart](/docs/getting-started/quickst
 ## First-build cost and offline use
 
 The first build is slower because Zig compiles BoringSSL, lsquic, libdeflate,
-and zlib from source. Expect several minutes on a laptop and longer on a shared
-CI runner. Later builds reuse `~/.cache/zig` and the project-local cache.
+and zlib from source. Later builds reuse `~/.cache/zig` and the project-local
+cache.
 
 To build without network access, populate both caches on a connected machine
 first, then reuse them. The dependency URLs and hashes are pinned in
@@ -124,6 +124,19 @@ Run the hello-world example:
 ```sh
 zig build hello_world -Doptimize=ReleaseSafe
 ```
+
+The run step blocks in the foreground. In a terminal, the development log prints
+the ready summary before the first request:
+
+```console
+$ zig build hello_world -Doptimize=ReleaseSafe
+µWebZockets v2.1.6  ready in 0.6 ms
+→ Local: http://127.0.0.1:3000/
+```
+
+The elapsed time varies by host. When output is redirected, the colored
+wordmark and local-address line are omitted and the log falls back to
+`info(server): server listening on 0.0.0.0:3000`. Stop the server with Ctrl+C.
 
 If both commands exit with status 0, the toolchain, dependency cache, and native
 build graph are ready.

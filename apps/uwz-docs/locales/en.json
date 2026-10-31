@@ -66,7 +66,7 @@
   "indexCards": {
     "label": "01 / Index",
     "heading": "Start here.",
-    "intro": "Six ways into the runtime: install it, learn the ownership rule, migrate a service, configure the server, understand the worker model, or explore type-safety.",
+    "intro": "Six ways into the runtime: install it, learn the ownership rule, compare the tradeoffs, plan capacities, understand the worker model, or explore type-safety.",
     "items": {
       "gettingStarted": {
         "title": "Getting Started",
@@ -77,12 +77,12 @@
         "description": "One worker, one event loop, one slab set, no shared state."
       },
       "migrate": {
-        "title": "Migrate existing projects",
-        "description": "Bring an existing Zig service onto the runtime."
+        "title": "Compare the tradeoffs",
+        "description": "See what changes when a service adopts bounded allocation."
       },
       "configure": {
-        "title": "Configure a uWZ server",
-        "description": "Set capacities, TLS, routes, and lifecycle explicitly."
+        "title": "Plan capacities",
+        "description": "Learn why fixed slabs and named limits replace per-request allocation."
       },
       "clusterWorker": {
         "title": "Understand a Cluster/Worker",

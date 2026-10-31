@@ -11,6 +11,9 @@ This tutorial mounts a typed JSON-RPC 2.0 service on `/rpc`. It defines one
 procedure, decodes named parameters into a Zig struct, and serializes a typed
 result.
 
+The repository base example is `zig build rpc_server` in
+`examples/rpc_server.zig`. The tutorial adds the shutdown signal watcher.
+
 ## Prerequisites
 
 - The server from [Your first HTTP server](/docs/getting-started/first-http-server).
@@ -95,7 +98,9 @@ duplicated, or too long fails registration with a named error.
 ## Larger parameters
 
 The typed adapter fits parameters into 4 KiB. For a larger type, use the
-lower-level `register` API with `Call.parse_params` and an explicit allocator:
+lower-level `register` API with `Call.parse_params` and an explicit allocator.
+Register the procedure before `server.rpc` mounts the service; the example uses
+a different method name because `math.add` is already registered above:
 
 ```zig
 fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
@@ -104,7 +109,7 @@ fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
     try call.result(.{ .sum = parsed.value.left + parsed.value.right });
 }
 
-try rpc.register("math.add", custom);
+try rpc.register("math.add_large", custom);
 ```
 
 The allocator is the caller's choice. The request path remains bounded when the

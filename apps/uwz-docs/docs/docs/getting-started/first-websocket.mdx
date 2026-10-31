@@ -11,6 +11,10 @@ This tutorial adds a WebSocket route to the HTTP application. The server echoes
 every text or binary message, sends a welcome message on open, and logs when a
 peer disconnects.
 
+The repository version is `zig build chat_server` in
+`examples/chat_server.zig`. It demonstrates bounded pub/sub instead of the echo
+handler below.
+
 ## Prerequisites
 
 - The server from [Your first HTTP server](/docs/getting-started/first-http-server).
@@ -113,8 +117,8 @@ returns, so the send itself does not borrow the message slice.
 ## Backpressure
 
 `ws.send` returns `error.WouldBlock` when the write queue for that connection is
-full. Do not drop the message silently and do not block the event loop. Use the
-`drain` callback to resume the producer:
+full. Do not drop the message silently and do not block the event loop. Add the
+`drain` callback to the existing `/echo` registration to resume the producer:
 
 ```zig
 fn on_drain(ws: *uz.WebSocket) void {
@@ -124,6 +128,7 @@ fn on_drain(ws: *uz.WebSocket) void {
 _ = try app.ws("/echo", .{
     .open = on_open,
     .message = on_message,
+    .close = on_close,
     .drain = on_drain,
 });
 ```
@@ -156,8 +161,9 @@ cross-worker publishes through bounded per-worker inboxes.
 - Incoming messages are capped by `max_frame_size` and `max_message_size`. The
   defaults are 16 KiB.
 - A route whose limits exceed the configured message capacity fails
-  registration with `500 Internal Server Error` rather than accepting a peer it
-  cannot serve.
+  registration with `error.InvalidWebSocketLimits` before the listener starts.
+  The process never accepts a peer it cannot serve, and no HTTP status is sent
+  for the configuration error.
 
 ## Next
 

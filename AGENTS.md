@@ -22,6 +22,7 @@ presentation, and tooling as separate products with separate owners.
 | [CONTRIBUTING.md](.github/CONTRIBUTING.md)                   | Environment, commands, branch and PR process                             |
 | [SECURITY.md](SECURITY.md)                                   | Reporting, supported versions, trust boundaries                          |
 | [SKILL.md](SKILL.md)                                         | Project master skill and skill routing                                   |
+| [uWZ-TODO.md](uWZ-TODO.md)                                   | uWebZockets docs roadmap, page register, milestones, and status          |
 | [.github/COMMIT_CONVENTION.md](.github/COMMIT_CONVENTION.md) | Commit message format                                                    |
 
 ## Non-Negotiable Rules

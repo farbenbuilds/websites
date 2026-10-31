@@ -1,12 +1,12 @@
 ---
 title: Documentation
-description: Find the right uWebZockets guide for a first server, a protocol tutorial, a worker group, or production operations.
+description: Find the right µWebZockets guide for a first server, a protocol tutorial, a worker group, or production operations.
 sidebar:
   order: 0
 search:
   tags: [getting-started, reference]
 seo:
-  title: uWebZockets documentation
+  title: µWebZockets documentation
 ---
 
 µWebZockets 2.1.6 is a zero-allocation, shared-nothing server framework for Zig
@@ -20,13 +20,13 @@ truth for wire behavior, limits, and release evidence.
 
 <CardGroup cols={3}>
   <Card title="I am new" href="/docs/getting-started" icon="rocket">
-    Install Zig 0.16.0, run the quickstart, and add a route in about ten minutes.
+    Install Zig 0.16.0, run the quickstart, and add a route to a running server.
   </Card>
   <Card title="I am evaluating" href="/docs/what-is-uwebsockets" icon="search">
     Understand the programming model, the protocol surface, and the deliberate boundaries.
   </Card>
   <Card title="I am operating this" href="/docs/getting-started/first-cluster" icon="server">
-    Start a worker group, plan capacities, and drain it on a signal.
+    Start a worker group, plan capacities, and handle shutdown on a signal.
   </Card>
 </CardGroup>
 
@@ -35,7 +35,7 @@ truth for wire behavior, limits, and release evidence.
 | Task                                        | Page                                                                        |
 | ------------------------------------------- | --------------------------------------------------------------------------- |
 | Install the package and build the examples  | [Installation](/docs/getting-started/installation)                          |
-| Reach a running HTTP server in one command  | [Quickstart](/docs/getting-started/quickstart)                              |
+| Create and run the quickstart project       | [Quickstart](/docs/getting-started/quickstart)                              |
 | Add an HTTP route and verify it with `curl` | [Your first HTTP server](/docs/getting-started/first-http-server)           |
 | Add a WebSocket echo route                  | [Your first WebSocket](/docs/getting-started/first-websocket)               |
 | Serve typed JSON-RPC procedures             | [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service) |
@@ -45,37 +45,42 @@ truth for wire behavior, limits, and release evidence.
 
 :::tip[Search the site]
 Use the search control in the header to find a page by title or by a phrase from
-the body. Search runs locally in the browser and needs no account or network
-request after the page loads.
+the body. Search runs locally in the browser with no third-party service or
+account. The browser fetches the local index from this site on first use.
 :::
 
 ## Helpers
 
-Small composable utilities live in the HTTP helper layer. Query and form
-parsing, multipart parsing, cookies, compression, ETag and conditional GET,
-`Accept` negotiation, fetch and stream primitives, and WebSocket stream adapters
-are documented in the repository until the Helpers hub ships on this site.
+<CardGroup cols={1}>
+  <Card
+    title="Helpers"
+    href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/http.md#request-and-response-helpers"
+    icon="wrench"
+  >
+    Query and form parsing, multipart, cookies, compression, ETag and conditional GET, `Accept`
+    negotiation, fetch and stream primitives, and WebSocket stream adapters.
+  </Card>
+</CardGroup>
 
-[Read the request and response helpers](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/http.md#request-and-response-helpers)
+## Feature coverage [#feature-coverage]
 
-## Feature coverage
+The table is the site's launch feature matrix. The full boundary list,
+including helper-only and experimental modules, is in the repository roadmap.
 
-The table summarises the launch surface. The full matrix, including
-helper-only and experimental modules, is in the repository roadmap.
+| Surface                  | Status             | Start with                                                                  |
+| ------------------------ | ------------------ | --------------------------------------------------------------------------- |
+| HTTP/1.1 request routing | Supported          | [Your first HTTP server](/docs/getting-started/first-http-server)           |
+| HTTP/2 request routing   | Supported, bounded | [What is µWebZockets](/docs/what-is-uwebsockets)                            |
+| WebSocket server         | Supported          | [Your first WebSocket](/docs/getting-started/first-websocket)               |
+| JSON-RPC 2.0             | Supported          | [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service) |
+| TLS 1.3 termination      | Supported          | [Your first TLS server](/docs/getting-started/first-tls-server)             |
+| Thread-per-core cluster  | Supported on TCP   | [Your first cluster](/docs/getting-started/first-cluster)                   |
+| HTTP/3 request routing   | Supported          | [Your first HTTP/3 server](/docs/getting-started/first-http3-server)        |
+| HTTP/3 clustering        | Not supported      | [First HTTP/3 server](/docs/getting-started/first-http3-server#boundaries)  |
+| WebTransport live path   | Not supported      | [HTTP/3 boundaries](/docs/getting-started/first-http3-server#boundaries)    |
+| WebSocket client         | Not supported      | [FAQ](/docs/getting-started/faq#client-scope)                               |
 
-| Surface                  | Status           | Start with                                                                  |
-| ------------------------ | ---------------- | --------------------------------------------------------------------------- |
-| HTTP/1.1 request routing | Supported        | [Your first HTTP server](/docs/getting-started/first-http-server)           |
-| WebSocket server         | Supported        | [Your first WebSocket](/docs/getting-started/first-websocket)               |
-| JSON-RPC 2.0             | Supported        | [Your first JSON-RPC service](/docs/getting-started/first-json-rpc-service) |
-| TLS 1.3 termination      | Supported        | [Your first TLS server](/docs/getting-started/first-tls-server)             |
-| Thread-per-core cluster  | Supported on TCP | [Your first cluster](/docs/getting-started/first-cluster)                   |
-| HTTP/3 request routing   | Supported        | [Your first HTTP/3 server](/docs/getting-started/first-http3-server)        |
-| HTTP/3 clustering        | Not supported    | [First HTTP/3 server](/docs/getting-started/first-http3-server#boundaries)  |
-| WebTransport live path   | Not supported    | [HTTP/3 boundaries](/docs/getting-started/first-http3-server#boundaries)    |
-| WebSocket client         | Not supported    | [FAQ](/docs/getting-started/faq#client-scope)                               |
-
-[Read the full feature matrix and roadmap](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
+[Read the repository roadmap and boundaries](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
 
 ## What to read next
 

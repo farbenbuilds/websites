@@ -1,6 +1,6 @@
 ---
 title: Cài đặt
-description: Cài Zig 0.16.0, chạy checkout Nix hoặc thêm uWebZockets làm package được pin với build graph tái lập và cache rõ ràng.
+description: Cài Zig 0.16.0, chạy checkout Nix hoặc thêm µWebZockets làm package được pin với build graph tái lập và cache rõ ràng.
 sidebar:
   order: 3
 search:
@@ -99,8 +99,7 @@ Chương trình consumer hoàn chỉnh nằm trong [quickstart](/docs/getting-st
 ## Chi phí build đầu và dùng offline
 
 Build đầu chậm hơn vì Zig biên dịch BoringSSL, lsquic, libdeflate và zlib từ
-source. Dự kiến vài phút trên laptop và lâu hơn trên CI runner chia sẻ. Build
-sau dùng lại `~/.cache/zig` và cache trong project.
+source. Build sau dùng lại `~/.cache/zig` và cache trong project.
 
 Để build không cần mạng, nạp cả hai cache trên máy có mạng trước, rồi dùng
 lại. URL và hash dependency được pin trong `build.zig.zon`; Zig xác minh hash
@@ -119,6 +118,19 @@ Chạy ví dụ hello-world:
 ```sh
 zig build hello_world -Doptimize=ReleaseSafe
 ```
+
+Bước run block ở foreground. Trong terminal, development log in ra ready summary
+trước request đầu tiên:
+
+```console
+$ zig build hello_world -Doptimize=ReleaseSafe
+µWebZockets v2.1.6  ready in 0.6 ms
+→ Local: http://127.0.0.1:3000/
+```
+
+Thời gian chính xác thay đổi theo host. Khi output bị redirect, wordmark màu và
+dòng địa chỉ local bị bỏ qua; log dùng dòng
+`info(server): server listening on 0.0.0.0:3000`. Dừng server bằng Ctrl+C.
 
 Nếu cả hai lệnh thoát với status 0, toolchain, cache dependency và build graph
 native đã sẵn sàng.

@@ -11,6 +11,9 @@ This tutorial starts an HTTPS server with a certificate generated in memory at
 startup. It needs no certificate files and no `openssl` command, which makes it
 suitable for local tests and demos.
 
+The repository base example is `zig build https_server` in
+`examples/https_server.zig`. The tutorial adds the shutdown signal watcher.
+
 ## Prerequisites
 
 - The server from [Your first HTTP server](/docs/getting-started/first-http-server).

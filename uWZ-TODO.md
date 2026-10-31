@@ -2,7 +2,7 @@
 
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
-> Owner: `docs-writer` with `dx_router` as product reviewer; `architect` approves scope, `integrator` closes milestones
+> Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
 > Last updated: 2026-10-31
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
@@ -116,7 +116,7 @@ add the missing tutorials, recipes, reference pages, and evidence.
 
 | Metric                          | Target                                                                                                    | Evidence                                                 |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| P0 pages published              | 100%                                                                                                      | Page register below; no `Planned` P0 rows                |
+| P0 pages published              | 100%                                                                                                      | Page register below; no `Planned` P0 rows at launch      |
 | P0 Vietnamese coverage          | 100%                                                                                                      | Mirrored `docs/vi/` pages, anchor parity                 |
 | Public features documented      | 100% of Appendix A rows                                                                                   | Coverage matrix has an owner page and example            |
 | Broken links and anchors        | 0                                                                                                         | `blume validate --strict`                                |
@@ -490,8 +490,8 @@ canonical page and names the public module.
 
 This register is the work queue. A page is not complete because the row exists;
 it is complete when the section contract and the global definition of done are
-satisfied. Rows marked `Live` are the current four-page site and the two pages
-that will be split during M1.
+satisfied. Rows marked `Live` include the landing page, the documentation home,
+What/Why, and every shipped Getting Started page.
 
 ### 5.1 Landing and documentation home
 
@@ -2412,8 +2412,8 @@ runner; Oxfmt/Oxlint own format and lint.
 | Docs validate         | PR touching docs/app     | `pnpm --filter uwz-docs exec blume validate --strict` | Yes                                 |
 | Docs build            | PR touching docs/app     | `pnpm exec vp run uwz-docs#build`                     | Yes                                 |
 | Docs audit            | PR touching docs/app     | `blume audit --fail-on warning`                       | Yes                                 |
-| Search smoke          | PR touching docs content | `pnpm test -- tests/docs`                             | Yes                                 |
-| Snippet compile       | PR touching code fences  | `sh scripts/check-docs-snippets.sh`                   | Yes                                 |
+| Search smoke          | PR touching docs content | `pnpm test -- tests/docs` (planned suite)             | Yes                                 |
+| Snippet compile       | PR touching code fences  | `sh scripts/check-docs-snippets.sh` (planned harness) | Yes                                 |
 | Link check (external) | Scheduled/nightly        | `blume validate --external --ignore ...`              | No, opens issue                     |
 | Redirect check        | Scheduled/nightly        | `blume audit --url <production>`                      | No, opens issue                     |
 | Lighthouse            | PR touching docs app     | Lighthouse CI on four routes                          | Warn at launch, block on regression |
@@ -2796,9 +2796,9 @@ These tasks are not page-specific. Assign one owner and one reviewer per task.
 | TD-005 | Add frontmatter/navigation tests under `tests/docs/`                              | P0       | M0        | `verification`                      | Missing title/description fails         |
 | TD-006 | Build the code-sample manifest and compile harness                                | P0       | M1        | `verification`                      | Runnable samples compile in CI          |
 | TD-007 | Add example-page synchronization                                                  | P1       | M5        | `verification`                      | Example source and page cannot drift    |
-| TD-008 | API reference generator spike                                                     | P0       | M3        | `astro-blume` + `dx_router`         | Decision recorded; drift check designed |
-| TD-009 | Generate `ServerConfig` and limits tables                                         | P0       | M5        | `dx_router`                         | Defaults match source                   |
-| TD-010 | Generate the error index from source                                              | P1       | M5        | `dx_router`                         | No stale error name                     |
+| TD-008 | API reference generator spike                                                     | P0       | M3        | `astro-blume` + `docs-writer`       | Decision recorded; drift check designed |
+| TD-009 | Generate `ServerConfig` and limits tables                                         | P0       | M5        | `docs-writer`                       | Defaults match source                   |
+| TD-010 | Generate the error index from source                                              | P1       | M5        | `docs-writer`                       | No stale error name                     |
 | TD-011 | Add C ABI header snapshot test                                                    | P0       | M5        | `ffi_edge`                          | Header and page stay in sync            |
 | TD-012 | Add search synonyms, tags, and popular pages                                      | P1       | M4        | `docs-writer`                       | Search QA table passes                  |
 | TD-013 | Add search index tests                                                            | P1       | M4        | `verification`                      | Canonical queries hit intended pages    |
@@ -2842,20 +2842,25 @@ These tasks are not page-specific. Assign one owner and one reviewer per task.
 
 | Decision             | Recommended default                                       | Why                                 | Owner         | Needed by |
 | -------------------- | --------------------------------------------------------- | ----------------------------------- | ------------- | --------- |
-| Production origin    | `https://uwz.farben.dev` or the final project domain      | Required for sitemap, canonical, OG | Product owner | M0        |
+| Production origin    | Applied: `https://uwz.farben.dev`; confirm before launch  | Required for sitemap, canonical, OG | Product owner | M0        |
 | Hosting              | Cloudflare Pages or Vercel static                         | Static, fast, previews, redirects   | `astro-blume` | M0        |
 | Analytics            | Cookie-free Plausible/Fathom/Umami                        | Privacy, no consent banner          | Product owner | M6        |
 | MCP/assistant        | Defer until a server host is approved                     | Static build cannot serve `/mcp`    | `architect`   | M6        |
-| Reference generation | Zig docs output if usable; otherwise generated JSON index | Avoid hand-maintained signatures    | `dx_router`   | M3        |
+| Reference generation | Zig docs output if usable; otherwise generated JSON index | Avoid hand-maintained signatures    | `docs-writer` | M3        |
 | Versioning           | Launch unversioned; cut `v2.1.6` when 2.2.0 ships         | Avoid empty version noise at launch | `docs-writer` | M7        |
 | Translation depth    | P0 fully mirrored; P1 within one milestone                | Balances quality and speed          | `docs-writer` | M1        |
 | Changelog source     | `CHANGELOG.md` as canonical, site renders a summary       | One source of truth                 | `docs-writer` | M5        |
-| Docs owner           | `docs-writer` with `dx_router` product review             | Clear accountability                | `architect`   | M0        |
+| Docs owner           | `docs-writer` with `integrator` product review            | Clear accountability                | `architect`   | M0        |
 | Launch scope         | All P0 rows plus P1 rows needed for navigation            | Prevents a hollow site              | `integrator`  | M6        |
 
 If a decision is not made by its needed-by milestone, record the blocker in the
 milestone dashboard and continue with the recommended default. Do not silently
 ship a different assumption.
+
+Production origin applied on 2026-10-31: `https://uwz.farben.dev`, the
+recommended default. If the final project domain differs, change
+`deployment.site` in `blume.config.ts` and rebuild; canonical URLs, the sitemap,
+Open Graph metadata, and the agent files follow that value.
 
 ## 16. Governance and ownership
 
@@ -2863,14 +2868,14 @@ ship a different assumption.
 
 | Surface                         | Accountable         | Responsible       | Consulted           | Informed      |
 | ------------------------------- | ------------------- | ----------------- | ------------------- | ------------- |
-| Product narrative and claims    | `dx_router`         | `docs-writer`     | `architect`         | `integrator`  |
+| Product narrative and claims    | `integrator`        | `docs-writer`     | `architect`         | `integrator`  |
 | Page prose and examples         | `docs-writer`       | `docs-writer`     | protocol specialist | `reviewer`    |
 | URL, navigation, Blume config   | `astro-blume`       | `astro-blume`     | `docs-writer`       | `integrator`  |
 | Svelte islands and components   | `svelte-engineer`   | `svelte-engineer` | `ui-stylist`        | `docs-writer` |
 | Visual design and accessibility | `ui-stylist`        | `ui-stylist`      | `docs-writer`       | `reviewer`    |
 | Verification and CI             | `verification`      | `verification`    | `integrator`        | `docs-writer` |
 | Security content                | `security-reviewer` | `docs-writer`     | `crypto_tls`        | `integrator`  |
-| API reference accuracy          | `dx_router`         | `docs-writer`     | module owners       | `reviewer`    |
+| API reference accuracy          | `docs-writer`       | `docs-writer`     | module owners       | `reviewer`    |
 | Release docs                    | `integrator`        | `docs-writer`     | module owners       | community     |
 
 ### 16.2 Change process
@@ -3211,8 +3216,8 @@ discoverable only by reading the source.
 | Root tests            | `pnpm test`                                                 | All pass                            |
 | i18n keys             | `pnpm i18n:check`                                           | 0 missing keys                      |
 | Site size             | `pnpm check:size`                                           | No source over 400 lines            |
-| Snippet compile       | `sh scripts/check-docs-snippets.sh`                         | All runnable samples compile        |
-| Search smoke          | `pnpm test -- tests/docs`                                   | Canonical queries pass              |
+| Snippet compile       | `sh scripts/check-docs-snippets.sh` (planned harness)       | All runnable samples compile        |
+| Search smoke          | `pnpm test -- tests/docs` (planned suite)                   | Canonical queries pass              |
 | Lighthouse            | `pnpm lighthouse:docs` (to add)                             | Budgets pass                        |
 
 The exact command names may change during M0. Record the final command in this
@@ -3274,12 +3279,13 @@ source at the time it is written.
 
 ### 18.6 Appendix F: document change log
 
-| Date       | Change                                                                                         | Author             |
-| ---------- | ---------------------------------------------------------------------------------------------- | ------------------ |
-| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices | Docs planning pass |
-| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                  | Docs planning pass |
-| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269    | Docs planning pass |
-| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects | Docs writing pass  |
+| Date       | Change                                                                                                     | Author             |
+| ---------- | ---------------------------------------------------------------------------------------------------------- | ------------------ |
+| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices             | Docs planning pass |
+| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                              | Docs planning pass |
+| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                | Docs planning pass |
+| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects             | Docs writing pass  |
+| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

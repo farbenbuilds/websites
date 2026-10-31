@@ -52,6 +52,9 @@ export default defineConfig({
     { from: "/vi/getting-started", to: "/vi/docs/getting-started", status: 301 },
     { from: "/vi/getting-started/:slug*", to: "/vi/docs/getting-started/:slug*", status: 301 },
   ],
+  deployment: {
+    site: "https://uwz.farben.dev",
+  },
   integrations: [svelte()],
   agents: {
     markdownComponents: {
@@ -67,7 +70,7 @@ export default defineConfig({
     },
   },
   theme: {
-    accent: "orange",
+    accent: { light: "#a64600", dark: "#ffb300" },
     radius: "none",
     background: {
       light: "#f4f0e6",

@@ -16,7 +16,7 @@ managed client ecosystem, or protocol behavior outside the documented surface.
 
 ## The problems it addresses
 
-| Problem                    | Consequence in a conventional server                            | uWebZockets response                                           |
+| Problem                    | Consequence in a conventional server                            | µWebZockets response                                           |
 | -------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
 | Per-request allocation     | Latency spikes, allocator contention, and unpredictable memory  | One startup slab; bounded request buffers and write queues     |
 | Unbounded queues           | Memory growth hides overload until the process is killed        | Fixed write queues; producers observe `error.WouldBlock`       |

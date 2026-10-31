@@ -1,6 +1,6 @@
 ---
 title: Your first cluster
-description: Start four shared-nothing workers, share one port with SO_REUSEPORT, verify the response, and drain the group cleanly.
+description: Start four shared-nothing workers, share one port with SO_REUSEPORT, verify the response, and shut down the group with a signal.
 sidebar:
   order: 10
 search:
@@ -10,6 +10,10 @@ search:
 This tutorial starts a thread-per-core worker group with four workers. Each
 worker owns its event loop, startup slab, and connection state, and binds the
 same port through `SO_REUSEPORT` where the platform supports it.
+
+The repository base example is `zig build shared_nothing_cluster` in
+`examples/shared_nothing_cluster.zig`. The tutorial adds the shutdown signal
+watcher.
 
 ## Prerequisites
 
@@ -55,7 +59,7 @@ pub fn main(init: std.process.Init) !void {
 }
 ```
 
-`build_cluster` takes the compiled worker capacity. The fourth argument is
+`build_cluster` takes the compiled worker capacity. The last argument is
 `ClusterOptions`, which can select a smaller active count and other cluster
 behavior. Use `build_cluster_from_environment` when `UWEBZOCKETS_WORKERS`
 should override the default.
@@ -115,7 +119,7 @@ build_cluster -> configure -> enable_https (optional) -> listen -> run
 | `listen`                 | Bind the shared port and start accepting.                      |
 | `run`                    | Spawn workers, join them, and return the first failure.        |
 | `catch_shutdown_signals` | Install one process-wide SIGINT/SIGTERM watcher for the group. |
-| `request_shutdown`       | Ask every worker to drain.                                     |
+| `request_shutdown`       | Request shutdown for every worker.                             |
 | `deinit`                 | Release worker storage after the loops stop.                   |
 
 `state()` reports `configured`, `running`, `stopped`, `releasing`, or
@@ -146,7 +150,9 @@ A spawn failure records phase `spawn`, an event-loop failure records phase
 - HTTP/3 and QUIC clustering are not supported. `init_http3` and `listen_udp`
   remain single-application APIs.
 - TLS clusters cover HTTP/1.1 and HTTP/2 over TCP. `enable_https` does not
-  configure client certificates; use `init_https_mtls` for mTLS.
+  configure client certificates. mTLS is available only through the
+  single-application `init_https_mtls`; a TLS cluster has no documented mTLS
+  path.
 - The Windows cluster uses `SO_REUSEADDR` because `SO_REUSEPORT` is not
   available there. Kernel distribution across listeners is unspecified.
 - A worker count larger than the physical core count wraps over the selected

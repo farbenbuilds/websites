@@ -1,6 +1,6 @@
 ---
 title: Cluster đầu tiên
-description: Khởi động bốn worker shared-nothing, chia sẻ một port qua SO_REUSEPORT, kiểm tra phản hồi và drain toàn bộ nhóm sạch sẽ.
+description: Khởi động bốn worker shared-nothing, chia sẻ một port qua SO_REUSEPORT, kiểm tra phản hồi và shutdown nhóm bằng tín hiệu.
 sidebar:
   order: 10
 search:
@@ -10,6 +10,10 @@ search:
 Hướng dẫn này khởi động nhóm worker thread-per-core với bốn worker. Mỗi worker
 sở hữu event loop, slab khởi động và trạng thái kết nối riêng, đồng thời bind
 cùng port qua `SO_REUSEPORT` ở nền tảng hỗ trợ.
+
+Bản base trong repository là `zig build shared_nothing_cluster` tại
+`examples/shared_nothing_cluster.zig`. Hướng dẫn thêm watcher tín hiệu
+shutdown.
 
 ## Điều kiện trước
 
@@ -55,7 +59,7 @@ pub fn main(init: std.process.Init) !void {
 }
 ```
 
-`build_cluster` nhận dung lượng worker lúc compile. Tham số thứ tư là
+`build_cluster` nhận dung lượng worker lúc compile. Tham số cuối là
 `ClusterOptions`, có thể chọn số worker active nhỏ hơn và hành vi cluster
 khác. Dùng `build_cluster_from_environment` khi muốn `UWEBZOCKETS_WORKERS`
 ghi đè mặc định.
@@ -79,7 +83,7 @@ curl -s http://127.0.0.1:3000/
 hello from a pinned shared-nothing worker
 ```
 
-Lặp request vài lần. Kernel cân bằng kết nối được accept across các listening
+Lặp request vài lần. Kernel cân bằng kết nối được accept trên các listening
 socket; một kết nối TCP riêng lẻ nằm trên worker đã accept nó.
 
 ## Nhóm sở hữu gì
@@ -103,8 +107,8 @@ có API hard-affinity.
 Thứ tự được hỗ trợ:
 
 ```text
-build_cluster -> configure -> enable_https (tùy chọn) -> listen -> run
--> request_shutdown hoặc tín hiệu -> deinit
+build_cluster -> configure -> enable_https (optional) -> listen -> run
+-> request_shutdown or signal -> deinit
 ```
 
 | Lệnh gọi                 | Quy tắc                                                    |
@@ -114,7 +118,7 @@ build_cluster -> configure -> enable_https (tùy chọn) -> listen -> run
 | `listen`                 | Bind port chia sẻ và bắt đầu accept.                       |
 | `run`                    | Spawn worker, join và trả lỗi đầu tiên.                    |
 | `catch_shutdown_signals` | Cài một watcher SIGINT/SIGTERM process-wide cho nhóm.      |
-| `request_shutdown`       | Yêu cầu mọi worker drain.                                  |
+| `request_shutdown`       | Yêu cầu shutdown cho mọi worker.                           |
 | `deinit`                 | Giải phóng lưu trữ worker sau khi loop dừng.               |
 
 `state()` báo `configured`, `running`, `stopped`, `releasing` hoặc `released`.
@@ -144,9 +148,10 @@ run ghi phase `cleanup`.
 - Cluster HTTP/3 và QUIC không được hỗ trợ. `init_http3` và `listen_udp` vẫn là
   API single-application.
 - TLS cluster bao phủ HTTP/1.1 và HTTP/2 trên TCP. `enable_https` không cấu
-  hình chứng chỉ client; dùng `init_https_mtls` cho mTLS.
+  hình chứng chỉ client. mTLS chỉ có qua `init_https_mtls` cho
+  single-application; TLS cluster không có đường mTLS được ghi.
 - Cluster Windows dùng `SO_REUSEADDR` vì không có `SO_REUSEPORT`. Phân phối
-  của kernel across listener là không xác định.
+  của kernel trên các listener là không xác định.
 - Worker count lớn hơn số lõi vật lý sẽ quấn vòng qua các lõi được chọn thay vì
   giữ slab cho worker không dùng.
 
