@@ -1,5 +1,5 @@
 import { localizeHref, type SiteLocale } from "../../site-links.ts";
-import type { InlinePart } from "../inline-text/inline-text.ts";
+import type { InlinePart } from "@farben/docs-components/inline-text.ts";
 
 export type LandingLocale = SiteLocale;
 
@@ -135,9 +135,19 @@ const LANDING: Readonly<Record<LandingLocale, LandingCopy>> = {
           value:
             "Noah Trần is a software engineer based in Ho Chi Minh, working across Svelte, Astro, Zig, Rust, design, and framework/tooling. They are the creator of ",
         },
-        { kind: "link", value: "Hope Art", href: "https://hope-art.app" },
+        {
+          kind: "link",
+          value: "Hope Art",
+          href: "https://hope-art.app",
+          className: "editorial-link",
+        },
         { kind: "text", value: " and now author and lead maintainer of " },
-        { kind: "link", value: "Farben", href: "https://github.com/farbenbuilds" },
+        {
+          kind: "link",
+          value: "Farben",
+          href: "https://github.com/farbenbuilds",
+          className: "editorial-link",
+        },
         { kind: "text", value: "." },
       ],
       socials: [
@@ -239,9 +249,19 @@ const LANDING: Readonly<Record<LandingLocale, LandingCopy>> = {
           value:
             "Noah Trần là kỹ sư phần mềm tại Thành phố Hồ Chí Minh, làm việc với Svelte, Astro, Zig, Rust, thiết kế và framework/tooling. Tác giả đã tạo ra ",
         },
-        { kind: "link", value: "Hope Art", href: "https://hope-art.app" },
+        {
+          kind: "link",
+          value: "Hope Art",
+          href: "https://hope-art.app",
+          className: "editorial-link",
+        },
         { kind: "text", value: " và hiện là tác giả, lead maintainer của " },
-        { kind: "link", value: "Farben", href: "https://github.com/farbenbuilds" },
+        {
+          kind: "link",
+          value: "Farben",
+          href: "https://github.com/farbenbuilds",
+          className: "editorial-link",
+        },
         { kind: "text", value: "." },
       ],
       socials: [

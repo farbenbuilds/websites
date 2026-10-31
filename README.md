@@ -16,7 +16,7 @@ Today `apps/` contains only the two documentation sites: `apps/uwz-docs` for [uW
 - The current docs apps use TypeScript and Blume. `uwz-docs` adds Astro, Svelte 5 islands, and `@farben/ui`; `vws-docs` adds local Astro landing components. A future app may choose another framework and owns its build configuration
 - Oxlint loads `eslint-plugin-svelte` and a local adapter for `eslint-plugin-astro` frontmatter rules. Oxlint's missing custom parser support keeps template-only rules out of scope
 - Oxfmt formats `.astro` and `.svelte` through its `astro` and `svelte` options, with the root `@astrojs/compiler-rs` and `svelte` dev dependencies
-- pnpm workspaces (`apps/*`, `packages/*`, `tools/*`)
+- pnpm workspaces (`apps/*`, `packages/*`, `tools/*`), with `@farben/docs-components` holding the shared docs inline-text renderer
 
 ## Development
 

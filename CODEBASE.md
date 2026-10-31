@@ -67,6 +67,8 @@ websites/
 │       ├── docs/vi/              # Vietnamese translations
 │       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
 ├── packages/
+│   ├── docs-components/          # @farben/docs-components shared Astro helpers
+│   │   └── src/                  # locale type, inline text model and renderer
 │   └── ui/                       # @farben/ui source components
 │       ├── src/lib/components/   # shadcn-svelte components
 │       ├── src/lib/styles/       # shared theme tokens
@@ -134,6 +136,10 @@ Documentation source is the product. Do not edit generated output under
 ignored by Git and recreated by the build.
 
 ## Shared UI
+
+`packages/docs-components` is `@farben/docs-components`, the shared `DocsLocale`
+type and Astro inline-text renderer used by both docs landing pages. It is
+consumed as source through its `exports` map.
 
 `packages/ui` is consumed as source. There is no package build step. Apps import
 components directly through the `exports` map and import the token stylesheet

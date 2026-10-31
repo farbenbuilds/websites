@@ -1,4 +1,4 @@
-import type { DocsLocale } from "../docs-locale.ts";
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
 
 export type IndexCardsLocale = DocsLocale;
 
@@ -35,7 +35,7 @@ const INDEX_CARDS: Readonly<Record<IndexCardsLocale, IndexCardsCopy>> = {
       {
         title: "Bắt đầu",
         description: "Cài ventiws và chạy một echo server cùng client.",
-        href: "/getting-started",
+        href: "/vi/getting-started",
         icon: "rocket",
       },
       {

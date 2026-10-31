@@ -13,6 +13,7 @@ const external = part.kind === "link" && isExternalHref(part.href);
 {part.kind === "strong" && <strong>{part.value}</strong>}
 {part.kind === "link" && (
   <a
+    class={part.className}
     href={part.href}
     target={external ? "_blank" : undefined}
     rel={external ? "noreferrer" : undefined}

@@ -1,5 +1,5 @@
 import { renderIndexCardsMarkdown } from "../index-cards/index-cards-data.ts";
-import { inlinePartsToMarkdown } from "../inline-text/inline-text.ts";
+import { inlinePartsToMarkdown } from "@farben/docs-components/inline-text.ts";
 import { landingCopy } from "./landing-copy.ts";
 
 export function renderLandingIntroMarkdown(locale: string | undefined): string {

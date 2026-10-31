@@ -1,4 +1,4 @@
-import type { DocsLocale } from "../docs-locale.ts";
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
 
 export type BenchmarkLocale = DocsLocale;
 

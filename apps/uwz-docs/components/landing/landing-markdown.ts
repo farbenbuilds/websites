@@ -1,7 +1,5 @@
-import { renderBenchmarkMarkdown } from "../benchmark/benchmark-section-data.ts";
-import { inlinePartsToMarkdown } from "../inline-text/inline-text.ts";
-import { renderIndexCardsMarkdown } from "../index-cards/index-cards-data.ts";
-import { renderSupportMarkdown } from "../support/support-section-data.ts";
+import { inlinePartsToMarkdown } from "@farben/docs-components/inline-text.ts";
+
 import { landingCopy } from "./landing-copy.ts";
 
 export function renderLandingHeroMarkdown(locale: string | undefined): string {
@@ -36,16 +34,4 @@ export function renderLandingSponsorMarkdown(locale: string | undefined): string
   const { sponsor } = landingCopy(locale);
 
   return `## ${sponsor.heading}\n\n${sponsor.body} [${sponsor.action.label}](${sponsor.action.href})`;
-}
-
-export function renderLandingMarkdown(locale: string | undefined): string {
-  return [
-    renderLandingHeroMarkdown(locale),
-    renderIndexCardsMarkdown(locale),
-    renderSupportMarkdown(locale),
-    renderBenchmarkMarkdown(locale),
-    renderLandingServerMarkdown(locale),
-    renderLandingAuthorMarkdown(locale),
-    renderLandingSponsorMarkdown(locale),
-  ].join("\n\n");
 }

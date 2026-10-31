@@ -1,0 +1,12 @@
+{
+  "name": "@farben/docs-components",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./docs-locale.ts": "./src/docs-locale.ts",
+    "./inline-text.ts": "./src/inline-text.ts",
+    "./inline-part.astro": "./src/inline-part.astro",
+    "./inline-text.astro": "./src/inline-text.astro"
+  }
+}

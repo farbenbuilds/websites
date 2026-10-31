@@ -127,6 +127,9 @@ Vite+ notes:
 - `apps/` contains only those two documentation apps today. A future marketing
   or shop app may use another framework; do not assume Blume, Astro, Svelte, or
   `@farben/ui`, and do not add it without a separate plan.
+- `packages/docs-components` is `@farben/docs-components`, the shared
+  `DocsLocale` type and Astro inline-text renderer used by both docs landing
+  pages.
 - `packages/ui` is `@farben/ui`, shared shadcn-svelte source components and
   design tokens. Add a registry primitive only when no existing primitive fits.
   Check `src/lib/components/ui` first, install from inside the package with

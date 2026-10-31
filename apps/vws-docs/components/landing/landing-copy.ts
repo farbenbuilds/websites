@@ -1,5 +1,5 @@
-import type { DocsLocale } from "../docs-locale.ts";
-import type { InlinePart } from "../inline-text/inline-text.ts";
+import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
+import type { InlinePart } from "@farben/docs-components/inline-text.ts";
 
 export type LandingLocale = DocsLocale;
 
@@ -300,7 +300,7 @@ const LANDING: Readonly<Record<LandingLocale, LandingCopy>> = {
         {
           kind: "link",
           value: "Bắt đầu",
-          href: "/getting-started",
+          href: "/vi/getting-started",
         },
         {
           kind: "text",
