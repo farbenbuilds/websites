@@ -14,6 +14,7 @@ describe("site links", () => {
   it("localizes internal links and leaves HTTPS destinations absolute", () => {
     expect(localizeHref("/getting-started", "vi")).toBe("/vi/getting-started");
     expect(localizeHref("/", "vi")).toBe("/vi");
+    expect(localizeHref("#highlights", "vi")).toBe("#highlights");
     expect(localizeHref("/getting-started", "en")).toBe("/getting-started");
     expect(localizeHref("https://github.com/farbenbuilds/uWebZockets", "vi")).toBe(
       "https://github.com/farbenbuilds/uWebZockets",
@@ -35,7 +36,8 @@ describe("site links", () => {
 
   it("points the footer at the author and the MIT license", () => {
     expect(AUTHOR_URL).toBe("https://github.com/Coder-Blue");
-    expect(siteFooterNote()).toBe("MIT License 2026");
+    expect(siteFooterNote("en")).toBe("MIT License 2026");
+    expect(siteFooterNote("vi")).toBe("MIT License 2026");
     expect(SITE_LINKS.map(({ href }) => href)).toEqual([
       AUTHOR_URL,
       PRODUCT_REPOSITORY_URL,

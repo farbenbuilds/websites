@@ -79,7 +79,10 @@ export default defineConfig({
     },
   },
   footer: {
-    copyright: siteFooterNote(),
+    copyright: {
+      en: siteFooterNote("en"),
+      vi: siteFooterNote("vi"),
+    },
     links: SITE_LINKS.map(({ label, href }) => ({ label, href })),
   },
 });

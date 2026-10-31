@@ -29,6 +29,10 @@ the working checklist.
 - No commented-out code and no `TODO`, `FIXME`, `XXX`, or `HACK`.
 - No `any`, unchecked casts, or non-null assertions used to silence uncertainty.
 - No `<style>` blocks in Svelte. No legacy Svelte syntax.
+- x18n owns component UI copy only, in `apps/<app>/locales/{locale}.json`.
+  Documentation content stays in `docs/` and `docs/vi/` MDX pages under Blume.
+  Never add MDX files, page prose, frontmatter, or docs routes to x18n
+  resources or locale JSON.
 - No file over 400 lines. No `part-2` files.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt settings
   live in `.oxfmtrc.json`.
@@ -59,6 +63,19 @@ Dependencies point downward. A domain module never imports a component or a
 page. A custom shared component lives in `packages/ui` only when at least two
 apps use it. A standard shadcn-svelte registry primitive may be installed when
 no existing primitive fits, even if one app uses it first.
+
+## Localization Boundary
+
+| Content | Owner | Check |
+| --- | --- | --- |
+| Component UI copy | `apps/<app>/locales/{locale}.json` | `pnpm i18n:check` |
+| Documentation prose, frontmatter, and headings | `docs/` and `docs/vi/` MDX | Docs check and build |
+| Navigation and Blume chrome | Blume | Docs check and build |
+
+- A string belongs to x18n only when a component renders it.
+- A future page such as `getting-started.mdx` or `api.mdx` is documentation
+  content. Add the English and Vietnamese MDX files, not locale keys.
+- Never add `docs/**` or `*.mdx` to an x18n resource pattern.
 
 ## Functional Pattern
 
@@ -111,6 +128,7 @@ review:
 pnpm lint
 pnpm format:check
 pnpm typecheck
+pnpm i18n:check
 pnpm test
 pnpm exec vp run <workspace>#check
 pnpm exec vp run <workspace>#build
@@ -131,5 +149,7 @@ Report the exact command and result. If a command could not run, say so.
 - Comments explain only a non-obvious why.
 - Types are explicit and external input is validated.
 - Svelte uses runes and Tailwind, not `<style>`.
+- Component UI copy is in locale JSON; documentation prose is in mirrored MDX
+  and not in x18n resources.
 - Formatting follows `.oxfmtrc.json`; lint follows `.oxlintrc.json`.
 - The narrowest check and the full gate are reported honestly.

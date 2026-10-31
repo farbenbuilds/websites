@@ -26,6 +26,8 @@ app's `docs/` folder before writing.
 - No comments in code unless the owning file needs a non-obvious why.
 - Do not edit generated output under `dist/` or `.blume/`.
 - Do not change navigation or build configuration without `astro-blume`.
+- Localize documentation as mirrored `docs/` and `docs/vi/` MDX. Do not add
+  page prose, frontmatter, or docs routes to x18n resources or locale JSON.
 - Do not document a command that was not run or a behavior that was not checked.
 
 ## Output

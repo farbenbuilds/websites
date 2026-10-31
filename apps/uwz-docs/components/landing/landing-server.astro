@@ -1,4 +1,5 @@
 ---
+import SectionHeader from "../section-header/section-header.astro";
 import { landingCopy, type LandingLocale } from "./landing-copy.ts";
 
 type Props = {
@@ -10,13 +11,12 @@ const copy = landingCopy(locale).server;
 ---
 
 <section class="docs-home-section" id="server" aria-labelledby="server-heading">
-  <div class="docs-home-section-head">
-    <p class="editorial-label">{copy.label}</p>
-    <div class="docs-home-section-intro">
-      <h2 id="server-heading">{copy.heading}</h2>
-      <p>{copy.intro}</p>
-    </div>
-  </div>
+  <SectionHeader
+    headingId="server-heading"
+    label={copy.label}
+    heading={copy.heading}
+    intro={copy.intro}
+  />
   <ol class="docs-home-steps" role="list">
     {copy.steps.map((step, index) => (
       <li class="docs-home-step">

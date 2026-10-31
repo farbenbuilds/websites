@@ -64,6 +64,9 @@ glass effects, and animation that competes with reading.
   Extract the pure logic.
 - A component file over 400 lines is a design smell even when it is mostly
   markup. Split the visual regions.
+- Component UI copy comes from `apps/<app>/locales/{locale}.json` and is checked
+  with `pnpm i18n:check`. Documentation prose stays in `docs/` and `docs/vi/`
+  MDX; never put page content into locale JSON.
 
 ## Accessibility
 

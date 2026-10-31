@@ -70,6 +70,21 @@ Failure behavior:
 Hand the island implementation to `svelte-engineer` and the visual review to
 `ui-stylist`. Keep static content in MDX.
 
+## Localization
+
+Documentation content is localized by mirrored MDX, not x18n.
+
+- English page: `docs/<slug>.mdx`.
+- Vietnamese page: `docs/vi/<slug>.mdx`.
+- Future pages such as `getting-started.mdx` and `api.mdx` follow the same
+  pattern.
+- Keep translated headings pinned to the English anchor ids so fragment links
+  resolve across locales.
+- Do not add MDX files, page prose, frontmatter, or docs routes to
+  `x18n.config.ts` or `locales/*.json`.
+- x18n checks component UI copy only. A docs-only change does not need
+  `pnpm i18n:check`; a component copy change does.
+
 ## Navigation and Discovery
 
 - Check that a new page appears in the expected navigation group.
@@ -95,6 +110,8 @@ Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
 
 - Frontmatter is present and accurate.
 - The page answers one reader goal.
+- The English and Vietnamese MDX files exist; docs content was not added to
+  x18n resources.
 - Commands are copy-pasteable and tested.
 - Links resolve and external links are descriptive.
 - Code fences have a language and no secrets.

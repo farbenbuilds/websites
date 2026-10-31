@@ -9,31 +9,22 @@
   import { generateStill } from "./butterfly-still";
 
   type ButterflyHeroProps = {
-    locale?: "en" | "vi";
+    labels: {
+      readonly pauseLabel: string;
+      readonly resumeLabel: string;
+      readonly scrollLabel: string;
+    };
     seed?: number;
     specimenCount?: number;
     scrollHref?: string;
     scrollLabel?: string;
   };
 
-  const COPY = {
-    en: {
-      pauseLabel: "Pause butterfly animation",
-      resumeLabel: "Resume butterfly animation",
-      scrollLabel: "Scroll to the documentation index",
-    },
-    vi: {
-      pauseLabel: "Tạm dừng hoạt ảnh bướm",
-      resumeLabel: "Tiếp tục hoạt ảnh bướm",
-      scrollLabel: "Cuộn đến mục lục tài liệu",
-    },
-  } as const;
-
   const PAUSE_KEY = "farben-butterfly-paused";
   const CONTENT_ROOT_SELECTOR = "[data-butterfly-content-root]";
 
   let {
-    locale = "en",
+    labels,
     seed = 20261029,
     specimenCount = DEFAULT_SPECIMEN_COUNT,
     scrollHref = "#docs-home-main",
@@ -48,7 +39,6 @@
   let paused = $state(false);
   let motionAllowed = $state(true);
 
-  const copy = $derived(COPY[locale] ?? COPY.en);
   const still = $derived(generateStill(seed, fallbackSpecimenCount(specimenCount)));
 
   function togglePause(): void {
@@ -115,11 +105,11 @@
       bind:this={canvas}
     ></canvas>
   </div>
-  <ScrollCue href={scrollHref} label={scrollLabel ?? copy.scrollLabel} avoid />
+  <ScrollCue href={scrollHref} label={scrollLabel ?? labels.scrollLabel} avoid />
   {#if ready && motionAllowed}
     <PlayPauseButton
       {paused}
-      labels={{ pause: copy.pauseLabel, resume: copy.resumeLabel }}
+      labels={{ pause: labels.pauseLabel, resume: labels.resumeLabel }}
       onToggle={togglePause}
       avoid
     />

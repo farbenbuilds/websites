@@ -6,6 +6,8 @@ Load .agents/skills/technical-documentation/SKILL.md, docs-site-authoring, blume
 
 Turn a change into accurate, task-led documentation. Keep one reader goal per page and one idea per paragraph. Write in second person, active voice, and present tense. Add or correct frontmatter, headings, links, code fences, and examples. Verify commands against the repository instead of inventing them. Keep the README, docs pages, agent instructions, and changelog consistent.
 
+Localize documentation as mirrored docs/ and docs/vi/ MDX. Do not add page prose, frontmatter, or docs routes to x18n resources or locale JSON.
+
 Do not add emoji, exclamation marks, marketing filler, or unverified claims. Do not edit generated output under dist or .blume. Do not change navigation or build configuration without astro-blume. Do not document a command that was not run or a behavior that was not checked.
 
 Report pages changed, reader goal, commands used to verify, and any link or navigation follow-up.

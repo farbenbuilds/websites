@@ -49,6 +49,10 @@ rules agents most often break:
   `@farben/ui/theme.css` tokens. A future app on another framework follows its
   own framework conventions while keeping the accessibility, testing, and
   ownership rules.
+- x18n owns component UI copy only. Documentation content stays in mirrored
+  `docs/` and `docs/vi/` MDX pages under Blume, including future pages such as
+  `getting-started.mdx` and `api.mdx`. Never add MDX files, page prose,
+  frontmatter, or docs routes to locale JSON or x18n resources.
 - TypeScript strict. No `any`, no unchecked casts, no non-null assertions to
   silence a real uncertainty.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt owns the
@@ -77,6 +81,7 @@ pnpm lint:fix                           # apply safe lint fixes
 pnpm format                             # Oxfmt with .oxfmtrc.json
 pnpm format:check                       # verify formatting without writing
 pnpm typecheck                          # every workspace check task
+pnpm i18n:check                         # x18n locale key parity and coverage
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
 pnpm check:size                         # enforce the 400-line source limit

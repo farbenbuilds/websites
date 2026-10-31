@@ -135,6 +135,7 @@ The default gate is `pnpm ready`. Targeted gates are additive:
 pnpm lint
 pnpm format:check
 pnpm typecheck
+pnpm i18n:check
 pnpm check:size
 pnpm test
 pnpm exec vp run -r test
@@ -156,6 +157,8 @@ A change is done when:
 - No emoji, dead code, commented-out code, or unexplained `TODO` was added.
 - Comments explain only non-obvious constraints.
 - Functional style is preserved; no class or hidden mutable state was added.
+- Component UI copy stays in locale JSON and passes `pnpm i18n:check`;
+  documentation pages stay in mirrored MDX and are not x18n resources.
 - Documentation and templates match the actual commands and behavior.
 - The required checks ran and passed, or a failure is reported with its cause.
 - The Reviewer has no unresolved blocking finding.
