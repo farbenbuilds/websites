@@ -32,6 +32,7 @@ Use the project-local CLI through pnpm on every host:
 pnpm lint
 pnpm format:check
 pnpm typecheck
+pnpm i18n:check
 pnpm test
 pnpm exec vp run -r build
 ```
@@ -56,19 +57,24 @@ websites/
 │   ├── uwz-docs/                 # uWebZockets documentation
 │   │   ├── docs/                # English Markdown and MDX source
 │   │   ├── docs/vi/             # Vietnamese translations
+│   │   ├── locales/             # en/vi UI copy checked by x18n
 │   │   ├── components/          # landing, index-cards, support, benchmark, colophon
 │   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
+│   │   ├── x18n.config.ts       # locale resources for uwz-docs
 │   │   └── theme.css            # host Tailwind entry and tokens
 │   └── vws-docs/                 # ventiws documentation
 │       ├── components/           # landing and index-cards Astro components
 │       ├── components.ts         # MDX component registration
 │       ├── docs/                 # English Markdown and MDX source
 │       ├── docs/vi/              # Vietnamese translations
+│       ├── locales/              # en/vi UI copy checked by x18n
+│       ├── site-links.ts         # footer labels and internal link localization
+│       ├── x18n.config.ts        # locale resources for vws-docs
 │       └── blume.config.ts       # site title, theme, i18n, GitHub edit links
 ├── packages/
 │   ├── docs-components/          # @farben/docs-components shared Astro helpers
-│   │   └── src/                  # locale type, inline text model and renderer
+│   │   └── src/                  # locale type, inline Markdown parser and renderer
 │   └── ui/                       # @farben/ui source components
 │       ├── src/lib/components/   # shadcn-svelte components
 │       ├── src/lib/styles/       # shared theme tokens
@@ -88,6 +94,7 @@ websites/
 ├── .oxlintrc.json                # Oxlint rules, plugins, and overrides
 ├── lefthook.yml                  # pre-commit hook definition
 ├── vitest.config.ts              # root Vitest configuration
+├── x18n.config.ts                # monorepo projects and shared locale defaults
 ├── AGENTS.md                     # root agent instructions
 ├── CODING_CONVENTION.md          # engineering contract
 ├── TEAM_WORKFLOW.md              # architect/developer/reviewer/integrator flow
@@ -131,6 +138,13 @@ routing, translated UI strings, locale-aware search, `llms.txt`, and the JSON
 API. Keep translated headings pinned to their English anchor ids so fragment
 links resolve in both languages.
 
+UI copy that is not MDX content lives in `apps/<app>/locales/{locale}.json`.
+Components read the whole locale object and parse inline Markdown into the shared
+`@farben/docs-components` inline-text model. x18n reads the same JSON files
+through each app's `x18n.config.ts`; run `pnpm i18n:check` from the root to check
+both projects. This keeps documentation content under Blume and translatable UI
+copy under one key/value source per app.
+
 Documentation source is the product. Do not edit generated output under
 `dist/` or generated Blume state under `.blume/`; those directories are
 ignored by Git and recreated by the build.
@@ -138,8 +152,8 @@ ignored by Git and recreated by the build.
 ## Shared UI
 
 `packages/docs-components` is `@farben/docs-components`, the shared `DocsLocale`
-type and Astro inline-text renderer used by both docs landing pages. It is
-consumed as source through its `exports` map.
+type, inline Markdown parser, and Astro inline-text renderer used by both docs
+landing pages. It is consumed as source through its `exports` map.
 
 `packages/ui` is consumed as source. There is no package build step. Apps import
 components directly through the `exports` map and import the token stylesheet

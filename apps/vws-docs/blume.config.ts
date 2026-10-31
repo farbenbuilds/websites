@@ -6,6 +6,7 @@ import {
   renderLandingIntroMarkdown,
   renderLandingNotesMarkdown,
 } from "./components/landing/landing-markdown.ts";
+import { siteLinkLabels } from "./site-links.ts";
 
 const introMarkdown: ComponentMarkdown = ({ props }) =>
   renderLandingIntroMarkdown(props.locale === "vi" ? "vi" : "en");
@@ -63,7 +64,10 @@ export default defineConfig({
   footer: {
     links: [
       {
-        label: { en: "ventiws on GitHub", vi: "ventiws trên GitHub" },
+        label: {
+          en: siteLinkLabels("en").repository,
+          vi: siteLinkLabels("vi").repository,
+        },
         href: "https://github.com/farbenbuilds/ventiws",
       },
     ],

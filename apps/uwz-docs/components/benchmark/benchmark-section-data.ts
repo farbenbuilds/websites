@@ -1,5 +1,8 @@
 import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
 
+import en from "../../locales/en.json" with { type: "json" };
+import vi from "../../locales/vi.json" with { type: "json" };
+
 export type BenchmarkLocale = DocsLocale;
 
 export type BenchmarkBar = {
@@ -34,6 +37,12 @@ export type BenchmarkCopy = {
   readonly arenaMetrics: readonly ArenaMetric[];
 };
 
+type BenchmarkMessages = typeof en;
+
+type ArenaMetricKey = keyof BenchmarkMessages["benchmark"]["metrics"];
+
+const MESSAGES: Record<BenchmarkLocale, BenchmarkMessages> = { en, vi };
+
 const BARS: readonly BenchmarkBar[] = [
   { name: "µWebZockets", value: "148,237", share: 100, leader: true },
   { name: "httpz", value: "109,571", share: 73.9 },
@@ -44,55 +53,45 @@ const BARS: readonly BenchmarkBar[] = [
   { name: "zzz", value: "40,453", share: 27.3 },
 ];
 
-const ARENA_METRICS: readonly ArenaMetric[] = [
-  { label: "HTTP/1.1", value: "3,736,192", unit: "req/s", detail: "4,096 connections" },
-  { label: "HTTP/2", value: "2,483,817", unit: "req/s", detail: "4,096 connections" },
-  { label: "WebSocket", value: "4,311,546", unit: "msg/s", detail: "4,096 connections" },
-  { label: "JSON compression", value: "16,639", unit: "req/s", detail: "4,096 connections" },
-  { label: "HTTP/3", value: "1,771", unit: "req/s", detail: "64 connections" },
+const ARENA_METRICS: readonly {
+  readonly key: ArenaMetricKey;
+  readonly label: string;
+  readonly value: string;
+  readonly unit: string;
+}[] = [
+  { key: "http1", label: "HTTP/1.1", value: "3,736,192", unit: "req/s" },
+  { key: "http2", label: "HTTP/2", value: "2,483,817", unit: "req/s" },
+  { key: "webSocket", label: "WebSocket", value: "4,311,546", unit: "msg/s" },
+  { key: "jsonCompression", label: "JSON compression", value: "16,639", unit: "req/s" },
+  { key: "http3", label: "HTTP/3", value: "1,771", unit: "req/s" },
 ];
 
-const BENCHMARKS: Readonly<Record<BenchmarkLocale, BenchmarkCopy>> = {
-  en: {
-    label: "03 / Benchmark",
-    heading: "Benchmarks.",
-    intro:
-      "Independent measurements from two Zig server benchmarks. Higher is better; the linked pages carry the full runs.",
-    benchLabel: "bench.zig.bd",
-    benchHeading: "Plaintext throughput",
-    benchMeta: "Requests per second · Plaintext · Linux x86_64 · 32 connections · 8 seconds",
-    benchAria: "Zig server plaintext throughput in requests per second",
-    benchSource: "Source: bench.zig.bd, captured 2026-10-30.",
-    bars: BARS,
-    arenaLabel: "HTTP Arena",
-    arenaHeading: "Cross-protocol results",
-    arenaMeta: "Alpha Round · 23 runs · updated 2026-10-28",
-    arenaSource: "Source: HTTP Arena. Requests per second unless noted.",
-    arenaLink: "http-arena.com",
-    arenaMetrics: ARENA_METRICS,
-  },
-  vi: {
-    label: "03 / Benchmark",
-    heading: "Hiệu năng.",
-    intro:
-      "Các phép đo độc lập từ hai benchmark máy chủ Zig. Cao hơn là tốt hơn; trang nguồn có đầy đủ kết quả.",
-    benchLabel: "bench.zig.bd",
-    benchHeading: "Thông lượng plaintext",
-    benchMeta: "Yêu cầu mỗi giây · Plaintext · Linux x86_64 · 32 kết nối · 8 giây",
-    benchAria: "Thông lượng plaintext của máy chủ Zig, yêu cầu mỗi giây",
-    benchSource: "Nguồn: bench.zig.bd, ghi nhận 2026-10-30.",
-    bars: BARS,
-    arenaLabel: "HTTP Arena",
-    arenaHeading: "Kết quả đa giao thức",
-    arenaMeta: "Alpha Round · 23 lần chạy · cập nhật 2026-10-28",
-    arenaSource: "Nguồn: HTTP Arena. Đơn vị là yêu cầu mỗi giây trừ khi có ghi chú.",
-    arenaLink: "http-arena.com",
-    arenaMetrics: ARENA_METRICS,
-  },
-};
-
 export function benchmarkCopy(locale: string | undefined): BenchmarkCopy {
-  return locale === "vi" ? BENCHMARKS.vi : BENCHMARKS.en;
+  const resolvedLocale: BenchmarkLocale = locale === "vi" ? "vi" : "en";
+  const messages = MESSAGES[resolvedLocale].benchmark;
+
+  return {
+    label: messages.label,
+    heading: messages.heading,
+    intro: messages.intro,
+    benchLabel: "bench.zig.bd",
+    benchHeading: messages.benchHeading,
+    benchMeta: messages.benchMeta,
+    benchAria: messages.benchAria,
+    benchSource: messages.benchSource,
+    bars: BARS,
+    arenaLabel: "HTTP Arena",
+    arenaHeading: messages.arenaHeading,
+    arenaMeta: messages.arenaMeta,
+    arenaSource: messages.arenaSource,
+    arenaLink: "http-arena.com",
+    arenaMetrics: ARENA_METRICS.map(({ key, label, value, unit }) => ({
+      label,
+      value,
+      unit,
+      detail: messages.metrics[key].detail,
+    })),
+  };
 }
 
 export function renderBenchmarkMarkdown(locale: string | undefined): string {

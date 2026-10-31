@@ -1,0 +1,190 @@
+{
+  "butterfly": {
+    "pauseLabel": "Pause butterfly animation",
+    "resumeLabel": "Resume butterfly animation",
+    "scrollLabel": "Scroll to the documentation index"
+  },
+  "landing": {
+    "hero": {
+      "eyebrow": "Zig / HTTP / WebSocket / RPC",
+      "title": "µWebZockets",
+      "summary": "A zero-allocation, shared-nothing server framework for Zig. HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and RPC through one type-safe `Request`/`Response` API.",
+      "primaryAction": "Getting Started",
+      "secondaryAction": "View on GitHub",
+      "dictionary": {
+        "label": "Dictionary entry for the word fast",
+        "lines": {
+          "headword": "速い",
+          "reading": "/はやい/ · 形容詞",
+          "definitionOne": "1. 動きや動作の速度が大きい。",
+          "definitionTwo": "2. Zig で HTTP、WebSocket、RPC をゼロアロケーションで処理する。"
+        },
+        "status": "Semi-production ready."
+      }
+    },
+    "server": {
+      "label": "04 / Server",
+      "heading": "Use µWZ as your server",
+      "intro": "Keep the Zig application you already have. The runtime takes over transport, TLS, limits, and shutdown without changing how your handlers are written.",
+      "steps": {
+        "addPackage": {
+          "title": "Add the package",
+          "text": "Fetch the pinned dependencies through the Zig package manager. No CMake, Ninja, Go, Perl, Python, or system zlib."
+        },
+        "mountHandlers": {
+          "title": "Mount your handlers",
+          "text": "Register HTTP, WebSocket, RPC, and static routes on one app. Your handlers stay ordinary Zig functions."
+        },
+        "runWhereYouDeploy": {
+          "title": "Run where you deploy",
+          "text": "Start one process or a thread-per-core cluster. Each worker owns its event loop, slab set, and physical core affinity where the platform allows."
+        }
+      },
+      "ctaText": "Bring your routes. The runtime owns transport, TLS, limits, and shutdown.",
+      "cta": "Read the setup guide"
+    },
+    "author": {
+      "label": "05 / Author",
+      "name": "Noah Trần",
+      "avatarAlt": "Noah Trần",
+      "bio": "Noah Trần is a software engineer based in Ho Chi Minh, working across Svelte, Astro, Zig, Rust, design, and framework/tooling. They are the creator of [Hope Art](https://hope-art.app) and now author and lead maintainer of [Farben](https://github.com/farbenbuilds).",
+      "socials": {
+        "facebook": {
+          "label": "Facebook",
+          "value": "Noah Trần",
+          "ariaLabel": "Facebook: Noah Trần"
+        },
+        "x": {
+          "label": "X",
+          "value": "@sh1ro_code",
+          "ariaLabel": "X: @sh1ro_code"
+        }
+      }
+    },
+    "sponsor": {
+      "label": "06 / Sponsor",
+      "heading": "Sponsor the maintainers.",
+      "logoAlt": "Farben logo",
+      "body": "Thank you to the Farben maintainers for their hard work across the runtime, packages, and documentation. If µWebZockets helps your service, sponsor the work on GitHub.",
+      "action": "Sponsor Farben"
+    }
+  },
+  "indexCards": {
+    "label": "01 / Index",
+    "heading": "Start here.",
+    "intro": "Six ways into the runtime: install it, learn the ownership rule, migrate a service, configure the server, understand the worker model, or explore type-safety.",
+    "items": {
+      "gettingStarted": {
+        "title": "Getting Started",
+        "description": "Install the package and run your first server."
+      },
+      "shareNothing": {
+        "title": "Share nothing rule",
+        "description": "One worker, one event loop, one slab set, no shared state."
+      },
+      "migrate": {
+        "title": "Migrate existing projects",
+        "description": "Bring an existing Zig service onto the runtime."
+      },
+      "configure": {
+        "title": "Configure a uWZ server",
+        "description": "Set capacities, TLS, routes, and lifecycle explicitly."
+      },
+      "clusterWorker": {
+        "title": "Understand a Cluster/Worker",
+        "description": "Follow how workers share ports and own their state."
+      },
+      "typeSafety": {
+        "title": "Explore Type-safety",
+        "description": "See how typed requests, responses, and routes stay checked at compile time."
+      }
+    }
+  },
+  "support": {
+    "label": "02 / Support",
+    "heading": "What µWZ supports",
+    "intro": "One server surface for the transports a Zig service actually needs, with the same routing, limits, and lifecycle across each one.",
+    "items": {
+      "http": {
+        "title": "HTTP/1.1 and HTTP/2",
+        "text": "Persistent connections, streaming bodies, multiplexed streams, and TLS ALPN in one handler model."
+      },
+      "http3": {
+        "title": "HTTP/3",
+        "text": "QUIC over UDP with the same routing and handlers as the TCP transports. QUIC clustering is not supported."
+      },
+      "webSocket": {
+        "title": "WebSocket",
+        "text": "RFC 6455 with compression, pub/sub, and heartbeats for long-lived connections."
+      },
+      "rpc": {
+        "title": "RPC",
+        "text": "Typed request and response calls that share the app, limits, and worker model."
+      },
+      "tls": {
+        "title": "TLS",
+        "text": "Ephemeral and production credentials, ALPN, 0-RTT, and mutual TLS."
+      },
+      "staticAssets": {
+        "title": "Static assets",
+        "text": "Serve files from the same process instead of adding a second asset server."
+      },
+      "workers": {
+        "title": "Thread-per-core workers",
+        "text": "Shared-nothing workers with one event loop each, pinned to physical cores where the platform allows."
+      },
+      "zeroAllocation": {
+        "title": "Zero allocation",
+        "text": "Bounded startup slabs and explicit capacity limits on every request path."
+      }
+    },
+    "platformsLabel": "Platforms",
+    "platformNote": "Linux runs the hosted runtime matrix; macOS is supported and cross-compiled; Windows is compile-checked.",
+    "platformHeader": "Platform",
+    "architectureHeader": "Architecture",
+    "statusHeader": "Status",
+    "platforms": {
+      "linuxX86": "Tested",
+      "linuxArm64": "Tested",
+      "macosX86": "Supported",
+      "macosArm64": "Supported",
+      "windowsX86": "Compile-checked"
+    }
+  },
+  "benchmark": {
+    "label": "03 / Benchmark",
+    "heading": "Benchmarks.",
+    "intro": "Independent measurements from two Zig server benchmarks. Higher is better; the linked pages carry the full runs.",
+    "benchHeading": "Plaintext throughput",
+    "benchMeta": "Requests per second · Plaintext · Linux x86_64 · 32 connections · 8 seconds",
+    "benchAria": "Zig server plaintext throughput in requests per second",
+    "benchSource": "Source: bench.zig.bd, captured 2026-10-30.",
+    "arenaHeading": "Cross-protocol results",
+    "arenaMeta": "Alpha Round · 23 runs · updated 2026-10-28",
+    "arenaSource": "Source: HTTP Arena. Requests per second unless noted.",
+    "metrics": {
+      "http1": {
+        "detail": "4,096 connections"
+      },
+      "http2": {
+        "detail": "4,096 connections"
+      },
+      "webSocket": {
+        "detail": "4,096 connections"
+      },
+      "jsonCompression": {
+        "detail": "4,096 connections"
+      },
+      "http3": {
+        "detail": "64 connections"
+      }
+    }
+  },
+  "siteLinks": {
+    "author": "Author",
+    "source": "Source",
+    "license": "License",
+    "footerNote": "MIT License 2026",
+    "colophonLabel": "Documentation colophon"
+  }
+}

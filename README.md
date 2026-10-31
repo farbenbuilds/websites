@@ -16,6 +16,7 @@ Today `apps/` contains only the two documentation sites: `apps/uwz-docs` for [uW
 - The current docs apps use TypeScript and Blume. `uwz-docs` adds Astro, Svelte 5 islands, and `@farben/ui`; `vws-docs` adds local Astro landing components. A future app may choose another framework and owns its build configuration
 - Oxlint loads `eslint-plugin-svelte` and a local adapter for `eslint-plugin-astro` frontmatter rules. Oxlint's missing custom parser support keeps template-only rules out of scope
 - Oxfmt formats `.astro` and `.svelte` through its `astro` and `svelte` options, with the root `@astrojs/compiler-rs` and `svelte` dev dependencies
+- [x18n](https://x18n.dev) checks the per-app JSON locale files for missing keys and translation coverage
 - pnpm workspaces (`apps/*`, `packages/*`, `tools/*`), with `@farben/docs-components` holding the shared docs inline-text renderer
 
 ## Development
@@ -39,6 +40,7 @@ pnpm lint:fix                             # apply safe lint fixes
 pnpm format                               # format with .oxfmtrc.json
 pnpm format:check                         # verify formatting
 pnpm typecheck                            # type-check every workspace
+pnpm i18n:check                           # check locale key parity and coverage
 pnpm test                                 # run the root Vitest suite
 pnpm test:watch                           # run Vitest in watch mode
 pnpm exec vp run uwz-docs#build           # build the uWebZockets docs site
@@ -89,6 +91,22 @@ internal imports such as `@farben/ui/utils.js`.
 A standard registry primitive may be installed when no existing primitive fits,
 even if one app uses it first. A custom shared component still needs at least two
 consumers. App-specific composition stays in the app.
+
+## Internationalization
+
+Each docs app keeps its localized UI copy in `apps/<app>/locales/{locale}.json`
+and its x18n settings in `apps/<app>/x18n.config.ts`. The root
+`x18n.config.ts` declares both apps as projects. Blume still owns documentation
+content under `docs/` and `docs/vi/`; x18n checks the key/value UI copy, not MDX
+pages.
+
+```bash
+pnpm i18n:check        # x18n check: missing keys and coverage for en and vi
+pnpm exec x18n doctor  # show the detected presets, resources, and scanners
+```
+
+Add new UI strings to both `en.json` and `vi.json` in the same app. If a locale
+file is not detected, run `x18n doctor` before changing the resource pattern.
 
 ## Contributing
 

@@ -1,0 +1,48 @@
+{
+  "landing": {
+    "intro": "**ventiws** là một bản triển khai WebSocket cho Node.js với API của [ws](https://github.com/websockets/ws), được cung cấp dưới dạng native addon với bộ máy đóng khung viết bằng [Zig](https://ziglang.org). Nó nhắm tới `ws` 8.22.0 và tái tạo hành vi quan sát được của bản phát hành đó thay vì mã nguồn. ventiws không liên kết với dự án `ws` và không nhúng mã nguồn nào của dự án đó.",
+    "highlights": {
+      "items": {
+        "wsApi": {
+          "lead": "API `ws`",
+          "text": "`WebSocket` và `WebSocketServer`, với giá trị mặc định của tùy chọn khớp `ws`: `maxPayload` 100 MiB, `maxFragments` 16384 và `closeTimeout` 30000 ms."
+        },
+        "nativeAddon": {
+          "lead": "Native addon",
+          "text": "bộ máy đóng khung viết bằng Zig; các constructor là hàm thuần trả về bản ghi trạng thái, không `class`, không `this`, không prototype."
+        },
+        "noCompiler": {
+          "lead": "Không cần compiler khi cài",
+          "text": "các gói binding theo nền tảng giúp `pnpm add ventiws` không cần toolchain."
+        },
+        "compatibility": {
+          "lead": "Khả năng tương thích có thể kiểm chứng",
+          "text": "mọi mục bề mặt của `ws`, trạng thái và bài kiểm thử bằng chứng đều được theo dõi trong ma trận tương thích của kho."
+        },
+        "devLogger": {
+          "lead": "Dev logger",
+          "text": "các bản ghi vòng đời được in ngay khi xảy ra (splash, open, close, error) mà không cần đăng ký callback."
+        }
+      }
+    },
+    "notes": {
+      "warning": "ventiws đang ở giai đoạn trước 1.0: bề mặt API có thể thay đổi giữa các bản beta, và Windows chưa được hỗ trợ. Ma trận tương thích và các khác biệt đã biết so với `ws` nằm trong [kho](https://github.com/farbenbuilds/ventiws).",
+      "note": "Trang tài liệu này đang được chuẩn bị. [Bắt đầu](/getting-started) hướng dẫn cài đặt và sử dụng lần đầu; các hướng dẫn còn lại sẽ được bổ sung."
+    }
+  },
+  "indexCards": {
+    "cards": {
+      "gettingStarted": {
+        "title": "Bắt đầu",
+        "description": "Cài ventiws và chạy một echo server cùng client."
+      },
+      "github": {
+        "title": "ventiws trên GitHub",
+        "description": "Mã nguồn, bản phát hành và nơi theo dõi issue."
+      }
+    }
+  },
+  "siteLinks": {
+    "repository": "ventiws trên GitHub"
+  }
+}

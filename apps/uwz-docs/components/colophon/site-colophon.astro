@@ -3,6 +3,7 @@ import {
   SITE_LINKS,
   localizeHref,
   resolveLocale,
+  siteColophonLabel,
   siteFooterNote,
   type SiteLocale,
 } from "../../site-links";
@@ -14,7 +15,7 @@ type Props = {
 const { locale } = Astro.props;
 const resolvedLocale = locale ?? resolveLocale(Astro.url.pathname);
 
-const label = resolvedLocale === "vi" ? "Chân trang tài liệu" : "Documentation colophon";
+const label = siteColophonLabel(resolvedLocale);
 
 const isExternal = (href: string): boolean =>
   href.startsWith("http://") || href.startsWith("https://");
@@ -35,5 +36,5 @@ const isExternal = (href: string): boolean =>
       </li>
     ))}
   </ul>
-  <p>{siteFooterNote()}</p>
+  <p>{siteFooterNote(resolvedLocale)}</p>
 </footer>

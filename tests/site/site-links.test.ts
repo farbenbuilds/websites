@@ -35,7 +35,8 @@ describe("site links", () => {
 
   it("points the footer at the author and the MIT license", () => {
     expect(AUTHOR_URL).toBe("https://github.com/Coder-Blue");
-    expect(siteFooterNote()).toBe("MIT License 2026");
+    expect(siteFooterNote("en")).toBe("MIT License 2026");
+    expect(siteFooterNote("vi")).toBe("MIT License 2026");
     expect(SITE_LINKS.map(({ href }) => href)).toEqual([
       AUTHOR_URL,
       PRODUCT_REPOSITORY_URL,

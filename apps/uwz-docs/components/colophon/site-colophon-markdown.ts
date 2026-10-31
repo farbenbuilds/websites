@@ -7,5 +7,5 @@ export function renderSiteColophonMarkdown(locale: string | undefined): string {
     "\n",
   );
 
-  return `${links}\n\n${siteFooterNote()}`;
+  return `${links}\n\n${siteFooterNote(resolvedLocale)}`;
 }
