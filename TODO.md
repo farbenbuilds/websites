@@ -706,7 +706,9 @@ Hero note: the palette is already a CSS contract
 `--farben-field-accent`, and `--farben-field-wing-*`). The component and engine
 stay identical; each app maps the aliases in its own `theme.css`. ventiws maps
 its teal and cool-paper values. Do not add per-app forks or color props to the
-component.
+component. The shared grain tile lives in `@farben/ui` and is exposed as
+`--farben-noise-texture`, so both hero hosts use the same texture without
+duplicating the asset.
 
 Planned slices:
 
@@ -990,6 +992,11 @@ field.
   viewport; the field fills the viewport behind it. The Blume header is fixed,
   hidden, and `inert` while the hero is in view; it reveals after the reader
   scrolls past the hero. Docs pages and the no-JS path keep the header visible.
+- **Paper grain:** the repository-owned 100x100 noise tile lives in
+  `@farben/ui` and is exposed as `--farben-noise-texture`. The hero repeats it at
+  100px and blends with `soft-light` at 12% in both themes. It sits below the
+  butterfly canvas and controls, so the art, copy, and the canvas dot matrix stay
+  crisp. The grain is static; reduced-motion behavior is unchanged.
 - **Specimens:** original procedural ASCII butterflies are rasterized into the
   cell grid. Three faceted species use coloured wing tiles from the host
   `--farben-field-wing-*` aliases, with body-locked veins, bands, margins, and

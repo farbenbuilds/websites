@@ -2,7 +2,7 @@
   position: absolute;
   bottom: clamp(1.5rem, 4vh, 2.5rem);
   left: 50%;
-  z-index: 3;
+  z-index: 4;
   display: grid;
   width: 2.75rem;
   height: 2.75rem;

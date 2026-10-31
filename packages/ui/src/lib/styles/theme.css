@@ -9,6 +9,7 @@
 
 @import "shadcn-svelte/tailwind.css";
 @import "tw-animate-css";
+@import "./noise.css";
 
 :root {
   --background: oklch(1 0 0);
