@@ -131,6 +131,7 @@ html [data-blume-nav-tree] a {
 }
 
 html [data-blume-nav-tree] .blume-nav-summary {
+  border: 1px solid transparent;
   font-family: var(--blume-font-body);
   font-size: 0.82rem;
   font-weight: 600;
@@ -138,20 +139,27 @@ html [data-blume-nav-tree] .blume-nav-summary {
   text-transform: none;
   transition:
     background-color 160ms ease,
-    box-shadow 160ms ease,
+    border-color 160ms ease,
     color 160ms ease;
 }
 
 html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary {
-  background: color-mix(in srgb, var(--blume-accent) 12%, transparent);
-  box-shadow:
-    inset 2px 0 0 var(--blume-accent),
-    0 0 18px color-mix(in srgb, var(--blume-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--blume-accent) 30%, var(--blume-border));
+  background: color-mix(in srgb, var(--blume-accent) 9%, var(--blume-background));
+  color: var(--blume-foreground);
+}
+
+html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary :is(svg) {
   color: var(--blume-accent);
 }
 
-html [data-blume-nav-tree] details:has(> div a[aria-current="page"]) > summary :is(a, span, svg) {
-  color: var(--blume-accent);
+html
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > summary
+  .blume-nav-summary-link {
+  color: var(--blume-foreground);
+  font-weight: 700;
 }
 
 html [data-blume-nav-tree] a:hover {
@@ -160,8 +168,8 @@ html [data-blume-nav-tree] a:hover {
 }
 
 html [data-blume-nav-tree] a[aria-current="page"] {
-  background: color-mix(in srgb, var(--blume-accent) 8%, transparent);
-  color: var(--blume-accent);
+  background: var(--blume-muted);
+  color: var(--blume-foreground);
   font-weight: 600;
 }
 
