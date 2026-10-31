@@ -15,6 +15,9 @@ catalogs:
     blume:
       specifier: ^2.2.6
       version: 2.2.6
+    eslint:
+      specifier: 10.13.0
+      version: 10.13.0
     eslint-plugin-astro:
       specifier: 3.2.1
       version: 3.2.1
@@ -53,6 +56,9 @@ importers:
       '@astrojs/compiler-rs':
         specifier: 'catalog:'
         version: 0.5.2
+      eslint:
+        specifier: 'catalog:'
+        version: 10.13.0(jiti@2.7.0)
       eslint-plugin-astro:
         specifier: 'catalog:'
         version: 3.2.1(eslint@10.13.0(jiti@2.7.0))

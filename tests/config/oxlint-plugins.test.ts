@@ -15,6 +15,12 @@ describe("oxlint plugin configuration", () => {
     expect(config).toContain('{ "name": "svelte", "specifier": "eslint-plugin-svelte" }');
   });
 
+  it("declares the ESLint peer used by the plugins", async () => {
+    const manifest = await readFile(new URL("../../package.json", import.meta.url), "utf8");
+
+    expect(manifest).toContain('"eslint": "catalog:"');
+  });
+
   it("scopes Astro and Svelte rules to their file types", async () => {
     const config = await readConfigText();
 
