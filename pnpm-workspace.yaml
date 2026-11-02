@@ -11,7 +11,7 @@ catalog:
   "@x18n/cli": 0.1.3
   "@x18n/core": 0.1.3
   blume: ^2.2.6
-  eslint: 10.13.0
+  eslint: 10.14.0
   eslint-plugin-astro: 3.2.1
   eslint-plugin-svelte: 3.23.1
   lefthook: ^2.2.2
