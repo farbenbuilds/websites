@@ -1,0 +1,141 @@
+---
+title: Response bất đồng bộ
+description: Trì hoãn response bằng token có thể copy, hoàn tất đúng một lần và biết điều gì bị huỷ khi kết nối ngắt trên owning loop.
+sidebar:
+  order: 7
+search:
+  tags: [concept, streaming]
+---
+
+Handler bất đồng bộ trả về trước khi có body và hoàn tất response sau đó qua
+token `AsyncResponse`. Token bảo đảm một lần completion duy nhất, fail closed
+khi peer đã rời đi và không thêm allocation nào vào request path.
+
+## Đăng ký handler trì hoãn
+
+Dùng `route_async` hoặc shortcut theo method như `get_async` khi công việc không
+thể xong trong callback: một timer, một lookup, hoặc kết quả đến từ nơi khác.
+Callback nhận request và token thay cho `*Response`:
+
+```zig
+fn handler(req: *uz.Request, token: uz.AsyncResponse) void
+```
+
+Field request còn hợp lệ cho tới khi token hoàn tất, nên slice mà handler đã giữ
+vẫn đọc được khi response đang park. Bản thân giá trị `*Request` chỉ hợp lệ trong
+callback.
+
+## Hoàn tất một lần, trên owning loop
+
+```zig examples/delay_server.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+/// Largest delay the example accepts; keeps parked requests bounded.
+const max_delay_ms: u64 = 60_000;
+
+fn parse_delay(raw: []const u8) ?u64 {
+    if (raw.len == 0) return null;
+    const value = std.fmt.parseInt(u64, raw, 10) catch return null;
+    return @min(value, max_delay_ms);
+}
+
+fn delay_handler(req: *uz.Request, token: uz.AsyncResponse) void {
+    const delay = parse_delay(req.get_param("ms") orelse "");
+    if (delay == null) {
+        token.complete("400 Bad Request", "Invalid delay") catch |err| {
+            std.log.err("delay response failed: {}", .{err});
+        };
+        return;
+    }
+
+    // The response fields are static, so the parked request needs no
+    // allocation while it waits on the worker's timing wheel.
+    token.sleep_complete(
+        delay.?,
+        "200 OK",
+        "Content-Type: text/plain\r\n",
+        "delayed response",
+    ) catch |err| {
+        token.complete("500 Internal Server Error", @errorName(err)) catch |complete_err| {
+            std.log.err("delay response failed: {} (after {})", .{ complete_err, err });
+        };
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.route_async(.get, "/delay/:ms", delay_handler);
+
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Token là một giá trị nhỏ: con trỏ tới slot thuộc connection hoặc stream, cộng
+với generation đã arm nó. Copy token là an toàn. Mọi bản copy đều có thể hoàn
+tất response, và lần completion đầu tiên có hiệu lực.
+
+Slot thuộc event loop của transport, nên mọi method completion chỉ được gọi trên
+event loop: `complete`, `complete_with_headers`, `sleep` và `sleep_complete`.
+Nếu thread khác tạo ra body, hãy đưa byte về loop đó qua cơ chế của ứng dụng rồi
+gọi `complete` tại đó. Truyền token sang thread không chuyển slot và không làm
+lời gọi trở nên thread-safe.
+
+## Completion có thể báo gì
+
+| Kết quả                               | Ý nghĩa                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| `error.AsyncResponseExpired`          | Generation đã đổi: peer ngắt kết nối, slot được tái sử dụng, hoặc response đã bị huỷ. |
+| `error.AsyncResponseAlreadyCompleted` | Generation này đã hoàn tất rồi.                                                       |
+| `error.InvalidStatus`                 | Status line không phải status response hợp lệ.                                        |
+| `error.InvalidHeaders`                | Header block không qua được kiểm tra response.                                        |
+| `error.BodyNotAllowed`                | Có body cho một status không cho phép body.                                           |
+| `error.TimerUnavailable`              | Transport không có timer slot thuộc connection.                                       |
+
+`AsyncResponseExpired` là terminal. Connection đã mất hoặc slot đã thuộc request
+khác, nên thử lại không thể giao response. Hãy bỏ công việc thay vì giữ nó lại
+để làm sau.
+
+## Park mà không allocation
+
+`AsyncResponse.sleep` park một resume callback tuỳ biến:
+
+```zig
+token.sleep(delay_ms, resume_context, resume) catch {};
+```
+
+`resume` chạy trên owning loop sau `delay_ms`; nó phải hoàn tất đúng token này.
+`sleep_complete` park luôn phần completion:
+
+```zig
+token.sleep_complete(delay_ms, status, headers, body) catch {};
+```
+
+Với `sleep_complete`, ba slice được lưu trong parking slot thuộc connection, nên
+caller phải giữ chúng hợp lệ cho tới khi delay hết hạn. Static string, buffer do
+handler sở hữu và field request mượn từ chính connection này đều dùng được, miễn
+là chúng còn hợp lệ trong khoảng thời gian đó.
+
+Cả hai method dùng timing wheel của từng worker. HTTP/1.1 có một parking slot
+mỗi connection và HTTP/2 ánh xạ một slot mỗi stream, nên không đường nào cấp
+phát.
+
+## Huỷ khi kết nối ngắt
+
+Peer ngắt kết nối sẽ huỷ slot của connection và tăng generation của nó. Mọi bản
+copy còn outstanding sau đó fail với `error.AsyncResponseExpired`, kể cả bản
+copy đang park trong timer chưa chạy. Token pending giữ request buffer hoặc
+stream mà nó park trên đó không bị tái sử dụng, nên huỷ cũng là cách giải phóng
+storage đó.
+
+## Tiếp theo
+
+- [Vòng đời response](/docs/concepts/response-lifecycle) bao quát cách kết
+  thúc đồng bộ, streaming và completion best-effort.
+- [Quyền sở hữu và vòng đời](/docs/concepts/ownership-and-lifetimes) giải
+  thích field request được mượn còn hợp lệ bao lâu.
+- [Backpressure](/docs/concepts/backpressure) chỉ cách xử lý khi write ring
+  đầy thay vì trì hoãn response.

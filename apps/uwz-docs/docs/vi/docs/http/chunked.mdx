@@ -1,0 +1,135 @@
+---
+title: Chunked response
+description: Điều khiển body chunked HTTP/1.1 bằng begin_chunked, write_chunk và end_chunks, và biết khi nào producer tốt hơn.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, streaming]
+---
+
+`begin_chunked` gửi response head và để body mở cho các chunk tường minh. Dùng
+nó khi body được tạo đồng bộ theo từng phần, mỗi phần vừa write queue. Với body
+được kéo qua các lần drain, dùng [`begin_stream`](/docs/http/streaming) thay thế.
+
+## Ghi body chunked
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn report(_: *uz.Request, res: *uz.Response) void {
+    res.begin_chunked(
+        "200 OK",
+        "Content-Type: text/plain; charset=utf-8\r\n",
+    ) catch |err| {
+        std.log.err("chunked start failed: {}", .{err});
+        return;
+    };
+
+    for ([_][]const u8{ "alpha\n", "beta\n", "gamma\n" }) |line| {
+        res.write_chunk(line) catch |err| {
+            std.log.err("chunk write failed: {}", .{err});
+            return;
+        };
+    }
+
+    res.end_chunks() catch |err| {
+        std.log.err("chunk end failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/report", report);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Handler phải gọi `end_chunks` trước khi trả về. Nếu nó trả về khi response còn
+streaming, HTTP/1.1 flush partial body rồi đóng connection, HTTP/2 kết thúc
+stream, và HTTP/3 chỉ đóng stream.
+
+## Định dạng trên wire
+
+Trên HTTP/1.1, `begin_chunked` gửi status line và
+`Transfer-Encoding: chunked`. Mỗi `write_chunk` thêm một chunk:
+
+```text
+<hex length>\r\n
+<body bytes>\r\n
+```
+
+Terminator là `0\r\n\r\n`. Độ dài hex chỉ tính byte body; framing không được
+tính. Chunk năm byte là `5\r\nhello\r\n`.
+
+HTTP/2 và HTTP/3 không dùng chunked transfer coding. Cùng các lệnh đó gửi frame
+`DATA`, và `end_chunks` kết thúc stream. Không có field `Transfer-Encoding`.
+
+## Ranh giới chunk không được buffer
+
+Trên HTTP/1.1, mỗi chunk được copy vào write path thành ba part: độ dài hex, body
+và CRLF. Không có buffer gộp giữa các lần `write_chunk`, nên chunk rất nhỏ chịu
+overhead framing và write cho mỗi lần gọi. JSON stream khác: `begin_json` gộp
+các write nhỏ trong buffer 4096 byte cố định.
+
+Chọn kích thước chunk có chủ đích:
+
+- Một chunk cùng framing phải vừa chỗ trống trong write queue.
+- Với queue mặc định 64 KiB, giữ chunk thấp hơn nhiều so với queue.
+- `write_chunk` độ dài 0 là no-op. Nó không kết thúc body.
+- Dùng `end_chunks` cho terminal chunk, không dùng write rỗng.
+
+## Hành vi queue
+
+`write_chunk` trả `error.WouldBlock` khi queue không nhận toàn bộ chunk. Không
+byte nào của lần gọi đó được queue, nên caller có thể thử lại đúng dữ liệu sau
+một lần drain.
+
+Handler đồng bộ không thể chờ drain: block loop sẽ chặn write completion giải
+phóng chỗ. Nếu một chunk không vừa, handler chỉ có thể trả về và để transport
+đóng stream. Chọn kích thước chunk từ đầu, hoặc dùng `begin_stream`, nơi producer
+được gọi lại trên loop sở hữu.
+
+## Khi nào nên dùng begin_stream
+
+| Tình huống                                           | Dùng            |
+| ---------------------------------------------------- | --------------- |
+| Mọi chunk biết trong callback và mỗi chunk vừa queue | `begin_chunked` |
+| Body đến từ cursor và có thể vượt queue              | `begin_stream`  |
+| Body là JSON ghi tăng dần                            | `begin_json`    |
+| Body là Server-Sent Events                           | `sse`           |
+
+`begin_stream` bọc cùng chunked head trên HTTP/1.1 và gọi lại producer khi có
+chỗ. Đây là đường duy nhất vượt backpressure mà không cần state retry thủ công.
+
+## Lỗi
+
+| Lỗi                      | Xảy ra khi                                           |
+| ------------------------ | ---------------------------------------------------- |
+| `InvalidStatus`          | Status sai định dạng hoặc ngoài 200 đến 599          |
+| `InvalidHeaders`         | Raw field không qua kiểm tra response                |
+| `BodyNotAllowed`         | Status hoặc response `HEAD` không cho phép body      |
+| `ResponseAlreadyStarted` | Helper khác đã bắt đầu response                      |
+| `ResponseNotStreaming`   | `write_chunk` hoặc `end_chunks` chạy ngoài streaming |
+| `WouldBlock`             | Chunk chưa vừa write queue lúc này                   |
+| `ConnectionClosed`       | Peer hoặc transport đang đóng                        |
+
+## Kiểm tra
+
+```sh
+curl --raw -i http://127.0.0.1:3000/report
+```
+
+`--raw` giữ chunk framing hiển thị. Kỳ vọng `200 OK`,
+`Transfer-Encoding: chunked`, ba chunk và chunk `0` kết thúc. Không có `--raw`,
+curl decode body và in ba dòng.
+
+## Tiếp theo
+
+Đọc [response streaming](/docs/http/streaming) cho body do producer điều khiển,
+sau đó [vòng đời response](/docs/concepts/response-lifecycle) cho quy tắc
+start-once và completion.

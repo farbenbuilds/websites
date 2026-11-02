@@ -1,5 +1,6 @@
 ---
 import SectionHeader from "../section-header/section-header.astro";
+import { BENCHMARK_URL, HTTP_ARENA_FRAMEWORK_URL } from "../../site-links.ts";
 import { benchmarkCopy, type BenchmarkLocale } from "./benchmark-section-data";
 
 type Props = {
@@ -25,7 +26,7 @@ const copy = benchmarkCopy(locale);
       </div>
       <a
         class="editorial-link"
-        href="https://bench.zig.bd/"
+        href={BENCHMARK_URL}
         target="_blank"
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
@@ -59,7 +60,7 @@ const copy = benchmarkCopy(locale);
       </div>
       <a
         class="editorial-link"
-        href="https://http-arena.com/frameworks/uwebzockets/"
+        href={HTTP_ARENA_FRAMEWORK_URL}
         target="_blank"
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
@@ -73,11 +74,11 @@ const copy = benchmarkCopy(locale);
       {copy.arenaMetrics.map((metric) => (
         <div class="docs-home-arena-metric">
           <dt>{metric.label}</dt>
-          <dd>
+          <dd class="docs-home-arena-value-row">
             <span class="docs-home-arena-value">{metric.value}</span>
             <span class="docs-home-arena-unit">{metric.unit}</span>
           </dd>
-          <p>{metric.detail}</p>
+          <dd class="docs-home-arena-detail">{metric.detail}</dd>
         </div>
       ))}
     </dl>

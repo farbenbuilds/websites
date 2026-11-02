@@ -1,0 +1,117 @@
+---
+title: Shared-nothing workers
+description: See what each worker owns, how one port feeds every loop, and why no connection state is ever shared across threads.
+sidebar:
+  order: 11
+search:
+  tags: [concept, cluster]
+---
+
+A cluster is a set of workers that share nothing but the listening port. Each
+worker owns one event loop, one slab, and its own TLS context, so routing a
+connection never takes a lock. This page explains how that split works and what
+it costs.
+
+## What each worker owns
+
+| Resource     | Ownership                                                             |
+| ------------ | --------------------------------------------------------------------- |
+| Event loop   | One libxev loop on one OS thread, pinned where the platform allows    |
+| Startup slab | Pool, request buffers, message regions, write queues, protocol tables |
+| TLS context  | One BoringSSL `SSL_CTX` per worker, created before listening          |
+| Listener     | The same address and port as every other worker                       |
+| Inbox        | One bounded lock-free ring for messages published by other workers    |
+| Timers       | One timing wheel per worker for keep-alive and deferred responses     |
+
+None of these are reference counted or shared. An accepted connection lands
+wholly inside the accepting worker's slab and is only ever touched by that
+worker's loop.
+
+## Topology
+
+Each worker owns its loop, slab, and TLS context. The kernel distributes accepted
+connections across their listeners, and each worker drains only its own inbox. A
+publish offers the message to every inbox; it never writes into connection
+storage. The [cluster model](/docs/concepts/cluster-model) shows the topology and
+the publish path in one diagram.
+
+## One port, no shared connection
+
+Every worker binds the same address and port. On Linux and other platforms with
+`SO_REUSEPORT`, the kernel load-balances incoming connections across the
+listeners. Windows has no `SO_REUSEPORT`, so cluster mode binds with
+`SO_REUSEADDR` instead; kernel distribution across listeners is unspecified
+there, and the Windows cluster is documented as a graceful fallback rather than
+a load-balancing path.
+
+Because the accepting worker owns the connection for its whole life, read,
+write, parse, and timer state never cross a thread boundary. That is what keeps
+the steady-state I/O path free of mutexes and spinlocks.
+
+## Affinity is best effort
+
+Pinning is physical-core based. On Linux the runtime reads the allowed CPU set
+and skips SMT siblings, then pins worker `i` with `sched_setaffinity`. Windows
+uses `SetThreadAffinityMask`. Other platforms report `error.UnsupportedPlatform`
+and continue unpinned; macOS has no hard-affinity API.
+
+A restricted cpuset or a failed syscall logs once and leaves the worker
+unpinned rather than refusing startup. Extra workers beyond the physical core
+count wrap over the selection, so affinity does not become a startup failure on
+an oversubscribed host.
+
+## The inbox is the only cross-worker path
+
+Cross-worker publish uses a bounded Vyukov sequence ring per worker
+(`src/router/cluster.zig`). Any worker thread may publish; only the owning worker
+consumes on its event loop. The enqueue and dequeue positions sit on separate
+cache lines to avoid false sharing, and the ring is allocation-free.
+
+A full inbox does not block and does not grow. The publisher sees
+`error.ClusterQueueFull` from the queue helper, or a counted drop in
+`Cluster.publish_report`. Validation happens before any inbox is mutated, so a
+bad topic or oversized payload cannot partially deliver.
+
+The owning loop copies each message through queue-owned scratch. A publish
+therefore cannot overwrite a connection's fragmented WebSocket assembly buffer,
+even when the two run on different workers.
+
+## Capacity is not the active worker count
+
+`App.cluster(N)` and `Server.builder(...).build_cluster(allocator, N, options)`
+compile a capacity of `N` workers. The runtime may use fewer:
+
+- `ClusterOptions.worker_count` selects the active count explicitly.
+- `build_cluster_from_environment` prefers that option, then
+  `UWEBZOCKETS_WORKERS`, then the platform CPU count.
+
+Only active workers allocate a slab, an inbox, and a thread handle, so a large
+compiled capacity does not reserve memory for workers that never start.
+`worker_count()` reports the allocated count, `worker_capacity()` reports the
+compiled capacity, and `worker(i)` returns null once the group has fewer active
+workers.
+
+## Why no shared connection state
+
+Sharing a connection would need a lock on every read, write, completion, and
+timeout, and it would put two event loops on one buffer. The model avoids that
+by giving every connection exactly one owner:
+
+- A connection slot is carved from the accepting worker's slab.
+- Its completions are inline members of the connection, not heap objects.
+- Its async token is event-loop confined.
+- Its deadlines live on the worker's timing wheel.
+- Its TLS session comes from the worker's `SSL_CTX`.
+
+The cost is that memory scales with active workers rather than with connection
+count alone: each one carries a slab, an inbox, and, with TLS, a context. The
+benefit is that the hot path has no cross-thread coordination. See
+[Capacity model](/docs/concepts/capacity-model) for the per-worker numbers.
+
+## Next
+
+- [Cluster model](/docs/concepts/cluster-model) covers lifecycle, failure
+  reporting, and publish semantics.
+- [Backpressure](/docs/concepts/backpressure) explains what a full inbox and a
+  full write ring report.
+- [Capacity model](/docs/concepts/capacity-model) sizes the slab and the inbox.

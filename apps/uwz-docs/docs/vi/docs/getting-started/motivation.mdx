@@ -14,7 +14,7 @@ nguyên trước, rồi dùng lại chúng trên hot path.
 ## Vấn đề của cấp phát không giới hạn
 
 Request path thông thường cấp phát cho request, header, body, giá trị đã parse,
-response part và output đang chờ. Mỗi lần cấp phát thêm một failure mode:
+response part và output đang chờ. Mỗi lần cấp phát thêm một kiểu lỗi:
 
 - Allocator có thể chậm hoặc bị tranh chấp dưới tải.
 - Bộ nhớ có thể tăng đến khi process bị dừng.
@@ -82,7 +82,7 @@ Mô hình đòi hỏi nhiều hơn từ người viết ứng dụng:
 - Callback chạy trên event loop sở hữu. Hãy chuyển công việc blocking sang
   thread khác và dùng async token để báo hoàn tất.
 
-Đây là các ràng buộc có chủ đích. [Mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+Đây là các ràng buộc có chủ đích. [Mô hình capacity](/docs/concepts/capacity-model)
 giải thích cách tính slab, và [Vì sao µWebZockets](/docs/why-uwebsockets) so
 sánh đánh đổi với thiết kế khác.
 

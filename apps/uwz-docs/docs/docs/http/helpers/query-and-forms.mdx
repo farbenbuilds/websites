@@ -1,0 +1,179 @@
+---
+title: Query and form parsing
+description: Slice a query string or form body into borrowed pairs and decode only the values you read as text. Parsing stays allocation-free.
+sidebar:
+  order: 1
+search:
+  tags: [helpers, how-to, http]
+---
+
+`uz.query` and `uz.form` turn a query string or an `application/x-www-form-urlencoded`
+body into a fixed-capacity view of borrowed key/value pairs. Parsing copies
+nothing. Percent escapes stay on the wire until you decode the bytes you
+interpret as text.
+
+## Two inputs, one slicer
+
+| Input            | Entry point                    | Source                           | Validation           |
+| ---------------- | ------------------------------ | -------------------------------- | -------------------- |
+| Query string     | `req.query_params()`           | `req.target` after the first `?` | None                 |
+| Standalone query | `query.QueryParams.parse(raw)` | Caller slice                     | None                 |
+| Form body        | `req.form()`                   | `req.body`                       | Form media type only |
+
+`req.query_params()` calls `QueryParams.parse_link(req.target)`. The path before
+the first `?` is located with a vectorized scan and never copied. A target with
+no `?` produces an empty view.
+
+`req.form()` reads the unique `Content-Type` field, rejects a missing or
+duplicated field with `MissingContentType`, and calls `form.parse`. The media
+type comparison is case-insensitive and ignores parameters such as `charset`.
+
+`form.parse(content_type, body)` applies the same check when you already hold
+the header value and body slice. A non-form media type returns
+`UnsupportedMediaType`. A query parse that exceeds its capacity returns
+`TooManyQueryParameters`.
+
+## Capacity
+
+`QueryParams` is `QueryParamsOf(32)`, so it stores 32 pairs inline by default.
+Choose another compile-time capacity when the input shape is known:
+
+```zig
+fn read_tags(req: *uz.Request) ![]const u8 {
+    const params = try req.query_params_of(8);
+    return params.get("tag") orelse "";
+}
+```
+
+`QueryParamsOf(0)` is legal and rejects the first non-empty pair with
+`TooManyQueryParameters`. The view is a struct of four parallel arrays, so a
+fixed capacity costs stack space, not heap allocation. `QueryComponentTooLong`
+is returned only when one key or value exceeds the `u32` length field.
+
+## Lookup and iteration
+
+| Method              | Returns       | Behavior                              |
+| ------------------- | ------------- | ------------------------------------- |
+| `get(name)`         | `?[]const u8` | First raw value whose raw key matches |
+| `get_last(name)`    | `?[]const u8` | Last matching value                   |
+| `has(name)`         | `bool`        | Any raw key matches                   |
+| `count_named(name)` | `usize`       | Number of matching raw keys           |
+| `get_int(T, name)`  | `!?T`         | Base-10 parse of the first raw value  |
+| `at(index)`         | `?Pair`       | Pair at a position                    |
+| `pairs()`           | `Iterator`    | Forward iteration over `Pair` values  |
+
+Keys are compared byte-exactly and case-sensitively. Repeated keys are preserved
+in arrival order, which is why `get` and `get_last` return different values for
+`?tag=a&tag=b`. `get_int` returns `null` when the key is absent and a
+`std.fmt.ParseIntError` when the raw value is not a base-10 integer.
+
+```zig
+fn current_page(params: *const uz.query.QueryParams) u32 {
+    return (params.get_int(u32, "page") catch null) orelse 1;
+}
+
+fn last_tag(params: *const uz.query.QueryParams) []const u8 {
+    return params.get_last("tag") orelse "";
+}
+```
+
+## Raw bytes and decoded text
+
+The view stores raw wire bytes. A query of `?q=hello%20world` yields the value
+`hello%20world`, and a form body of `q=hello+world` yields `hello+world`. Decode
+into caller-owned scratch when the value is text:
+
+| Function               | Treats `+`   | Decodes `%HH` | Errors                                  |
+| ---------------------- | ------------ | ------------- | --------------------------------------- |
+| `query.percent_decode` | Literal plus | Yes           | `InvalidPercentEncoding`, `NoSpaceLeft` |
+| `query.form_decode`    | As space     | Yes           | `InvalidPercentEncoding`, `NoSpaceLeft` |
+
+The scratch buffer must be at least as long as the input value, because a
+fully escaped value never shrinks. The input slice is never modified. Decode a
+key too if you need to compare it with a decoded name; `get` matches the raw
+spelling only.
+
+With the same view:
+
+```zig
+fn decoded_query(params: *const uz.query.QueryParams, scratch: []u8) []const u8 {
+    const raw = params.get("q") orelse "";
+    return uz.query.percent_decode(raw, scratch) catch "";
+}
+```
+
+## Allocation and lifetime
+
+Both views borrow the connection request buffer. They stay valid for a
+synchronous handler or until an asynchronous response completes. Copy a value
+into bounded application storage before deferring work. The only allocating
+request APIs are `req.clone(allocator)` and `req.json(T, allocator)`; these
+helpers never allocate.
+
+## Complete handlers
+
+The handlers below fit the quickstart project. Registration and startup are
+unchanged.
+
+```zig src/main.zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const params = req.query_params() catch |err| {
+        res.end("400 Bad Request", @errorName(err)) catch {};
+        return;
+    };
+
+    const page = (params.get_int(u32, "page") catch null) orelse 1;
+    const tag_count = params.count_named("tag");
+
+    var decoded: [128]u8 = undefined;
+    const raw = params.get("q") orelse "";
+    const text = uz.query.percent_decode(raw, &decoded) catch "";
+
+    var body_buffer: [192]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &body_buffer,
+        "page={d} tags={d} q={s}",
+        .{ page, tag_count, text },
+    ) catch return;
+    res.text(body) catch {};
+}
+
+fn subscribe(req: *uz.Request, res: *uz.Response) void {
+    const fields = req.form() catch |err| switch (err) {
+        error.MissingContentType, error.UnsupportedMediaType => {
+            res.end("415 Unsupported Media Type", "") catch {};
+            return;
+        },
+        else => {
+            res.end("400 Bad Request", @errorName(err)) catch {};
+            return;
+        },
+    };
+
+    var name_buffer: [64]u8 = undefined;
+    const name = uz.query.form_decode(fields.get("name") orelse "", &name_buffer) catch "";
+
+    var body_buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&body_buffer, "subscribed {s}", .{name}) catch return;
+    res.text(body) catch {};
+}
+```
+
+## Verify
+
+```sh
+curl -i 'http://127.0.0.1:3000/search?page=3&tag=zig&tag=http&q=slab%20size'
+curl -i -X POST http://127.0.0.1:3000/subscribe \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'name=Ada+Lovelace'
+```
+
+The first response reports `page=3 tags=2 q=slab size`. The second reports
+`subscribed Ada Lovelace` because `form_decode` turns `+` into a space.
+
+## Next
+
+Read the [Request API](/docs/http/request) for the body and header accessors
+around these views, then the [response API](/docs/http/response) to send the
+parsed value. For the fixed buffers behind the view, see the
+[capacity model](/docs/concepts/capacity-model).

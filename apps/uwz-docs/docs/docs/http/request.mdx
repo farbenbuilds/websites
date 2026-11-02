@@ -1,0 +1,209 @@
+---
+title: Request API
+description: Read the method, target, headers, body, query, form, cookies, and route captures of one borrowed HTTP request.
+sidebar:
+  order: 5
+search:
+  tags: [reference, http]
+---
+
+A `Request` is a borrowed snapshot of one HTTP request. Its fields point into
+the connection request buffer, so reading them costs no allocation. Use the
+accessors below instead of reaching into the inline header arrays.
+
+## Request fields
+
+| Field      | Contains                                            |
+| ---------- | --------------------------------------------------- |
+| `method`   | Uppercase method token, for example `GET` or `POST` |
+| `target`   | Original request target, including the query        |
+| `path`     | Path without the query                              |
+| `query`    | Query bytes without the leading `?`                 |
+| `body`     | Complete bounded request body                       |
+| `protocol` | Extended `CONNECT` protocol token, when negotiated  |
+
+`url()` returns the same borrowed bytes as `target`. It does not synthesize a
+scheme or authority, and it does not decode percent escapes.
+
+## Header access
+
+| Method                          | Returns          | Behavior                                                |
+| ------------------------------- | ---------------- | ------------------------------------------------------- |
+| `get_header(name)`              | `?[]const u8`    | First matching field, case-insensitive                  |
+| `get_unique_header(name)`       | `?[]const u8`    | Value only when exactly one field matches               |
+| `count_headers(name)`           | `usize`          | Number of matching fields                               |
+| `header_has_token(name, token)` | `bool`           | Case-insensitive token match in a comma-delimited field |
+| `has_header(name)`              | `bool`           | Same as `get_header(name) != null`                      |
+| `headers()`                     | `HeadersView`    | View with `get`, `has`, and `entries`                   |
+| `header_entries()`              | `HeaderIterator` | Iterator over `{ name, value }` entries                 |
+
+Field names are ASCII case-insensitive. Repeated fields stay in arrival order
+and are not joined. `get_unique_header` is the correct accessor for singleton
+fields such as `Content-Type` and `Authorization`; a duplicate returns `null`
+rather than an arbitrary first value.
+
+```zig
+fn inspect(req: *uz.Request, res: *uz.Response) void {
+    const request_id = req.get_unique_header("x-request-id") orelse "anonymous";
+    const trace_count = req.count_headers("x-trace");
+    const wants_json = req.header_has_token("accept", "application/json");
+
+    var entries = req.header_entries();
+    while (entries.next()) |entry| {
+        std.debug.print("{s}: {s}\n", .{ entry.name, entry.value });
+    }
+
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &buffer,
+        "{s} {d} {}",
+        .{ request_id, trace_count, wants_json },
+    ) catch return;
+    res.text(body) catch {};
+}
+```
+
+## Header and capture capacity
+
+| Storage               | Default                 | Extra capacity                   |
+| --------------------- | ----------------------- | -------------------------------- |
+| Inline header fields  | 64 (`max_headers`)      | `with_max_header_count` above 64 |
+| Inline route captures | 16 (`max_route_params`) | `with_max_route_params` above 16 |
+
+The transport borrows one extra name/value slice pair per connection and reuses
+it across requests on that connection. Configuration above the inline defaults
+carves those slices into the per-connection slab, so a request still allocates
+nothing. `add_header` and `add_param` fill the inline arrays first, then the
+extra capacity, and fail closed with `HeaderCapacityReached` or
+`RouteParameterCapacityReached` when no room remains.
+
+The default header count is 64. On HTTP/1.1, a request with more header fields
+receives `431 Request Header Fields Too Large` unless the server reserves extra
+slots; HTTP/2 rejects an over-capacity header list with a connection error. The
+default body limit is 16 KiB and an oversized HTTP/1.1 body receives
+`413 Payload Too Large`. See [HTTP limits](/docs/http/limits) for the full table.
+
+## Body access
+
+| Method                                        | Returns               | Notes                                          |
+| --------------------------------------------- | --------------------- | ---------------------------------------------- |
+| `text()`                                      | `[]const u8`          | Body bytes as text, with no charset conversion |
+| `bytes()`                                     | `[]const u8`          | The same borrowed body bytes                   |
+| `json(T, allocator)`                          | `!std.json.Parsed(T)` | Parses the complete body; call `deinit()`      |
+| `validate_json(T, allocator)`                 | `!std.json.Parsed(T)` | Applies compile-time `validation` rules        |
+| `validate_json_detailed(T, allocator, issue)` | `!std.json.Parsed(T)` | Fills the first field issue                    |
+
+The body is complete and bounded. This API does not expose a streaming request
+body. `text()` and `bytes()` return the buffer directly; they do not copy and
+do not validate UTF-8.
+
+```zig
+const CreateUser = struct {
+    name: []const u8,
+};
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const parsed = req.json(CreateUser, std.heap.page_allocator) catch {
+        res.end("400 Bad Request", "invalid json") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "created {s}", .{parsed.value.name}) catch return;
+    res.end("201 Created", body) catch {};
+}
+```
+
+`validate_json` reads a `pub const validation` declaration on `T`. The
+detailed variant writes the first rejected field and its `IssueKind` into a
+caller-owned `Issue`.
+
+## Query, form, multipart, and cookies
+
+| Method                        | Returns             | Behavior                                         |
+| ----------------------------- | ------------------- | ------------------------------------------------ |
+| `query_params()`              | `!QueryParams`      | Zero-copy query view with 32 pair slots          |
+| `query_params_of(N)`          | `!QueryParamsOf(N)` | Same view with a compile-time pair capacity      |
+| `form()`                      | `!QueryParams`      | Requires a form content type and parses the body |
+| `multipart()`                 | `!multipart.Parser` | Requires a unique multipart `Content-Type`       |
+| `cookie(name)`                | `?[]const u8`       | First RFC 6265 pair across all `Cookie` fields   |
+| `signed_cookie(name, secret)` | `!?[]const u8`      | Verifies an HMAC-SHA256 signed value             |
+| `accepts(media_type)`         | `bool`              | Checks the first `Accept` field                  |
+
+Query keys and values borrow the request target; percent escapes stay encoded
+until you decode them. Form parsing validates the media type before reading the
+body. Multipart boundaries longer than 70 bytes fail with
+`InvalidMultipartBoundary`. A missing `Content-Type` for `form` or `multipart`
+returns `MissingContentType`. An over-capacity view returns
+`TooManyQueryParameters`, and `form` rejects a non-form media type with
+`UnsupportedMediaType`.
+
+`accepts` treats a missing or unparsable `Accept` field as `*/*`. A present
+signed cookie with a secret shorter than 32 bytes returns
+`CookieSecretTooShort`; a malformed or mismatched signature returns
+`InvalidCookieSignature`. Signing proves integrity, not confidentiality.
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const params = req.query_params() catch return;
+    const page = (params.get_int(u32, "page") catch null) orelse 1;
+    const query = params.get("q") orelse "";
+
+    const secret = "0123456789abcdef0123456789abcdef";
+    const session = req.signed_cookie("session", secret) catch null;
+    if (session == null) {
+        res.redirect("/login", 303) catch {};
+        return;
+    }
+
+    var buffer: [160]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "page {d}: {s}", .{ page, query }) catch return;
+    res.text(body) catch {};
+}
+```
+
+## Route captures and lifetime
+
+| Method                  | Returns         | Behavior                                |
+| ----------------------- | --------------- | --------------------------------------- |
+| `get_param(name)`       | `?[]const u8`   | Exact, case-sensitive capture lookup    |
+| `clone(allocator)`      | `!OwnedRequest` | Copies every field, header, and capture |
+| `OwnedRequest.view()`   | `*Request`      | Stable view of the copied request       |
+| `OwnedRequest.deinit()` | `void`          | Releases the snapshot                   |
+
+`get_param` reads `:name` and terminal `*name` captures. Names are matched
+exactly; values are borrowed. The [route parameters
+page](/docs/http/route-parameters) covers pattern syntax and precedence.
+
+Every field, header value, and capture borrows the connection buffer. They stay
+valid through a synchronous handler or until an asynchronous response
+completes. Do not store a raw slice for later work. `clone` copies the request
+into allocator-owned storage; `view()` remains valid until `deinit`, and a
+failed snapshot returns `RequestSnapshotTooLarge`.
+
+```zig
+fn snapshot(req: *uz.Request, allocator: std.mem.Allocator) !uz.OwnedRequest {
+    return req.clone(allocator);
+}
+```
+
+The caller owns the returned snapshot, must call `deinit` exactly once, and
+must not use `view()` after that call. For the broader ownership rules, see
+[ownership and lifetimes](/docs/concepts/ownership-and-lifetimes).
+
+## Verify
+
+```sh
+curl -i 'http://127.0.0.1:3000/search?page=2&q=slab' -H 'X-Request-Id: demo'
+```
+
+With the query handler above, this request has no `session` cookie, so expect
+`303 See Other` with `Location: /login`. A valid signed cookie reaches the
+`page 2: slab` body.
+
+## Next
+
+Read the [Response API](/docs/http/response) to send the reply, then review
+[headers](/docs/http/headers) and the
+[query and form helpers](/docs/http/helpers/query-and-forms).

@@ -1,0 +1,155 @@
+---
+title: Xác thực
+description: Kiểm tra credential Basic và Bearer tại middleware boundary, đọc challenge 401 và giữ cho credential check trung thực.
+sidebar:
+  order: 17
+search:
+  tags: [how-to, auth]
+---
+
+µWebZockets cung cấp authentication Basic và Bearer dạng fixed-state qua
+middleware. Bạn đưa vào các credential được chấp nhận, và mọi request tới
+middleware phải trình một credential đó trong field `Authorization` duy nhất.
+Middleware không allocation và so sánh secret trong constant time.
+
+## Đăng ký middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn private_page(_: *uz.Request, res: *uz.Response) void {
+    res.text("private") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var credentials = uz.middleware.auth(.{
+        .realm = "ops",
+        .basic = &.{
+            .{ .username = "admin", .password = "secret" },
+            .{ .username = "deploy", .password = "rotate-me" },
+        },
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&credentials, uz.middleware.Auth.handler);
+
+    _ = try app.get("/private", private_page);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Credential là các slice được mượn. Giữ giá trị `Auth` và mọi chuỗi nó trỏ tới
+sống đến `app.deinit()`, và đăng ký middleware trước `listen`.
+
+## Tùy chọn
+
+| Kiểu              | Field                  | Ý nghĩa                                    |
+| ----------------- | ---------------------- | ------------------------------------------ |
+| `AuthOptions`     | `realm`                | Realm của challenge, mặc định `restricted` |
+| `AuthOptions`     | `basic`                | `[]const BasicCredential`, mặc định rỗng   |
+| `AuthOptions`     | `bearer`               | `[]const BearerToken`, mặc định rỗng       |
+| `BasicCredential` | `username`, `password` | Cặp plaintext được chấp nhận               |
+| `BearerToken`     | `token`                | Token plaintext được chấp nhận             |
+
+Request có thể khớp bất kỳ entry nào trong hai danh sách. Không có identity theo
+từng user gắn với kết quả khớp: middleware chỉ trả lời "được chấp nhận" hoặc "bị
+từ chối", còn handler quyết định caller được làm gì.
+
+## Middleware kiểm tra gì
+
+1. `get_unique_header("authorization")` phải trả về một giá trị. Field thiếu
+   hoặc field trùng đều trả `null`, nên cả hai bị từ chối.
+2. Giá trị phải bắt đầu bằng `Basic` hoặc `Bearer`, so khớp không phân biệt hoa
+   thường, theo sau là ít nhất một space hoặc tab.
+3. Với `Basic`, phần còn lại được decode base64 theo RFC 4648 vào buffer stack
+   cố định 512 byte. Base64 không hợp lệ hoặc payload decode vượt 512 byte bị
+   từ chối.
+4. Payload decode được tách tại dấu `:` đầu tiên. Phần trước là username; phần
+   sau là password và có thể chứa thêm dấu `:`. Payload không có `:` bị từ chối.
+5. Từng credential đã cấu hình đều được so sánh. Username, password và bearer
+   token dùng `std.crypto.timing_safe.eql` trên block cố định 64 byte. Mọi
+   credential đều được so sánh kể cả sau khi đã khớp, nên timing không tiết lộ
+   entry nào khớp.
+6. Giá trị `Bearer` có token rỗng bị từ chối.
+
+Độ dài được xem là metadata công khai: hai giá trị khác độ dài bị từ chối ngay
+thay vì chạy vòng block. Constant-time comparison bảo vệ nội dung của secret,
+không bảo vệ độ dài của nó.
+
+Khớp trả `.continue_dispatch`. Mọi trường hợp còn lại kết thúc response và trả
+`.stop`.
+
+## Request bị từ chối
+
+Middleware trả `401 Unauthorized` với body rỗng và field `WWW-Authenticate` chỉ
+liệt kê các scheme đã cấu hình:
+
+| Cấu hình    | Challenge                   |
+| ----------- | --------------------------- |
+| Chỉ Basic   | `Basic realm="ops"`         |
+| Chỉ Bearer  | `Bearer`                    |
+| Cả hai      | `Basic realm="ops", Bearer` |
+| Không có gì | Không có field challenge    |
+
+Dòng cuối là lỗi cấu hình: `Auth` không có credential từ chối mọi request và
+không cho client cách nào để xác thực.
+
+## Trust boundary
+
+- Middleware xác thực; nó không phân quyền. Role, tenancy và quyền theo route
+  thuộc handler hoặc middleware bạn tự viết.
+- Credential được lưu và so sánh dạng plaintext. So sánh là constant-time, nhưng
+  giá trị không được hash, ký hay mã hoá.
+- `Authorization` là cleartext trên đường truyền. Hãy kết thúc TLS, và không log
+  field này hay echo nó trong body lỗi.
+- Field trùng hoặc sai định dạng fail closed với `401`. Không có fallback về
+  field đầu tiên.
+- Không có session state. Mọi request phải mang credential; middleware không
+  quản lý cookie, token store hay thời hạn.
+- Xoay credential nghĩa là dựng lại các option được mượn, trên thực tế là
+  restart. Hãy lên kế hoạch rotation quanh điều đó.
+- Trong cluster, tạo một `Auth` cho app của từng worker. Option là immutable nên
+  có thể chia sẻ cùng danh sách credential, nhưng mỗi app vẫn cần đăng ký riêng.
+
+Middleware là global, nên nó bảo vệ mọi route, kể cả endpoint `app.openapi`.
+Nếu CORS chạy trước và trả preflight bằng `204 No Content`, request preflight
+không bao giờ tới credential check, đúng như trình duyệt cần.
+
+## Các lỗi thường gặp
+
+| Điều kiện                                              | Kết quả                                              |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| Credential thiếu, trùng, sai định dạng hoặc không khớp | `401 Unauthorized`, body rỗng                        |
+| Payload Basic decode vượt 512 byte                     | `401 Unauthorized`                                   |
+| `realm` chứa `"`, CR hoặc LF                           | `500 Internal Server Error` qua `error.InvalidRealm` |
+| Challenge format vượt 1024 byte                        | `500 Internal Server Error` qua `error.NoSpaceLeft`  |
+
+Realm được kiểm tra khi format challenge, không phải khi dựng option. Vì vậy
+realm sai hiện ra thành `500` ở request bị từ chối đầu tiên. Với cấu hình chỉ có
+bearer, realm không bao giờ được format và check này không chạy.
+
+## Kiểm tra
+
+```sh
+curl -i http://127.0.0.1:3000/private
+curl -i -u admin:secret http://127.0.0.1:3000/private
+curl -i -H 'Authorization: Bearer service-token' http://127.0.0.1:3000/private
+```
+
+Lệnh đầu trả `401 Unauthorized` với
+`WWW-Authenticate: Basic realm="ops", Bearer`. Hai lệnh còn lại trả `200 OK` với
+body `private`. Gửi lặp field `Authorization` trong một request lại trả `401`.
+
+## Tiếp theo
+
+- [Header bảo mật](/docs/http/security-headers) trình bày các field response
+  đi cùng authentication.
+- [Giới hạn tần suất](/docs/http/rate-limiting) giới hạn số lần một caller
+  được thử request.
+- [Mô hình bảo mật](/docs/concepts/security-model) đặt authentication trong
+  toàn bộ trust boundary.

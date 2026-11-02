@@ -1,0 +1,181 @@
+---
+title: Server lifecycle
+description: Choose an initializer, register routes, bind TCP or QUIC listeners, run the loop, and drain shutdown without moving the application value.
+sidebar:
+  order: 1
+search:
+  tags: [how-to, http]
+---
+
+This page takes one application from construction to a drained shutdown. It
+names every lifecycle call, where routes become immutable, and the errors each
+step returns.
+
+## Complete program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+
+    try app.catch_shutdown_signals();
+    try app.listen_all(&.{
+        .{ .address = "127.0.0.1", .port = 3000 },
+        .{ .address = "127.0.0.1", .port = 3001 },
+    });
+    try app.run();
+}
+```
+
+`defer app.deinit()` is the only release call. The two listeners bind before
+either one accepts, so a busy port fails startup without leaving a half-open
+server.
+
+## Phases
+
+The order is construct, register, bind, run, stop, release. Registration only
+succeeds before the first successful listener; a bind failure keeps routes
+unlocked so startup can be retried.
+
+## Initializers
+
+| Initializer                              | Transport        | Notes                                                               |
+| ---------------------------------------- | ---------------- | ------------------------------------------------------------------- |
+| `init(io)`                               | TCP plaintext    | Shortest path                                                       |
+| `init_https(io, cert, key)`              | TCP TLS 1.3      | ALPN `h2` then `http/1.1`; 0-RTT enabled for safe methods           |
+| `init_https_mtls(io, cert, key, config)` | TCP TLS 1.3      | Client certificates; 0-RTT disabled when a certificate is requested |
+| `init_http3(io, cert, key)`              | TCP TLS and QUIC | Two isolated contexts; QUIC advertises `h3` only                    |
+| `init_https_ephemeral(io)`               | TCP TLS 1.3      | Self-signed certificate for `localhost`, `127.0.0.1`, `::1`         |
+| `init_http3_ephemeral(io)`               | TCP TLS and QUIC | Both contexts generated in memory                                   |
+
+```zig src/main.zig
+var app = try uz.App(128).init_https(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer app.deinit();
+
+_ = try app.get("/", index);
+try app.listen("0.0.0.0", 8443);
+```
+
+This excerpt replaces the `init` call in the complete program; the rest of
+`main` is unchanged.
+
+For mutual TLS, use the same shape with a client-auth config:
+`init_https_mtls(io, cert, key, .{ .mode = .required, .ca_path = "certs/clients-ca.pem" })`.
+`mode` is `.none`, `.optional`, or `.required`; any mode other than `.none`
+requires `ca_path` and disables TLS 1.3 0-RTT, because the certificate is
+verified in the second flight.
+
+A failed TLS load releases the slab and returns
+`error.CertificateLoadFailed`, `error.PrivateKeyLoadFailed`,
+`error.TrustStoreLoadFailed`, or `error.InvalidClientAuthConfig`.
+
+## Route registration lock
+
+Every registration helper calls the same guard. Before a listener binds, it
+checks the router storage and registers the route. After a successful
+`listen_all` or `listen_udp`, it returns `error.RoutesLocked`.
+
+- A failed `listen_all` closes the sockets it created, leaves `listener_count`
+  at zero, and keeps routes unlocked, so you can fix the port and retry.
+- A call after shutdown starts or after `deinit` returns
+  `error.ApplicationUnavailable`.
+- `openapi`, `datagram`, and `static` keep pointers into the application or
+  caller storage, so register them before binding.
+
+## Listeners
+
+| Call                        | Endpoints       | Contract                                                                |
+| --------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `listen(address, port)`     | One TCP         | Convenience wrapper for `listen_all`                                    |
+| `listen_all(endpoints)`     | One to four TCP | Binds every endpoint, verifies every local port, then arms accepts      |
+| `listen_udp(address, port)` | One UDP         | Requires `init_http3` or `init_http3_ephemeral`; starts the QUIC engine |
+
+An endpoint is `{ .address, .port, .tls }`. `tls` is optional; `null` follows
+whether the application owns a TLS context. A TLS endpoint on a plaintext
+application returns `error.TlsNotInitialized`.
+
+`listen_all` is all-or-none. No accept completion is armed until every socket
+has bound and reported a usable local port. A failure in the bind or
+verification phase closes the sockets created by that call.
+
+`listen_udp` is single-application only. It also rejects a shared
+`max_header_size` above 65535 with `error.InvalidHttp3Capacity`, because QUIC
+header fields are 16-bit.
+
+## Run and shutdown
+
+| Call                 | Thread                 | Contract                                                                                    |
+| -------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `run()`              | Owning thread          | Blocks until shutdown drains; re-entry returns `error.ApplicationAlreadyRunning`            |
+| `request_shutdown()` | Any thread or callback | Stores the stop flag, wakes the owning loop, returns immediately                            |
+| `shutdown()`         | Loop thread            | From a callback it starts shutdown and returns; outside a run it drives the loop and drains |
+| `deinit()`           | Owner                  | Idempotent; panics if called from inside the event loop                                     |
+
+After shutdown starts or `deinit` runs, `run` and the listen calls return
+`error.ApplicationUnavailable`. `shutdown` returns
+`error.ApplicationDeinitialized` after release, and `error.ShutdownIncomplete`
+when a connection, timer, watcher, listener, or QUIC transport has not drained;
+`run` performs the same verification when shutdown was requested during the
+loop.
+
+## Signals
+
+Call `try app.catch_shutdown_signals()` before `try app.run()`. The watcher
+handles SIGINT and SIGTERM, or a Windows console-control event, and requests the
+same shutdown path as `shutdown`. Install it once per process: a second call
+returns `error.SignalWatcherAlreadyInstalled`, and a call after shutdown starts
+returns `error.ApplicationUnavailable`. Repeated signals are coalesced into one
+request.
+
+## Stable address
+
+Keep the application at one address from the first call that captures `&app`:
+`listen`, `listen_all`, `listen_udp`, `catch_shutdown_signals`, `openapi`, or
+`datagram`. Listeners, completions, and the signal watcher hold that pointer
+until `deinit`, so never copy or move the value.
+
+## Failures
+
+Startup and shutdown calls run outside request dispatch, so they return a Zig
+error and no HTTP response.
+
+| Condition                                   | Result                          |
+| ------------------------------------------- | ------------------------------- |
+| Second TCP bind, or a second `listen_udp`   | `error.AlreadyListening`        |
+| More than four TCP endpoints                | `error.ListenerCapacityReached` |
+| `listen_udp` without an HTTP/3 initializer  | `error.Http3NotInitialized`     |
+| Shared header limit above 65535 with HTTP/3 | `error.InvalidHttp3Capacity`    |
+| `deinit` from inside the loop               | Panic, not an error             |
+
+## Verify
+
+```sh
+zig build run
+```
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3001/
+```
+
+Both ports return `ok`. Press Ctrl+C to request shutdown; `run` returns after
+the drain and `deinit` releases the slab.
+
+## Next
+
+- [Routing](/docs/http/routing) explains how registered paths are selected.
+- [Handlers](/docs/http/handlers) covers the four callback shapes.
+- [Request API](/docs/http/request) covers the borrowed request value.

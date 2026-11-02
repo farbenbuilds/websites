@@ -1,0 +1,159 @@
+---
+title: OpenAPI output
+description: Serve a generated OpenAPI 3.1 document from registered routes, read its exact shape, and know the limits and the omissions.
+sidebar:
+  order: 19
+search:
+  tags: [how-to, openapi]
+---
+
+`app.openapi(path)` registers a `GET` route that renders the current route
+table as an OpenAPI 3.1 document. The document is generated from route
+registration metadata, so it costs no per-request allocation and cannot drift
+from the routes the server actually registered.
+
+## Register the endpoint
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(_: *uz.Request, res: *uz.Response) void {
+    res.text("user") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.openapi("/openapi.json");
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.openapi` is itself a route registration. It must run before `listen`, it
+consumes a route record and registry space, and the path it serves appears in
+the generated document.
+
+## Generated document
+
+The endpoint returns compact JSON. This is the same document formatted for
+reading:
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": { "title": "uWebZockets API", "version": "2.1.6" },
+  "paths": {
+    "/": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    },
+    "/users/{id}": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    },
+    "/openapi.json": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    }
+  }
+}
+```
+
+| Element        | Value                                                             |
+| -------------- | ----------------------------------------------------------------- |
+| `openapi`      | Always `3.1.0`                                                    |
+| `info.title`   | `uWebZockets API`, the default `openapi.Options.title`            |
+| `info.version` | The release version (`2.1.6` at this baseline)                    |
+| `paths`        | One entry per distinct path, in registration order                |
+| Operation key  | Lowercase method name, except `x-any`, `x-query`, and `x-connect` |
+| Responses      | Exactly one `200` with description `Success`                      |
+| `x-websocket`  | `true` on a route registered through `app.ws`                     |
+
+A WebSocket route is recorded as `GET`, so its operation carries both the `200`
+response and `"x-websocket": true`. The keys `x-any` (from `app.any`), `x-query`
+(RFC 10008 `QUERY`), and `x-connect` are not OpenAPI operation keys; strict
+validators may reject a document that contains them.
+
+The response carries `Content-Type: application/json` and status `200 OK`.
+
+## Path parameters
+
+The generator converts router patterns to OpenAPI template syntax:
+
+| Registered path         | Emitted path              |
+| ----------------------- | ------------------------- |
+| `/users/:id`            | `/users/{id}`             |
+| `/assets/*path`         | `/assets/{path}`          |
+| `/reports/:year/:month` | `/reports/{year}/{month}` |
+
+Only a `:` or `*` at the start of a segment starts a parameter, matching the
+router's pattern analysis. A `:` inside a segment stays literal. The conversion
+is textual: names come from the pattern the router already validated, so a
+duplicate capture name fails registration before it can reach the document.
+
+## Limits
+
+| Resource             | Default                                                 | Failure                             |
+| -------------------- | ------------------------------------------------------- | ----------------------------------- |
+| Route records        | 320: 256 `max_route_nodes` plus 64 `max_pattern_routes` | `error.RouteCapacityReached`        |
+| Retained route paths | 64 KiB `max_route_registry_size`                        | `error.RouteStorageCapacityReached` |
+| Generated document   | 64 KiB buffer in the endpoint handler                   | `500 Internal Server Error`         |
+
+The document buffer also holds a temporary snapshot of the route records, so the
+JSON budget is below 64 KiB. `write_openapi` returns `error.BufferTooSmall` when
+the snapshot does not fit and `error.WriteFailed` when the JSON exhausts the
+remaining bytes. Either way the handler answers `500 Internal Server Error` with
+the body `OpenAPI document exceeds capacity`. The two 64 KiB values are
+unrelated: one sizes the retained route paths, the other sizes one generated
+response.
+
+`max_route_registry_size` is a builder option
+(`with_max_route_registry_size`); the document buffer is fixed in the built-in
+endpoint, so a larger route table can still fail to render. Keep paths short and
+the route count well below the record limit if you depend on this endpoint.
+
+The first two failures are registration errors with no HTTP status. The third is
+a request-time `500` from the endpoint.
+
+## What is not generated
+
+The document describes routing only. It does not contain request or response
+schemas, `parameters`, `requestBody`, `components`, `tags`, `servers`,
+`security`, operation `summary` or `description`, or any response other than
+`200`. There is no router API to attach that metadata.
+
+The implicit `HEAD` fallback and the automatic `OPTIONS` answer are not
+operations either, because neither is a registered route.
+
+If you need a fuller document, `uz.openapi.generate(buffer, routes, options)`
+is public. You then build the `uz.openapi.Route` list and the surrounding
+metadata yourself, which means the document is no longer derived from the
+router table.
+
+## Verify
+
+```sh
+curl -s http://127.0.0.1:3000/openapi.json
+
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  http://127.0.0.1:3000/openapi.json
+```
+
+The first command prints the compact document. The second prints
+`200 application/json`.
+
+## Next
+
+- [Routing](/docs/http/routing) covers registration order, patterns, and the
+  route limits this document reflects.
+- [Route parameters and wildcards](/docs/http/route-parameters) covers the
+  capture syntax behind the `{name}` conversion.
+- [JSON responses](/docs/http/json) covers the response helpers you would use
+  to serve your own specification file.

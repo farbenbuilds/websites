@@ -117,6 +117,14 @@ export default defineConfig({
   deployment: {
     site: "https://uwz.farben.dev",
   },
+  markdown: {
+    code: {
+      theme: {
+        light: "github-light-high-contrast",
+        dark: "github-dark-high-contrast",
+      },
+    },
+  },
   integrations: [svelte()],
   agents: {
     markdownComponents: {

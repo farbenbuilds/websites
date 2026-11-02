@@ -1,0 +1,135 @@
+---
+title: HTTP/1.1 and the application API
+description: Map the HTTP section, learn how one application surface serves every route, and follow the reading order from startup to verified response.
+search:
+  tags: [http, http1, reference]
+---
+
+This section covers how µWebZockets parses an HTTP/1.1 request, matches a route,
+runs your handler, and writes the response. It also maps the application API
+that HTTP/1.1, HTTP/2, and HTTP/3 share, so the route and handler pages stay
+useful when you add another transport.
+
+Read [Server lifecycle](/docs/http/server-lifecycle) first when you are writing
+startup code. Read [Handlers](/docs/http/handlers) first when the application
+already starts and you need the callback contract.
+
+## One application surface
+
+One `uz.App(N)` value owns the route table and the connection pool. Each request
+gets a borrowed `Request` and a `Response` writer. Routes, `Request`, `Response`,
+and the async token do not change when the transport changes. HTTP/1.1 adds the
+wire rules that the protocol pages own:
+
+| Listener     | Transport                 | Framing and flow control                                   |
+| ------------ | ------------------------- | ---------------------------------------------------------- |
+| `listen`     | TCP, plaintext or TLS 1.3 | Content-Length or chunked, one write ring per connection   |
+| `listen_udp` | QUIC                      | HTTP/3 stream framing, response bounded by the write queue |
+
+The TCP TLS context advertises ALPN `h2` then `http/1.1`, so a browser can
+negotiate HTTP/2 on the same listener. Request handling still enters the same
+router.
+
+## The HTTP/1.1 contract
+
+The TCP connection accumulates one bounded request until the parser can prove
+it is complete. Pipelined bytes stay in the buffer and are parsed again after
+the response completes.
+
+| Topic                                                 | Behavior                                                                                                                                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request target                                        | Origin-form, absolute-form for `http` and `https`, and `*` for server-wide `OPTIONS`. Authority-form, fragments, and userinfo are rejected.                         |
+| Malformed input                                       | `400 Bad Request`, then the connection closes                                                                                                                       |
+| `Expect: 100-continue`                                | Answered automatically before the body is read; any other `Expect` value returns `417 Expectation Failed`                                                           |
+| Oversized body                                        | `413 Payload Too Large` with a JSON document naming the limit and value                                                                                             |
+| Oversized request line, header block, or header count | `431 Request Header Fields Too Large` with the same document shape                                                                                                  |
+| Response framing                                      | The library generates `Content-Length` or chunked framing. A caller-supplied `Content-Length` or `Transfer-Encoding` field is rejected with `error.InvalidHeaders`. |
+| Keep-alive                                            | Bounded by `idle_timeout_ms`, 120 seconds by default. `Connection: close` is honored.                                                                               |
+
+Large fixed bodies must fit the per-connection write queue. A body that cannot
+fit returns `error.WouldBlock` from `Response.end`; use a streaming body for
+larger payloads. The [HTTP limits](/docs/http/limits) page lists every bound.
+
+## Section map
+
+Start with the pages that establish the request path, then use the reference and
+task pages that match what you are building.
+
+### Startup and routing
+
+| Page                                                          | Read it when                                    |
+| ------------------------------------------------------------- | ----------------------------------------------- |
+| [Server lifecycle](/docs/http/server-lifecycle)               | You are choosing an initializer or a listener   |
+| [Routing](/docs/http/routing)                                 | You are choosing paths, methods, and precedence |
+| [Route parameters and wildcards](/docs/http/route-parameters) | You need values from the path                   |
+| [Handlers](/docs/http/handlers)                               | You are choosing a callback shape               |
+
+### Request, response, and body writing
+
+| Page                                                | Read it when                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| [Request API](/docs/http/request)                   | You are reading headers, body, query, form, or cookies                     |
+| [Response API](/docs/http/response)                 | You are writing a status, body, stream, or file                            |
+| [Helpers](/docs/http/helpers)                       | You need query, multipart, cookie, compression, cache, or stream utilities |
+| [Middleware](/docs/http/middleware)                 | You need a check before every route                                        |
+| [Headers](/docs/http/headers)                       | You need duplicate or unique header semantics                              |
+| [JSON responses](/docs/http/json)                   | You are returning or streaming JSON                                        |
+| [Chunked responses](/docs/http/chunked)             | You control each chunk yourself                                            |
+| [Streaming responses](/docs/http/streaming)         | A producer fills the body as the transport drains                          |
+| [Server-Sent Events](/docs/http/server-sent-events) | You are pushing an event stream                                            |
+| [Static files](/docs/http/static-files)             | You are serving a directory                                                |
+
+### Policy and security
+
+| Page                                            | Read it when                             |
+| ----------------------------------------------- | ---------------------------------------- |
+| [CORS](/docs/http/cors)                         | A browser origin needs explicit access   |
+| [Security headers](/docs/http/security-headers) | You need baseline browser headers        |
+| [Authentication](/docs/http/authentication)     | You need Basic or Bearer checks          |
+| [Rate limiting](/docs/http/rate-limiting)       | You need bounded per-key request budgets |
+| [OpenAPI output](/docs/http/openapi)            | You need a generated route document      |
+
+### Diagnostics and operations
+
+| Page                                         | Read it when                             |
+| -------------------------------------------- | ---------------------------------------- |
+| [HTTP errors](/docs/http/errors)             | You are standardizing failure bodies     |
+| [RFC 10008 QUERY](/docs/http/query-method)   | You need the read-only query method      |
+| [TRACE](/docs/http/trace)                    | You need an explicit diagnostic echo     |
+| [HTTP limits](/docs/http/limits)             | You are sizing a server                  |
+| [Testing an HTTP server](/docs/http/testing) | You are verifying a route or a rejection |
+
+[Helpers](/docs/http/helpers) is a nested group for small utilities such as
+query parsing, cookies, compression, and caching. A helper never owns wire
+behavior; link to it from the page that needs the utility.
+
+## Names and boundaries
+
+Route registration uses one name per method: `get`, `post`, `put`, `delete`,
+`patch`, `options`, `head`, `trace`, `query`, and `any`. The context and async
+variants keep the same names: `route_context`, `route_async`,
+`route_async_context`, and the GET shortcuts `get_context`, `get_async`, and
+`get_async_context`.
+
+Every failure in this section names both the HTTP status and the Zig error when
+one exists. Startup calls have no HTTP status because no request exists yet;
+they return a named error instead.
+
+## Verify
+
+The [quickstart](/docs/getting-started/quickstart) program is the smallest
+server that proves this section's baseline:
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+The response starts with `HTTP/1.1 200 OK`, and the body is the text the handler
+passed to `res.text`.
+
+## Next
+
+- [Server lifecycle](/docs/http/server-lifecycle) covers initialization,
+  binding, and shutdown.
+- [Routing](/docs/http/routing) explains method and path selection.
+- [Handlers](/docs/http/handlers) explains the four callback shapes.

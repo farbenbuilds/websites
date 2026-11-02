@@ -1,0 +1,160 @@
+---
+title: Kiểm thử server HTTP
+description: Kiểm thử quyết định của handler in-process, xác minh wire trên loopback và assert rejection trước handler mà không cần test client.
+sidebar:
+  order: 24
+search:
+  tags: [how-to, http]
+---
+
+Kiểm thử quyết định in-process và wire trên loopback. Trang này trình bày cả hai
+lớp, rồi các compliance gate ở cấp repository nằm ngoài application project.
+
+## Chọn lớp kiểm thử
+
+| Điều cần chứng minh                               | Kiểm thử ở đâu                                     |
+| ------------------------------------------------- | -------------------------------------------------- |
+| Validation rule, media policy hoặc error document | Zig test trên hàm thuần                            |
+| Status, body và header sau dispatch               | Loopback server cộng `curl`                        |
+| Parser rejection như `413` hoặc `431`             | Loopback server cộng request quá lớn               |
+| `405` trước handler                               | Loopback server cộng method mà route không đăng ký |
+| Compliance HTTP/1.1 hoặc WebSocket                | Gate của repository, không phải suite application  |
+
+## Kiểm thử quyết định thuần in-process
+
+Tách quyết định ra khỏi callback, rồi kiểm thử bằng `std.testing`. Ví dụ này
+kiểm thử media-type policy mà không cần socket:
+
+```zig src/main.zig
+const std = @import("std");
+
+fn response_for(content_type: []const u8) []const u8 {
+    const separator = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media_type = std.mem.trim(u8, content_type[0..separator], " \t");
+    if (!std.ascii.eqlIgnoreCase(media_type, "application/json")) {
+        return "415 Unsupported Media Type";
+    }
+    return "200 OK";
+}
+
+test "media policy ignores parameters" {
+    try std.testing.expectEqualStrings(
+        "200 OK",
+        response_for("application/json; charset=utf-8"),
+    );
+    try std.testing.expectEqualStrings(
+        "415 Unsupported Media Type",
+        response_for("text/plain"),
+    );
+}
+```
+
+```sh
+zig test src/main.zig
+```
+
+Library không ship test client hay response mock. `uz.client` là HTTP/1.1 client
+production có giới hạn, không phải test harness. Internal suite tự dựng response
+capture target, và target đó không được export cho application test.
+
+## Chạy loopback server test
+
+Khởi động server từ [quickstart](/docs/getting-started/quickstart) trên
+`127.0.0.1:3000`, rồi assert status, body và header trong terminal thứ hai:
+
+```sh
+status=$(curl -s -o body.txt -w '%{http_code}' \
+  http://127.0.0.1:3000/)
+test "$status" = "200"
+test "$(cat body.txt)" = "hello from a dependency"
+
+curl -s -D headers.txt -o /dev/null http://127.0.0.1:3000/
+grep -qi '^content-type: text/plain' headers.txt
+```
+
+Kiểm tra đúng tên field handler đặt; `res.text` gửi
+`Content-Type: text/plain; charset=utf-8`. Đăng ký `/users/42` từ
+[route parameter](/docs/http/route-parameters) khi bạn muốn assert một capture.
+
+## Assert rejection từ parser
+
+Body quá lớn phải fail trước handler. Với giới hạn body mặc định 16 KiB:
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+status=$(curl -s -o rejection.json -w '%{http_code}' \
+  --data-binary @body.bin http://127.0.0.1:3000/upload)
+test "$status" = "413"
+grep -q '"code":"payload_too_large"' rejection.json
+grep -q '"limit_bytes":16384' rejection.json
+```
+
+Header block quá lớn dùng cùng pattern:
+
+```sh
+status=$(curl -s -o headers.json -w '%{http_code}' \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  http://127.0.0.1:3000/)
+test "$status" = "431"
+grep -q '"code":"headers_too_large"' headers.json
+```
+
+Cả hai request chứng minh parser đã trả lời. Chúng không chứng minh gì về route,
+vì không route handler nào chạy.
+
+## Assert 405 trước handler
+
+Đăng ký `GET /only-get` rồi gửi `DELETE`:
+
+```sh
+status=$(curl -s -o method.txt -w '%{http_code}' \
+  -X DELETE http://127.0.0.1:3000/only-get)
+test "$status" = "405"
+
+curl -s -D - -o /dev/null -X DELETE http://127.0.0.1:3000/only-get \
+  | grep -qi '^allow: get, head'
+```
+
+Field `Allow` phải liệt kê `GET, HEAD`. Để chứng minh handler GET không chạy, hãy
+assert counter, log line hoặc side effect của nó không đổi. Router trả lời trước
+dispatch khi path khớp và method không có handler.
+
+## Giữ compliance gate trong repository
+
+h1spec và Autobahn là gate ở cấp repository, không phải dependency của
+application. Không thêm h1spec, Autobahn, Deno hay fixture của chúng vào
+application project. Repository của framework chạy chúng với compliance server
+của chính nó:
+
+```sh
+zig build
+./zig-out/bin/h1spec &
+server_pid=$!
+
+cd vendor/h1spec
+deno run --allow-net=127.0.0.1:8000 http_test.ts 127.0.0.1 8000
+
+kill "$server_pid"
+```
+
+Gate Autobahn báo 517/517 server case được chấp nhận: 514 `OK` và 3
+`INFORMATIONAL`, bao gồm compression group 12 và 13. `zig build test` chạy unit
+suite thông thường từ `src/tests/main.zig`; nó tách biệt với cả hai compliance
+gate.
+
+## Kiểm tra
+
+```sh
+zig test src/main.zig
+```
+
+Test quyết định thuần pass mà không cần listener. Chạy các lệnh loopback với
+server đã build để chứng minh wire behavior và status rejection.
+
+## Tiếp theo
+
+- [Lỗi HTTP](/docs/http/errors) trình bày các document mà test này assert.
+- [Giới hạn HTTP](/docs/http/limits) liệt kê default đứng sau kiểm tra `413` và
+  `431`.
+- [Server lifecycle](/docs/http/server-lifecycle) trình bày các lời gọi startup
+  và shutdown mà loopback test điều khiển.

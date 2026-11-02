@@ -3,7 +3,13 @@ import { parseInlineMarkdown } from "@farben/docs-components/inline-markdown.ts"
 import type { InlinePart } from "@farben/docs-components/inline-text.ts";
 
 import { siteMessages } from "../../messages.ts";
-import { localizeHref, type SiteLocale } from "../../site-links.ts";
+import {
+  FACEBOOK_URL,
+  PRODUCT_REPOSITORY_URL,
+  X_URL,
+  localizeHref,
+  type SiteLocale,
+} from "../../site-links.ts";
 
 export type LandingLocale = SiteLocale;
 
@@ -70,6 +76,7 @@ export type LandingCopy = {
   };
 };
 
+// The dictionary is a fixed editorial specimen, not translatable UI copy.
 const DICTIONARY_LINES = [
   "速い",
   "/はやい/ · 形容詞",
@@ -80,8 +87,8 @@ const DICTIONARY_LINES = [
 const SOCIAL_KEYS = ["facebook", "x"] as const;
 
 const SOCIAL_HREFS: Record<(typeof SOCIAL_KEYS)[number], string> = {
-  facebook: "https://www.facebook.com/noah.tran1109",
-  x: "https://x.com/sh1ro_code",
+  facebook: FACEBOOK_URL,
+  x: X_URL,
 };
 
 export function landingCopy(locale: string | undefined): LandingCopy {
@@ -100,7 +107,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     },
     secondaryAction: {
       label: landing.hero.secondaryAction,
-      href: "https://github.com/farbenbuilds/uWebZockets",
+      href: PRODUCT_REPOSITORY_URL,
     },
     dictionary: {
       label: landing.hero.dictionary.label,

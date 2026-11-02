@@ -1,0 +1,149 @@
+---
+title: Security model
+description: Map the trust boundaries, parser hardening, TLS policy, authentication controls, secrets handling, and disclosure path.
+sidebar:
+  order: 17
+search:
+  tags: [concept, security]
+---
+
+The security model separates what the framework enforces from what the
+deployment must own. µWebZockets bounds every network input and fails closed on
+malformed protocol data. Certificate trust, identity policy, secret storage, and
+capacity sizing remain your responsibility.
+
+## Trust boundaries
+
+- **TCP and TLS.** The framework enforces TLS 1.3 only, ALPN `h2` then
+  `http/1.1`, safe-method 0-RTT, and QUIC 0-RTT off. You own certificates, the CA
+  bundle, rotation, and network policy.
+- **HTTP parsing.** The framework uses fixed buffers, strict framing, and
+  `413`/`431` rejection documents. You own capacity sizing and OS resource
+  limits.
+- **Authentication.** `middleware.Auth` compares constant time, and mTLS
+  verification runs in the TLS layer. You own the user store, token issuance, and
+  per-route authorization.
+- **Rate limiting.** `middleware.RateLimit` uses fixed token buckets. You own the
+  key choice, thresholds, and shared-state policy.
+- **C ABI.** The framework provides opaque handles, explicit destroy, and nonzero
+  error codes. You own handle lifetime and copying borrowed slices.
+
+The live network surface is HTTP/1.1, bounded HTTP/2, RFC 6455 WebSockets, RFC
+7692 per-message deflate, HTTPS, and bounded HTTP/3 request/response routing.
+Raw QUIC engine, stream, packet, and QPACK callbacks under `src/quic` are
+internal and are not a supported consumer interface. The outbound HTTP/1.1 client
+is also part of the surface: it verifies certificates when `verify` is enabled,
+requires a caller-supplied trust store, and refuses to reuse one client with
+different trust rules. `verify = false` is development-only.
+
+## Parser hardening
+
+HTTP/1.1 parsing proves completeness before dispatch and rejects ambiguous
+framing. The h1spec suite and deterministic adversarial cases cover request
+targets, framing, pipelining, and oversized input. HTTP/2 validates the client
+preface, frame size, frame sequencing, HPACK state, and flow control, and caps
+each connection at eight streams. HTTP/3 requires pseudo-fields to precede
+regular fields and stay unique, and rejects connection-specific fields as
+malformed with a stream-scoped `H3_MESSAGE_ERROR`.
+
+Oversized input becomes a structured rejection instead of a dropped connection.
+The rejection path writes from a fixed stack buffer and never reaches the
+handler. WebSocket parsing follows RFC 6455 and RFC 7692, and the server passes
+517/517 Autobahn server cases, including compression groups 12 and 13.
+Per-message deflate is disabled by default. When enabled, negotiation requires
+no context takeover, input and output use separate scratch slices, and
+decompression cannot exceed the configured message capacity.
+
+These defaults bound the parser before application code runs:
+
+| Setting                  | Default |
+| ------------------------ | ------: |
+| `max_connections`        |   1,024 |
+| `max_request_line_size`  |   8 KiB |
+| `max_header_size`        |  16 KiB |
+| `max_header_count`       |      64 |
+| `max_body_size`          |  16 KiB |
+| `max_ws_message_size`    |  16 KiB |
+| `write_queue_size`       |  64 KiB |
+| `max_middleware`         |      32 |
+| `idle_timeout_ms`        | 120,000 |
+| `header_read_timeout_ms` |  30,000 |
+| `compression`            | `false` |
+
+`ConfiguredAppWithTimeout` changes or disables the idle deadline with zero.
+`ServerConfig.header_read_timeout_ms` bounds an incomplete HTTP/1 request; zero
+disables that deadline. Size these values for your traffic and apply normal
+operating-system limits as a second boundary.
+
+## TLS policy
+
+The TLS context is TLS 1.3 only; older protocol versions are rejected at the
+context. TCP contexts advertise `h2` then `http/1.1`, while the HTTP/3 context
+advertises only `h3`. TLS 1.3 early data is admitted only for safe methods until
+the handshake is confirmed, and QUIC keeps early data disabled. A non-safe method
+in TCP early data receives `425 Too Early`.
+
+Mutual TLS uses `init_https_mtls` with one of three `tls.ClientAuth` modes:
+`none`, `optional`, or `required`. A mode other than `none` requires a non-empty
+`ca_path`, and `required` fails the handshake closed when the client presents no
+certificate. Optional and required modes disable TLS 1.3 early data because the
+certificate is checked in the second flight. The client CA bundle is read once
+when the context is created; replacing it requires a restart. CRLs in the bundle
+are loaded into the trust store but revocation is not enforced, so a revoked
+certificate validates until it expires unless the application checks it.
+
+`Cluster.enable_https` does not configure client certificates. HTTP/3 client
+authentication is not wired through the QUIC transport. Certificate and key
+files are read once per worker, and rotating them requires a rolling restart.
+Ephemeral certificates are self-signed, generated in memory, not exportable, and
+intended for development.
+
+## Authentication and rate limiting
+
+`middleware.Auth` supports Basic and Bearer credentials and compares them in
+constant time. It fails closed on malformed or duplicate fields and uses
+caller-owned fixed storage. Route-level authorization remains application policy;
+the middleware verifies a credential, not a permission model.
+
+`middleware.RateLimit` uses fixed token buckets and is designed to resist
+rotation across buckets. Choose the key and thresholds for your traffic. CORS and
+security-header middleware apply before the route handler, so their policy is the
+same on every transport.
+
+## Secrets and supply chain
+
+- Do not commit PEM files, private keys, CA bundles, or tokens.
+- Keep TLS credentials out of the repository and read them from the deployment
+  environment.
+- Treat a private report as sensitive: include logs and sanitizer output only
+  after removing secrets.
+- Pin exact source or release hashes, review `THIRD_PARTY_NOTICES.md`, and test
+  the library under your own workload before production.
+- Destroy every C ABI handle explicitly and copy borrowed `uwz_slice` values
+  before a callback returns.
+
+Bounded buffers and compliance tests reduce risk, but they do not guarantee the
+absence of defects. ASan, UBSan, leak detection, fuzzing, h1spec, Autobahn, and
+the HTTP/3 cross-implementation gate are evidence, not a proof of safety.
+
+## Disclosure
+
+Security fixes apply to the current development revision and the latest released
+minor line. Older tagged releases and earlier snapshots receive no backports.
+
+Do not open a public issue, pull request, discussion, or Autobahn report for an
+undisclosed vulnerability. Send a private report to the addresses in
+[SECURITY.md](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+Include the affected revision and platform, a minimal reproducer or packet
+sequence, expected and observed behavior, impact and preconditions, logs with
+secrets removed, and any suggested mitigation. The maintainers acknowledge,
+reproduce, assess, fix, add a regression test, and coordinate disclosure. No
+fixed service-level agreement is offered. Allow a reasonable remediation and
+release window before publication; advisories credit reporters who request it.
+
+## Next
+
+- [Protocol negotiation](/docs/concepts/protocol-negotiation) explains ALPN,
+  early data, and the separate HTTP/3 context.
+- [Authentication](/docs/http/authentication) shows the middleware in a route.
+- [Rate limiting](/docs/http/rate-limiting) shows bounded request throttling.

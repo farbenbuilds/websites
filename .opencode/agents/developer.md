@@ -51,6 +51,9 @@ concern to the architect.
 - No class, prototype, `this`, or hidden mutable state.
 - No `any`, unchecked cast, or non-null assertion used as a shortcut.
 - No `<style>` block in Svelte.
+- Code samples follow their source language. Zig samples use `snake_case`
+  functions, variables, parameters, and fields, `PascalCase` types, and the
+  exact public spelling; never camel-case a Zig identifier.
 - Never weaken a lint, test, build, accessibility, or CI gate.
 
 ## Output

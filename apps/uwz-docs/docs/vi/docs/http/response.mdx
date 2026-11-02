@@ -1,0 +1,215 @@
+---
+title: API response
+description: Gửi response cố định, JSON, chunked, stream, SSE, file và nén bằng helper phù hợp, kiểm tra start-once trước khi ghi.
+sidebar:
+  order: 6
+search:
+  tags: [reference, http]
+---
+
+`Response` bắt đầu ở trạng thái idle và kết thúc đúng một lần. Mọi helper kết
+thúc đều kiểm tra status và response field trước khi ghi byte. Chọn helper cấp
+cao nhất phù hợp và xử lý lỗi tại ranh giới handler.
+
+## Trạng thái start-once
+
+| State       | Ý nghĩa                                   | Được vào bởi                                         |
+| ----------- | ----------------------------------------- | ---------------------------------------------------- |
+| `idle`      | Chưa ghi byte response nào                | Trạng thái ban đầu                                   |
+| `streaming` | Head hoặc body đã bắt đầu; cho phép chunk | `begin_chunked`, `begin_stream`, `begin_json`, `sse` |
+| `ended`     | Response hoàn tất                         | `end`, `send_file`, `end_chunks`                     |
+
+`is_started()` cho biết state đã rời `idle` chưa. `is_complete()` cho biết state
+đã đến `ended` chưa. Lần start thứ hai trả về
+`error.ResponseAlreadyStarted`. `write_chunk` và `end_chunks` ngoài state
+`streaming` trả về `error.ResponseNotStreaming`.
+
+## Body cố định
+
+| Method                          | Status   | Content type                      |
+| ------------------------------- | -------- | --------------------------------- |
+| `text(content)`                 | `200 OK` | `text/plain; charset=utf-8`       |
+| `html(content)`                 | `200 OK` | `text/html; charset=utf-8`        |
+| `bytes(content)`                | `200 OK` | `application/octet-stream`        |
+| `json(value, allocator)`        | `200 OK` | `application/json; charset=utf-8` |
+| `json_buf(value, buffer)`       | `200 OK` | `application/json; charset=utf-8` |
+| `json_value(value, allocator)`  | `200 OK` | `application/json; charset=utf-8` |
+| `json_value_buf(value, buffer)` | `200 OK` | `application/json; charset=utf-8` |
+
+`json` và `json_buf` nhận mọi value mà `std.json.Stringify` hỗ trợ.
+`json_value` và `json_value_buf` là biến thể có tên cho `std.json.Value`. Biến
+thể allocator giải phóng phần render tạm trước khi trả về; biến thể `_buf`
+render vào vùng nhớ của caller và trả về `error.BufferOverflow` khi quá nhỏ.
+
+```zig
+fn item(_: *uz.Request, res: *uz.Response) void {
+    var buffer: [256]u8 = undefined;
+    res.json_buf(.{ .id = 7, .name = "slab" }, &buffer) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+## Status và raw header
+
+`end(status, body)` và `end_with_headers(status, headers, body)` gửi một
+response hoàn chỉnh. Status là `NNN` hoặc `NNN reason`. Mã phải nằm trong
+khoảng 200 đến 599. Status 204, 205 và 304 không cho phép body; body không rỗng
+trả về `error.BodyNotAllowed`.
+
+Raw response field phải là block kết thúc bằng `\r\n`. Mỗi dòng cần token name
+không rỗng và dấu hai chấm; value từ chối control character trừ tab.
+`Content-Length`, `Transfer-Encoding` và `Content-Encoding` lặp lại trong
+`end_gzip` đều bị từ chối.
+
+`append_header(name, value)` xếp một field trước khi response bắt đầu. Hàm dùng
+block 2048 byte, từ chối CR hoặc LF trong value, và trả về
+`error.BufferOverflow` khi một dòng vượt 1024 byte hoặc block đầy.
+`end_with_headers` và mọi start helper gộp các field đang chờ.
+
+| Lỗi                      | Phát sinh khi                                             |
+| ------------------------ | --------------------------------------------------------- |
+| `InvalidStatus`          | Status sai định dạng hoặc ngoài 200 đến 599               |
+| `InvalidHeaders`         | Field sai định dạng, bị chèn hoặc dùng framing dành riêng |
+| `BodyNotAllowed`         | Có body cho 204, 205 hoặc 304                             |
+| `ResponseAlreadyStarted` | Helper chạy sau khi response đã rời `idle`                |
+| `BufferOverflow`         | Field đang chờ, redirect target hoặc JSON buffer quá lớn  |
+
+`redirect(location, code: ?u16)` mặc định là `302 Found` và chỉ giữ 301, 302,
+303, 307 và 308; mã khác gửi `302 Found`. CR hoặc LF trả về
+`error.InvalidHeaders`, và location trên 512 byte trả về
+`error.BufferOverflow`.
+
+`set_cookie(name, value, options)` xếp một field `Set-Cookie`.
+`set_signed_cookie(name, value, secret, options)` ký bằng HMAC-SHA256. Secret
+phải dài ít nhất 32 byte, và ký không phải mã hóa. Các helper này chỉ xếp byte,
+nên thêm chúng trước helper kết thúc hoặc start. Xem [cookie và signed
+cookie](/docs/http/helpers/cookies) để biết option và quy tắc prefix.
+
+`end_best_effort(status, body)` và
+`end_with_headers_best_effort(status, headers, body)` dành cho callback có ABI
+không báo được lỗi. Chúng gọi helper thường và abort transport khi lỗi:
+TCP đóng connection, HTTP/2 hoặc HTTP/3 reset hoặc đóng stream. Lỗi validation
+và response đã start cũng đi theo đường abort này.
+
+## JSON dạng stream
+
+`begin_json()` bắt đầu response chunked `200 OK` với
+`Content-Type: application/json; charset=utf-8` và trả về `JsonStream`. Các
+lần write nhỏ được gộp trong stack buffer 4096 byte.
+
+| Method               | Hành vi                                                   |
+| -------------------- | --------------------------------------------------------- |
+| `writer()`           | Trả về `std.Io.Writer` có buffer                          |
+| `stringify()`        | Trả về `std.json.Stringify` gắn với stream                |
+| `write(bytes)`       | Ghi byte JSON thô; backpressure thành `error.WriteFailed` |
+| `flush()`            | Phát các byte đang buffer thành chunk                     |
+| `write_chunk(bytes)` | Flush, rồi giữ nguyên lỗi transport thật                  |
+| `end()`              | Flush và kết thúc chunked body                            |
+
+```zig
+fn stream(_: *uz.Request, res: *uz.Response) void {
+    var json = res.begin_json() catch return;
+    json.write("{\"items\":[") catch return;
+    json.write("1,2,3") catch return;
+    json.write("]}") catch return;
+    json.end() catch return;
+}
+```
+
+Giữ `JsonStream` ở địa chỉ ổn định khi còn hoạt động. Không copy nó sau lần
+write đầu tiên.
+
+## Chunked và pull streaming
+
+| Method                           | Hành vi                            |
+| -------------------------------- | ---------------------------------- |
+| `begin_chunked(status, headers)` | Gửi head và vào `streaming`        |
+| `write_chunk(chunk)`             | Ghi một chunk; yêu cầu `streaming` |
+| `end_chunks()`                   | Ghi terminator và vào `ended`      |
+
+`begin_stream(status, headers, context, producer)` để transport kéo body.
+`StreamProducer` là
+`*const fn (*anyopaque, *Response) anyerror!StreamStatus`. Trả về `.pending` để
+được gọi lại và `.done` sau `end_chunks`. Producer chạy ngay và chạy lại mỗi
+khi có chỗ trong output, nên body rất lớn không cần cấp phát queue theo kích
+thước.
+
+```zig
+fn produce(_: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    try res.write_chunk("streamed body");
+    try res.end_chunks();
+    return .done;
+}
+```
+
+Producer thực tế giữ cursor trong `context`, trả về `.pending` khi write chunk
+trả `error.WouldBlock`, và tiếp tục từ cursor đó. Transport không có producer
+callback sẽ fail closed với `error.ProducerStreamingUnsupported` trước khi ghi
+byte nào. Xem [response dạng stream](/docs/http/streaming) để biết khác biệt
+giữa các transport.
+
+## Server-Sent Events
+
+`sse()` bắt đầu event stream chunked `200 OK` với
+`Content-Type: text/event-stream`, `Cache-Control: no-cache` và
+`X-Accel-Buffering: no`.
+
+| Method                    | Hành vi                                             |
+| ------------------------- | --------------------------------------------------- |
+| `send_event(event, data)` | Ghi `event:` và một dòng `data:` cho mỗi dòng input |
+| `heartbeat()`             | Ghi comment `: keep-alive`                          |
+| `close()`                 | Gọi `end_chunks`                                    |
+
+`send_event` từ chối CR hoặc LF trong event name bằng
+`error.InvalidEventName`. Dòng input tách theo `\n`, và `\r` ở cuối bị bỏ trước
+khi framing.
+
+```zig
+fn events(_: *uz.Request, res: *uz.Response) void {
+    var stream = res.sse() catch return;
+    stream.send_event("tick", "one\ntwo") catch return;
+    stream.heartbeat() catch return;
+    stream.close() catch return;
+}
+```
+
+## File, gzip và writable stream
+
+| Method                                             | Hành vi                                      |
+| -------------------------------------------------- | -------------------------------------------- |
+| `send_file(status, headers, file, offset, length)` | Stream file đang mở trên TCP plaintext       |
+| `end_gzip(status, headers, body)`                  | Nén qua codec pool của từng worker           |
+| `writable_stream()`                                | Trả về `WritableByteStream` cho response này |
+
+`send_file` giao file cho connection khi thành công và đóng file khi body drain;
+khi có lỗi, caller giữ ownership. HTTP/2, HTTP/3 và stream có TLS frame trả về
+`error.ZeroCopyUnavailable`, nên dùng body buffer có giới hạn thay thế.
+
+`end_gzip` yêu cầu `with_http_compression(true)`. Hàm thêm
+`Content-Encoding: gzip` và `Vary: Accept-Encoding`. Thiếu pool trả về
+`error.CompressionUnavailable`, HTTP/3 trả về
+`error.CompressionUnsupported`, caller tự đặt `Content-Encoding` trả về
+`error.DuplicateContentEncoding`, và field gộp vượt 2048 byte trả về
+`error.HeadersTooLarge`.
+
+`writable_stream()` bắt đầu chunked `200 OK` ở lần write đầu, không có content
+type. `close` kết thúc chunked body khi response đang streaming.
+
+## Lỗi
+
+| Lỗi                      | Ý nghĩa                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `ResponseAlreadyStarted` | Response đã rời `idle` trước lần gọi này             |
+| `ResponseNotStreaming`   | Ghi chunk ngoài `streaming`                          |
+| `BodyNotAllowed`         | Status không cho body, hoặc body bị bỏ qua           |
+| `InvalidStatus`          | Mã status ngoài 200 đến 599                          |
+| `InvalidHeaders`         | Field sai định dạng hoặc có control character        |
+| `BufferOverflow`         | Buffer đang chờ hoặc buffer của caller quá nhỏ       |
+| `CompressionUnavailable` | Gzip được yêu cầu nhưng pool chưa bật                |
+| `ZeroCopyUnavailable`    | `send_file` chạy trên transport không phải plaintext |
+
+## Tiếp theo
+
+Tiếp tục với [response dạng stream](/docs/http/streaming), sau đó đọc
+[chunked response](/docs/http/chunked) và [lỗi HTTP](/docs/http/errors).

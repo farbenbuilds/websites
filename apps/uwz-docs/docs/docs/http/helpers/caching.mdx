@@ -1,0 +1,116 @@
+---
+title: Caching and ETags
+description: Generate a strong ETag from a response body, answer If-None-Match with 304, and keep cache policy in your application.
+sidebar:
+  order: 5
+search:
+  tags: [helpers, how-to, http]
+---
+
+`uz.cache` generates a strong ETag from a body and answers a conditional GET
+with `304 Not Modified`. The helper covers validators, not policy: your
+application decides which responses are cacheable, for how long, and whether a
+shared cache may store them.
+
+## Strong ETag generation
+
+`EtagBuffer` is `[18]u8`: two quotes and sixteen lowercase hex digits.
+`etag(content, buffer)` writes the Wyhash-64 digest of `content` into that
+buffer and returns the quoted tag.
+
+```zig
+var tag_buffer: uz.cache.EtagBuffer = undefined;
+const tag = uz.cache.etag(body, &tag_buffer);
+```
+
+The same bytes always produce the same tag, and the helper needs no allocator.
+The digest covers the bytes you pass. If one URL serves different
+representations, such as a compressed and an uncompressed body, compute a
+distinct tag for each representation; the helper does not inspect
+`Content-Encoding`. The buffer is caller-owned, which keeps the helper inside
+the same [capacity model](/docs/concepts/capacity-model) as the request path.
+
+## Conditional GET
+
+| Function                    | Input                     | Result                                                   |
+| --------------------------- | ------------------------- | -------------------------------------------------------- |
+| `is_not_modified(req, tag)` | Request and current ETag  | `true` when any `If-None-Match` field matches            |
+| `not_modified(res, tag)`    | Response and current ETag | Queues `ETag`, then ends `304 Not Modified` with no body |
+
+`is_not_modified` scans every `If-None-Match` field, splits comma lists, trims
+optional whitespace, accepts `*`, and compares validators weakly: a `W/` prefix
+is stripped from both sides before the byte comparison. An empty current tag
+returns `false`. The scan uses the borrowed request headers described in the
+[Request API](/docs/http/request).
+
+`not_modified` writes the current ETag and ends the response. A `304` must carry
+the validator, so do not call `res.end("304 Not Modified", "")` directly when
+the client sent `If-None-Match`.
+
+```zig
+fn article(req: *uz.Request, res: *uz.Response) void {
+    const body = "{\"title\":\"Caching\"}";
+
+    var tag_buffer: uz.cache.EtagBuffer = undefined;
+    const tag = uz.cache.etag(body, &tag_buffer);
+
+    if (uz.cache.is_not_modified(req, tag)) {
+        uz.cache.not_modified(res, tag) catch {};
+        return;
+    }
+
+    res.append_header("ETag", tag) catch {};
+    res.end_with_headers("200 OK", "Content-Type: application/json\r\n", body) catch {};
+}
+```
+
+## Static Last-Modified and If-Range
+
+`App.static` owns the file-specific validators, and the
+[static files page](/docs/http/static-files) covers the full mount behavior.
+The two pure functions behind it are public:
+
+| Function                                          | Behavior                                                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `static_files.not_modified(req, etag, modified)`  | Prefers `If-None-Match`; otherwise requires `If-Modified-Since` to equal `Last-Modified` |
+| `static_files.range_allowed(req, etag, modified)` | Applies RFC 9110 strong comparison for `If-Range`                                        |
+
+`If-Range` accepts only a strong ETag that equals the current one or an
+HTTP-date that exactly equals `Last-Modified`. A weak `W/` validator never
+matches, and a mismatched validator makes the server send the whole
+representation instead of a partial range.
+
+## Policy belongs to the application
+
+The cache helpers emit no `Cache-Control` field. Decide it per route:
+
+| Response                            | Typical policy                        |
+| ----------------------------------- | ------------------------------------- |
+| Immutable asset with a content hash | `public, max-age=31536000, immutable` |
+| Public page that changes            | `public, max-age=60` plus an ETag     |
+| Authenticated page                  | `private, no-store`                   |
+| Error response                      | No long-lived cache                   |
+
+`App.static` is the exception: when its `max_age` option is nonzero, it emits
+`Cache-Control: public, max-age=N`. For every handler-built response, add the
+field with `res.append_header` before ending the response.
+
+## Verify
+
+```sh
+tag=$(curl -s -D - -o /dev/null http://127.0.0.1:3000/article \
+  | awk -F': ' 'tolower($1)=="etag"{print $2}' | tr -d '\r')
+curl -i -H "If-None-Match: $tag" http://127.0.0.1:3000/article
+curl -i -H 'If-None-Match: *' http://127.0.0.1:3000/article
+```
+
+Both conditional requests return `304 Not Modified` with the same `ETag` and no
+body. A request with `If-None-Match: W/"other"` returns the full `200 OK`
+response.
+
+## Next
+
+Read [static files](/docs/http/static-files) for the mount-level validators and
+the [Response API](/docs/http/response) for header ordering. The
+[response lifecycle](/docs/concepts/response-lifecycle) explains when a `304`
+counts as a complete response.

@@ -1,0 +1,166 @@
+---
+title: JSON responses
+description: Serialize JSON with json, json_buf, and begin_json, parse request bodies with req.json, and manage allocator ownership.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, json]
+---
+
+µWebZockets handles JSON at two boundaries: parsing the bounded request body and
+rendering a response. Choose the buffer or allocator variant by whether the
+document size is known at the call site, and release parsed values exactly once.
+
+## Send and parse in one program
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Note = struct { text: []const u8 };
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
+        std.log.warn("json parse failed: {}", .{err});
+        res.end("400 Bad Request", "invalid json") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    var buffer: [256]u8 = undefined;
+    res.json_buf(.{ .ok = true, .text = parsed.value.text }, &buffer) catch |err| {
+        std.log.err("json response failed: {}", .{err});
+    };
+}
+
+fn stream(_: *uz.Request, res: *uz.Response) void {
+    var json = res.begin_json() catch return;
+    const writer = json.writer();
+    writer.writeAll("{\"items\":[") catch return;
+    for (0..1000) |index| {
+        if (index != 0) writer.writeAll(",") catch return;
+        writer.print("{d}", .{index}) catch return;
+    }
+    writer.writeAll("]}") catch return;
+    json.end() catch return;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.post("/notes", create);
+    _ = try app.get("/items", stream);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Fixed responses
+
+| Method                          | Storage                                         | Size limit                       |
+| ------------------------------- | ----------------------------------------------- | -------------------------------- |
+| `json(value, allocator)`        | Temporary allocator render, freed before return | Allocator capacity               |
+| `json_buf(value, buffer)`       | Caller buffer                                   | `error.BufferOverflow` when full |
+| `json_value(value, allocator)`  | Same as `json` for `std.json.Value`             | Allocator capacity               |
+| `json_value_buf(value, buffer)` | Same as `json_buf` for `std.json.Value`         | `error.BufferOverflow` when full |
+
+All four send `200 OK` with `Content-Type: application/json; charset=utf-8`.
+`json` and `json_buf` accept any type `std.json.Stringify` supports. The
+`json_value` variants take a dynamic `std.json.Value`.
+
+`json` allocates only the temporary rendering. It frees that buffer before the
+helper returns, and the response queue owns its own copy of the bytes. The
+allocator you pass is otherwise untouched.
+
+A fixed body is rendered and queued in one step. On HTTP/1.1, if the rendered
+body does not fit the write queue, `json` returns `error.WouldBlock`. Use
+`begin_json` when the document can exceed the queue.
+
+## Streaming responses
+
+`begin_json()` starts a `200 OK` chunked response with the JSON content type and
+returns a `JsonStream`. Small writes coalesce in a fixed 4096-byte stack buffer,
+so the body size is not bounded by a rendering buffer.
+
+| Method               | Behavior                                                         |
+| -------------------- | ---------------------------------------------------------------- |
+| `writer()`           | Buffered `std.Io.Writer` for `writeAll`, `print`, and formatting |
+| `stringify()`        | `std.json.Stringify` bound to the stream                         |
+| `write(bytes)`       | Raw JSON bytes; transport failure becomes `error.WriteFailed`    |
+| `flush()`            | Emits buffered bytes as response chunks                          |
+| `write_chunk(bytes)` | Flushes, then preserves the real transport error                 |
+| `end()`              | Flushes and terminates the chunked body                          |
+
+`write`, `flush`, and the writer path report `error.WriteFailed` because the
+`std.Io.Writer` error set is narrower than the transport. Use `write_chunk` when
+you need to distinguish `error.WouldBlock` from another transport failure. Call
+`end` exactly once, and keep the `JsonStream` at a stable address while it is
+active.
+
+## Parse a request body
+
+`req.json(T, allocator)` parses the complete buffered body into
+`std.json.Parsed(T)`:
+
+```zig
+const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
+    std.log.warn("json parse failed: {}", .{err});
+    res.end("400 Bad Request", "invalid json") catch {};
+    return;
+};
+defer parsed.deinit();
+```
+
+The allocator owns the parsed value, including nested strings and arrays. Call
+`deinit` exactly once and do not free fields individually. `Request.json` does
+not inspect `Content-Type`; it parses the body bytes whatever the media type.
+Check the media type first when the route accepts more than JSON.
+
+Parse failures are `std.json.ParseError` values such as `SyntaxError`,
+`UnexpectedEndOfInput`, `MissingField`, `DuplicateField`, and `UnknownField`.
+An allocation failure is `error.OutOfMemory`. Map a parse failure to
+`400 Bad Request` in the handler; the framework does not choose a status for
+you.
+
+`validate_json(T, allocator)` applies compile-time field rules and
+`validate_json_detailed` reports the first issue. The [type safety
+model](/docs/concepts/type-safety) covers those declarations.
+
+## Size limits
+
+| Boundary              | Limit                                           | Result                                     |
+| --------------------- | ----------------------------------------------- | ------------------------------------------ |
+| HTTP/1.1 request body | `ServerConfig.max_body_size`, 16 KiB by default | `413 Payload Too Large` before the handler |
+| Request parse         | Whole bounded body                              | Parse error or `error.OutOfMemory`         |
+| `json_buf` render     | Caller buffer                                   | `error.BufferOverflow`                     |
+| Fixed response body   | HTTP/1.1 write queue                            | `error.WouldBlock`                         |
+| Streamed JSON total   | No queue-sized total; each step must fit        | `error.WriteFailed` or `error.WouldBlock`  |
+
+The request body limit applies before `req.json` runs. A body above the limit is
+rejected by the HTTP/1.1 parser, so the handler is never called.
+
+## Verify
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"slab"}'
+```
+
+Expect `200 OK` and `{"ok":true,"text":"slab"}`. A malformed body returns
+`400 Bad Request`:
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{'
+```
+
+The streaming route returns a chunked `200 OK` body with 1000 numbers.
+
+## Next
+
+Read the [Request API](/docs/http/request) for body access, then
+[streaming responses](/docs/http/streaming) for non-JSON producers.

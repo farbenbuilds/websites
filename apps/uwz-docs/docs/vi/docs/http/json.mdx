@@ -1,0 +1,164 @@
+---
+title: JSON response
+description: Serialize JSON bằng json, json_buf và begin_json, parse request body bằng req.json và quản lý allocator ownership.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, json]
+---
+
+µWebZockets xử lý JSON ở hai ranh giới: parse body request có giới hạn và render
+response. Chọn biến thể buffer hoặc allocator tùy việc document size có biết tại
+chỗ gọi hay không, và giải phóng value đã parse đúng một lần.
+
+## Gửi và parse trong một chương trình
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Note = struct { text: []const u8 };
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
+        std.log.warn("json parse failed: {}", .{err});
+        res.end("400 Bad Request", "invalid json") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    var buffer: [256]u8 = undefined;
+    res.json_buf(.{ .ok = true, .text = parsed.value.text }, &buffer) catch |err| {
+        std.log.err("json response failed: {}", .{err});
+    };
+}
+
+fn stream(_: *uz.Request, res: *uz.Response) void {
+    var json = res.begin_json() catch return;
+    const writer = json.writer();
+    writer.writeAll("{\"items\":[") catch return;
+    for (0..1000) |index| {
+        if (index != 0) writer.writeAll(",") catch return;
+        writer.print("{d}", .{index}) catch return;
+    }
+    writer.writeAll("]}") catch return;
+    json.end() catch return;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.post("/notes", create);
+    _ = try app.get("/items", stream);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Response cố định
+
+| Method                          | Storage                                          | Giới hạn kích thước            |
+| ------------------------------- | ------------------------------------------------ | ------------------------------ |
+| `json(value, allocator)`        | Render tạm bằng allocator, free trước khi trả về | Capacity của allocator         |
+| `json_buf(value, buffer)`       | Buffer của caller                                | `error.BufferOverflow` khi đầy |
+| `json_value(value, allocator)`  | Như `json` cho `std.json.Value`                  | Capacity của allocator         |
+| `json_value_buf(value, buffer)` | Như `json_buf` cho `std.json.Value`              | `error.BufferOverflow` khi đầy |
+
+Cả bốn gửi `200 OK` với `Content-Type: application/json; charset=utf-8`.
+`json` và `json_buf` nhận mọi kiểu mà `std.json.Stringify` hỗ trợ. Biến thể
+`json_value` nhận `std.json.Value` động.
+
+`json` chỉ cấp phát phần render tạm. Nó free buffer đó trước khi helper trả về,
+và response queue sở hữu bản copy byte của mình. Allocator bạn truyền không giữ
+buffer sau khi helper trả về.
+
+Body cố định được render và đưa vào queue trong một bước. Trên HTTP/1.1, nếu body
+đã render không vừa write queue, `json` trả `error.WouldBlock`. Dùng `begin_json`
+khi document có thể vượt queue.
+
+## Response streaming
+
+`begin_json()` bắt đầu response `200 OK` chunked với JSON content type và trả
+`JsonStream`. Các write nhỏ coalesce trong stack buffer 4096 byte cố định, nên
+body size không bị giới hạn bởi buffer render.
+
+| Method               | Hành vi                                                     |
+| -------------------- | ----------------------------------------------------------- |
+| `writer()`           | `std.Io.Writer` có buffer cho `writeAll`, `print` và format |
+| `stringify()`        | `std.json.Stringify` gắn với stream                         |
+| `write(bytes)`       | Byte JSON thô; lỗi transport thành `error.WriteFailed`      |
+| `flush()`            | Gửi byte đã buffer thành response chunk                     |
+| `write_chunk(bytes)` | Flush rồi giữ nguyên lỗi transport thật                     |
+| `end()`              | Flush và kết thúc chunked body                              |
+
+`write`, `flush` và đường writer báo `error.WriteFailed` vì error set của
+`std.Io.Writer` hẹp hơn transport. Dùng `write_chunk` khi cần phân biệt
+`error.WouldBlock` với lỗi transport khác. Gọi `end` đúng một lần, và giữ
+`JsonStream` ở địa chỉ ổn định khi đang hoạt động.
+
+## Parse request body
+
+`req.json(T, allocator)` parse toàn bộ body đã buffer thành
+`std.json.Parsed(T)`:
+
+```zig
+const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
+    std.log.warn("json parse failed: {}", .{err});
+    res.end("400 Bad Request", "invalid json") catch {};
+    return;
+};
+defer parsed.deinit();
+```
+
+Allocator sở hữu value đã parse, gồm string và array lồng nhau. Gọi `deinit`
+đúng một lần và không free từng field. `Request.json` không kiểm tra
+`Content-Type`; nó parse byte body bất kể media type. Kiểm tra media type trước
+khi route chấp nhận nhiều hơn JSON.
+
+Lỗi parse là các giá trị `std.json.ParseError` như `SyntaxError`,
+`UnexpectedEndOfInput`, `MissingField`, `DuplicateField` và `UnknownField`. Lỗi
+cấp phát là `error.OutOfMemory`. Ánh xạ lỗi parse thành `400 Bad Request` trong
+handler; framework không tự chọn status.
+
+`validate_json(T, allocator)` áp dụng rule field lúc compile và
+`validate_json_detailed` báo issue đầu tiên. [Mô hình type
+safety](/docs/concepts/type-safety) trình bày các khai báo đó.
+
+## Giới hạn kích thước
+
+| Ranh giới             | Giới hạn                                      | Kết quả                                     |
+| --------------------- | --------------------------------------------- | ------------------------------------------- |
+| Request body HTTP/1.1 | `ServerConfig.max_body_size`, mặc định 16 KiB | `413 Payload Too Large` trước handler       |
+| Parse request         | Toàn bộ body có giới hạn                      | Parse error hoặc `error.OutOfMemory`        |
+| Render `json_buf`     | Buffer của caller                             | `error.BufferOverflow`                      |
+| Body response cố định | Write queue HTTP/1.1                          | `error.WouldBlock`                          |
+| Tổng JSON stream      | Không giới hạn theo queue; mỗi bước phải vừa  | `error.WriteFailed` hoặc `error.WouldBlock` |
+
+Giới hạn request body áp dụng trước khi `req.json` chạy. Body vượt giới hạn bị
+parser HTTP/1.1 từ chối, nên handler không bao giờ được gọi.
+
+## Kiểm tra
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"slab"}'
+```
+
+Kỳ vọng `200 OK` và `{"ok":true,"text":"slab"}`. Body sai định dạng trả
+`400 Bad Request`:
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{'
+```
+
+Route streaming trả body `200 OK` chunked với 1000 số.
+
+## Tiếp theo
+
+Đọc [Request API](/docs/http/request) cho body access, sau đó
+[response streaming](/docs/http/streaming) cho producer không phải JSON.

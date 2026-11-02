@@ -1,0 +1,112 @@
+---
+title: Cache và ETag
+description: Tạo ETag mạnh từ body response, trả lời If-None-Match bằng 304 và giữ cache policy ở phía ứng dụng để tái sử dụng.
+sidebar:
+  order: 5
+search:
+  tags: [helpers, how-to, http]
+---
+
+`uz.cache` tạo ETag mạnh từ body và trả lời conditional GET bằng
+`304 Not Modified`. Helper lo validator, không lo policy: ứng dụng quyết định
+response nào được cache, trong bao lâu và shared cache có được lưu hay không.
+
+## Tạo ETag mạnh
+
+`EtagBuffer` là `[18]u8`: hai dấu ngoặc kép và mười sáu chữ số hex viết
+thường. `etag(content, buffer)` ghi digest Wyhash-64 của `content` vào buffer
+và trả tag đã đóng ngoặc.
+
+```zig
+var tag_buffer: uz.cache.EtagBuffer = undefined;
+const tag = uz.cache.etag(body, &tag_buffer);
+```
+
+Cùng một bộ byte luôn cho cùng tag, và helper không cần allocator. Digest phủ
+đúng các byte bạn truyền. Nếu một URL phục vụ nhiều representation, ví dụ body
+nén và body không nén, hãy tính tag riêng cho từng representation; helper không
+xem `Content-Encoding`. Buffer do caller sở hữu, nên helper nằm trong cùng
+[capacity model](/docs/concepts/capacity-model) với request path.
+
+## Conditional GET
+
+| Function                    | Input                     | Kết quả                                                                   |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `is_not_modified(req, tag)` | Request và ETag hiện tại  | `true` khi một field `If-None-Match` khớp                                 |
+| `not_modified(res, tag)`    | Response và ETag hiện tại | Đưa `ETag` vào pending header, rồi kết thúc `304 Not Modified` không body |
+
+`is_not_modified` quét mọi field `If-None-Match`, tách danh sách bằng dấu phẩy,
+bỏ whitespace tùy chọn, chấp nhận `*`, và so sánh validator theo kiểu weak:
+tiền tố `W/` được bỏ ở cả hai phía trước khi so byte. Tag hiện tại rỗng trả
+`false`. Phép quét dùng header request được mượn, mô tả trong
+[API request](/docs/http/request).
+
+`not_modified` ghi ETag hiện tại và kết thúc response. Response `304` phải mang
+validator, nên đừng gọi `res.end("304 Not Modified", "")` trực tiếp khi client
+đã gửi `If-None-Match`.
+
+```zig
+fn article(req: *uz.Request, res: *uz.Response) void {
+    const body = "{\"title\":\"Caching\"}";
+
+    var tag_buffer: uz.cache.EtagBuffer = undefined;
+    const tag = uz.cache.etag(body, &tag_buffer);
+
+    if (uz.cache.is_not_modified(req, tag)) {
+        uz.cache.not_modified(res, tag) catch {};
+        return;
+    }
+
+    res.append_header("ETag", tag) catch {};
+    res.end_with_headers("200 OK", "Content-Type: application/json\r\n", body) catch {};
+}
+```
+
+## Last-Modified và If-Range của static
+
+`App.static` sở hữu validator dành riêng cho file, và
+[trang static file](/docs/http/static-files) bao quát toàn bộ hành vi mount.
+Hai hàm thuần phía sau nó là public:
+
+| Function                                          | Hành vi                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `static_files.not_modified(req, etag, modified)`  | Ưu tiên `If-None-Match`; nếu không có thì yêu cầu `If-Modified-Since` bằng `Last-Modified` |
+| `static_files.range_allowed(req, etag, modified)` | Áp dụng so sánh mạnh của RFC 9110 cho `If-Range`                                           |
+
+`If-Range` chỉ chấp nhận ETag mạnh bằng ETag hiện tại hoặc HTTP-date bằng đúng
+`Last-Modified`. Validator weak `W/` không bao giờ khớp, và validator không
+khớp làm server gửi toàn bộ representation thay vì một range.
+
+## Policy thuộc về ứng dụng
+
+Helper cache không ghi field `Cache-Control`. Quyết định theo từng route:
+
+| Response                         | Policy thường dùng                    |
+| -------------------------------- | ------------------------------------- |
+| Asset bất biến có hash trong tên | `public, max-age=31536000, immutable` |
+| Trang công khai có thay đổi      | `public, max-age=60` kèm ETag         |
+| Trang cần đăng nhập              | `private, no-store`                   |
+| Error response                   | Không cache lâu                       |
+
+`App.static` là ngoại lệ: khi option `max_age` khác 0, nó ghi
+`Cache-Control: public, max-age=N`. Với mọi response do handler dựng, thêm
+field bằng `res.append_header` trước khi kết thúc response.
+
+## Kiểm tra
+
+```sh
+tag=$(curl -s -D - -o /dev/null http://127.0.0.1:3000/article \
+  | awk -F': ' 'tolower($1)=="etag"{print $2}' | tr -d '\r')
+curl -i -H "If-None-Match: $tag" http://127.0.0.1:3000/article
+curl -i -H 'If-None-Match: *' http://127.0.0.1:3000/article
+```
+
+Cả hai request conditional trả `304 Not Modified` với cùng `ETag` và không body.
+Request với `If-None-Match: W/"other"` trả response `200 OK` đầy đủ.
+
+## Tiếp theo
+
+Đọc [static file](/docs/http/static-files) cho validator ở mức mount và
+[API response](/docs/http/response) cho thứ tự header.
+[Vòng đời response](/docs/concepts/response-lifecycle) giải thích khi nào
+`304` được tính là response hoàn chỉnh.

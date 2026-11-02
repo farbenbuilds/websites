@@ -40,7 +40,10 @@ violates it is rejected in review, not negotiated in a pull request.
 - Types and components use PascalCase. Functions and variables use camelCase.
   Function declarations, function expressions, and arrow functions assigned to
   a variable must use camelCase; exported HTTP method handlers such as `GET`
-  are the only uppercase exception.
+  are the only uppercase exception. This rule covers repository-authored
+  TypeScript. Code samples in Zig follow the µWebZockets public API spelling:
+  `snake_case` functions, variables, parameters, and fields; `PascalCase`
+  types; and the exact public API spelling.
 - Module constants use `SCREAMING_SNAKE_CASE` only when they are true process
   constants.
 - Semicolons are mandatory. Trailing commas are mandatory in multiline

@@ -1,0 +1,166 @@
+---
+title: Route parameter và wildcard
+description: Bắt một path segment hoặc remainder, cấp phát capture storage, decode percent escape và giữ giá trị borrowed trong một callback.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, routing]
+---
+
+Route parameter bắt một phần request path cho handler. µWebZockets hỗ trợ một
+segment không rỗng với `:name` và remainder ở cuối với `*name`. Capture mượn
+request buffer và router không bao giờ decode chúng.
+
+## Cú pháp
+
+| Pattern         | Khớp                                          | Không khớp                   |
+| --------------- | --------------------------------------------- | ---------------------------- |
+| `/users/:id`    | `/users/42`                                   | `/users/`, `/users/42/posts` |
+| `/assets/*path` | `/assets/css/site.css`, `/assets`, `/assets/` | `/assets-old`                |
+
+Segment bắt đầu bằng `:` bắt đúng một segment không rỗng. Segment bắt đầu bằng
+`*` phải là segment cuối; nó bắt mọi thứ phía sau, kể cả remainder rỗng và dấu
+slash bên trong.
+
+Tên cho phép chữ ASCII, số, `_` và `-`. Tên phân biệt hoa thường, và một pattern
+không được dùng cùng tên hai lần.
+
+## Chương trình hoàn chỉnh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse {
+        res.end("400 Bad Request", "missing id") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    var scratch: [128]u8 = undefined;
+    const decoded = uz.query.percent_decode(id, &scratch) catch {
+        res.end("400 Bad Request", "invalid escape") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    var buffer: [192]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{decoded}) catch {
+        res.end("500 Internal Server Error", "format failed") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn serve_asset(req: *uz.Request, res: *uz.Response) void {
+    const path = req.get_param("path") orelse "";
+    res.text(path) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/assets/*path", serve_asset);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Giá trị capture
+
+| Pattern         | Request path           | Kết quả                     |
+| --------------- | ---------------------- | --------------------------- |
+| `/users/:id`    | `/users/42`            | `id` là `42`                |
+| `/users/:id`    | `/users/`              | Không khớp, `404 Not Found` |
+| `/users/:id`    | `/users/42/posts`      | Không khớp, `404 Not Found` |
+| `/assets/*path` | `/assets/css/site.css` | `path` là `css/site.css`    |
+| `/assets/*path` | `/assets`              | `path` là chuỗi rỗng        |
+| `/assets/*path` | `/assets/`             | `path` là chuỗi rỗng        |
+
+`Request.get_param(name)` trả capture đầu tiên có tên đó, hoặc `null`. Router xóa
+capture array trước mỗi lookup. Vì vậy handler chỉ thấy capture của route hiện
+tại.
+
+## Capacity capture
+
+Request giữ 16 capture inline; `ServerConfig.max_route_params` mặc định là 16.
+Tăng qua `with_max_route_params` sẽ dành thêm một cặp pointer name/value cho mỗi
+capture slot và mỗi connection trong startup slab. Vùng slab được tái sử dụng
+cho mọi request trên connection đó, nên request vẫn không cấp phát gì.
+
+| Giới hạn            |           Mặc định | Failure                                           |
+| ------------------- | -----------------: | ------------------------------------------------- |
+| Capture mỗi request |          16 inline | `error.RouteParameterCapacityReached`             |
+| Capture mỗi pattern | `max_route_params` | `error.RouteParameterCapacityReached` khi đăng ký |
+| Route path          |              2 KiB | `error.InvalidRoutePath`                          |
+
+Pattern vượt capacity đã cấu hình sẽ báo lỗi khi đăng ký thay vì khớp một phần.
+Integration code gắn capture mượn qua `Request.add_param` nhận cùng error khi
+vùng dự phòng đầy.
+
+## Pattern sai
+
+Đăng ký fail closed; router không bao giờ fallback sang matching mơ hồ. Đây là
+lỗi startup nên không có HTTP status.
+
+| Pattern                        | Lỗi                           | Nguyên nhân                      |
+| ------------------------------ | ----------------------------- | -------------------------------- |
+| `users/:id`                    | `error.InvalidRoutePath`      | Thiếu `/` ở đầu                  |
+| `/users/:`                     | `error.InvalidRoutePattern`   | Tên capture rỗng                 |
+| `/users/:na me`                | `error.InvalidRoutePattern`   | Space không phải ký tự tên       |
+| `/assets/*path/tail`           | `error.InvalidRoutePattern`   | Wildcard không ở cuối            |
+| `/users/:id/:id`               | `error.InvalidRoutePattern`   | Tên capture trùng                |
+| `/users/:id` và `/users/:name` | `error.RoutePatternConflicts` | Cùng shape path                  |
+| `/users/:id?active=1`          | `error.InvalidRoutePath`      | Query separator trong route path |
+
+Path dài hơn `max_route_path_size` cũng trả `error.InvalidRoutePath`. Đăng ký path
+không có query string; query của request đã được tách vào `Request.query`.
+
+## Percent decoding
+
+Router khớp raw request path. `%2F` ở trong một segment và không bị coi là
+separator, còn `%20` giữ nguyên ba byte.
+
+| Request path            | Capture cho `/users/:id` | Giá trị sau decode |
+| ----------------------- | ------------------------ | ------------------ |
+| `/users/Ada%20Lovelace` | `Ada%20Lovelace`         | `Ada Lovelace`     |
+| `/users/a%2Fb`          | `a%2Fb`                  | `a/b`              |
+
+Decode tường minh bằng `uz.query.percent_decode(value, scratch)`. Slice scratch
+phải dài ít nhất bằng capture. Escape sai trả `error.InvalidPercentEncoding`, và
+scratch ngắn trả `error.NoSpaceLeft`. `percent_decode` để nguyên `+`; chỉ dùng
+`uz.query.form_decode` cho body form-urlencoded, không dùng cho path.
+
+Validate giá trị đã decode trước khi dùng làm path hoặc key. Capture là input do
+attacker kiểm soát.
+
+## Lifetime
+
+Capture mượn connection request buffer. Nó hợp lệ đến khi handler synchronous
+trả về, hoặc đến khi async response complete. Copy vào application storage, hoặc
+gọi `req.clone(allocator)` để sở hữu snapshot đầy đủ, trước khi giao cho worker
+hoặc lưu lại.
+
+## Kiểm tra
+
+```sh
+curl -s 'http://127.0.0.1:3000/users/Ada%20Lovelace'
+curl -s 'http://127.0.0.1:3000/assets/css/site.css'
+curl -i http://127.0.0.1:3000/users/
+```
+
+Body đầu là `user Ada Lovelace`, body thứ hai là `css/site.css`, và request thứ
+ba trả `404 Not Found` vì `:id` cần segment không rỗng.
+
+## Tiếp theo
+
+- [Handler](/docs/http/handlers) trình bày callback synchronous và deferred.
+- [Request API](/docs/http/request) trình bày truy cập header, body và query.
+- [Ownership và lifetime](/docs/concepts/ownership-and-lifetimes) giải thích
+  request storage được mượn.

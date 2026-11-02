@@ -1,0 +1,146 @@
+---
+title: Streaming responses
+description: Produce a body larger than the write queue with begin_stream, handle backpressure, and know the transport differences.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, streaming]
+---
+
+`begin_stream` lets the transport pull a response body from your producer only
+as output space frees. The queue bounds one invocation, not the total body, so a
+multi-gigabyte response does not need a matching buffer.
+
+## Producer contract
+
+A `StreamProducer` receives your context pointer and the active response. These
+declarations come from `src/http/response.zig`; the snippet omits the module
+imports:
+
+```zig
+pub const StreamProducer = *const fn (*anyopaque, *Response) anyerror!StreamStatus;
+
+pub const StreamStatus = enum {
+    pending,
+    done,
+};
+```
+
+| Status     | Meaning                                    | Next step                                       |
+| ---------- | ------------------------------------------ | ----------------------------------------------- |
+| `.pending` | The transport accepted all it can hold now | The producer runs again when output space frees |
+| `.done`    | The producer called `end_chunks`           | The response is complete                        |
+
+The producer runs immediately inside `begin_stream`, then again whenever the
+transport drains. It is not called on a timer, a new application event, or a
+peer read. Return `.pending` only because of backpressure, not because the data
+is not ready yet.
+
+## Keep a cursor
+
+This excerpt shows the cursor and retry rule. It omits imports, `main`, route
+registration, and the storage that owns `Download`:
+
+```zig
+const Download = struct {
+    chunks: []const []const u8,
+    index: usize = 0,
+};
+
+fn produce(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const download: *Download = @ptrCast(@alignCast(context));
+    while (download.index < download.chunks.len) {
+        const chunk = download.chunks[download.index];
+        res.write_chunk(chunk) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        download.index += 1;
+    }
+    try res.end_chunks();
+    return .done;
+}
+
+fn start(res: *uz.Response, download: *Download) !void {
+    return res.begin_stream(
+        "200 OK",
+        "Content-Type: application/octet-stream\r\n",
+        download,
+        produce,
+    );
+}
+```
+
+`error.WouldBlock` queues nothing, so the producer retries the same chunk
+without advancing `index`. On HTTP/1.1, a chunk must fit the write queue together
+with its chunk framing; on HTTP/2 and HTTP/3 it must fit the available
+flow-control window. Split larger data into smaller chunks instead of returning
+the same oversized chunk forever.
+
+The context pointer must stay valid until the response completes. A value on
+the handler stack is not valid after the handler returns, so keep one state per
+active response in application-owned storage and reset it before
+`begin_stream`. Do not share one cursor between concurrent responses.
+
+## Backpressure and completion
+
+- The default write queue is 64 KiB per connection.
+- A streamed body can exceed the queue because each invocation stops at the
+  first `error.WouldBlock`.
+- Do not loop on `error.WouldBlock` inside the callback. The drain that would
+  make room cannot run while the loop is blocked.
+- Call `end_chunks` once, then return `.done`. The status value alone does not
+  terminate the body.
+- The status and headers are sent before the producer runs. You cannot change
+  them after the first byte.
+
+A producer error after the head is sent cannot become a different HTTP status.
+On HTTP/1.1 the transport closes the connection; an armed HTTP/2 producer
+resets its stream. Send the status you want before you start streaming.
+
+## Transport differences
+
+| Transport                 | Body framing                     | Producer resume            | Notes                                |
+| ------------------------- | -------------------------------- | -------------------------- | ------------------------------------ |
+| HTTP/1.1 plaintext or TLS | `Transfer-Encoding: chunked`     | Write-ring drain           | `begin_stream` uses the chunked head |
+| HTTP/2                    | `DATA` frames, no chunked coding | Stream flow-control window | Needs an arming callback             |
+| HTTP/3                    | `DATA` frames, no chunked coding | Stream flow-control window | Needs an arming callback             |
+
+A target without a producer arming callback fails with
+`error.ProducerStreamingUnsupported` before any body bytes are written. TCP
+always supports the producer path. On HTTP/2 and HTTP/3, chunk framing is a
+transport detail; `write_chunk` maps to one body write, not to an HTTP/1.1
+chunk header.
+
+## Errors
+
+| Error                          | Raised when                                                 |
+| ------------------------------ | ----------------------------------------------------------- |
+| `InvalidStatus`                | The status is malformed or outside 200 to 599               |
+| `InvalidHeaders`               | The raw fields fail response validation                     |
+| `BodyNotAllowed`               | The status forbids a body, or a `HEAD` response on HTTP/1.1 |
+| `ResponseAlreadyStarted`       | Another helper already started the response                 |
+| `ResponseNotStreaming`         | `write_chunk` or `end_chunks` ran outside streaming         |
+| `WouldBlock`                   | The write queue cannot accept this chunk now                |
+| `ProducerStreamingUnsupported` | The transport has no producer arming callback               |
+| `ConnectionClosed`             | The peer or transport is already closing                    |
+
+## Verify
+
+```sh
+curl -i http://127.0.0.1:3000/download
+```
+
+On HTTP/1.1, expect `200 OK`, `Transfer-Encoding: chunked`, and no
+`Content-Length`. The body arrives in chunks and ends with the terminal chunk.
+Add `--raw` to see the chunk sizes:
+
+```sh
+curl --raw -i http://127.0.0.1:3000/download
+```
+
+## Next
+
+Read [backpressure](/docs/concepts/backpressure) for the shared `WouldBlock`
+contract, then [chunked responses](/docs/http/chunked) for the synchronous
+alternative.

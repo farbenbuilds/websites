@@ -1,0 +1,120 @@
+---
+title: Content negotiation
+description: Parse Accept ranges, score them in per-mille quality, and pick the best representation you offer without allocating.
+sidebar:
+  order: 6
+search:
+  tags: [helpers, how-to, http]
+---
+
+`uz.negotiate` parses an `Accept` field and scores media types you already
+produce. It is a pure, fixed-capacity matcher: malformed entries are dropped,
+the registry holds at most 16 entries, and no step allocates.
+
+The helper does not generate representations, set `Content-Type`, or choose a
+charset. You supply the offers and send the winner.
+
+## Parse and score
+
+| Function                      | Returns       | Behavior                                       |
+| ----------------------------- | ------------- | ---------------------------------------------- |
+| `parse(header)`               | `Accept`      | Best-effort list of up to 16 entries           |
+| `score(accept, media_type)`   | `u16`         | Quality in per-mille, `0` when nothing matches |
+| `accepts(accept, media_type)` | `bool`        | `score(...) > 0`                               |
+| `best(accept, offers)`        | `?[]const u8` | Highest-scoring offer, or `null`               |
+
+`parse` trims whitespace, drops malformed entries, and ignores entries past the
+16-entry bound. It does not fail. A malformed `Accept` therefore behaves like an
+empty one, and an empty `Accept` accepts every media type with quality `1000`.
+The 16 entries live inline in `Accept`, following the fixed-storage rule in the
+[capacity model](/docs/concepts/capacity-model).
+
+`score` splits the offer into type and subtype and finds the most specific
+matching entry. Specificity outranks quality:
+
+| Match                  | Specificity | Example                     |
+| ---------------------- | ----------: | --------------------------- |
+| Exact type and subtype |           3 | `text/html` for `text/html` |
+| Type wildcard          |           2 | `text/*` for `text/html`    |
+| Any wildcard           |           1 | `*/*` for `text/html`       |
+| No match               |           0 | `image/*` for `text/html`   |
+
+When two entries have the same specificity, the earlier entry wins. A wildcard
+is valid only as the complete type or subtype: `*/*` and `text/*` parse, while
+`*/json` is dropped.
+
+## Quality values
+
+An entry without `q` has quality `1000`. `q=0` explicitly rejects the range.
+The parser accepts `0`, `1`, `0.` followed by one to three digits, and
+`1.000`. It rejects a duplicate `q` parameter, a bare `q` with no value, and a
+zero-prefixed weight with more than three fractional digits, and drops the whole
+entry.
+
+```text
+Accept: text/html, application/json;q=0.9, image/avif;q=0
+```
+
+This scores `text/html` at `1000`, `application/json` at `900`, and
+`image/avif` at `0`.
+
+Because specificity is resolved before quality, `text/*;q=1, text/html;q=0.5`
+scores `text/html` at `500`, not `1000`. That is the RFC 9110 rule: the most
+specific matching range supplies the quality.
+
+## Choose an offer
+
+`best(accept, offers)` scores every offer and keeps the first one with the
+highest quality. Equal scores preserve the order of `offers`. When every offer
+scores `0`, it returns `null`.
+
+```zig
+fn represent(req: *uz.Request, res: *uz.Response) void {
+    const accept = uz.negotiate.parse(req.get_header("accept") orelse "");
+    const offers = [_][]const u8{ "application/json", "text/html" };
+    const selected = uz.negotiate.best(accept, &offers) orelse {
+        res.end("406 Not Acceptable", "") catch {};
+        return;
+    };
+
+    if (std.mem.eql(u8, selected, "application/json")) {
+        res.end_with_headers(
+            "200 OK",
+            "Content-Type: application/json\r\n",
+            "{\"ok\":true}",
+        ) catch {};
+        return;
+    }
+    res.end_with_headers("200 OK", "Content-Type: text/html\r\n", "<p>ok</p>") catch {};
+}
+```
+
+| `Accept`               | `best`             | Why                                  |
+| ---------------------- | ------------------ | ------------------------------------ |
+| Empty                  | `application/json` | Both score 1000; offer order decides |
+| `text/html`            | `text/html`        | Only the HTML offer matches          |
+| `application/*`        | `application/json` | Type wildcard matches JSON           |
+| `*/*;q=0.1`            | `application/json` | Equal score keeps offer order        |
+| `application/json;q=0` | `null`             | Both offers score 0                  |
+
+`req.accepts(media_type)` is the short form. It parses the first `Accept` field
+and returns whether the score is greater than zero. It does not tell you which
+offer won; call `best` when you have more than one.
+
+## Bounds and failure modes
+
+| Condition                                                     | Result                                     |
+| ------------------------------------------------------------- | ------------------------------------------ |
+| More than 16 entries                                          | Extra entries ignored                      |
+| Malformed entry                                               | Entry dropped                              |
+| Malformed offer with a non-empty `Accept`, for example `json` | Score `0`                                  |
+| No acceptable offer                                           | `best` returns `null`; `score` returns `0` |
+| Caller handles no match                                       | Send `406 Not Acceptable`                  |
+
+## Next
+
+Read the [Request API](/docs/http/request) for `get_header` and `accepts`, and
+the [Response API](/docs/http/response) for `Content-Type` and
+`end_with_headers`. The [protocol negotiation](/docs/concepts/protocol-negotiation)
+page covers the transport-level choice between HTTP versions, which is a
+different decision.

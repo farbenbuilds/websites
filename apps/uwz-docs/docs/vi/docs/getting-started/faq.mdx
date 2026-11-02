@@ -24,7 +24,7 @@ connection.
 
 ## Điều gì xảy ra khi cạn capacity?
 
-Thất bại là tường minh:
+Lỗi được báo tường minh:
 
 | Tài nguyên                  | Kết quả                                                |
 | --------------------------- | ------------------------------------------------------ |
@@ -35,7 +35,7 @@ Thất bại là tường minh:
 | Inbox cluster               | Số drop và wakeup failure trong `PublishReport`.       |
 | Registry procedure JSON-RPC | Lỗi đăng ký có tên trước khi service được mount.       |
 
-Xem [mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+Xem [mô hình capacity](/docs/concepts/capacity-model)
 để biết giá trị mặc định và bố cục slab.
 
 ## Capacity có tăng lúc runtime không? [#can-capacity-grow-at-runtime]

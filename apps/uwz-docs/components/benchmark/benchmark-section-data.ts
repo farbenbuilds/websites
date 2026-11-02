@@ -49,6 +49,7 @@ const BARS: readonly BenchmarkBar[] = [
   { name: "zzz", value: "40,453", share: 27.3 },
 ];
 
+// Protocol names and measurement units are data labels, not UI copy.
 const ARENA_METRICS: readonly {
   readonly key: ArenaMetricKey;
   readonly label: string;

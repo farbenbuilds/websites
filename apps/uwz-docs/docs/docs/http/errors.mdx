@@ -1,0 +1,179 @@
+---
+title: HTTP errors
+description: Return typed JSON error documents, use canonical status lines, and keep internal detail out of 500 responses when one exists.
+sidebar:
+  order: 20
+search:
+  tags: [reference, http]
+---
+
+`uz.errors` turns a failure into a bounded JSON document with a stable machine
+code. This page covers the document shape, the four send helpers, the 405 and
+500 paths, and the difference between an HTTP status and a Zig error.
+
+## The error document
+
+Every helper emits the same shape when the scratch buffer is large enough:
+
+```json
+{ "error": { "code": "not_found", "message": "Not Found" } }
+```
+
+`code` is the stable identifier a client branches on. `message` is the human
+text. `render` JSON-escapes both fields, replaces each malformed UTF-8 byte with
+U+FFFD, and writes into caller-owned storage. It never allocates.
+
+`errors.max_document_bytes` is the 512-byte worst case. A buffer smaller than the
+rendered document yields the constant fallback
+`{"error":{"code":"internal"}}`, so a rejection path never emits partial JSON.
+
+## Problem, render, and send
+
+| Name                                         | Use                                    |
+| -------------------------------------------- | -------------------------------------- |
+| `errors.Problem`                             | `status`, `code`, and `message` fields |
+| `errors.render(code, message, buffer)`       | Return the document as a slice         |
+| `errors.send(response, problem)`             | Send with an internal 512-byte buffer  |
+| `errors.send_buf(response, problem, buffer)` | Send with caller-owned scratch         |
+
+`send` and `send_buf` write `Content-Type: application/json; charset=utf-8` and
+the canonical line from `uz.status.line(problem.status)`. Use `send_buf` when
+the handler already owns a scratch buffer and you want the allocation path to
+stay visible.
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [uz.errors.max_document_bytes]u8 = undefined;
+    if (req.text().len == 0) {
+        uz.errors.send_buf(res, .{
+            .status = .bad_request,
+            .code = "empty_body",
+            .message = "Request body is required",
+        }, &scratch) catch |err| std.log.err("error response failed: {}", .{err});
+        return;
+    }
+
+    res.end("201 Created", "created") catch |err| std.log.err("response failed: {}", .{err});
+}
+```
+
+The handler chooses the status, the code, and the message. Keep the code stable
+across releases; change the message when the reader-facing explanation improves.
+
+## Status helpers
+
+`uz.status.StatusCode` lists the final-response codes that have canonical lines.
+`uz.status.line(.not_found)` returns `404 Not Found`, and
+`uz.status.line(.too_many_requests)` returns `429 Too Many Requests`.
+
+The enum is a convenience, not a filter. `Response.end` accepts a status line
+whose first three bytes are a code from 200 to 599, followed by an optional space
+and reason phrase; anything else returns `error.InvalidStatus`. Codes without an
+enum member, such as `431 Request Header Fields Too Large`, are passed as raw
+status lines. `Problem.status` is a `StatusCode`, so `errors.send` covers only the
+enum members. For a code outside the enum, call `res.end_with_headers` with the
+raw line and a document from `errors.render`.
+
+The enum names `413 Content Too Large`, the RFC 9110 name. The HTTP/1 parser
+writes `413 Payload Too Large` on its rejection path. Both name the same code, so
+assert the number when a test spans both paths.
+
+## Method not allowed
+
+`errors.method_not_allowed(response, allow)` appends an `Allow` field and sends
+
+```json
+{ "error": { "code": "method_not_allowed", "message": "Method Not Allowed" } }
+```
+
+with `405 Method Not Allowed`. The `allow` argument may not contain CR or LF. An
+invalid value returns `error.InvalidHeaders` and leaves the response idle, so a
+caller-supplied value cannot inject a field.
+
+The router's automatic `405` is separate: the server formats its own `Allow`
+field and sends the plain text body `Method Not Allowed`. Use the helper only
+when your handler decides that method selection itself.
+
+## Structured rejections
+
+The HTTP/1 parser answers oversized input before a handler exists:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+`413` uses `payload_too_large` and `431` uses `headers_too_large`; both include a
+`limit_bytes` value. The `431` document reports the configured header-block limit
+even when an oversized request line or header count triggered the rejection.
+These are transport documents, not `uz.errors.Problem` values: no handler runs,
+no application scratch buffer is involved, and the connection closes after the
+response. The [HTTP limits](/docs/http/limits) page lists every trigger.
+
+## Internal errors
+
+`errors.internal(response)` sends `500 Internal Server Error` with code
+`internal` and message `Internal Server Error`. It never echoes an allocator
+error, a path, a query, a secret, or a database message. Log the detailed cause
+on the server and return the fixed document.
+
+A handler that returns without completing a response receives a
+framework-generated `500`. That path is a contract violation, not an application
+error response.
+
+## Response already started
+
+A response is `idle`, `streaming`, or `ended`. Once it leaves `idle`, every
+complete writer and `append_header` returns `error.ResponseAlreadyStarted`.
+`errors.send` propagates the same error from its final write.
+
+Check `response.is_started()` before choosing an error document. You cannot
+replace a stream or a partial body with a JSON problem after the first write.
+Decide the failure path before the first byte leaves the handler.
+
+## HTTP status versus Zig error
+
+| Failure                                           | Client sees                                   | Caller sees                                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Malformed request, oversized head, oversized body | `400`, `413`, or `431` from the parser        | No handler call                                                                                                              |
+| Path exists, method does not                      | `405` plus `Allow`                            | No handler call                                                                                                              |
+| Handler misuses the response writer               | A framework `500` if the handler returns idle | `error.ResponseAlreadyStarted`, `error.InvalidStatus`, `error.InvalidHeaders`, `error.BodyNotAllowed`, or `error.WouldBlock` |
+| Route or middleware capacity is exhausted         | Nothing                                       | A registration error such as `error.RouteCapacityReached`                                                                    |
+| Application failure after the handler starts      | The handler's chosen status                   | Your own log entry                                                                                                           |
+
+A route callback returns `void`, so an application error has no return channel.
+Catch it, log it, and call `errors.internal` or a more specific problem while the
+response is still idle.
+
+## Verify
+
+```zig
+test "error document keeps the canonical shape" {
+    var buffer: [uz.errors.max_document_bytes]u8 = undefined;
+    const document = uz.errors.render("empty_body", "Request body is required", &buffer);
+    try std.testing.expectEqualStrings(
+        "{\"error\":{\"code\":\"empty_body\",\"message\":\"Request body is required\"}}",
+        document,
+    );
+}
+```
+
+```sh
+zig test src/main.zig
+```
+
+## Next
+
+- [HTTP limits](/docs/http/limits) lists the statuses the parser returns before
+  a handler runs.
+- [Testing an HTTP server](/docs/http/testing) shows how to assert a rejection
+  body and a pre-handler `405`.
+- [Response API](/docs/http/response) covers the states and writer errors.

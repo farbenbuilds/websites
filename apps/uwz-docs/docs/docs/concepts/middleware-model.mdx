@@ -1,0 +1,104 @@
+---
+title: Middleware model
+description: Run ordered middleware between route resolution and the handler, stop dispatch safely, and keep each callback bounded and per worker.
+sidebar:
+  order: 6
+search:
+  tags: [concept, middleware]
+---
+
+Middleware is an ordered list of callbacks that run after the router resolves a
+request and before the selected handler runs. Each callback sees the borrowed
+request and the in-progress response, then decides whether dispatch continues.
+
+## Order and control flow
+
+`App.use(context, handler)` appends one callback. Middleware runs in
+registration order. The snippets on this page omit the `std` and `uz` imports.
+
+```zig
+const Policy = struct { header: []const u8 };
+
+fn require_header(context: *anyopaque, req: *uz.Request, res: *uz.Response) uz.MiddlewareResult {
+    const policy: *const Policy = @ptrCast(@alignCast(context));
+    if (req.get_header(policy.header) != null) return .continue_dispatch;
+
+    res.end("400 Bad Request", "missing header") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+    return .stop;
+}
+```
+
+Inside `main`, after `init` and before `listen`, register the callback with its
+caller-owned state:
+
+```zig
+var policy = Policy{ .header = "x-api-version" };
+_ = try app.use(&policy, require_header);
+```
+
+A callback returns one of two values:
+
+- `.continue_dispatch` runs the next middleware callback.
+- `.stop` ends the middleware chain without running the handler.
+
+Dispatch also stops when a callback starts a response, even if it returns
+`.continue_dispatch`. The router checks the response state after every callback,
+so a started response cannot be followed by another handler. The started
+response then completes through its normal path.
+
+## What middleware can see
+
+Route resolution happens before middleware, so dispatch can stop for a matched
+route before the handler runs. Middleware also runs when no route matched, before
+the framework sends `404 Not Found`. That makes it a useful place for request
+logging and shared headers.
+
+Middleware does not select the route. It can finish the response, add headers
+before the response starts, inspect request fields, and stop dispatch.
+
+## The 32-callback bound
+
+A router holds at most `max_middleware` callbacks, 32 by default. Appending one
+more returns `error.MiddlewareCapacityReached`. Raise the limit through
+`ServerConfig.max_middleware` or the builder's `with_max_middleware` before the
+application is built.
+
+The bound applies to the fixed router table, not to a per-request allocation.
+There is no dynamic middleware API: routes and middleware lock together at the
+first `listen` or `listen_udp`, and a later registration returns
+`error.RoutesLocked`. During shutdown, registration returns
+`error.ApplicationUnavailable`.
+
+## Per-worker state
+
+Each middleware entry stores a context pointer supplied at registration. The
+framework never copies or frees that state. Keep it alive for the application
+lifetime.
+
+In a cluster, configure middleware inside `Cluster.configure` so every worker
+registers its own callback and its own context. State that one loop mutates must
+not be shared with another loop. The rate limiter is the clearest example: one
+bucket table belongs to one event loop, so create one per worker.
+
+## Built-in middleware
+
+µWebZockets ships four middleware types. Each is allocation-free and uses
+caller-owned options or state.
+
+| Middleware        | Purpose                                       |
+| ----------------- | --------------------------------------------- |
+| `Cors`            | Exact origin matching and preflight responses |
+| `SecurityHeaders` | Configured response security headers          |
+| `Auth`            | Basic and Bearer credentials with a challenge |
+| `RateLimit`       | Token buckets with `429` and `Retry-After`    |
+
+Read [Middleware](/docs/http/middleware) for the exact options, builder calls,
+and per-worker setup.
+
+## Next
+
+- [Asynchronous responses](/docs/concepts/async-responses)
+- [Middleware](/docs/http/middleware)
+- [Handler shapes](/docs/concepts/handler-shapes)

@@ -1,0 +1,155 @@
+---
+title: Application model
+description: Compare App(N), the configured application types, and Server.builder, then follow the lifecycle that owns one startup slab.
+sidebar:
+  order: 1
+search:
+  tags: [concept, capacity]
+---
+
+Choose an application type before you register a route. The type fixes the
+connection capacity, WebSocket message size, and write queue, which size the
+startup slab, plus the idle timeout, which is runtime behavior rather than slab
+storage.
+
+## Four ways to construct an application
+
+| Constructor                                                  |    Connections |   Message size |    Write queue |   Idle timeout |
+| ------------------------------------------------------------ | -------------: | -------------: | -------------: | -------------: |
+| `uz.App(N)`                                                  |            `N` |         16 KiB |         64 KiB |          120 s |
+| `uz.ConfiguredApp(N, message, queue)`                        |            `N` |       argument |       argument |          120 s |
+| `uz.ConfiguredAppWithTimeout(N, message, queue, timeout_ms)` |            `N` |       argument |       argument |       argument |
+| `uz.Server.builder(init.io)`                                 | `ServerConfig` | `ServerConfig` | `ServerConfig` | `ServerConfig` |
+
+`App(N)` is the shortest path. It passes the default 16 KiB message size,
+64 KiB write queue, and 120 s idle timeout to `ConfiguredApp`. Capacities stay
+compile time because they size the generated application type, so pass literals
+or `const` values.
+
+`Server.builder` starts from a `ServerConfig` and accepts named `with_*`
+overrides. Each call returns a builder for a new configuration, and
+`build(allocator)` performs one application allocation: the contiguous slab
+behind the connection pool, request buffers, WebSocket message regions, write
+queues, router storage, and optional compression scratch.
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .preset(uz.Presets.microservice)
+    .with_max_body_size(256 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`ServerConfig.slab_bytes()` and `Server.builder(...).slab_bytes()` report the
+exact slab size before you allocate. The values must match the generated type,
+so the builder rejects a runtime-variable capacity at compile time. The snippet
+above assumes the `std` and `uz` imports and the `init` value that `main`
+receives from `std.process.Init`.
+
+## A complete application
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`init` allocates the slab and returns the application. The `defer` pairs with it
+so a failed `listen` or a drained `run` still releases memory once.
+
+## Presets
+
+A preset is a named `ServerConfig`. Override only the fields your workload
+changes; the remaining defaults stay in place.
+
+| Preset                   | Conn. | WS msg |   Queue |   Body |  Idle |
+| ------------------------ | ----: | -----: | ------: | -----: | ----: |
+| `Presets.microservice`   |   256 |  8 KiB |  16 KiB | 64 KiB |  30 s |
+| `Presets.websocket_chat` |   512 | 32 KiB |  32 KiB |  4 KiB | 120 s |
+| `Presets.file_server`    |   128 |  4 KiB | 512 KiB |  8 KiB | 300 s |
+
+`websocket_chat` also reserves per-connection RFC 7692 scratch by setting
+`compression = true`. The message size, write queue, and request body limits are
+the values that decide how far one connection can grow.
+
+## One application or a worker group
+
+`App` runs one event loop. `App.cluster(worker_count)` names a thread-per-core
+group type, and `Server.builder(...).build_cluster(allocator, worker_count,
+options)` constructs one. Each worker owns its slab, its event loop, and, when
+TLS is enabled, its own `SSL_CTX`. Workers bind the shared port with
+`SO_REUSEPORT` where the platform provides it.
+
+The compile-time `worker_count` is a capacity, not a hard runtime cap.
+`ClusterOptions.worker_count` can select fewer active workers, and only active
+workers allocate slabs, inboxes, and thread handles. `worker_count()` reports
+the allocated count and `worker_capacity()` reports the compiled capacity.
+
+| Shape   | Use when                                                                        |
+| ------- | ------------------------------------------------------------------------------- |
+| `App`   | One event loop is enough for the service, test, or embedded runtime.            |
+| Cluster | Work must spread across cores, or each core needs its own slab and TLS context. |
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Group = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Group.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/", hello);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+Configure routes per worker before `listen`, and call
+`group.catch_shutdown_signals()` when the group should shut down on SIGINT or
+SIGTERM. A cluster listener is TCP/TLS only; `init_http3` and `listen_udp` stay
+single-application APIs.
+
+## Lifecycle
+
+| Step                    | Rule                                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `init*`                 | Choose plaintext, HTTPS, mTLS, or HTTP/3. TLS variants load credentials before the loop starts.                                           |
+| Route registration      | Before the first `listen`. Later calls return `error.RoutesLocked`.                                                                       |
+| `listen` / `listen_all` | `listen` binds one endpoint; `listen_all` binds up to four with an all-or-nothing barrier. The application must stay at a stable address. |
+| `listen_udp`            | Bind QUIC after an HTTP/3 initializer. It also locks route mutation.                                                                      |
+| `run`                   | Drives the loop until shutdown drains. Re-entry returns `error.ApplicationAlreadyRunning`.                                                |
+| `request_shutdown`      | Safe from any thread or callback. It stores the request, wakes the owning loop, and returns.                                              |
+| `shutdown`              | Loop-thread only. From a callback it begins shutdown; otherwise it drives the loop and drains.                                            |
+| `deinit`                | Panics when called inside the event loop. Always pair it with `defer`.                                                                    |
+
+:::warning[Keep the application at a stable address]
+Do not move the `App` value after `listen` or `listen_udp`, or after a
+context-capturing registration such as `openapi`, `datagram`, or the
+observability install performed by `listen`. Callbacks and completions retain
+pointers into it.
+:::
+
+## Next
+
+- [Request lifecycle](/docs/concepts/request-lifecycle)
+- [Server lifecycle](/docs/http/server-lifecycle)
+- [Capacity model](/docs/concepts/capacity-model)

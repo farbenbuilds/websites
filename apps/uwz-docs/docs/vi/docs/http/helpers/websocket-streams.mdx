@@ -1,0 +1,169 @@
+---
+title: Adapter WebSocket stream
+description: Adapter transport WebSocket gửi nguyên message thành stream byte kiểu pull với action backpressure tường minh.
+sidebar:
+  order: 8
+search:
+  tags: [helpers, how-to, websocket]
+---
+
+`uz.WebSocketStream` biến transport WebSocket gửi nguyên message thành stream
+byte kiểu pull. Bạn đẩy từng message vào incoming ring có giới hạn và đọc byte
+ra theo nhu cầu. Adapter báo flow control dưới dạng value thay vì giấu nó trong
+callback.
+
+Adapter không parse frame, không thực hiện handshake upgrade, không kiểm tra
+UTF-8 và không thương lượng compression. Tài liệu protocol WebSocket trong
+repository (`docs/websocket.md`) sở hữu các quy tắc đó. Trang này chỉ nói về
+mặt adapter.
+
+## Dựng stream
+
+`web_socket_stream(Adapter)` là constructor lúc compile. `Adapter` phải khai báo
+`send`, `close` và `terminate`; thiếu một khai báo sẽ làm build báo lỗi với
+compile error nêu tên nó.
+
+| Thành viên      | Chữ ký                                   | Hành vi                                   |
+| --------------- | ---------------------------------------- | ----------------------------------------- |
+| `init`          | `(context, incoming, high, low, signal)` | Kiểm tra buffer và water mark             |
+| `push_incoming` | `(message) !void`                        | Copy một message hoàn chỉnh vào ring      |
+| `read`          | `(destination) !usize`                   | Kéo byte vào vùng nhớ của caller          |
+| `send`          | `(message, kind) !Action`                | Gửi và trả action flow control            |
+| `flushed`       | `(byte_count) !Action`                   | Ghi nhận một lần transport drain          |
+| `close`         | `() !Action`                             | Bắt đầu đóng có thứ tự                    |
+| `abort`         | `() void`                                | Terminate transport theo kiểu best effort |
+
+`init` trả `EmptyIncomingBuffer` khi ring dài 0 và `InvalidWaterMarks` khi
+high-water mark bằng 0 hoặc low-water mark cao hơn high-water mark.
+`push_incoming`, `read` và `send` kiểm tra `AbortSignal` khác null trước khi
+chạm vào state của stream.
+
+## Chuyển message và byte
+
+`push_incoming` copy message vào ring mà không cấp phát. Message không vừa trả
+`IncomingBufferFull`; ring không bao giờ lớn thêm. `read` copy tối đa
+`destination.len` byte từ ring và trả số byte, hoặc `0` khi ring rỗng.
+
+`MessageKind` là `binary` hoặc `text`. `send` chuyển message và kind cho adapter
+rồi cộng độ dài vào số byte đang trong queue.
+
+```zig
+fn forward(
+    stream: *uz.NativeWebSocketStream,
+    payload: []const u8,
+) !uz.websocket_backpressure.Action {
+    return stream.send(payload, .binary);
+}
+```
+
+Khi adapter send lỗi, `send` chuyển state sang `aborted`, gọi
+`Adapter.terminate` và trả lỗi gốc. Stream không được dùng lại sau đó.
+
+## Quan sát backpressure
+
+Adapter dùng mô hình transition thuần trong `uz.websocket_backpressure`. `send`
+và `flushed` trả một `uz.websocket_backpressure.Action`:
+
+| Action                | Ý nghĩa với producer                        |
+| --------------------- | ------------------------------------------- |
+| `none`                | Không đổi                                   |
+| `write`               | Queue vẫn dưới high-water mark              |
+| `pause_producer`      | Đã chạm high-water mark; dừng sản xuất      |
+| `resume_producer`     | Đã rút về low-water mark; tiếp tục          |
+| `close_transport`     | Output đã rút hết; stream đã đóng transport |
+| `terminate_transport` | Stream đã terminate transport               |
+
+`flushed(byte_count)` trừ số byte đã thoát khỏi queue. Close được yêu cầu khi
+còn byte sẽ chuyển sang `closing` và trả `none`; lần drain làm queue rỗng trả
+`close_transport`. `abort()` không trả gì vì stream đã closed hoặc aborted được
+giữ nguyên.
+
+Producer sở hữu việc tạm dừng: không có gì trong stream gọi lại producer của
+bạn. Dừng ở `pause_producer` và tiếp tục khi một lần gọi `flushed` trả
+`resume_producer`. Số byte trong queue bị chặn bởi water mark bạn truyền lúc
+`init`; [capacity model](/docs/concepts/capacity-model) giải thích cách
+transport queue được cấp kích thước.
+
+## Adapter native
+
+`uz.NativeWebSocketStream` gắn constructor với `WebSocket` của server:
+
+| Lời gọi adapter | Hành vi native                                    |
+| --------------- | ------------------------------------------------- |
+| `send`          | Ánh xạ `binary` hoặc `text` sang opcode tương ứng |
+| `close`         | Gửi close code 1000 với reason rỗng               |
+| `terminate`     | Bỏ connection ngay lập tức                        |
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, _: uz.Opcode) void {
+    var incoming: [16 * 1024]u8 = undefined;
+    var stream = uz.NativeWebSocketStream.init(
+        ws,
+        &incoming,
+        64 * 1024,
+        16 * 1024,
+        null,
+    ) catch |err| {
+        std.log.err("stream init failed: {}", .{err});
+        ws.terminate();
+        return;
+    };
+
+    stream.push_incoming(message) catch |err| {
+        std.log.err("stream buffer failed: {}", .{err});
+        stream.abort();
+        return;
+    };
+
+    var scratch: [512]u8 = undefined;
+    const count = stream.read(&scratch) catch |err| {
+        std.log.err("stream read failed: {}", .{err});
+        stream.abort();
+        return;
+    };
+
+    _ = stream.send(scratch[0..count], .text) catch |err| {
+        std.log.err("stream send failed: {}", .{err});
+        return;
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/chat", .{ .message = on_message });
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Ví dụ callback copy một message qua ring cục bộ để trình bày API. Dùng adapter
+khi một producer khác đẩy nhiều message và consumer kéo chúng theo nhịp riêng,
+không dùng cho một echo đơn lẻ.
+
+## Adapter hay callback
+
+| Nhu cầu                                                           | Dùng                                  |
+| ----------------------------------------------------------------- | ------------------------------------- |
+| Route server thông thường với `open`, `message`, `drain`, `close` | Callback `app.ws`                     |
+| Slice message được mượn trong một callback                        | Callback `app.ws`                     |
+| Kéo byte theo nhịp của consumer                                   | `WebSocketStream`                     |
+| Chuyển message vào writer hoặc parser khác                        | `WebSocketStream`                     |
+| Adapter transport không native hoặc test harness                  | `web_socket_stream(YourAdapter)`      |
+| Framing, masking, handshake, compression                          | Tầng protocol, không phải adapter này |
+
+Không có WebSocket client nào được cung cấp. Client đi kèm chỉ hỗ trợ HTTP/1.1,
+và WebSocket client nằm trong roadmap gần; xem
+[FAQ](/docs/getting-started/faq#client-scope). Không dùng adapter này như
+client: nó không có upgrade, masking hay frame parser.
+
+## Tiếp theo
+
+Đọc [WebSocket đầu tiên](/docs/examples/first-websocket) cho route dùng
+callback, rồi [backpressure](/docs/concepts/backpressure) cho mô hình queue mà
+các action mô tả. Trang [streaming response](/docs/http/streaming) nói về
+cùng kỷ luật producer ở phía HTTP.

@@ -1,0 +1,167 @@
+---
+title: Nén
+description: Gửi response gzip từ pool của worker hoặc chạy libdeflate stream có giới hạn trên vùng nhớ của caller và không giữ slice.
+sidebar:
+  order: 4
+search:
+  tags: [helpers, how-to, streaming]
+---
+
+µWebZockets có ba mức nén. `Response.end_gzip` nén một body có giới hạn rồi
+gửi. `uz.compression_pool` sở hữu codec dùng lại theo worker cùng output
+scratch. `uz.compression_stream` mở các value `CompressionStream` và
+`DecompressionStream` có giới hạn cho dữ liệu không phải HTTP response body.
+
+Cả ba dùng libdeflate. Pool theo worker cấp phát lúc application init.
+`CompressionStream` hoặc `DecompressionStream` cấp phát codec libdeflate trong
+`init` và giải phóng trong `deinit`, nên tạo stream lúc startup hoặc chấp nhận
+rằng `init` là allocation tường minh trên request path.
+
+## Gzip một lần cho response
+
+`res.end_gzip(status, headers, body)` nén `body` vào pool của worker và kết thúc
+response với `Content-Encoding: gzip` cùng `Vary: Accept-Encoding` đặt trước
+header của bạn.
+
+| Điều kiện                                                              | Lỗi                                  |
+| ---------------------------------------------------------------------- | ------------------------------------ |
+| Response còn idle                                                      | `ResponseAlreadyStarted`             |
+| Status line hợp lệ                                                     | `InvalidStatus`                      |
+| Header block không có ký tự điều khiển                                 | `InvalidHeaders`                     |
+| Chưa có `Content-Encoding` trong header truyền vào hoặc pending header | `DuplicateContentEncoding`           |
+| Pool của worker tồn tại                                                | `CompressionUnavailable`             |
+| Transport hỗ trợ                                                       | `CompressionUnsupported` trên HTTP/3 |
+
+Bật pool trên server builder:
+
+```zig
+var app = try uz.Server.builder(init.io)
+    .with_http_compression(true)
+    .build(std.heap.page_allocator);
+```
+
+HTTP/1.1 và HTTP/2 dùng pool được mượn của worker. HTTP/3 trả
+`CompressionUnsupported` cho đến khi pool được truyền vào context của QUIC
+stream. Status không cho phép body kết thúc response với body rỗng và không nén
+gì.
+
+## Giới hạn input và output
+
+| Giới hạn            | Mức                                                    | Kết quả                   |
+| ------------------- | ------------------------------------------------------ | ------------------------- |
+| Input body          | `ServerConfig.max_body_size`                           | `InputTooLarge`           |
+| Pool scratch        | Gzip bound tệ nhất cho `max_input`                     | `BufferTooSmall`          |
+| Header sau khi ghép | Capacity của pending header                            | `HeadersTooLarge`         |
+| Capacity response   | Write queue của connection; response stride của HTTP/2 | `WouldBlock` từ transport |
+
+Giới hạn input là kích thước body chưa nén. Kết quả đã nén cũng phải vừa
+capacity response của transport. Một body vừa `max_body_size` vẫn có thể lỗi
+trên write queue nhỏ. Với output lớn hoặc sinh động, dùng
+[streaming response](/docs/http/streaming) thay vì gzip một lần.
+
+## Codec stream có giới hạn
+
+`CompressionStream` và `DecompressionStream` gom input vào vùng nhớ của caller
+và tạo một slice output.
+
+| Thành viên       | Nén                                  | Giải nén                      |
+| ---------------- | ------------------------------------ | ----------------------------- |
+| `init`           | `init(format, level, input_storage)` | `init(format, input_storage)` |
+| `write(chunk)`   | Thêm vào input storage               | Thêm vào input storage        |
+| `output_bound()` | Kích thước tệ nhất cho input đã gom  | Không có                      |
+| `finish(output)` | Một lượt libdeflate                  | Một lượt libdeflate           |
+| `deinit()`       | Giải phóng codec                     | Giải phóng codec              |
+
+`Format` là `deflate` cho zlib wrapper, `deflate_raw` cho DEFLATE thô và `gzip`.
+Level được truyền vào `libdeflate_alloc_compressor`. `write` copy vào slice
+input; nó không nén tăng dần. `finish` đóng stream khi thành công, nên lần gọi
+sau đó trả `StreamClosed`. Nén nhiều input hơn sức chứa của slice input trả
+`BufferTooSmall`.
+
+```zig
+fn gzip_to(input: []const u8, output: []u8) ![]u8 {
+    var input_storage: [1024]u8 = undefined;
+    var stream = try uz.compression_stream.CompressionStream.init(
+        .gzip,
+        6,
+        &input_storage,
+    );
+    defer stream.deinit();
+
+    try stream.write(input);
+    if (stream.output_bound() > output.len) return error.BufferTooSmall;
+    return stream.finish(output);
+}
+```
+
+`DecompressionStream.finish` trả `InvalidData` khi stream hỏng và
+`BufferTooSmall` khi libdeflate báo thiếu output space.
+
+## Lifetime của pool
+
+`uz.compression_pool.Pool.init(max_input)` cấp một compressor level 6 và gzip
+scratch cho trường hợp tệ nhất của `max_input`. Gọi nó lúc khởi động, giữ một
+pool cho mỗi worker và không chia sẻ pool giữa các thread. `Pool.gzip(input)`
+trả slice được mượn từ scratch đó. `init` trả `InitFailed` khi không tạo được
+codec, `OutOfMemory` khi không cấp được scratch, và `InputTooLarge` với bound
+bằng 0.
+
+Slice trả về còn hợp lệ cho đến lần gọi `gzip` tiếp theo hoặc `deinit`. Copy nó,
+hoặc hoàn tất response, trước khi gọi `gzip` lần nữa. `gzip` trả
+`InputTooLarge` khi vượt `max_input` và `BufferTooSmall` khi scratch không chứa
+nổi kết quả. `deinit` giải phóng cả scratch và codec.
+
+:::warning[Side channel của nén]
+Không gzip response trộn secret với input do kẻ tấn công kiểm soát. Độ dài sau
+nén rò rỉ thông tin về secret, cùng nhóm rủi ro với BREACH. Chỉ nén static
+asset và body công khai đồng nhất; để response chứa secret hoặc trộn dữ liệu ở
+dạng không nén.
+:::
+
+## Chương trình hoàn chỉnh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const report_body = "{\"status\":\"ok\",\"items\":[1,2,3]}";
+
+fn report(_: *uz.Request, res: *uz.Response) void {
+    res.end_gzip(
+        "200 OK",
+        "Content-Type: application/json\r\n",
+        report_body,
+    ) catch |err| {
+        std.log.err("gzip response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.Server.builder(init.io)
+        .with_max_body_size(64 * 1024)
+        .with_http_compression(true)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+
+    _ = try app.get("/report", report);
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Kiểm tra
+
+```sh
+curl -i --compressed http://127.0.0.1:3000/report
+curl -s -D - -o /dev/null -H 'Accept-Encoding: gzip' http://127.0.0.1:3000/report
+```
+
+Header gồm `Content-Encoding: gzip` và `Vary: Accept-Encoding`. Lệnh đầu in JSON
+đã decode; lệnh thứ hai để body ở dạng nén để bạn kiểm tra header.
+
+## Tiếp theo
+
+Đọc [streaming response](/docs/http/streaming) khi body quá lớn cho một lần,
+và [API response](/docs/http/response) cho quy tắc header quanh `end_gzip`.
+[Capacity model](/docs/concepts/capacity-model) giải thích write queue giới
+hạn kết quả nén.

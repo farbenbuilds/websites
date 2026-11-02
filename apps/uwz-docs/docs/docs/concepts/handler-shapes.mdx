@@ -1,0 +1,119 @@
+---
+title: Handler shapes
+description: Compare synchronous, context, async, and async-context handlers, and keep caller-owned state and borrowed request fields valid.
+sidebar:
+  order: 5
+search:
+  tags: [concept, routing]
+---
+
+A handler receives a borrowed request and either writes a response or hands back
+an async token. Four callback shapes cover synchronous work, explicit state, and
+deferred completion. The snippets on this page omit the `std` and `uz` imports.
+
+## The four signatures
+
+| Registration                               | Callback signature                              | Use                                |
+| ------------------------------------------ | ----------------------------------------------- | ---------------------------------- |
+| `get` and the other method helpers         | `fn (*Request, *Response) void`                 | Synchronous work                   |
+| `route_context`, `get_context`             | `fn (*anyopaque, *Request, *Response) void`     | Synchronous work with caller state |
+| `route_async`, `get_async`                 | `fn (*Request, AsyncResponse) void`             | Work completed later               |
+| `route_async_context`, `get_async_context` | `fn (*anyopaque, *Request, AsyncResponse) void` | Deferred work with caller state    |
+
+The `get`, `head`, `post`, `put`, `delete`, `patch`, `options`, `trace`, `query`,
+and `any` helpers all take the first signature.
+
+## Synchronous handlers
+
+A synchronous handler reports failure through the response. It has no error
+return channel, so a write error is either logged, translated into a status, or
+handled with a best-effort ending after the response fields are already known
+valid:
+
+```zig
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+A handler that returns without starting a response receives
+`500 Internal Server Error` with `Handler did not complete the response`.
+
+## Context handlers
+
+`route_context` and `get_context` prepend a `*anyopaque` context. The context is
+type-erased so the router can store one fixed-size entry, a context pointer plus
+a callback, without generating a route type per context or allocating a closure.
+The framework never reads or frees the value.
+
+You own the value and its lifetime. Cast it back at the top of the handler and
+keep the original alignment:
+
+```zig
+const Greeting = struct { text: []const u8 };
+
+fn greet(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const greeting: *const Greeting = @ptrCast(@alignCast(context));
+    res.text(greeting.text) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(64).init(init.io);
+    defer app.deinit();
+
+    var greeting = Greeting{ .text = "hello" };
+    _ = try app.get_context("/hello", &greeting, greet);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The context must stay alive while the route is registered. In a cluster,
+register per-worker state inside `Cluster.configure`; do not register a pointer
+to one worker's mutable state on another worker.
+
+## Async handlers
+
+An async handler receives an `AsyncResponse` token by value. The token is
+copyable and generation-checked, and it completes exactly once:
+
+```zig
+fn deferred(_: *uz.Request, token: uz.AsyncResponse) void {
+    // Completion must run on the loop that owns the connection.
+    token.complete("200 OK", "later") catch |err| {
+        std.log.err("completion failed: {}", .{err});
+    };
+}
+```
+
+Register it with `app.get_async("/later", deferred)`. A pending token keeps the
+request buffer or stream slot parked, so the request fields stay valid until the
+token completes. A second completion, a reused generation, or a disconnected
+peer fails closed. `sleep_complete` parks a complete response with borrowed
+fields when the delay is the only pending work.
+
+Complete the token on its owning event loop. To finish work on another thread,
+send the result back to that loop and complete there.
+
+## Callback rules
+
+- Do not block the event loop. Defer slow work and complete the token later.
+- Do not retain a borrowed request field past the synchronous return or the
+  async token completion. Copy it or use `Request.clone`.
+- Start at most one response. A second start returns
+  `error.ResponseAlreadyStarted`.
+- Do not complete an async token twice or from a foreign thread.
+- Do not call `deinit` from a callback; it panics inside the event loop.
+  `shutdown` from a callback begins shutdown and lets the active run drain.
+- Register routes before the first listen call. Later registration returns
+  `error.RoutesLocked`.
+
+## Next
+
+- [Middleware model](/docs/concepts/middleware-model)
+- [Handlers](/docs/http/handlers)
+- [Asynchronous responses](/docs/concepts/async-responses)

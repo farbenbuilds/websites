@@ -67,9 +67,8 @@ html .prose :is(h1, h2, h3, h4, h5, h6) a.blume-heading-anchor:hover {
 
 html .prose pre.astro-code {
   border-radius: 0;
-  box-shadow:
-    inset 0 0 0 100vmax var(--blume-code-background),
-    inset 0 0 0 1px var(--blume-border);
+  background-color: var(--blume-code-background) !important;
+  box-shadow: inset 0 0 0 1px var(--blume-border);
   font-family: var(--blume-font-mono);
   font-size: 0.84rem;
   line-height: 1.7;
@@ -99,17 +98,23 @@ html .prose table {
   border-collapse: collapse;
   border-top: 1px solid var(--blume-border);
   border-bottom: 1px solid var(--blume-border);
-  font-size: 0.875rem;
+  font-size: 0.9rem;
 }
 
 html .prose thead th {
   border-bottom: 1px solid var(--blume-border);
   color: var(--blume-muted-foreground);
   font-family: var(--blume-font-mono);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* Mermaid renders SVG at its natural width; let Blume's wrapper scroll when a
+ * diagram is wider than the prose column. Do not force a minimum width. */
+html .prose blume-mermaid svg {
+  height: auto;
 }
 
 html .prose tbody tr + tr {
@@ -218,6 +223,7 @@ html .astro-code + button {
     display: block;
     max-width: 100%;
     overflow-x: auto;
+    font-size: 0.86rem;
   }
 
   html .prose pre.astro-code {

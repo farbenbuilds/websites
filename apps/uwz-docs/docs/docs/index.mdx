@@ -22,7 +22,7 @@ limits, and unsupported features it documents.
   <Card title="I am new" href="/docs/getting-started" icon="rocket">
     Install Zig 0.16.0, run the quickstart, and add a route to a running server.
   </Card>
-  <Card title="I am evaluating" href="/docs/what-is-uwebsockets" icon="search">
+  <Card title="I am evaluating" href="/docs/concepts" icon="search">
     Understand the programming model, the protocol surface, and the deliberate boundaries.
   </Card>
   <Card title="I am operating this" href="/docs/examples/first-cluster" icon="server">
@@ -36,7 +36,9 @@ limits, and unsupported features it documents.
 | ------------------------------------------- | -------------------------------------------------------------------- |
 | Install Zig and add the package             | [Installation](/docs/getting-started/installation)                   |
 | Create and run the quickstart project       | [Quickstart](/docs/getting-started/quickstart)                       |
+| Understand the runtime model                | [Concepts](/docs/concepts)                                           |
 | Add an HTTP route and verify it with `curl` | [Your first HTTP server](/docs/examples/first-http-server)           |
+| Look up an HTTP type, helper, or limit      | [HTTP/1.1 and the application API](/docs/http)                       |
 | Add a WebSocket echo route                  | [Your first WebSocket](/docs/examples/first-websocket)               |
 | Serve typed JSON-RPC procedures             | [Your first JSON-RPC service](/docs/examples/first-json-rpc-service) |
 | Terminate TLS with an in-memory certificate | [Your first TLS server](/docs/examples/first-tls-server)             |
@@ -52,11 +54,7 @@ account. The browser fetches the local index from this site on first use.
 ## Helpers
 
 <CardGroup cols={1}>
-  <Card
-    title="Helpers"
-    href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/http.md#request-and-response-helpers"
-    icon="wrench"
-  >
+  <Card title="Helpers" href="/docs/http/helpers" icon="wrench">
     Query and form parsing, multipart, cookies, compression, ETag and conditional GET, `Accept`
     negotiation, fetch and stream primitives, and WebSocket stream adapters.
   </Card>

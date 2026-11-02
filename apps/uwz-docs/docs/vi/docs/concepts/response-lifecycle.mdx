@@ -1,0 +1,139 @@
+---
+title: Vòng đời response
+description: Chọn helper response, khởi động nó một lần và hoàn tất bằng body cố định, stream theo queue, file hoặc async token.
+sidebar:
+  order: 3
+search:
+  tags: [concept, http]
+---
+
+Một response khởi động một lần và hoàn tất một lần. Helper bạn chọn quyết định
+body được đưa vào queue trong một lần gọi, được kéo khi transport drain, stream
+từ file, hay hoàn tất sau bằng async token.
+
+Các snippet trên trang này bỏ qua import `std` và `uz`.
+
+## Chọn đường đi cho body
+
+| Nhu cầu                          | API                                          | Completion                     |
+| -------------------------------- | -------------------------------------------- | ------------------------------ |
+| Text, HTML hoặc byte cố định     | `res.text`, `res.html`, `res.bytes`          | Body vào queue, response ended |
+| JSON từ một giá trị              | `res.json`, `res.json_buf`                   | Body vào queue, response ended |
+| JSON ghi dần                     | `res.begin_json`                             | `JsonStream.end`               |
+| Chunked output bạn tự điều khiển | `begin_chunked`, `write_chunk`, `end_chunks` | `end_chunks`                   |
+| Body sinh ra khi drain           | `res.begin_stream`                           | Producer trả `.done`           |
+| Server-Sent Events               | `res.sse`                                    | Stream close hoặc disconnect   |
+| File từ đĩa                      | `res.send_file`, `App.static`                | File body drain                |
+| Body cố định nén                 | `res.end_gzip`                               | Body vào queue, response ended |
+
+`res.text` gửi `200 OK` với `text/plain; charset=utf-8`; `res.html` và
+`res.bytes` đặt content type tương ứng. `res.json` render qua allocator do
+caller cấp và giải phóng buffer tạm trước khi trả về, còn `res.json_buf` render
+vào buffer do caller sở hữu và không cấp phát.
+
+## Khởi động một lần
+
+`Response` giữ một state: `idle`, `streaming` hoặc `ended`. Mọi helper khởi động
+response đều kiểm tra `idle` trước. Lần khởi động thứ hai trả về
+`error.ResponseAlreadyStarted`:
+
+```zig
+fn handler(_: *uz.Request, res: *uz.Response) void {
+    res.text("first") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+    // The second call fails with error.ResponseAlreadyStarted.
+    res.text("second") catch |err| {
+        std.log.err("second response rejected: {}", .{err});
+    };
+}
+```
+
+Việc thêm header cũng theo cùng quy tắc. `append_header` và các cookie helper chỉ đưa
+field vào queue khi response còn `idle`; lần gọi sau trả về
+`error.ResponseAlreadyStarted`. Status line và raw header được validate trước khi
+byte nào vào queue, nên status sai, header chứa control character, hoặc body
+trên status không cho phép body sẽ báo lỗi mà không có response dở dang.
+
+`res.is_started()` báo đã có byte response nào được khởi động chưa.
+`res.is_complete()` báo response đã đạt `ended` chưa.
+
+## Completion
+
+Handler sync kết thúc response thì không còn việc gì. Dispatch kiểm tra ba kết
+quả:
+
+- Response hoàn tất, nên dispatch chuyển sang request pipelined tiếp theo.
+- Producer stream đã armed, nên dispatch treo đến khi producer xong.
+- Response đã khởi động nhưng chưa hoàn tất, nên transport đóng connection sau
+  khi flush những gì đã có.
+
+Handler sync trả về mà không khởi động response nào nhận `500 Internal Server Error`
+với `Handler did not complete the response`.
+
+Response HTTP/1.1 đã xong giữ connection khả dụng trừ khi response mang
+`Connection: close`. Idle deadline, do `ServerConfig.idle_timeout_ms` điều khiển,
+đóng connection keep-alive đã drain sau 120 s mặc định.
+
+## Best-effort ending
+
+Callback ABI sync trả về `void`, nên không thể báo write error.
+`end_best_effort` và `end_with_headers_best_effort` kết thúc response và, khi có
+lỗi, abort transport: TCP đóng connection, HTTP/2 reset stream, HTTP/3 đóng
+stream.
+
+Đây là lối thoát hẹp cho callback đã validate một response cố định. Validation
+error và response đã khởi động đi cùng đường abort, vì callback không có kênh
+trả lỗi.
+
+## Async token
+
+`AsyncResponse` là token có thể copy, có generation check, cho một response trì
+hoãn. Truyền nó cho task khác, rồi hoàn tất trên event loop sở hữu connection:
+
+```zig
+fn delayed(req: *uz.Request, token: uz.AsyncResponse) void {
+    const delay_ms = std.fmt.parseInt(u64, req.get_param("ms") orelse "0", 10) catch 0;
+    // The transport retains the token and these slices for delay_ms.
+    token.sleep_complete(delay_ms, "200 OK", "Content-Type: text/plain\r\n", "later") catch |err| {
+        std.log.err("deferred response failed: {}", .{err});
+    };
+}
+```
+
+Token đang pending giữ request buffer HTTP/1.1, stream slot HTTP/2 hoặc stream
+HTTP/3 không bị tái sử dụng. `complete` và `complete_with_headers` hoàn tất
+response một lần; generation đã bị tái sử dụng trả về
+`error.AsyncResponseExpired`, và token đã hoàn tất trả về
+`error.AsyncResponseAlreadyCompleted`. Peer ngắt kết nối sẽ cancel slot, nên
+token cũ fail closed.
+
+`sleep` treo một resume callback tùy chỉnh. `sleep_complete` treo response và ba
+field được mượn trong slot thuộc connection, nên đường delay không cấp phát. Không
+block loop khi token đang pending, và không hoàn tất token từ thread khác trước
+khi marshal kết quả về loop của nó.
+
+## Streaming, SSE và file
+
+`begin_stream` chạy producer ngay và chạy lại mỗi khi có chỗ output trống.
+Producer ghi qua `res.write_chunk` và trả `.pending` khi transport backpressure,
+hoặc `.done` sau khi gọi `res.end_chunks`. Body lớn tùy ý vì thế không cần write
+queue lớn tương ứng.
+
+`res.sse()` khởi động event stream `200 OK` với `text/event-stream`,
+`Cache-Control: no-cache` và `X-Accel-Buffering: no`. `res.begin_json()` khởi
+động chunked JSON response và trả về `JsonStream` kết thúc body qua
+`JsonStream.end`.
+
+`res.send_file` stream file thường đã mở tại ranh giới kernel trên connection
+TCP plaintext. Response qua TLS, HTTP/2 và HTTP/3 trả về
+`error.ZeroCopyUnavailable`, nên `App.static` chuyển sang đường buffered có giới
+hạn. `end_gzip` dùng pool codec theo worker trên HTTP/1.1 và HTTP/2, pool này phải
+được bật bằng `with_http_compression(true)`; HTTP/3 trả về
+`error.CompressionUnsupported`.
+
+## Tiếp theo
+
+- [Async response](/docs/concepts/async-responses)
+- [Response API](/docs/http/response)
+- [Streaming response](/docs/http/streaming)

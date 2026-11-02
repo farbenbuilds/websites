@@ -1,0 +1,142 @@
+---
+title: HTTP limits
+description: Read every ServerConfig default, builder override, overflow result, and the limits shared with HTTP/2 and HTTP/3.
+sidebar:
+  order: 23
+search:
+  tags: [reference, capacity]
+---
+
+Every capacity is fixed before the listener starts. This page lists the
+`ServerConfig` defaults, the builder method that changes each value, and what the
+transport does when input exceeds it.
+
+## Set a limit
+
+```zig src/main.zig
+var server = try uz.Server.builder(init.io)
+    .with_max_clients(2048)
+    .with_max_body_size(32 * 1024)
+    .with_max_header_size(24 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+The overrides take compile-time values because they size the generated
+application type. Use literals or `const` values, and call `slab_bytes()` when
+you need the exact footprint before allocation.
+
+## Request limits
+
+| Limit                |   Default | Builder override              | On overflow                 |
+| -------------------- | --------: | ----------------------------- | --------------------------- |
+| Request line         |     8 KiB | `with_max_request_line_size`  | `431` with JSON             |
+| Header block         |    16 KiB | `with_max_header_size`        | `431` with JSON             |
+| Header count         | 64 inline | `with_max_header_count`       | Spill, then `431` with JSON |
+| Request body         |    16 KiB | `with_max_body_size`          | `413` with JSON             |
+| Header read deadline |      30 s | `with_header_read_timeout_ms` | Connection closed           |
+| Idle timeout         |     120 s | `with_idle_timeout_ms`        | Connection closed           |
+
+`max_header_count` cannot go below 64 because the inline `Request` arrays cannot
+shrink. A larger value carves one name/value pair per extra header into the
+per-connection slab.
+
+## Connection and routing limits
+
+| Limit                 |   Default | Builder override                                      | On overflow                           |
+| --------------------- | --------: | ----------------------------------------------------- | ------------------------------------- |
+| Connections           |     1,024 | `with_max_clients`                                    | New TCP connection closed             |
+| Write queue           |    64 KiB | `with_write_queue_size`                               | `error.WouldBlock`                    |
+| Route nodes           |       256 | `with_max_route_nodes`                                | `error.RouteCapacityReached`          |
+| Pattern routes        |        64 | `with_max_pattern_routes`                             | `error.RouteCapacityReached`          |
+| Route captures        | 16 inline | `with_max_route_params`                               | `error.RouteParameterCapacityReached` |
+| Route path            |     2 KiB | `with_max_route_path_size`                            | `error.InvalidRoutePath`              |
+| Middleware            |        32 | `with_max_middleware`                                 | `error.MiddlewareCapacityReached`     |
+| Route registry        |    64 KiB | `with_max_route_registry_size`                        | `error.RouteStorageCapacityReached`   |
+| Static mounts         |         8 | Not configurable                                      | `error.StaticRouteCapacityReached`    |
+| OpenAPI route records |       320 | `with_max_route_nodes` plus `with_max_pattern_routes` | `error.RouteCapacityReached`          |
+
+`max_route_params` cannot go below 16. The route registry must hold at least one
+`max_route_path_size` path, and the combined node and pattern count must fit
+`u16`; a configuration that cannot be represented fails validation instead of
+truncating.
+
+## HTTP/2 and HTTP/3 limits
+
+| Limit                          |                                Default | Builder override                              | On overflow                                |
+| ------------------------------ | -------------------------------------: | --------------------------------------------- | ------------------------------------------ |
+| HTTP/2 header block            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` with `ENHANCE_YOUR_CALM`          |
+| HTTP/2 request body            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Connection closed without an HTTP response |
+| HTTP/2 response header block   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                      |
+| HTTP/2 response fields         |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                      |
+| HTTP/3 request body            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                    |
+| HTTP/3 response header storage |                                4,096 B | `with_max_h3_response_header_size`            | Response fails closed; maximum 65,535      |
+| HTTP/3 response fields         |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; maximum 4,096       |
+
+The HTTP/2 request body cap is the smaller of `max_body_size` and
+`max_h2_body_size`: the connection sets `request_body_limit` from
+`max_body_size`, while the compiled per-stream slab is the hard ceiling. A
+header-count overflow on HTTP/2 is a connection error, not a `431` document.
+The HTTP/2 response limits include the status field and the generated
+`content-length` field. The HTTP/3 response header size is capped at 65,535
+because field offsets and lengths are `u16`; the field count is capped at 4,096
+by `h3_response_header_count_limit`.
+
+## Shared values
+
+| Value                    | Also sizes                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `max_header_size`        | HTTP/2 and HTTP/3 request-header storage; HTTP/3 requires at most 65,535                                                           |
+| `max_header_count`       | HTTP/2 and HTTP/3 decoded header caps; extras spill into slab storage                                                              |
+| `max_body_size`          | HTTP/1.1 bodies and the HTTP/2 `request_body_limit`; HTTP/2 still cannot exceed `max_h2_body_size`; HTTP/3 uses `max_h3_body_size` |
+| `write_queue_size`       | HTTP/1.1 and HTTP/2 pending output; HTTP/3 response body                                                                           |
+| `max_connections`        | Connection pool and QUIC connection capacity                                                                                       |
+| `idle_timeout_ms`        | HTTP/1.1 keep-alive and the HTTP/2 connection idle deadline                                                                        |
+| `header_read_timeout_ms` | HTTP/1.1 head and body; HTTP/2 uses its header block limit and idle deadline                                                       |
+
+`max_header_size` above 65,535 remains valid for HTTP/1.1 and HTTP/2. `listen_udp`
+rejects it with `error.InvalidHttp3Capacity` because lsxpack field lengths are
+16-bit.
+
+## Rejection documents
+
+An oversized body or header block receives a structured document with the
+rejection code and a byte value:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+Oversized headers use the same shape with `headers_too_large`. An oversized
+request line or header count also returns `431`; that document reports
+`max_header_size`, because the transport renders one header-rejection policy.
+Neither path allocates, and neither requires a handler.
+
+## Verify
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+curl -s -o rejection.json -w '%{http_code}\n' \
+  --data-binary @body.bin \
+  http://127.0.0.1:3000/upload
+grep -q '"code":"payload_too_large"' rejection.json
+```
+
+With the default 16 KiB body limit, the status is `413` and the document names
+`limit_bytes` 16384. Raise `with_max_body_size` and repeat the request to see the
+new value in both places.
+
+## Next
+
+- [HTTP errors](/docs/http/errors) covers the document shape and the status
+  helpers.
+- [Testing an HTTP server](/docs/http/testing) covers rejection assertions and
+  loopback checks.
+- [Capacity model](/docs/concepts/capacity-model) explains how one configuration
+  becomes the startup slab.

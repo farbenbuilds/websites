@@ -1,0 +1,183 @@
+---
+title: Routing
+description: Register methods, resolve static and parameterized paths, read the Allow header, and recognize the exact errors that fail registration.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, routing]
+---
+
+This page shows how µWebZockets selects a route for a request. Registration is a
+startup activity: the table is immutable once a listener binds, and selection
+depends on path shape rather than on the order you registered routes.
+
+## Register routes
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn list_users(_: *uz.Request, res: *uz.Response) void {
+    res.text("users") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse "";
+    var buffer: [64]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{id}) catch return;
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_user(_: *uz.Request, res: *uz.Response) void {
+    res.end("201 Created", "created") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/users/me", index);
+    _ = try app.get("/users", list_users);
+    _ = try app.post("/users", create_user);
+    _ = try app.any("/health", health);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`/users/me` wins over `/users/:id` for every method, even though the
+parameterized route was registered first. That is the static-first rule, not a
+registration-order rule.
+
+## Methods
+
+| Registration | HTTP method         | Callback                        |
+| ------------ | ------------------- | ------------------------------- |
+| `get`        | `GET`               | `fn (*Request, *Response) void` |
+| `head`       | `HEAD`              | Same                            |
+| `post`       | `POST`              | Same                            |
+| `put`        | `PUT`               | Same                            |
+| `delete`     | `DELETE`            | Same                            |
+| `patch`      | `PATCH`             | Same                            |
+| `options`    | `OPTIONS`           | Same                            |
+| `trace`      | `TRACE`             | Same                            |
+| `query`      | `QUERY` (RFC 10008) | Same                            |
+| `any`        | Every method        | Same                            |
+
+`trace` registers an explicit handler. The library does not add a route or
+synthesize the RFC 9110 echo response. A `QUERY` request without a valid
+`Content-Type` is rejected with `400 Bad Request` before the handler runs.
+
+## Selection order
+
+For each request, the router tries these steps in order:
+
+1. Exact static path through the hash index.
+2. The radix walk over static segments.
+3. The best parameterized pattern.
+
+Among parameterized patterns, the router prefers the one with the most literal
+bytes, then a pattern without a wildcard, then the one with fewer captures. Two
+patterns with the same shape, such as `/users/:id` and `/users/:name`, cannot
+both be registered. If two different shapes still tie on all three rules, the
+route registered first wins.
+
+A static path shadows a parameterized path for every method. If `/users/me`
+exists only as `POST`, then `GET /users/me` receives `405 Method Not Allowed`;
+it does not fall through to `GET /users/:id`.
+
+`*name` is terminal and captures the remaining path, including an empty
+remainder. A nonterminal wildcard fails registration with
+`error.InvalidRoutePattern`. The [route parameters
+page](/docs/http/route-parameters) covers capture syntax.
+
+## HEAD, OPTIONS, and Allow
+
+- `HEAD` uses an explicit `head` route when one exists. Otherwise it runs the
+  `GET` handler and suppresses the body bytes, while keeping the framing that
+  the body would have produced.
+- When a path matches and no `OPTIONS` handler exists, the server answers
+  `OPTIONS` with `204 No Content` and an `Allow` field. `HEAD` is listed
+  whenever `GET` is registered.
+- `OPTIONS *` is answered with `204 No Content` and no `Allow` field.
+- `any` handles every method, including `OPTIONS` and method tokens that are not
+  in the method enum. Registering `any` suppresses the automatic `OPTIONS`
+  answer.
+- A request with no matching path receives `404 Not Found`. A matching path
+  without a handler for the method, and without `any`, receives
+  `405 Method Not Allowed` plus `Allow`.
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/users
+```
+
+```text
+HTTP/1.1 204 No Content
+Allow: GET, HEAD, POST
+```
+
+## Route limits
+
+| Resource                  |   Default | Builder override               |
+| ------------------------- | --------: | ------------------------------ |
+| Radix nodes               |       256 | `with_max_route_nodes`         |
+| Parameterized patterns    |        64 | `with_max_pattern_routes`      |
+| Route path                |     2 KiB | `with_max_route_path_size`     |
+| Captures per request      | 16 inline | `with_max_route_params`        |
+| Global middleware         |        32 | `with_max_middleware`          |
+| Route records for OpenAPI |       320 | Node limit plus pattern limit  |
+| Route registry bytes      |    64 KiB | `with_max_route_registry_size` |
+
+Radix nodes store compressed path fragments, not one node per segment; shared
+prefixes split into separate nodes, so `/a`, `/a/b`, and `/a/b/c` are three
+nodes. The route record limit adds the node and pattern capacities; the registry
+holds 64 KiB of paths.
+
+## Registration failures
+
+Registration runs before any request, so these failures return a Zig error and
+no HTTP status.
+
+| Error                                 | Cause                                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | No leading `/`, a `?`, `#`, CR, or LF, or a path above 2 KiB                                         |
+| `error.InvalidRoutePattern`           | Empty capture name, invalid name character, duplicate name in one pattern, or a nonterminal wildcard |
+| `error.RoutePatternConflicts`         | Two patterns with the same shape that differ only in capture names                                   |
+| `error.RouteAlreadyRegistered`        | The same path and method are registered twice                                                        |
+| `error.RouteCapacityReached`          | No radix node or route record remains                                                                |
+| `error.RouteStorageCapacityReached`   | The 64 KiB route registry is full                                                                    |
+| `error.RouteParameterCapacityReached` | A pattern needs more captures than `max_route_params`                                                |
+
+Registration after a successful bind returns `error.RoutesLocked`. Middleware
+order is separate from route registration; registration order also breaks a tie
+between two parameterized shapes that rank equally. See
+[Middleware](/docs/http/middleware).
+
+## Verify
+
+```sh
+curl -s http://127.0.0.1:3000/users/me
+curl -s http://127.0.0.1:3000/users/42
+curl -i -X DELETE http://127.0.0.1:3000/users
+```
+
+The first two requests return `index` and `user 42`. The third returns
+`405 Method Not Allowed` with `Allow: GET, HEAD, POST`.
+
+## Next
+
+- [Route parameters and wildcards](/docs/http/route-parameters) covers capture
+  syntax, decoding, and lifetimes.
+- [Handlers](/docs/http/handlers) covers the callback shapes.
+- [Middleware](/docs/http/middleware) covers ordered checks before dispatch.

@@ -1,0 +1,184 @@
+---
+title: Handlers
+description: Choose a synchronous, context, async, or async-context callback, complete the response exactly once, and report failures through Response.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, routing]
+---
+
+A handler receives the borrowed request and a response writer or async token.
+The four shapes share the route table and differ only in signature and
+completion.
+
+## The four shapes
+
+| Registration                                                                        | Callback signature                              | Use                                |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------- |
+| `get`, `post`, `put`, `delete`, `patch`, `options`, `head`, `trace`, `query`, `any` | `fn (*Request, *Response) void`                 | Work that finishes in the callback |
+| `route_context`, `get_context`                                                      | `fn (*anyopaque, *Request, *Response) void`     | Work that needs caller-owned state |
+| `route_async`, `get_async`                                                          | `fn (*Request, AsyncResponse) void`             | Work that completes later          |
+| `route_async_context`, `get_async_context`                                          | `fn (*anyopaque, *Request, AsyncResponse) void` | Deferred work with state           |
+
+Only `get` has the `get_context`, `get_async`, and `get_async_context`
+shortcuts. For another method, call `route_context`, `route_async`, or
+`route_async_context` with `uz.HttpMethod.post` and so on.
+
+## Complete program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const State = struct {
+    requests: u64 = 0,
+};
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn counted(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    state.requests += 1;
+    var buffer: [32]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "{d}", .{state.requests}) catch {
+        res.end("500 Internal Server Error", "format failed") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn later(_: *uz.Request, token: uz.AsyncResponse) void {
+    token.sleep_complete(250, "200 OK", "Content-Type: text/plain\r\n", "later") catch |err|
+        std.log.err("async completion failed: {}", .{err});
+}
+
+fn delayed(context: *anyopaque, _: *uz.Request, token: uz.AsyncResponse) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    state.requests += 1;
+    token.sleep_complete(100, "200 OK", "", "after state") catch |err|
+        std.log.err("async completion failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var state = State{};
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.get_context("/counted", &state, counted);
+    _ = try app.get_async("/later", later);
+    _ = try app.get_async_context("/delayed", &state, delayed);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+The context pointer is caller-owned and untyped; cast it once at the top of the
+callback. State mutation is loop-confined; do not share it with another thread.
+
+## Response completion
+
+A synchronous handler must end the response before it returns.
+
+| Situation                                                                        | Result                                                                                       |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Handler calls `end`, `text`, `html`, `bytes`, `json`, or another complete writer | Response is sent                                                                             |
+| Handler returns without ending or starting a response                            | `500 Internal Server Error` with body `Handler did not complete the response`                |
+| Handler starts a stream or chunked body and returns without finishing it         | HTTP/1.1 flushes and closes the connection; HTTP/2 ends the stream; HTTP/3 closes the stream |
+| Handler starts `begin_stream`                                                    | The producer owns completion and resumes dispatch when it finishes                           |
+| Async token is still pending when the callback returns                           | Dispatch suspends; the request buffer is not reused                                          |
+
+An async token completes exactly once, on the event loop that owns the
+connection or stream. A second completion returns
+`error.AsyncResponseAlreadyCompleted`. A token whose transport slot was reused
+or disconnected returns `error.AsyncResponseExpired`.
+
+The framework `500` body is `Handler did not complete the response` on HTTP/1.1
+and HTTP/2. HTTP/3 writes `Handler did not complete response`, so assert the
+numeric status when a test runs across transports.
+
+`token.sleep_complete(delay_ms, status, headers, body)` parks the response and
+completes it when the timer fires. The status, headers, and body are borrowed
+until then, so pass literals or longer-lived storage, not a stack buffer.
+
+To do other work later, park with `token.sleep` and complete from its resume
+callback, or hand the result back to the owning loop and call `token.complete`.
+
+## Reporting errors
+
+This excerpt from `src/main.zig` omits the imports and `main`. A callback has
+no error return channel, so report failures through the response:
+
+```zig src/main.zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    if (body.len == 0) {
+        res.end("400 Bad Request", "empty body") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    }
+    res.end("201 Created", body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+Response writers return these errors:
+
+| Error                          | Cause                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `error.ResponseAlreadyStarted` | The response already left the idle state                                                            |
+| `error.InvalidStatus`          | The status code is outside 200 to 599                                                               |
+| `error.InvalidHeaders`         | A field is malformed, contains a control character, or sets `Content-Length` or `Transfer-Encoding` |
+| `error.BodyNotAllowed`         | The status is `204`, `205`, or `304` and the body is not empty                                      |
+| `error.WouldBlock`             | A fixed body does not fit the write queue or its free space                                         |
+
+`end_best_effort` takes the same arguments and aborts the transport when the
+write fails: TCP closes, HTTP/2 resets the stream, HTTP/3 closes the stream. Use
+it only where the callback cannot report the error.
+
+Some failures never reach a handler: `404 Not Found`, `405 Method Not Allowed`
+with `Allow`, automatic `OPTIONS` with `204 No Content`, `426 Upgrade Required`
+for a WebSocket route without an upgrade, `425 Too Early` for a non-safe method
+in TLS 0-RTT, and `413 Payload Too Large` or `431 Request Header Fields Too
+Large` from the parser before dispatch.
+
+## What not to do
+
+- Do not block the loop; use the async token and the timer for delayed work.
+- Do not register a route, call `listen`, or call `deinit` from a callback.
+  Registration returns `error.RoutesLocked`, a second bind returns
+  `error.AlreadyListening`, and `deinit` panics inside the loop.
+- Do not call `shutdown` from another thread; `request_shutdown` is safe from
+  any thread and coalesces the request.
+- Do not keep a request field, header value, body slice, or capture after the
+  callback returns or the async token completes. Copy it or call
+  `req.clone(allocator)`.
+- Do not set `Content-Length` or `Transfer-Encoding` yourself. The library owns
+  framing and rejects both fields.
+- Do not complete an async token twice, from another thread, or after its
+  generation was reused.
+
+## Verify
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3000/counted
+curl -s http://127.0.0.1:3000/later
+curl -s http://127.0.0.1:3000/delayed
+```
+
+The bodies are `hello`, `1`, `later`, and `after state`; the last two arrive
+after a short delay while the token parks the request buffer.
+
+## Next
+
+- [Request API](/docs/http/request) covers the borrowed request value.
+- [Response API](/docs/http/response) covers statuses, headers, and bodies.
+- [Handler shapes](/docs/concepts/handler-shapes) explains the model.

@@ -7,7 +7,7 @@ search:
   tags: [getting-started, concept]
 ---
 
-µWebZockets dành cho các dịch vụ Zig cần thất bại tại một giới hạn đã biết
+µWebZockets dành cho các dịch vụ Zig cần dừng tại một giới hạn đã biết
 thay vì suy giảm không đoán trước dưới tải. Nó phù hợp khi bộ nhớ được lập kế
 hoạch, độ trễ quan trọng và một handler API dùng chung cho nhiều giao thức giúp
 giảm code lặp lại.
@@ -67,7 +67,7 @@ try group.run();
 Thiết kế có giới hạn luôn đi kèm đánh đổi:
 
 - Bạn phải tính số connection, request body, write queue, message WebSocket,
-  route, middleware và trạng thái giao thức. [Mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+  route, middleware và trạng thái giao thức. [Mô hình capacity](/docs/concepts/capacity-model)
   ghi các giá trị mặc định.
 - Cạn capacity được báo tường minh. Write queue đầy trả `error.WouldBlock`; request
   quá lớn nhận `413` hoặc `431` kèm tài liệu có cấu trúc.
@@ -93,7 +93,7 @@ Chọn µWebZockets khi bạn trả lời được các câu sau trước khi de
 5. Bao nhiêu worker nên sở hữu slab và event loop?
 
 Nếu các câu trả lời ổn định, mô hình capacity biến chúng thành một lần cấp
-phát lúc khởi động và một failure mode dễ dự đoán. Nếu chúng đổi theo từng
+phát lúc khởi động và một kiểu lỗi dễ dự đoán. Nếu chúng đổi theo từng
 request, runtime khác có thể phù hợp hơn.
 
 ## Dùng bằng chứng thay cho tuyên bố

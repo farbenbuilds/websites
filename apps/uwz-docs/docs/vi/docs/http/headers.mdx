@@ -1,0 +1,156 @@
+---
+title: Header
+description: Đọc request header được mượn, phát hiện trùng lặp và tránh field framing bị reserved khi queue response header.
+sidebar:
+  order: 14
+search:
+  tags: [reference, http]
+---
+
+Request header là view được mượn, không phân biệt hoa thường, trỏ vào buffer của
+connection. Response header được queue trước khi response bắt đầu và được kiểm
+tra trước khi ghi byte nào. Hai bên có quy tắc khác nhau, đặc biệt với field
+singleton và field framing.
+
+## Đọc header trong handler
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn inspect(req: *uz.Request, res: *uz.Response) void {
+    if (req.count_headers("authorization") > 1) {
+        res.end("400 Bad Request", "duplicate Authorization") catch {};
+        return;
+    }
+
+    const raw_id = req.get_unique_header("x-request-id") orelse "anonymous";
+    const request_id = if (raw_id.len <= 64) raw_id else "invalid";
+    const accepts_json = req.header_has_token("accept", "application/json");
+
+    res.append_header("Vary", "Accept") catch return;
+
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &buffer,
+        "{s} json={}",
+        .{ request_id, accepts_json },
+    ) catch return;
+    res.text(body) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/inspect", inspect);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Accessor
+
+| Accessor                        | Trả về           | Hành vi khi trùng                                    |
+| ------------------------------- | ---------------- | ---------------------------------------------------- |
+| `get_header(name)`              | `?[]const u8`    | Field khớp đầu tiên theo thứ tự đến                  |
+| `get_unique_header(name)`       | `?[]const u8`    | `null` khi không có hoặc có nhiều hơn một field      |
+| `count_headers(name)`           | `usize`          | Đếm mọi field khớp                                   |
+| `has_header(name)`              | `bool`           | Như `get_header(name) != null`                       |
+| `header_has_token(name, token)` | `bool`           | Trả `true` khi có token phân tách bằng dấu phẩy khớp |
+| `headers()`                     | `HeadersView`    | `get`, `has` và `entries` trên view được mượn        |
+| `header_entries()`              | `HeaderIterator` | Duyệt cặp `{ name, value }`                          |
+
+Tên so sánh không phân biệt hoa thường theo ASCII. Value không được chuẩn hóa,
+gộp hay decode. Field trùng giữ thứ tự đến. Dùng `get_unique_header` cho
+singleton như `Content-Type`, `Authorization`, `Origin`, `Range` hoặc `If-Range`;
+dùng `count_headers` khi cần phân biệt field thiếu với field trùng.
+
+`header_has_token` tách field theo dấu phẩy, cắt space và tab quanh từng ứng
+viên, rồi so sánh không phân biệt hoa thường. Đây là cách kiểm tra đúng cho
+`Accept`, `Connection`, `Transfer-Encoding` và field token được cache. Không
+dùng so khớp substring.
+
+## Lifetime và capacity
+
+Mọi tên và value được mượn từ buffer request của connection. Slice còn hợp lệ
+qua handler đồng bộ hoặc đến khi response bất đồng bộ hoàn tất. Dùng
+`req.clone(allocator)` khi cần snapshot sở hữu cho công việc sau; xem
+[ownership và lifetime](/docs/concepts/ownership-and-lifetimes).
+
+Mảng `Request` inline giữ 64 field. `max_header_count` lớn hơn 64 tạo thêm slot
+name/value trong slab của từng connection. Transport dùng lại các slot đó qua
+các request trên cùng connection. Cạn cả hai capacity trong lúc parse tạo
+`431 Request Header Fields Too Large`.
+
+## Parser từ chối
+
+Parser HTTP/1.1 kiểm tra header block trước khi handler chạy:
+
+| Input                                                            | Kết quả                               |
+| ---------------------------------------------------------------- | ------------------------------------- |
+| Tên field không phải token, thiếu dấu hai chấm hoặc dòng bị fold | `400 Bad Request`                     |
+| Control character trong value ngoài horizontal tab, hoặc DEL     | `400 Bad Request`                     |
+| `Host` thiếu, rỗng hoặc trùng                                    | `400 Bad Request`                     |
+| `Content-Length` trùng                                           | `400 Bad Request`                     |
+| `Transfer-Encoding` trùng                                        | `400 Bad Request`                     |
+| `Transfer-Encoding` khác đúng `chunked`                          | `400 Bad Request`                     |
+| Có cả `Content-Length` và `Transfer-Encoding`                    | `400 Bad Request`                     |
+| Header block vượt `max_header_size`, mặc định 16 KiB             | `431 Request Header Fields Too Large` |
+| Nhiều field hơn capacity đã cấu hình                             | `431 Request Header Fields Too Large` |
+
+Parser đóng connection sau khi từ chối. Value có thể chứa byte từ space trở lên,
+trừ DEL, cùng horizontal tab. Tên field chỉ dùng tập ký tự token HTTP. Không có
+obs-fold continuation.
+
+## Response header
+
+`append_header(name, value)` queue một field khi response còn `idle`:
+
+- CR hoặc LF trong value trả `error.InvalidHeaders`.
+- Tên hoặc value vượt 1024 byte, hoặc dòng vượt 1024 byte, trả
+  `error.BufferOverflow`.
+- Block pending 2048 byte là giới hạn cứng; thêm quá sẽ trả
+  `error.BufferOverflow`.
+- Gọi sau khi response bắt đầu trả `error.ResponseAlreadyStarted`.
+
+`end_with_headers(status, headers, body)` nhận block field thô kết thúc bằng
+`\r\n`. Mỗi dòng cần tên token và dấu hai chấm. Value từ chối control character
+trừ horizontal tab. Block phải kết thúc bằng CRLF.
+
+### Field framing bị reserved
+
+Transport sở hữu message framing. Field response tên `Content-Length` hoặc
+`Transfer-Encoding` bị từ chối với `error.InvalidHeaders`, dù đến từ
+`append_header` hay block thô. Framework ghi framing đúng cho body cố định, body
+chunked hoặc file.
+
+`Content-Encoding` được phép, nhưng `end_gzip` từ chối field trùng khi caller đã
+cung cấp một field. Lỗi đó là `error.DuplicateContentEncoding`.
+
+## Kiểm tra
+
+```sh
+curl -i http://127.0.0.1:3000/inspect \
+  -H 'Accept: text/html, application/json' \
+  -H 'X-Request-Id: req-7'
+```
+
+Kỳ vọng `200 OK`, `Vary: Accept` và body `req-7 json=true`.
+
+Gửi singleton trùng lặp:
+
+```sh
+curl -i http://127.0.0.1:3000/inspect \
+  -H 'Authorization: Bearer one' \
+  -H 'Authorization: Bearer two'
+```
+
+Kỳ vọng `400 Bad Request`. Handler từ chối field trùng trước khi ghi response
+bình thường.
+
+## Tiếp theo
+
+Đọc [Request API](/docs/http/request) cho toàn bộ body và query surface, sau đó
+[Response API](/docs/http/response) cho helper kết thúc và thứ tự kiểm tra.

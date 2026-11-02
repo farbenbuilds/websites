@@ -1,0 +1,125 @@
+---
+title: Zero allocation
+description: Nêu chính xác claim không allocation, liệt kê mọi ngoại lệ lúc startup và audit handler trước khi ship, kèm ngoại lệ rõ ràng.
+sidebar:
+  order: 10
+search:
+  tags: [concept, capacity]
+---
+
+Request path không cấp phát trên heap. Câu đó là chính xác: nó mô tả HTTP
+dispatch và response hoàn tất sau khi connection và TLS handshake đã tồn tại,
+không phải toàn bộ process. TLS setup theo connection và các giai đoạn startup
+bên dưới cấp phát tường minh. Trang này liệt kê cái gì cấp phát, khi nào, và cách
+chứng minh một handler nằm trong bảo đảm.
+
+## Claim bao gồm gì
+
+Hai quy tắc đúng cho mọi transport:
+
+1. Connection slot, request buffer, message region, write queue, bảng protocol
+   và router được định cỡ trước khi listener đầu tiên khởi động.
+2. Request cần nhiều hơn capacity đã cấu hình nhận một error có giới hạn hoặc
+   response từ chối. Framework không bao giờ mở rộng buffer để chứa nó.
+
+Bảo đảm nói về framework. Code ứng dụng có thể cấp phát. `Request.clone`,
+`req.json(T, allocator)`, `req.validate_json(T, allocator)` và
+`validate_json_detailed(T, allocator, issue)` là bốn public request API làm việc
+đó với allocator bạn truyền. Những lời gọi này tường minh, thấy được tại call
+site, và nằm ngoài claim zero allocation. Về phía response, `Response.json`
+render qua allocator và giải phóng phần tạm trước khi trả về;
+`Response.json_buf` là lựa chọn có giới hạn.
+
+## Allocation lúc startup và một lần
+
+| Giai đoạn                         | Allocation                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `build` / `init`                  | Một application slab liền mạch qua allocator của caller                             |
+| Build (event loop)                | Bảng backend libxev cố định 4096 entry, độc lập với capacity                        |
+| `with_http_compression(true)`     | Một gzip codec và output scratch có giới hạn mỗi worker, ngoài slab                 |
+| `ServerConfig.compression = true` | Compressor và decompressor RFC 7692 tái sử dụng cùng scratch mỗi connection         |
+| Đăng ký route                     | Router storage cố định; RFC 7692 scratch khi đăng ký route WebSocket có compression |
+| TLS accept                        | `SSL_new` và một BIO pair của BoringSSL mỗi TLS connection                          |
+| `init_tls`                        | Trạng thái nội bộ của BoringSSL, có giới hạn theo connection                        |
+| Khởi tạo TLS ephemeral            | Sinh key và certificate P-256 một lần, giải phóng trước startup                     |
+| `Cluster.enable_https`            | Một `SSL_CTX` BoringSSL mỗi worker cộng việc load credential lúc startup            |
+| `listen_udp`                      | Pool của QUIC engine, tạo trước khi listener thành công                             |
+| Request path                      | Không, sau dispatch và handshake                                                    |
+| `deinit`                          | Slab được giải phóng một lần qua chủ sở hữu                                         |
+
+Bốn mục đáng xem kỹ. HTTP compression tạo một codec và output scratch lúc
+application init, nằm ngoài `slab_bytes()`. WebSocket compression tạo engine tái
+sử dụng lúc init và cặp scratch nhận/gửi mỗi connection lúc đăng ký route;
+`ServerConfig.compression = true` chuyển scratch theo connection vào startup
+slab. TLS accept tạo `SSL` và BIO pair cho mỗi connection, vì TLS state thuộc về
+connection dù `SSL_CTX` được chia sẻ. Cluster TLS cấp phát một `SSL_CTX` mỗi
+worker ngoài slab, nên `slab_bytes()` không đổi khi bật TLS.
+
+Điểm chung của danh sách này là mọi mục đều là chi phí startup hoặc shutdown.
+Không có gì ở giữa cấp phát trong lúc phục vụ request hoặc message.
+
+## Audit một handler
+
+Đọc handler và tìm bốn dấu hiệu:
+
+- Lời gọi nhận `Allocator`, trực tiếp hoặc qua helper.
+- Container có thể mở rộng, ví dụ `std.ArrayList`, hash map, hoặc cây JSON được
+  parse bằng allocator.
+- Helper dựng body và format vào bộ nhớ vừa cấp phát.
+- Slice được lưu lâu hơn callback hoặc completion sở hữu nó.
+
+Handler không mắc dấu hiệu nào trong bốn điểm trên thì chỉ dùng input được mượn
+và output có giới hạn:
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const params = req.query_params() catch return;
+    const page = (params.get_int(u32, "page") catch null) orelse 1;
+    var scratch: [96]u8 = undefined;
+    res.json_buf(.{ .query = params.get("q") orelse "", .page = page }, &scratch) catch {};
+}
+```
+
+`query_params` lấy slice từ request target, `get_int` parse tại chỗ, và
+`json_buf` render vào buffer trên stack trước khi copy vào write ring.
+
+Handler tương tự viết bằng allocation vẫn chạy, nhưng rời khỏi mô hình:
+
+```zig
+fn search_alloc(req: *uz.Request, res: *uz.Response, allocator: std.mem.Allocator) void {
+    const id = req.get_param("id") orelse "0";
+    const body = std.fmt.allocPrint(allocator, "id={s}", .{id}) catch return;
+    defer allocator.free(body);
+    res.text(body) catch {};
+}
+```
+
+Allocation này thấy được, nên audit ghi nhận nó là lựa chọn tường minh của ứng
+dụng chứ không phải chi phí ẩn của framework. Nó cũng thêm một failure path và
+một latency spike mà bản có giới hạn không có.
+
+## Ranh giới đẩy ngược lại
+
+Khi output hoặc input vượt capacity, framework báo lỗi thay vì cấp phát:
+
+| Tín hiệu                              | Nguồn                                          |
+| ------------------------------------- | ---------------------------------------------- |
+| `error.WouldBlock`                    | Lần write không vừa write ring của connection  |
+| `413 Payload Too Large`               | Request body vượt `max_body_size`              |
+| `431 Request Header Fields Too Large` | Request line hoặc header block vượt giới hạn   |
+| `503 Service Unavailable`             | WebSocket tunnel hoặc giới hạn capacity đã cạn |
+| Error capacity lúc đăng ký            | Bảng route, bảng pattern hoặc registry đầy     |
+
+`Response.begin_json` stream JSON qua buffer cố định trên stack, nên document lớn
+bị giới hạn bởi write queue chứ không bởi buffer render. `Response.begin_stream`
+chỉ kéo từ producer khi có chỗ output, nên kích thước body không phụ thuộc kích
+thước queue.
+
+## Tiếp theo
+
+- [Mô hình capacity](/docs/concepts/capacity-model) chỉ cách startup slab được
+  định cỡ và phân vùng.
+- [Backpressure](/docs/concepts/backpressure) giải thích producer phản ứng thế
+  nào với `error.WouldBlock`.
+- [Response API](/docs/http/response) liệt kê các response helper có giới hạn
+  và hành vi allocation của chúng.

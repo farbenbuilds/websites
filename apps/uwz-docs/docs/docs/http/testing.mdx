@@ -1,0 +1,162 @@
+---
+title: Testing an HTTP server
+description: Test handler decisions in process, verify the wire on loopback, and assert pre-handler rejections without a shipped test client.
+sidebar:
+  order: 24
+search:
+  tags: [how-to, http]
+---
+
+Test the decision in process and the wire on loopback. This page shows both
+layers, then the repository-level compliance gates that stay outside an
+application project.
+
+## Choose the layer
+
+| What you need to prove                             | Test at                                                   |
+| -------------------------------------------------- | --------------------------------------------------------- |
+| A validation rule, media policy, or error document | Zig test on a pure function                               |
+| Status, body, and headers after dispatch           | Loopback server plus `curl`                               |
+| A parser rejection such as `413` or `431`          | Loopback server plus an oversized request                 |
+| A `405` before the handler                         | Loopback server plus a method the route does not register |
+| HTTP/1.1 or WebSocket compliance                   | The repository gates, not your application suite          |
+
+## Test pure decisions in process
+
+Extract the decision from the callback, then test it with `std.testing`. This
+example tests a media-type policy without a socket:
+
+```zig src/main.zig
+const std = @import("std");
+
+fn response_for(content_type: []const u8) []const u8 {
+    const separator = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media_type = std.mem.trim(u8, content_type[0..separator], " \t");
+    if (!std.ascii.eqlIgnoreCase(media_type, "application/json")) {
+        return "415 Unsupported Media Type";
+    }
+    return "200 OK";
+}
+
+test "media policy ignores parameters" {
+    try std.testing.expectEqualStrings(
+        "200 OK",
+        response_for("application/json; charset=utf-8"),
+    );
+    try std.testing.expectEqualStrings(
+        "415 Unsupported Media Type",
+        response_for("text/plain"),
+    );
+}
+```
+
+```sh
+zig test src/main.zig
+```
+
+The library ships no test client or response mock. `uz.client` is a bounded
+production HTTP/1.1 client, not a test harness. The internal suite builds its own
+response capture target, and that target is not exported for application tests.
+
+## Run a loopback server test
+
+Start the server from the [quickstart](/docs/getting-started/quickstart) on
+`127.0.0.1:3000`, then assert status, body, and headers in a second terminal:
+
+```sh
+status=$(curl -s -o body.txt -w '%{http_code}' \
+  http://127.0.0.1:3000/)
+test "$status" = "200"
+test "$(cat body.txt)" = "hello from a dependency"
+
+curl -s -D headers.txt -o /dev/null http://127.0.0.1:3000/
+grep -qi '^content-type: text/plain' headers.txt
+```
+
+Check the exact field names your handler sets; `res.text` sends
+`Content-Type: text/plain; charset=utf-8`. Register `/users/42` from
+[route parameters](/docs/http/route-parameters) when you want to assert a
+captured value instead.
+
+## Assert a parser rejection
+
+An oversized body must fail before the handler. With the default 16 KiB body
+limit:
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+status=$(curl -s -o rejection.json -w '%{http_code}' \
+  --data-binary @body.bin http://127.0.0.1:3000/upload)
+test "$status" = "413"
+grep -q '"code":"payload_too_large"' rejection.json
+grep -q '"limit_bytes":16384' rejection.json
+```
+
+An oversized header block uses the same pattern:
+
+```sh
+status=$(curl -s -o headers.json -w '%{http_code}' \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  http://127.0.0.1:3000/)
+test "$status" = "431"
+grep -q '"code":"headers_too_large"' headers.json
+```
+
+Both requests prove the parser answered. They do not prove anything about the
+route, because no route handler ran.
+
+## Assert a pre-handler 405
+
+Register `GET /only-get` and send `DELETE`:
+
+```sh
+status=$(curl -s -o method.txt -w '%{http_code}' \
+  -X DELETE http://127.0.0.1:3000/only-get)
+test "$status" = "405"
+
+curl -s -D - -o /dev/null -X DELETE http://127.0.0.1:3000/only-get \
+  | grep -qi '^allow: get, head'
+```
+
+The `Allow` field must list `GET, HEAD`. To prove the GET handler did not run,
+assert its counter, log line, or side effect stays unchanged. The router answers
+before dispatch when the path matches and the method has no handler.
+
+## Keep compliance gates in the repository
+
+h1spec and Autobahn are repository-level gates, not application dependencies.
+Do not add h1spec, Autobahn, Deno, or their fixtures to an application project.
+The framework repository runs them against its own compliance servers:
+
+```sh
+zig build
+./zig-out/bin/h1spec &
+server_pid=$!
+
+cd vendor/h1spec
+deno run --allow-net=127.0.0.1:8000 http_test.ts 127.0.0.1 8000
+
+kill "$server_pid"
+```
+
+The Autobahn gate reports 517/517 server cases accepted: 514 `OK` and 3
+`INFORMATIONAL`, including compression groups 12 and 13. `zig build test` runs
+the ordinary unit suite from `src/tests/main.zig`; it is separate from both
+compliance gates.
+
+## Verify
+
+```sh
+zig test src/main.zig
+```
+
+The pure decision test passes without a listener. Run the loopback commands
+against the built server to prove the wire behavior and the rejection statuses.
+
+## Next
+
+- [HTTP errors](/docs/http/errors) covers the documents these tests assert.
+- [HTTP limits](/docs/http/limits) lists the defaults behind the `413` and `431`
+  checks.
+- [Server lifecycle](/docs/http/server-lifecycle) covers the startup and
+  shutdown calls a loopback test drives.

@@ -1,0 +1,169 @@
+---
+title: Compression helpers
+description: Send a gzip response from the per-worker pool or drive bounded libdeflate streams over caller-owned storage with scratch.
+sidebar:
+  order: 4
+search:
+  tags: [helpers, how-to, streaming]
+---
+
+µWebZockets offers three compression levels. `Response.end_gzip` compresses one
+bounded body and sends it. `uz.compression_pool` owns a reusable per-worker
+codec and output scratch. `uz.compression_stream` exposes bounded
+`CompressionStream` and `DecompressionStream` values for data that is not an
+HTTP response body.
+
+All three use libdeflate. The per-worker pool allocates at application init.
+A `CompressionStream` or `DecompressionStream` allocates its libdeflate codec in
+`init` and releases it in `deinit`, so create streams during startup or accept
+that `init` is an explicit request-path allocation.
+
+## One-shot response gzip
+
+`res.end_gzip(status, headers, body)` compresses `body` into the worker pool and
+ends the response with `Content-Encoding: gzip` and
+`Vary: Accept-Encoding` prepended to your headers.
+
+| Precondition                                          | Failure                            |
+| ----------------------------------------------------- | ---------------------------------- |
+| Response is still idle                                | `ResponseAlreadyStarted`           |
+| Status line is valid                                  | `InvalidStatus`                    |
+| Header block has no control characters                | `InvalidHeaders`                   |
+| No `Content-Encoding` in the passed or queued headers | `DuplicateContentEncoding`         |
+| The worker pool exists                                | `CompressionUnavailable`           |
+| The transport supports it                             | `CompressionUnsupported` on HTTP/3 |
+
+Enable the pool on the server builder:
+
+```zig
+var app = try uz.Server.builder(init.io)
+    .with_http_compression(true)
+    .build(std.heap.page_allocator);
+```
+
+HTTP/1.1 and HTTP/2 use the borrowed worker pool. HTTP/3 returns
+`CompressionUnsupported` until a pool is threaded through the QUIC stream
+context. A status that forbids a body ends the response with an empty body and
+does not compress anything.
+
+## Input and output bounds
+
+| Bound             | Limit                                              | Result                          |
+| ----------------- | -------------------------------------------------- | ------------------------------- |
+| Input body        | `ServerConfig.max_body_size`                       | `InputTooLarge`                 |
+| Pool scratch      | Worst-case gzip bound for `max_input`              | `BufferTooSmall`                |
+| Merged headers    | Pending header capacity                            | `HeadersTooLarge`               |
+| Response capacity | Per-connection write queue; HTTP/2 response stride | `WouldBlock` from the transport |
+
+The input limit is the uncompressed body size. The compressed result must also
+fit the transport's response capacity. A body that fits `max_body_size` can
+still fail on a small write queue. For large or generated output, use
+[streaming responses](/docs/http/streaming) instead of one-shot gzip.
+
+## Bounded codec streams
+
+`CompressionStream` and `DecompressionStream` stage input in caller storage and
+produce one output slice.
+
+| Member           | Compression                          | Decompression                 |
+| ---------------- | ------------------------------------ | ----------------------------- |
+| `init`           | `init(format, level, input_storage)` | `init(format, input_storage)` |
+| `write(chunk)`   | Appends to input storage             | Appends to input storage      |
+| `output_bound()` | Worst-case size for staged input     | Not provided                  |
+| `finish(output)` | One libdeflate pass                  | One libdeflate pass           |
+| `deinit()`       | Frees the codec                      | Frees the codec               |
+
+`Format` is `deflate` for a zlib wrapper, `deflate_raw` for raw DEFLATE, and
+`gzip`. The level is passed to `libdeflate_alloc_compressor`. `write` copies
+into the input slice; it does not compress incrementally. `finish` closes the
+stream on success, so a second call then returns `StreamClosed`. Compressing more
+input than the input slice holds returns `BufferTooSmall`.
+
+```zig
+fn gzip_to(input: []const u8, output: []u8) ![]u8 {
+    var input_storage: [1024]u8 = undefined;
+    var stream = try uz.compression_stream.CompressionStream.init(
+        .gzip,
+        6,
+        &input_storage,
+    );
+    defer stream.deinit();
+
+    try stream.write(input);
+    if (stream.output_bound() > output.len) return error.BufferTooSmall;
+    return stream.finish(output);
+}
+```
+
+`DecompressionStream.finish` returns `InvalidData` for a corrupt stream and
+`BufferTooSmall` when libdeflate reports insufficient output space.
+
+## Pool lifetime
+
+`uz.compression_pool.Pool.init(max_input)` allocates one level-6 compressor and
+the worst-case gzip scratch for `max_input`. Call it during startup, keep one
+pool per worker, and never share it across threads. `Pool.gzip(input)` returns a
+borrowed slice into that scratch. `init` returns `InitFailed` when the codec
+cannot be created, `OutOfMemory` when the scratch cannot be allocated, and
+`InputTooLarge` for a zero bound.
+
+The returned slice is valid until the next `gzip` call or `deinit`. Copy it, or
+finish the response, before calling `gzip` again. `gzip` returns
+`InputTooLarge` above `max_input` and `BufferTooSmall` when the scratch cannot
+hold the result. `deinit` frees both the scratch and the codec.
+
+:::warning[Compression side channel]
+Do not gzip a response that mixes a secret with attacker-controlled input. The
+compressed length leaks information about the secret, the same class of risk as
+BREACH. Compress static assets and uniformly public bodies; leave
+secret-bearing and mixed responses uncompressed.
+:::
+
+## Complete program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const report_body = "{\"status\":\"ok\",\"items\":[1,2,3]}";
+
+fn report(_: *uz.Request, res: *uz.Response) void {
+    res.end_gzip(
+        "200 OK",
+        "Content-Type: application/json\r\n",
+        report_body,
+    ) catch |err| {
+        std.log.err("gzip response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.Server.builder(init.io)
+        .with_max_body_size(64 * 1024)
+        .with_http_compression(true)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+
+    _ = try app.get("/report", report);
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Verify
+
+```sh
+curl -i --compressed http://127.0.0.1:3000/report
+curl -s -D - -o /dev/null -H 'Accept-Encoding: gzip' http://127.0.0.1:3000/report
+```
+
+The headers include `Content-Encoding: gzip` and `Vary: Accept-Encoding`. The
+first command prints the decoded JSON; the second leaves the body compressed so
+you can confirm the headers.
+
+## Next
+
+Read [streaming responses](/docs/http/streaming) when the body is too large for
+one shot, and the [Response API](/docs/http/response) for the header rules
+around `end_gzip`. The [capacity model](/docs/concepts/capacity-model) explains
+the write queue that bounds the compressed result.

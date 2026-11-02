@@ -1,0 +1,169 @@
+---
+title: Route parameters and wildcards
+description: Capture one path segment or a trailing remainder, size the capture storage, decode percent escapes, and keep borrowed values inside one callback.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, routing]
+---
+
+A route parameter captures part of the request path for the handler. µWebZockets
+supports one nonempty segment with `:name` and a terminal remainder with
+`*name`. Captures borrow the request buffer and are never decoded by the router.
+
+## Syntax
+
+| Pattern         | Matches                                       | Does not match               |
+| --------------- | --------------------------------------------- | ---------------------------- |
+| `/users/:id`    | `/users/42`                                   | `/users/`, `/users/42/posts` |
+| `/assets/*path` | `/assets/css/site.css`, `/assets`, `/assets/` | `/assets-old`                |
+
+A segment beginning with `:` captures exactly one nonempty segment. A segment
+beginning with `*` must be the last segment; it captures everything that
+follows, including an empty remainder and embedded slashes.
+
+Names allow ASCII letters, digits, `_`, and `-`. Names are case-sensitive, and
+one pattern cannot use the same name twice.
+
+## Complete program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse {
+        res.end("400 Bad Request", "missing id") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    var scratch: [128]u8 = undefined;
+    const decoded = uz.query.percent_decode(id, &scratch) catch {
+        res.end("400 Bad Request", "invalid escape") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    var buffer: [192]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{decoded}) catch {
+        res.end("500 Internal Server Error", "format failed") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn serve_asset(req: *uz.Request, res: *uz.Response) void {
+    const path = req.get_param("path") orelse "";
+    res.text(path) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/assets/*path", serve_asset);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Capture values
+
+| Pattern         | Request path           | Result                     |
+| --------------- | ---------------------- | -------------------------- |
+| `/users/:id`    | `/users/42`            | `id` is `42`               |
+| `/users/:id`    | `/users/`              | No match, `404 Not Found`  |
+| `/users/:id`    | `/users/42/posts`      | No match, `404 Not Found`  |
+| `/assets/*path` | `/assets/css/site.css` | `path` is `css/site.css`   |
+| `/assets/*path` | `/assets`              | `path` is the empty string |
+| `/assets/*path` | `/assets/`             | `path` is the empty string |
+
+`Request.get_param(name)` returns the first capture with that name, or `null`.
+The router clears the capture array before each lookup. A handler therefore sees
+only the captures from the current route.
+
+## Capture capacity
+
+The request holds 16 captures inline; `ServerConfig.max_route_params` defaults
+to 16. Raising it through `with_max_route_params` carves one extra name/value
+pointer pair per capture slot and per connection into the startup slab. The slab
+region is reused for every request on that connection, so a request still
+allocates nothing.
+
+| Limit                |            Default | Failure                                               |
+| -------------------- | -----------------: | ----------------------------------------------------- |
+| Captures per request |          16 inline | `error.RouteParameterCapacityReached`                 |
+| Captures per pattern | `max_route_params` | `error.RouteParameterCapacityReached` at registration |
+| Route path           |              2 KiB | `error.InvalidRoutePath`                              |
+
+A pattern above the configured capacity fails registration instead of matching
+partially. Integration code that attaches borrowed captures through
+`Request.add_param` gets the same error when the extra region is full.
+
+## Malformed patterns
+
+Registration fails closed; the router never falls back to ambiguous matching.
+These are startup errors, so they have no HTTP status.
+
+| Pattern                         | Error                         | Cause                           |
+| ------------------------------- | ----------------------------- | ------------------------------- |
+| `users/:id`                     | `error.InvalidRoutePath`      | Missing leading `/`             |
+| `/users/:`                      | `error.InvalidRoutePattern`   | Empty capture name              |
+| `/users/:na me`                 | `error.InvalidRoutePattern`   | Space is not a name character   |
+| `/assets/*path/tail`            | `error.InvalidRoutePattern`   | Wildcard is not terminal        |
+| `/users/:id/:id`                | `error.InvalidRoutePattern`   | Duplicate capture name          |
+| `/users/:id` and `/users/:name` | `error.RoutePatternConflicts` | Same path shape                 |
+| `/users/:id?active=1`           | `error.InvalidRoutePath`      | Query separator in a route path |
+
+A path longer than `max_route_path_size` also returns `error.InvalidRoutePath`.
+Register the path without a query string; the request query is already split
+into `Request.query`.
+
+## Percent decoding
+
+The router matches the raw request path. `%2F` stays inside one segment and is
+not treated as a separator, and `%20` stays as three bytes.
+
+| Request path            | Capture for `/users/:id` | Decoded value  |
+| ----------------------- | ------------------------ | -------------- |
+| `/users/Ada%20Lovelace` | `Ada%20Lovelace`         | `Ada Lovelace` |
+| `/users/a%2Fb`          | `a%2Fb`                  | `a/b`          |
+
+Decode explicitly with `uz.query.percent_decode(value, scratch)`. The scratch
+slice must be at least as long as the capture. Malformed escapes return
+`error.InvalidPercentEncoding`, and a short scratch returns `error.NoSpaceLeft`.
+`percent_decode` leaves `+` alone; use `uz.query.form_decode` only for
+form-urlencoded bodies, not for a path.
+
+Validate the decoded value before using it as a path or a key. A capture is
+attacker-controlled input.
+
+## Lifetime
+
+A capture borrows the connection request buffer. It stays valid until the
+synchronous handler returns, or until an asynchronous response completes. Copy
+it into application storage, or call `req.clone(allocator)` to own a full
+snapshot, before handing it to a worker or storing it.
+
+## Verify
+
+```sh
+curl -s 'http://127.0.0.1:3000/users/Ada%20Lovelace'
+curl -s 'http://127.0.0.1:3000/assets/css/site.css'
+curl -i http://127.0.0.1:3000/users/
+```
+
+The first body is `user Ada Lovelace`, the second is `css/site.css`, and the
+third returns `404 Not Found` because `:id` requires a nonempty segment.
+
+## Next
+
+- [Handlers](/docs/http/handlers) covers synchronous and deferred callbacks.
+- [Request API](/docs/http/request) covers headers, body, and query access.
+- [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) explains
+  borrowed request storage.

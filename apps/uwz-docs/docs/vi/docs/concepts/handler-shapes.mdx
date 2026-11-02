@@ -1,0 +1,118 @@
+---
+title: Dạng handler
+description: So sánh handler sync, context, async và async-context, đồng thời giữ state do caller sở hữu và field request được mượn hợp lệ.
+sidebar:
+  order: 5
+search:
+  tags: [concept, routing]
+---
+
+Handler nhận một request được mượn và hoặc ghi response, hoặc trả lại một async
+token. Bốn dạng callback bao phủ công việc sync, state tường minh và completion
+trì hoãn. Các snippet trên trang này bỏ qua import `std` và `uz`.
+
+## Bốn chữ ký
+
+| Đăng ký                                    | Chữ ký callback                                 | Dùng                                |
+| ------------------------------------------ | ----------------------------------------------- | ----------------------------------- |
+| `get` và các method helper khác            | `fn (*Request, *Response) void`                 | Công việc sync                      |
+| `route_context`, `get_context`             | `fn (*anyopaque, *Request, *Response) void`     | Công việc sync với state của caller |
+| `route_async`, `get_async`                 | `fn (*Request, AsyncResponse) void`             | Công việc hoàn tất sau              |
+| `route_async_context`, `get_async_context` | `fn (*anyopaque, *Request, AsyncResponse) void` | Công việc trì hoãn với state        |
+
+Các helper `get`, `head`, `post`, `put`, `delete`, `patch`, `options`, `trace`,
+`query` và `any` đều nhận chữ ký đầu tiên.
+
+## Handler sync
+
+Handler sync báo lỗi qua response. Nó không có kênh trả error, nên write error
+được log, chuyển thành status, hoặc xử lý bằng best-effort ending sau khi field
+response đã biết hợp lệ:
+
+```zig
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+Handler trả về mà không khởi động response nhận `500 Internal Server Error` với
+`Handler did not complete the response`.
+
+## Handler context
+
+`route_context` và `get_context` thêm một `*anyopaque` context ở đầu. Context
+được type-erase để router lưu một entry kích thước cố định, gồm pointer context
+và callback, mà không sinh route type cho từng context hay cấp phát closure.
+Framework không đọc và không giải phóng giá trị này.
+
+Bạn sở hữu giá trị và lifetime của nó. Cast lại ở đầu handler và giữ nguyên
+alignment:
+
+```zig
+const Greeting = struct { text: []const u8 };
+
+fn greet(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const greeting: *const Greeting = @ptrCast(@alignCast(context));
+    res.text(greeting.text) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(64).init(init.io);
+    defer app.deinit();
+
+    var greeting = Greeting{ .text = "hello" };
+    _ = try app.get_context("/hello", &greeting, greet);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Context phải sống trong khi route còn đăng ký. Trong cluster, đăng ký state theo
+từng worker bên trong `Cluster.configure`; không đăng ký pointer tới mutable state
+của worker này trên worker khác.
+
+## Handler async
+
+Handler async nhận token `AsyncResponse` theo giá trị. Token có thể copy, có
+generation check và hoàn tất đúng một lần:
+
+```zig
+fn deferred(_: *uz.Request, token: uz.AsyncResponse) void {
+    // Completion must run on the loop that owns the connection.
+    token.complete("200 OK", "later") catch |err| {
+        std.log.err("completion failed: {}", .{err});
+    };
+}
+```
+
+Đăng ký bằng `app.get_async("/later", deferred)`. Token đang pending giữ request
+buffer hoặc stream slot, nên field request còn hợp lệ đến khi token hoàn tất.
+Lần hoàn tất thứ hai, generation đã tái sử dụng hoặc peer đã ngắt kết nối đều
+fail closed. `sleep_complete` treo một response hoàn chỉnh cùng các field được mượn
+khi delay là công việc pending duy nhất.
+
+Hoàn tất token trên event loop sở hữu nó. Để hoàn tất công việc trên thread
+khác, gửi kết quả về loop đó rồi complete tại đó.
+
+## Quy tắc callback
+
+- Không block event loop. Trì hoãn công việc chậm và complete token sau.
+- Không giữ field request được mượn sau return sync hoặc token completion. Copy nó
+  hoặc dùng `Request.clone`.
+- Khởi động tối đa một response. Lần khởi động thứ hai trả về
+  `error.ResponseAlreadyStarted`.
+- Không complete async token hai lần hoặc từ thread khác.
+- Không gọi `deinit` từ callback; nó panic trong event loop. `shutdown` từ
+  callback bắt đầu shutdown và để run đang active drain.
+- Đăng ký route trước lần listen đầu tiên. Đăng ký sau đó trả về
+  `error.RoutesLocked`.
+
+## Tiếp theo
+
+- [Mô hình middleware](/docs/concepts/middleware-model)
+- [Handler](/docs/http/handlers)
+- [Async response](/docs/concepts/async-responses)

@@ -1,0 +1,167 @@
+---
+title: Giới hạn tần suất
+description: Giới hạn request theo key bằng token bucket do caller sở hữu, cấp phát bảng index và đọc contract 429 cùng Retry-After.
+sidebar:
+  order: 18
+search:
+  tags: [how-to, rate-limit]
+---
+
+µWebZockets giới hạn request bằng token bucket theo key, với state do caller sở
+hữu. Middleware không allocation và không lock, còn constructor O(1) thêm một
+key index open-addressing cùng LRU intrusive trên cùng bảng cố định.
+
+## Đăng ký limiter
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn api(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var buckets: [256]uz.middleware.RateLimitBucket = @splat(.{});
+    var slots: [512]uz.middleware.RateLimitIndexSlot = @splat(.{});
+    var links: [256]uz.middleware.RateLimitLink = @splat(.{});
+
+    var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+        .rate_per_second = 2,
+        .burst = 4,
+        // Một budget toàn cục. Dùng key_fn với identity đã xác thực khi mỗi
+        // client cần budget riêng.
+        .key_constant = 1,
+    }, &buckets, &slots, &links);
+    _ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+
+    _ = try app.get("/api", api);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Bucket là state của limiter, không phải cấu hình. Giữ cả ba mảng sống đến
+`app.deinit()`, và cấp cho mỗi limiter bộ mảng riêng.
+
+## Chọn key
+
+`RateLimitOptions` phân giải key theo thứ tự:
+
+| Field          | Kiểu              | Hành vi                                          |
+| -------------- | ----------------- | ------------------------------------------------ |
+| `key_fn`       | `?RateLimitKeyFn` | Được gọi trước khi set; trả key trực tiếp        |
+| `key_header`   | `?[]const u8`     | Hash bằng FNV-1a khi request có field            |
+| `key_constant` | `u64`             | Dùng khi không có function, hoặc header vắng mặt |
+
+`RateLimitKeyFn` là `*const fn (request: *const Request) u64`. `key_header` mà
+request không mang theo sẽ fallback về `key_constant`, nên mọi request không có
+key chia sẻ một budget. Kết quả `key_fn` được dùng nguyên vẹn, kể cả `0`.
+
+`key_header` chỉ an toàn khi giá trị do server tạo, ví dụ `x-forwarded-for` do
+proxy tin cậy ghi hoặc API key tra từ record đã lưu. Header mà client tự chọn
+cho phép một client xoay key. Mỗi lần xoay tạo một bucket mới, và khi bảng đầy,
+mỗi key mới đẩy bucket cũ nhất ra. Client xoay key không thể nạp lại budget của
+chính nó, nhưng có thể đẩy client khác ra; client bị đẩy quay lại với bucket mới
+rỗng token và nhận `429`. Ưu tiên `key_fn` với giá trị do server tạo, hoặc
+`key_constant` cho một giới hạn toàn cục.
+
+## Cấp phát bảng index
+
+| Yêu cầu                                         | Được kiểm tra lúc construction |
+| ----------------------------------------------- | ------------------------------ |
+| `slots.len >= 2 * buckets.len`                  | `error.InvalidIndexCapacity`   |
+| `links.len == buckets.len`                      | `error.InvalidIndexCapacity`   |
+| Không có key trùng trong mảng bucket pre-seeded | `error.DuplicateRateLimitKey`  |
+
+Tỷ lệ hai-một giữ load factor của open addressing ở mức một nửa.
+`rate_limit_indexed` dựng lại index từ mảng bucket, nên bảng được khôi phục vẫn
+giữ placement và tie break exact-oldest.
+
+`rate_limit(init.io, options, buckets)` là constructor cũ cho caller chỉ có mảng
+bucket. Nó scan bảng và là đường linear compatibility được ghi nhận cho bảng đã
+có dữ liệu mà không có index storage. Không chia sẻ một mảng bucket đang sống
+giữa hai constructor.
+
+## Token bucket
+
+- `rate_per_second` là tốc độ nạp token mỗi giây. `0` tắt refill.
+- `burst` là capacity của bucket. `0` dùng `rate_per_second` với tối thiểu một
+  token.
+- Refill liên tục, đọc bằng `std.Io.Clock.now(.awake)`, tức `CLOCK_MONOTONIC`
+  trên Linux. Phần lẻ dưới một token nằm lại trong `last_refill_ns`, nên bucket
+  không reset theo cửa sổ cố định.
+- Bucket đầy không tích trữ thời gian idle. Token được clamp về burst hiệu dụng
+  ở mỗi bước.
+- Request mới trên slot trống bắt đầu với bucket đầy. Request mới đã đẩy key
+  khác ra bắt đầu với zero token.
+
+Phần tính refill là hàm pure được export `rate_limit_step`, nên có thể test
+quyết định mà không cần socket hay clock.
+
+## Loại bỏ bucket
+
+Bảng indexed giữ một LRU intrusive trên `links`. Một hit và một insert vào slot
+trống là O(1) expected. Khi mọi bucket đã có chủ và một key mới tới, middleware
+loại bucket ở head của LRU, tức bucket có `last_refill_ns` nhỏ nhất. Timestamp
+bằng nhau thì bucket index nhỏ hơn thắng.
+
+Tombstone do loại bỏ kích hoạt dựng lại index khi vượt một phần tư `slots`, nhờ
+đó probe chain ngắn. Việc dựng lại giữ nguyên thứ tự LRU.
+
+## Từ chối request
+
+Bucket cạn nhận `429 Too Many Requests` với body rỗng và field `Retry-After: 1`.
+Giá trị là một giây cho mọi `rate_per_second` khác 0, vì độ phân giải của header
+là một giây và tốc độ nguyên cấp token kế tiếp trong giây đó. Rate bằng 0 không
+bao giờ refill, nên middleware bỏ `Retry-After` thay vì hứa một khoảng chờ.
+
+Hai trường hợp fail closed với cùng `429`: mảng bucket rỗng, và table lookup
+không trả được slot. Limiter không có storage từ chối mọi request thay vì cho
+qua.
+
+## Theo worker
+
+Một bảng thuộc về một event loop. Đó là mutable state không lock, nên không chia
+sẻ giữa các worker. Trong cluster, dựng một limiter cho mỗi worker và tính phần
+nhân lên: client chạm `N` worker có thể tiêu budget của từng worker một lần. Key
+cũng chỉ duy nhất trong bảng của một worker, và việc phân phối lại traffic làm
+worker mất hiểu biết cũ về một key.
+
+## Các lỗi thường gặp
+
+| Điều kiện                              | Kết quả                                                   |
+| -------------------------------------- | --------------------------------------------------------- |
+| Token cạn                              | `429 Too Many Requests` kèm `Retry-After` khi rate khác 0 |
+| Mảng bucket rỗng                       | `429 Too Many Requests` cho mọi request                   |
+| `slots` nhỏ hơn hai lần `buckets`      | Lỗi startup `error.InvalidIndexCapacity`                  |
+| Độ dài `links` khác `buckets`          | Lỗi startup `error.InvalidIndexCapacity`                  |
+| Key trùng trong mảng bucket pre-seeded | Lỗi startup `error.DuplicateRateLimitKey`                 |
+
+Ba lỗi cuối đến từ `rate_limit_indexed` trước khi listener bind, nên là Zig
+error và không có HTTP status.
+
+## Kiểm tra
+
+```sh
+for i in $(seq 1 6); do
+  curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api
+done
+```
+
+Với `burst = 4`, bốn request đầu in `200` và các request sau in `429` cho đến
+khi bucket nạp lại hai token mỗi giây. Dùng `curl -i` trên một request bị từ
+chối để thấy `Retry-After: 1`.
+
+## Tiếp theo
+
+- [Xác thực](/docs/http/authentication) quyết định ai được gọi trước khi
+  limiter đếm số lần.
+- [Middleware](/docs/http/middleware) trình bày thứ tự đăng ký và đăng ký
+  theo worker.
+- [Worker shared-nothing](/docs/concepts/shared-nothing) giải thích vì sao
+  bảng này thuộc từng loop.

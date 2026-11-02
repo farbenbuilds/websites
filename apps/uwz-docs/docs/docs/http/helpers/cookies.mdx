@@ -1,0 +1,180 @@
+---
+title: Cookies and signed cookies
+description: Read RFC 6265 cookies, format Set-Cookie attributes, and sign values with HMAC-SHA256 keys that rotate; signing is not encryption.
+sidebar:
+  order: 3
+search:
+  tags: [helpers, how-to, cookies]
+---
+
+`uz.cookie` parses the `Cookie` request field, formats a validated `Set-Cookie`
+response field, and signs values with HMAC-SHA256. Parsing and formatting borrow
+or write into caller storage; nothing allocates.
+
+Signing proves that a value came from your server and was not modified. It does
+not hide the value.
+
+## Read a cookie
+
+| API                               | Scope                | Behavior                                              |
+| --------------------------------- | -------------------- | ----------------------------------------------------- |
+| `cookie.find(header, name)`       | One `Cookie` field   | First pair with that name, only if its value is valid |
+| `cookie.iterator(header)`         | One `Cookie` field   | Skips malformed pairs                                 |
+| `CookieJar.parse(header)`         | One `Cookie` field   | Fixed-capacity view of up to 32 pairs                 |
+| `req.cookie(name)`                | Every `Cookie` field | First match across the request                        |
+| `req.signed_cookie(name, secret)` | Every `Cookie` field | Verifies the HMAC-SHA256 signature                    |
+
+`CookieJar` is `CookieJarOf(32)`. Parsing a field with more than 32 valid pairs
+keeps the first 32 and ignores the rest. Malformed pairs are skipped rather than
+failing the parse. Names are compared byte-exactly.
+
+```zig
+const jar = uz.cookie.CookieJar.parse(req.get_header("cookie") orelse "");
+const theme = jar.get("theme") orelse "light";
+
+var pairs = jar.pairs();
+while (pairs.next()) |pair| {
+    std.debug.print("{s}={s}\n", .{ pair.name, pair.value });
+}
+```
+
+`find` validates the value of the matching pair. A malformed value returns
+`null` even if a later duplicate would be valid; use the iterator when you need
+to inspect every well-formed pair. The jar borrows the request buffer; the
+[capacity model](/docs/concepts/capacity-model) explains the fixed storage.
+
+## Write a cookie
+
+`cookie.format(buffer, name, value, options)` writes the complete field,
+including `Set-Cookie: ` and the trailing CRLF; do not pass it to `append_header`.
+`Response.set_cookie` calls it with a 1024-byte stack buffer and queues it;
+`set_signed_cookie` signs before queueing. `BufferOverflow` means the field did not fit.
+
+| Option             | Default | Effect                                  |
+| ------------------ | ------- | --------------------------------------- |
+| `path`             | `"/"`   | `Path` attribute                        |
+| `domain`           | `null`  | `Domain` attribute                      |
+| `max_age`          | `null`  | `Max-Age` in seconds                    |
+| `expires_unix`     | `null`  | `Expires` as an IMF-fixdate             |
+| `http_only`        | `false` | `HttpOnly`                              |
+| `secure`           | `false` | `Secure`                                |
+| `same_site`        | `null`  | `Strict`, `Lax`, or `None`              |
+| `enforce_prefixes` | `false` | Applies `__Host-` and `__Secure-` rules |
+
+`expires_unix` is formatted with `format_http_date` into a 29-byte
+`HttpDateBuffer` and emitted after `Max-Age`. Seconds before the Unix epoch or
+a year past 9999 return `InvalidExpires`.
+
+## Prefixes and SameSite
+
+`SameSite=None` requires `secure = true`; otherwise `format` returns
+`InsecureSameSiteNone`. This check applies even when prefix enforcement is off.
+
+Prefix enforcement is opt-in through `enforce_prefixes = true`:
+
+- `__Host-` requires `secure = true`, `domain = null`, and `path = "/"`.
+- `__Secure-` requires `secure = true`.
+
+A violation returns `InsecureCookiePrefix` when the response prepends the field.
+Browsers apply the same rules, so the check turns a cookie that a browser would
+drop into a request-time error instead of a silent loss.
+
+```zig
+fn set_session(res: *uz.Response, session_id: []const u8) !void {
+    return res.set_cookie("__Host-session", session_id, .{
+        .secure = true,
+        .http_only = true,
+        .same_site = .lax,
+        .enforce_prefixes = true,
+    });
+}
+```
+
+## Sign and verify
+
+| Function                             | Output                                            | Errors                                                                         |
+| ------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sign(buffer, value, secret)`        | `value.hex(HMAC-SHA256(value, secret))`           | `CookieSecretTooShort`, `InvalidCookieValue`, `BufferTooSmall`                 |
+| `verify_signed(value, secret)`       | Borrowed payload                                  | `CookieSecretTooShort`, `InvalidCookieSignature`                               |
+| `sign_versioned(buffer, value, key)` | `id.payload.hex(HMAC-SHA256(id.payload, secret))` | `InvalidKeyId`, `CookieSecretTooShort`, `InvalidCookieValue`, `BufferTooSmall` |
+| `verify_versioned(value, keys)`      | Borrowed payload                                  | `UnknownKeyId`, `CookieSecretTooShort`, `InvalidCookieSignature`               |
+
+A secret shorter than 32 bytes is rejected. `sign` needs a buffer of
+`value.len + 1 + 64` bytes because the hex signature is 64 characters.
+`verify_signed` compares in constant time and distinguishes a bad structure, bad
+hex, and a mismatched tag with `InvalidCookieSignature`.
+
+Signing is not encryption. The payload remains readable in the cookie; anyone
+who sees the value can read it. Use signing for integrity, not confidentiality.
+
+## Rotate keys
+
+`Key` pairs a public id with a 32-byte-or-longer secret. An id may be up to 32
+bytes, must be a valid cookie name, and must not contain a dot.
+`verify_versioned` looks up the id in the caller's key list, so old cookies keep
+working while a new key signs new values.
+
+```zig
+const keys = [_]uz.cookie.Key{
+    .{ .id = "2026-11", .secret = "0123456789abcdef0123456789abcdef" },
+    .{ .id = "2026-10", .secret = "fedcba9876543210fedcba9876543210" },
+};
+
+fn read_session(value: []const u8) ![]const u8 {
+    return uz.cookie.verify_versioned(value, &keys);
+}
+```
+
+Both literals above are examples. Load every secret from configuration. An
+unknown id returns `UnknownKeyId`. Keep the previous key in the list until its
+longest-lived cookie has expired, then remove it.
+
+## Verify with a request
+
+```zig
+const secret = "0123456789abcdef0123456789abcdef";
+
+fn login(_: *uz.Request, res: *uz.Response) void {
+    res.set_signed_cookie("__Host-session", "user=42", secret, .{
+        .secure = true,
+        .http_only = true,
+        .same_site = .lax,
+        .enforce_prefixes = true,
+    }) catch |err| {
+        res.end("500 Internal Server Error", @errorName(err)) catch {};
+        return;
+    };
+    res.end("204 No Content", "") catch {};
+}
+
+fn profile(req: *uz.Request, res: *uz.Response) void {
+    const maybe = req.signed_cookie("__Host-session", secret) catch |err| {
+        res.end("401 Unauthorized", @errorName(err)) catch {};
+        return;
+    };
+    const value = maybe orelse {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(value) catch {};
+}
+```
+
+The literal above is an example. Load the secret from configuration and keep it
+out of source control.
+
+```sh
+curl -i -c jar.txt http://127.0.0.1:3000/login
+curl -i -b jar.txt http://127.0.0.1:3000/profile
+```
+
+The first response carries `Set-Cookie: __Host-session=user=42.<hex>` with the
+requested attributes. The second returns `user=42`. Editing one character in the
+cookie returns `401 Unauthorized` with `InvalidCookieSignature`.
+
+## Next
+
+Read the [Request API](/docs/http/request) for header access and the
+[Response API](/docs/http/response) for `set_cookie`. The
+[security model](/docs/concepts/security-model) covers the trust boundary around
+session state.

@@ -1,0 +1,151 @@
+---
+title: Server-Sent Events
+description: Send framed SSE events over a chunked response with cache-safe defaults, heartbeats, and clean close behavior.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, sse]
+---
+
+`res.sse()` starts a `200 OK` event stream with the content type and
+anti-buffering headers a browser `EventSource` expects. You write events through
+a small helper, and the same field bytes work on HTTP/1.1, HTTP/2, and HTTP/3.
+
+## Send a finite stream
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn events(_: *uz.Request, res: *uz.Response) void {
+    var stream = res.sse() catch |err| {
+        std.log.err("sse start failed: {}", .{err});
+        return;
+    };
+
+    stream.send_event("tick", "one\ntwo") catch return;
+    stream.heartbeat() catch return;
+    stream.send_event("tick", "three") catch return;
+    stream.close() catch return;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/events", events);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The callback writes and closes the sequence before it returns. If it returns
+with the stream open and no producer armed, HTTP/1.1 flushes what it has and
+closes the connection, HTTP/2 ends the stream, and HTTP/3 closes the stream. A
+handler that starts a stream and never completes it does not keep the response
+open for later writes.
+
+## Defaults
+
+`sse()` calls `begin_chunked` with this head:
+
+```text
+Content-Type: text/event-stream
+Cache-Control: no-cache
+X-Accel-Buffering: no
+```
+
+`no-cache` allows storage but requires revalidation, so a proxy does not serve a
+stale event stream. `X-Accel-Buffering: no` asks nginx-style proxies not to
+buffer the response. Neither header replaces a correct proxy configuration.
+
+On HTTP/1.1 the body uses chunked transfer coding. HTTP/2 and HTTP/3 carry the
+same field bytes in `DATA` frames with no chunk framing.
+
+## Event framing
+
+`send_event(event, data)` writes:
+
+- `event: NAME` when `event` is not empty.
+- One `data: ` field per line in `data`.
+- One blank line to end the event.
+
+Input is split on `\n`. A trailing `\r` on each line is removed before framing,
+so CRLF input produces the same fields as LF input. An empty `data` value still
+produces one empty `data:` field.
+
+```text
+event: tick
+data: one
+data: two
+
+: keep-alive
+
+event: tick
+data: three
+
+```
+
+A CR or LF in the event name returns `error.InvalidEventName` before the helper
+writes that event. The event name is a field value, not a free-form label; keep
+it to one line.
+
+## Heartbeats and close
+
+`heartbeat()` writes the comment field `: keep-alive` followed by a blank line.
+Comments are ignored by `EventSource`, but they keep intermediaries from closing
+an idle connection. Send one on a period shorter than your proxy idle timeout.
+
+`close()` calls `end_chunks`. It sends no final event and no status marker; the
+end of the HTTP body is the close signal. Call it exactly once, after the last
+event.
+
+## Client reconnect guidance
+
+A browser `EventSource` reconnects automatically after a broken connection. The
+helper does not emit `id:` or `retry:` fields, so the client has no
+`Last-Event-ID` position to resume from and cannot set a server-controlled retry
+delay.
+
+Design the client for a fresh stream:
+
+- Re-fetch a snapshot or replay from an application sequence carried in `data`.
+- Deduplicate events if the application can deliver one twice.
+- Treat a reconnect as a new subscription, not a resume.
+- Keep the server heartbeat shorter than the client and proxy idle timeouts.
+
+If the application needs resumable delivery, put the sequence in the `data`
+field and let the client send its last position on the next request. Do not
+invent an SSE field the helper does not write.
+
+## Errors
+
+| Error                    | Raised when                                            |
+| ------------------------ | ------------------------------------------------------ |
+| `InvalidEventName`       | The event name contains CR or LF                       |
+| `WouldBlock`             | The write queue cannot accept the next field now       |
+| `ResponseNotStreaming`   | An event write runs after the stream ended             |
+| `ResponseAlreadyStarted` | `sse()` runs after another helper started the response |
+| `BodyNotAllowed`         | The request method or status suppresses the body       |
+| `ConnectionClosed`       | The peer or transport is already closing               |
+
+A write error returns to the handler. Because the response is already started,
+the handler cannot replace it with an error status; returning leaves the
+transport to close the open stream after flushing.
+
+## Verify
+
+```sh
+curl -N -i http://127.0.0.1:3000/events
+```
+
+`-N` disables curl buffering. Expect `200 OK`, `Content-Type: text/event-stream`,
+`Cache-Control: no-cache`, and `X-Accel-Buffering: no`, followed by the framed
+events and the heartbeat comment. The connection closes after `close()`.
+
+## Next
+
+Read [streaming responses](/docs/http/streaming) for producer-driven bodies,
+then [response lifecycle](/docs/concepts/response-lifecycle) for completion
+rules.

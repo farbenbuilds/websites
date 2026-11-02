@@ -1,0 +1,127 @@
+---
+title: Lỗi và cách xử lý
+description: Phân biệt Zig error với HTTP status, đọc rejection document có cấu trúc và quyết định lỗi nào có thể retry trên từng transport.
+sidebar:
+  order: 15
+search:
+  tags: [concept, troubleshooting]
+---
+
+µWebZockets báo lỗi trên hai kênh. Lệnh gọi framework trả Zig error, còn route
+handler không có error return và báo lỗi bằng cách kết thúc response với một
+status. Đọc cả hai kênh cho biết client thấy status nào, server thấy error name
+nào, và lần thử tiếp theo có thể thành công không.
+
+## Handler báo qua response
+
+Route handler trả `void`. Nó không thể trả `error.PayloadTooLarge` cho transport.
+Nó có thể gửi bất kỳ status nào, kể cả status do `uz.errors.Problem` có kiểu tạo
+ra:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    if (req.text().len == 0) {
+        var buffer: [uz.errors.max_document_bytes]u8 = undefined;
+        uz.errors.send_buf(res, .{
+            .status = .unprocessable_entity,
+            .code = "empty_body",
+            .message = "A request body is required.",
+        }, &buffer) catch {};
+        return;
+    }
+
+    res.end("201 Created", "created") catch {};
+}
+```
+
+Handler là excerpt; đăng ký route và `listen` được lược bỏ. `Problem` mang
+`StatusCode`, machine code và message. Render ghi vào storage do caller sở hữu,
+escape text chịu ảnh hưởng từ attacker và thay UTF-8 không hợp lệ thay vì tạo
+JSON không hợp lệ.
+
+## Lỗi trước khi handler chạy
+
+| Status | Nguyên nhân                                                  |
+| ------ | ------------------------------------------------------------ |
+| `413`  | Body vượt `max_body_size`                                    |
+| `431`  | Request line, header block hoặc số field vượt giới hạn       |
+| `404`  | Không route nào khớp                                         |
+| `405`  | Method khác đã có route; field `Allow` liệt kê method đó     |
+| `425`  | Non-safe method đến trong TLS 0-RTT early data               |
+| `426`  | Route WebSocket được gọi mà không có `Upgrade: websocket`    |
+| `501`  | HTTP/2 hoặc HTTP/3 `CONNECT` ngoài RFC 8441 extended CONNECT |
+| `503`  | Tài nguyên có giới hạn đã cạn, ví dụ tunnel HTTP/2 thứ hai   |
+
+Transport có thể từ chối request quá lớn mà không gọi handler. Response là JSON
+document có cấu trúc nêu tên giới hạn và giá trị. Với giới hạn body mặc định
+16 KiB, document `413` là:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+Document `431` dùng code `headers_too_large` và nêu `max_header_size`. Cả hai được
+render vào stack buffer 384 byte, nên đường rejection không cấp phát và không phụ
+thuộc code ứng dụng.
+
+## Lỗi có thể retry và lỗi terminal
+
+| Lỗi                                      | Retry                                         |
+| ---------------------------------------- | --------------------------------------------- |
+| `425 Too Early`                          | Có, sau khi TLS handshake hoàn tất            |
+| `503` từ tunnel HTTP/2 thứ hai           | Có, trên connection mới                       |
+| `error.WouldBlock` từ WebSocket `send`   | Có, sau khi `drain` callback báo còn capacity |
+| `ClusterQueueFull` hoặc `report.dropped` | Có, sau khi consumer drain inbox              |
+| `413` hoặc `431` trên cùng request       | Không; gửi request nhỏ hơn hoặc tăng giới hạn |
+| `426` hoặc `501`                         | Không; đổi route hoặc đường giao thức         |
+| `error.AsyncResponseExpired`             | Không; peer đã mất hoặc slot đã được dùng lại |
+| `error.ClusterWorkerFailed`              | Không cho lần `run` đó; xem `first_failure()` |
+| `error.CertificateLoadFailed`            | Không cho đến khi sửa file PEM                |
+
+Capacity failure không phải lời hứa retry mãi sẽ thành công. Hãy size giới hạn
+phù hợp rồi retry. Lỗi terminal nghĩa là cùng input không thể thành công nếu
+không đổi code, cấu hình hoặc giao thức.
+
+## Nơi lỗi được đặt tên
+
+- Cấu hình: error set `Error` trong `src/router/config.zig`.
+- Cluster: `MessageError`, `QueueError`, `PublishError` và `RunError` trong
+  `src/router/cluster.zig`.
+- Async completion: `src/http/response.zig`, tóm tắt ở trang asynchronous
+  responses.
+- JSON-RPC: `HandlerError`, `DispatchError` và `RegistrationError` trong
+  `src/rpc/json_rpc.zig`.
+- TLS: `src/crypto/tls.zig`; tài liệu TLS upstream liệt kê mọi giá trị.
+- HTTP status line: `src/http/status.zig`.
+
+Các registration và lifecycle error phổ biến là tên ổn định, không phải message
+đã format:
+
+- `error.RoutesLocked` sau `listen` đầu tiên.
+- `error.AlreadyListening` ở `listen`, `listen_all` hoặc `listen_udp` lần hai.
+- `error.ApplicationAlreadyRunning` khi `run` bị gọi lại.
+- `error.ApplicationUnavailable` sau shutdown hoặc `deinit`.
+- `error.SignalWatcherAlreadyInstalled` ở signal watcher thứ hai.
+- `error.WouldBlock` khi write queue có giới hạn hoặc WebSocket send đã đầy.
+
+HTTP status dành cho peer. Zig error dành cho caller có thể branch. Đừng parse
+status string để lấy lại error name, và đừng biến terminal Zig error thành vòng
+retry.
+
+## Tiếp theo
+
+- [Type safety](/docs/concepts/type-safety) giải thích cách schema issue và
+  error set có kiểu được tạo.
+- [Thương lượng giao thức](/docs/concepts/protocol-negotiation) giải thích các
+  status phụ thuộc transport được chọn.
+- [HTTP errors](/docs/http/errors) là reference cho status document và
+  response helper.

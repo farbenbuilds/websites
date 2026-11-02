@@ -1,0 +1,103 @@
+---
+title: Concepts
+description: Build the mental model for application types, lifecycles, routing, handlers, middleware, memory, and transport boundaries.
+search:
+  tags: [concept, reference]
+---
+
+The concepts section explains how one application value becomes bounded runtime
+behavior. Read it before the protocol pages. Each protocol page links back here
+instead of repeating the model.
+
+The first six pages cover the pieces of the request path: application
+construction, request parsing, response completion, route matching, handler
+shapes, and middleware. The later pages cover the memory, concurrency, and
+failure boundaries behind that path.
+
+## Application and request path
+
+<CardGroup cols={2}>
+  <Card title="Application model" href="/docs/concepts/application-model" icon="layers">
+    Compare `App(N)`, the configured types, and the builder, then follow the lifecycle that owns one
+    startup slab.
+  </Card>
+  <Card title="Request lifecycle" href="/docs/concepts/request-lifecycle" icon="arrow-right-left">
+    Trace one request from accept through parsing, middleware, routing, and slot reuse.
+  </Card>
+  <Card title="Response lifecycle" href="/docs/concepts/response-lifecycle" icon="send">
+    See how helpers, streaming paths, files, and async tokens complete a response.
+  </Card>
+  <Card title="Routing model" href="/docs/concepts/routing-model" icon="route">
+    Learn static, `:param`, and `*wildcard` precedence, method fallback, and route limits.
+  </Card>
+  <Card title="Handler shapes" href="/docs/concepts/handler-shapes" icon="braces">
+    Pick a synchronous, context, async, or async-context callback and keep its ownership rules.
+  </Card>
+  <Card title="Middleware model" href="/docs/concepts/middleware-model" icon="filter">
+    Order middleware, stop dispatch deliberately, and keep state per worker.
+  </Card>
+</CardGroup>
+
+## Deferred work and ownership
+
+<CardGroup cols={2}>
+  <Card title="Asynchronous responses" href="/docs/concepts/async-responses" icon="clock">
+    Complete a deferred response exactly once on the loop that owns it.
+  </Card>
+  <Card
+    title="Ownership and lifetimes"
+    href="/docs/concepts/ownership-and-lifetimes"
+    icon="key-round"
+  >
+    Know which borrowed slice stays valid after a callback returns.
+  </Card>
+  <Card title="Capacity model" href="/docs/concepts/capacity-model" icon="gauge">
+    Read the presets, slab size, and exhaustion behavior before choosing limits.
+  </Card>
+  <Card title="Zero allocation" href="/docs/concepts/zero-allocation" icon="cpu">
+    Separate the startup allocation from the few request APIs that allocate.
+  </Card>
+  <Card title="Shared-nothing workers" href="/docs/concepts/shared-nothing" icon="share-2">
+    Understand per-worker loops, slabs, TLS contexts, and lock-free inboxes.
+  </Card>
+  <Card title="Backpressure" href="/docs/concepts/backpressure" icon="radio">
+    Handle a full write ring, WebSocket drain, and producer resume.
+  </Card>
+</CardGroup>
+
+## Protocol and failure boundaries
+
+<CardGroup cols={2}>
+  <Card title="Protocol negotiation" href="/docs/concepts/protocol-negotiation" icon="network">
+    Follow ALPN, the HTTP/2 preface, and the separate HTTP/3 context.
+  </Card>
+  <Card title="Type safety" href="/docs/concepts/type-safety" icon="type">
+    Use compile-time capacities, typed JSON, and named callback types.
+  </Card>
+  <Card title="Errors and failure modes" href="/docs/concepts/errors" icon="alert-triangle">
+    Distinguish a Zig error from an HTTP status and find the named failure.
+  </Card>
+  <Card title="Cluster model" href="/docs/concepts/cluster-model" icon="layers">
+    Configure, run, and release a worker group without losing the first failure.
+  </Card>
+  <Card title="Security model" href="/docs/concepts/security-model" icon="shield-check">
+    Map trust boundaries, parser hardening, TLS policy, and disclosure.
+  </Card>
+  <Card title="Web standards mapping" href="/docs/concepts/web-standards" icon="globe">
+    See which Fetch and Streams names apply and where Zig ownership differs.
+  </Card>
+</CardGroup>
+
+## Where to start
+
+If you are choosing limits, read [Application model](/docs/concepts/application-model)
+and [Capacity model](/docs/concepts/capacity-model) first. If you are writing a
+handler, read [Request lifecycle](/docs/concepts/request-lifecycle) and
+[Handler shapes](/docs/concepts/handler-shapes). If you are adding policy that
+applies to many routes, read [Middleware model](/docs/concepts/middleware-model).
+
+## Next
+
+- [Application model](/docs/concepts/application-model)
+- [HTTP and the application API](/docs/http)
+- [Glossary](/docs/getting-started/glossary)

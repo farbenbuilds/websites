@@ -1,0 +1,127 @@
+---
+title: Zero allocation
+description: State the no-allocation claim precisely, name every startup exception, and audit a handler before shipping it.
+sidebar:
+  order: 10
+search:
+  tags: [concept, capacity]
+---
+
+The request path performs no heap allocation. That sentence is precise: it
+describes HTTP dispatch and response completion after the connection and its TLS
+handshake exist, not the whole process. Per-connection TLS setup and the startup
+phases below allocate explicitly. This page lists what allocates, when, and how
+to prove that a handler stays inside the guarantee.
+
+## What the claim covers
+
+Two rules hold for every transport:
+
+1. Connection slots, request buffers, message regions, write queues, protocol
+   tables, and the router are sized before the first listener starts.
+2. A request that needs more than its configured capacity receives a bounded
+   error or a rejection response. The framework never grows a buffer to fit it.
+
+The guarantee is about the framework. Application code can allocate.
+`Request.clone`, `req.json(T, allocator)`, `req.validate_json(T, allocator)`, and
+`validate_json_detailed(T, allocator, issue)` are the four public request APIs
+that do so with the allocator you pass. Those calls are explicit, visible at the
+call site, and outside the zero-allocation claim. On the response side,
+`Response.json` renders through an allocator and frees the temporary before it
+returns; `Response.json_buf` is the bounded alternative.
+
+## Startup and one-time allocations
+
+| Phase                             | Allocation                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `build` / `init`                  | One contiguous application slab through the caller allocator                           |
+| Build (event loop)                | A fixed 4096-entry libxev backend table, independent of capacity                       |
+| `with_http_compression(true)`     | One gzip codec and bounded output scratch per worker, outside the slab                 |
+| `ServerConfig.compression = true` | Reusable RFC 7692 compressor and decompressor engines plus per-connection scratch      |
+| Route registration                | Fixed router storage; RFC 7692 scratch when a compressed WebSocket route is registered |
+| TLS accept                        | BoringSSL `SSL_new` and a BIO pair per TLS connection                                  |
+| `init_tls`                        | BoringSSL internal state, bounded per connection                                       |
+| Ephemeral TLS initialization      | One-time P-256 key and certificate generation, released before startup                 |
+| `Cluster.enable_https`            | One BoringSSL `SSL_CTX` per worker plus startup credential loading                     |
+| `listen_udp`                      | QUIC engine pools, created before the listener succeeds                                |
+| Request path                      | None after dispatch and handshake                                                      |
+| `deinit`                          | The slab is released once through its owner                                            |
+
+Four of these deserve a closer look. HTTP compression creates one codec and its
+output scratch at application init, outside `slab_bytes()`. WebSocket
+compression creates reusable engines at init and paired receive/send scratch per
+connection at route registration; `ServerConfig.compression = true` moves the
+per-connection scratch into the startup slab. TLS accept creates an `SSL` and BIO
+pair for each connection, because TLS state is per connection even though the
+`SSL_CTX` is shared. Cluster TLS allocates one `SSL_CTX` per worker outside the
+slab, which is why `slab_bytes()` does not change when TLS is enabled.
+
+The common thread on this list is that every item is a startup or shutdown cost.
+Nothing in the middle allocates while serving a request or a message.
+
+## Audit a handler
+
+Read the handler and look for four things:
+
+- A call that takes an `Allocator`, directly or through a helper.
+- A growable container such as `std.ArrayList`, a hash map, or a parsed JSON
+  tree built with an allocator.
+- A body-building helper that formats into newly allocated memory.
+- A slice stored past its owning callback or completion.
+
+A handler that trips none of the four uses only borrowed input and bounded
+output:
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const params = req.query_params() catch return;
+    const page = (params.get_int(u32, "page") catch null) orelse 1;
+    var scratch: [96]u8 = undefined;
+    res.json_buf(.{ .query = params.get("q") orelse "", .page = page }, &scratch) catch {};
+}
+```
+
+`query_params` slices the request target, `get_int` parses in place, and
+`json_buf` renders into the stack buffer before copying into the write ring.
+
+The same handler written with allocation still works, but it leaves the model:
+
+```zig
+fn search_alloc(req: *uz.Request, res: *uz.Response, allocator: std.mem.Allocator) void {
+    const id = req.get_param("id") orelse "0";
+    const body = std.fmt.allocPrint(allocator, "id={s}", .{id}) catch return;
+    defer allocator.free(body);
+    res.text(body) catch {};
+}
+```
+
+The allocation is visible, so the audit passes it as an explicit application
+choice rather than a hidden framework cost. It also adds a failure path and a
+latency spike that the bounded version does not have.
+
+## Where the boundary pushes back
+
+When output or input exceeds capacity, the framework reports it instead of
+allocating:
+
+| Signal                                | Source                                                 |
+| ------------------------------------- | ------------------------------------------------------ |
+| `error.WouldBlock`                    | A write that does not fit the connection's ring        |
+| `413 Payload Too Large`               | A request body above `max_body_size`                   |
+| `431 Request Header Fields Too Large` | A request line or header block above its limit         |
+| `503 Service Unavailable`             | An exhausted WebSocket tunnel or capacity limit        |
+| A capacity error at registration      | A route table, pattern table, or registry that is full |
+
+`Response.begin_json` streams JSON through a fixed stack buffer, so a large
+document is bounded by the write queue rather than by a rendering buffer.
+`Response.begin_stream` pulls from your producer only when output space frees,
+so the body size does not depend on the queue size.
+
+## Next
+
+- [Capacity model](/docs/concepts/capacity-model) shows how the startup slab is
+  sized and partitioned.
+- [Backpressure](/docs/concepts/backpressure) explains how producers react to
+  `error.WouldBlock`.
+- [Response API](/docs/http/response) lists the bounded response helpers and
+  their allocation behavior.

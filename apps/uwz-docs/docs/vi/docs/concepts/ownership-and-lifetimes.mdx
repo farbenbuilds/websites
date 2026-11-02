@@ -1,0 +1,124 @@
+---
+title: Quyền sở hữu và vòng đời
+description: Theo dõi slice nào mượn connection slot nào, khi nào hết hiệu lực và cần copy gì trước khi callback trả về để tránh dangling slice.
+sidebar:
+  order: 8
+search:
+  tags: [concept, capacity]
+---
+
+µWebZockets trao slice được mượn, không trao bản copy. Mỗi slice trỏ vào một
+connection slot mà worker sở hữu sẽ tái sử dụng, nên trang này nói rõ mỗi giá
+trị còn hợp lệ bao lâu và cần copy gì trước khi nó hết hạn.
+
+## Bảng hiệu lực
+
+| Giá trị                              | Hợp lệ tới                                                | Giữ lâu hơn bằng                                    |
+| ------------------------------------ | --------------------------------------------------------- | --------------------------------------------------- |
+| Field của `Request` và route capture | Khi handler đồng bộ trả về, hoặc khi async token hoàn tất | Copy vào storage có giới hạn, hoặc `Request.clone`  |
+| Slice `message` của WebSocket        | Khi callback trả về                                       | Copy những byte cần giữ                             |
+| `ResponseView` của client            | Khi callback trả về, hoặc theo vòng đời `FetchStorage`    | Giữ `FetchStorage` còn sống                         |
+| Token `AsyncResponse`                | Hoàn tất đúng một lần, hoặc bị vô hiệu khi ngắt kết nối   | Copy giá trị token thì được; copy slot thì không    |
+| Giá trị `App`                        | Suốt process, tại địa chỉ ổn định sau `listen`            | Khai báo một lần và không di chuyển                 |
+| Giá trị `Cluster`                    | Một chủ sở hữu duy nhất, tới khi `deinit_checked` trả về  | Không copy và không di chuyển sau khi `run` bắt đầu |
+| `Cluster.worker(i)`                  | Tới khi quá trình release bắt đầu                         | Đọc lại từ cluster thay vì lưu con trỏ              |
+
+Transport sở hữu mọi buffer được mượn trong bảng. Không giá trị nào ở đây dùng
+reference counting, và không slice được mượn nào giữ storage của connection sống
+sau khi slot sở hữu nó bị tái sử dụng.
+
+## Đọc field request trong callback
+
+`req.method`, `req.target`, `req.path`, `req.query`, các slice header, body và
+route capture đều mượn request buffer của connection. Chúng hợp lệ trong suốt
+callback đồng bộ, và trong async response cho tới khi token hoàn tất. Hãy copy
+phần cần sống qua một trong hai ranh giới:
+
+```zig
+fn request_id(req: *uz.Request) [32]u8 {
+    var copy: [32]u8 = @splat(0);
+    const value = req.get_header("x-request-id") orelse return copy;
+    const length = @min(value.len, copy.len);
+    @memcpy(copy[0..length], value[0..length]);
+    return copy;
+}
+```
+
+Bản copy bị cắt ngắn là có chủ đích: buffer cố định giới hạn bộ nhớ và header
+không bao giờ sống quá callback. Handler cần snapshot chính xác, không giới hạn
+thì dùng `Request.clone`.
+
+## Slice message của WebSocket
+
+Slice `message` truyền vào callback WebSocket chỉ hợp lệ trong callback đó. Một
+message bị phân mảnh được lắp trong message region của connection, và frame tiếp
+theo có thể ghi đè. Hãy copy byte vào storage của ứng dụng trước khi trả về,
+hoặc chuyển tiếp bằng `send`; `send` tiêu thụ byte vào output storage có giới hạn
+của connection trước khi trả về.
+
+## Response view của client
+
+Client gửi đi trả về `ResponseView` gồm `status`, `headers` và `body`. View mượn
+response buffer của client slot và chỉ hợp lệ trong thời gian chạy
+`FetchCallback`. Sau khi callback trả về, slot có thể được dùng cho request
+khác.
+
+`fetch_blocking` chạy một request trên client tạm thời và copy response vào
+`FetchStorage` do caller sở hữu. Điều đó kéo dài vòng đời của view tới vòng đời
+storage. Giữ `FetchStorage` sống chừng nào còn đọc view, và không giữ view sau
+khi storage bị tái sử dụng.
+
+## Clone request cho công việc về sau
+
+`Request.clone(allocator)` trả về `OwnedRequest`: một allocation cho phần byte,
+một allocation cho mỗi mảng header và capture, cùng một `*Request` view ổn định.
+Giải phóng bằng `deinit`:
+
+```zig
+fn audit(req: *uz.Request) !void {
+    var owned = try req.clone(std.heap.page_allocator);
+    defer owned.deinit();
+
+    const snapshot = owned.view();
+    std.log.info("{s} {s}", .{ snapshot.method, snapshot.path });
+}
+```
+
+`clone` là một trong hai public request API cấp phát tường minh; API còn lại là
+`req.json(T, allocator)`. Nó cho bạn quyền sở hữu phần byte, không cho phép hoàn
+tất async token từ thread khác. Token vẫn ở trên owning loop của nó.
+
+## Giữ App và Cluster tại địa chỉ ổn định
+
+`App` nhúng completion và timer node được đăng ký theo địa chỉ, và `listen` cài
+một phần của giá trị vào event loop. Sau `listen` hoặc `listen_udp`, và sau mọi
+đăng ký giữ context như `openapi`, `datagram`, hoặc bước cài observability mà
+`listen` thực hiện, giá trị không được di chuyển.
+
+Khai báo một lần trong `main` là đủ:
+
+```zig
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Một factory trả `App` theo giá trị sau khi listen sẽ di chuyển nó và phá vỡ hợp
+đồng đó. `Cluster` còn chặt hơn: nó có một chủ sở hữu duy nhất, không được copy,
+không được di chuyển sau khi `catch_shutdown_signals` hoặc `run` bắt đầu, và
+phải sống qua `deinit_checked`. Con trỏ `Cluster.worker(i)` được mượn tới khi
+release bắt đầu và không được lưu qua `deinit_checked`.
+
+## Tiếp theo
+
+- [Mô hình capacity](/docs/concepts/capacity-model) cho biết mỗi connection
+  slot giữ chỗ bao nhiêu trước khi process khởi động.
+- [Response bất đồng bộ](/docs/concepts/async-responses) giải thích token kéo
+  dài vòng đời của field request.
+- [Request API](/docs/http/request) liệt kê các field được mượn và accessor
+  tương ứng.

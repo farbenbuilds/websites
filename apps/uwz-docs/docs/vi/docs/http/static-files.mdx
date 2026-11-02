@@ -1,0 +1,169 @@
+---
+title: Static file
+description: Mount một thư mục asset được giới hạn với MIME, ETag, conditional GET, một byte range và đường sendfile plaintext.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, static-files]
+---
+
+`App.static(prefix, root, options)` mount một thư mục lúc startup và phục vụ file
+trong đó mà không cấp phát trên request path. Mount an toàn trước path traversal,
+hỗ trợ conditional request và dùng ranh giới file của kernel trên connection
+plaintext.
+
+## Mount một thư mục
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("assets live under /assets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.static("/assets", "public", .{
+        .index = "index.html",
+        .etag = true,
+        .max_age = 3600,
+    });
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`root` được mở một lần khi tạo mount, tương đối với working directory. Mount mọi
+thư mục trước khi listener đầu tiên khởi động.
+
+## Hợp đồng mount
+
+| Mục       | Quy tắc                                                               | Lỗi                                                   |
+| --------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
+| Prefix    | Không rỗng, bắt đầu bằng `/`, không có `?`, `#`, CR, LF, `:` hoặc `*` | `error.InvalidRoutePath`                              |
+| Route     | `GET {prefix}/*path`; `HEAD` fallback sang `GET`                      | Method khác nhận `405 Method Not Allowed` kèm `Allow` |
+| Số mount  | 8 mỗi ứng dụng                                                        | `error.StaticRouteCapacityReached`                    |
+| Tên index | Kiểm tra lúc mount                                                    | `error.InvalidStaticPath`                             |
+| Root      | Mở với `follow_symlinks = false`                                      | Lỗi lúc startup                                       |
+
+## Giới hạn đường dẫn và symlink
+
+`*path` được percent-decode rồi kiểm tra:
+
+- Byte NUL và backslash bị từ chối.
+- Mọi segment `.` hoặc `..` bị từ chối sau khi decode.
+- Slash ở đầu được trim trước khi mở đường dẫn tương đối.
+- Đường dẫn đã decode dài hơn buffer 1024 byte nội bộ bị từ chối.
+
+Mọi component thư mục và file cuối đều được mở với `follow_symlinks = false`.
+Symlink ở bất kỳ vị trí nào làm request bị từ chối thay vì thoát khỏi root. Handler
+ánh xạ lỗi sang status:
+
+| Zig error                                          | Status                      |
+| -------------------------------------------------- | --------------------------- |
+| `InvalidStaticPath`, `AccessDenied`, `SymLinkLoop` | `403 Forbidden`             |
+| `FileNotFound`, `NotDir`                           | `404 Not Found`             |
+| `FileTooLarge`                                     | `413 Content Too Large`     |
+| Lỗi khác                                           | `500 Internal Server Error` |
+
+## Tùy chọn
+
+| Field                | Default        | Tác dụng                                                         |
+| -------------------- | -------------- | ---------------------------------------------------------------- |
+| `index: ?[]const u8` | `"index.html"` | Thêm vào khi path kết thúc bằng `/`; `null` tắt directory index  |
+| `etag: bool`         | `true`         | Gửi `ETag` mạnh dựa trên size và modification time               |
+| `max_age: u32`       | `0`            | Khác 0 gửi `Cache-Control: public, max-age=N`; bằng 0 thì bỏ qua |
+
+`max_age` là directive cache công khai. Không mount file riêng tư với `max_age`
+khác 0.
+
+## MIME và metadata
+
+`Content-Type` được chọn theo phần mở rộng:
+
+| Phần mở rộng                                             | Content type                                                                          |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.html`, `.htm`                                          | `text/html; charset=utf-8`                                                            |
+| `.css`                                                   | `text/css; charset=utf-8`                                                             |
+| `.js`, `.mjs`                                            | `text/javascript; charset=utf-8`                                                      |
+| `.json`                                                  | `application/json`                                                                    |
+| `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.ico` | `image/svg+xml`, `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/x-icon` |
+| `.wasm`                                                  | `application/wasm`                                                                    |
+| `.txt`, `.xml`, `.pdf`, `.zip`                           | `text/plain; charset=utf-8`, `application/xml`, `application/pdf`, `application/zip`  |
+| Còn lại                                                  | `application/octet-stream`                                                            |
+
+Mọi response cũng mang `Accept-Ranges: bytes`. `ETag` và `Last-Modified` được
+gửi khi có. ETag là strong; `max_age` chỉ điều khiển field `Cache-Control`,
+không điều khiển validator.
+
+## Conditional request
+
+`If-None-Match` được ưu tiên hơn `If-Modified-Since`. Nó xử lý `*`, danh sách
+phân tách bằng dấu phẩy và so sánh weak; khi khớp, response là
+`304 Not Modified` với cùng validator và không có body. `If-Modified-Since` được
+so sánh như chuỗi HTTP-date chính xác sau khi trim space và tab.
+
+## Byte range
+
+Mount hỗ trợ một RFC 9110 range, lấy từ field `Range` duy nhất. Các dạng là
+`bytes=start-end`, `bytes=start-` và `bytes=-suffix`.
+
+Range thành công trả `206 Partial Content` kèm `Content-Range`. Nhiều range,
+unit không hợp lệ và range không thỏa mãn trả `416 Range Not Satisfiable` kèm
+`Content-Range: bytes */SIZE`. Các lỗi liên quan là `MultipleRangesUnsupported`,
+`InvalidRange` và `RangeNotSatisfiable`.
+
+`If-Range` phải khớp ETag mạnh hiện tại hoặc giá trị `Last-Modified` chính xác.
+Weak validator không bao giờ khớp. Khi lệch, `Range` bị bỏ qua và response là
+`200 OK` đầy đủ, nên range cũ không tạo `416`. Field `Range` trùng lặp không phải
+unique header, nên mount bỏ qua và phục vụ toàn bộ file.
+
+## Ranh giới sendfile
+
+Trên connection HTTP/1.1 plaintext, response `GET` và `HEAD` stream file qua
+ranh giới `sendfile` của kernel (`Response.send_file`). File không được copy vào
+buffer user space và không bị giới hạn bởi file buffer của mount; `HEAD` giữ
+transfer length và không gửi body.
+
+TLS, HTTP/2 và HTTP/3 trả `error.ZeroCopyUnavailable` từ `send_file`, nên mount
+fallback sang buffered read có giới hạn. Buffer được tính kích thước lúc compile:
+
+```text
+static_file_capacity = write_queue_size - 4096
+```
+
+Capacity là toàn bộ write queue khi queue từ 4096 byte trở xuống; với queue mặc
+định 64 KiB, buffer giữ 60 KiB. File lớn hơn trả `FileTooLarge`, được ánh xạ
+thành `413 Content Too Large`.
+
+## Kiểm tra
+
+Tạo `public/index.html`, khởi động server rồi chạy:
+
+```sh
+curl -i http://127.0.0.1:3000/assets/
+curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+```
+
+Request đầu trả `200 OK`. Request thứ hai trả `206 Partial Content` khi file đủ
+lớn. Field nhiều range trả `416 Range Not Satisfiable`.
+
+Lặp lại request đầu với validator nhận được:
+
+```sh
+curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
+```
+
+Thay `ETAG` bằng giá trị chính xác và kỳ vọng `304 Not Modified`.
+
+## Tiếp theo
+
+Đọc [caching và ETag](/docs/http/helpers/caching) cho việc tạo validator ngoài
+static mount, sau đó [giới hạn HTTP](/docs/http/limits) cho capacity của body và
+header.

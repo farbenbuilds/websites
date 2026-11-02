@@ -67,7 +67,7 @@ try group.run();
 Bounded design is a trade, not a free upgrade:
 
 - You must size connections, request bodies, write queues, WebSocket messages,
-  routes, middleware, and protocol state. The [capacity model](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+  routes, middleware, and protocol state. The [capacity model](/docs/concepts/capacity-model)
   documents the defaults.
 - Exhaustion is explicit. A full write queue returns `error.WouldBlock`; an
   oversized request receives `413` or `431` with a structured document.

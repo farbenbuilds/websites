@@ -1,0 +1,132 @@
+---
+title: HTTP/1.1 và application API
+description: Bản đồ phần HTTP, cách một application surface phục vụ mọi route và thứ tự đọc từ khởi động đến response đã kiểm tra.
+search:
+  tags: [http, http1, reference]
+---
+
+Phần này trình bày cách µWebZockets parse request HTTP/1.1, khớp route, chạy
+handler và ghi response. Trang cũng mô tả application API mà HTTP/1.1, HTTP/2 và
+HTTP/3 chia sẻ, để các trang route và handler vẫn dùng được khi bạn thêm
+transport khác.
+
+Đọc [Vòng đời server](/docs/http/server-lifecycle) trước khi viết code khởi
+động. Đọc [Handler](/docs/http/handlers) trước khi application đã start và bạn
+cần contract của callback.
+
+## Một application surface
+
+Một giá trị `uz.App(N)` sở hữu route table và connection pool. Mỗi request nhận
+một `Request` được mượn và một `Response` writer. Route, `Request`, `Response` và
+async token không đổi khi transport đổi. HTTP/1.1 thêm các wire rule do các
+trang protocol sở hữu:
+
+| Listener     | Transport                   | Framing và flow control                                     |
+| ------------ | --------------------------- | ----------------------------------------------------------- |
+| `listen`     | TCP, plaintext hoặc TLS 1.3 | Content-Length hoặc chunked, một write ring mỗi connection  |
+| `listen_udp` | QUIC                        | HTTP/3 stream framing, response bị giới hạn bởi write queue |
+
+TLS context của TCP quảng bá ALPN `h2` rồi `http/1.1`, nên browser có thể
+negotiate HTTP/2 trên cùng listener. Request vẫn đi vào cùng router.
+
+## Hợp đồng HTTP/1.1
+
+Connection TCP tích lũy một request có giới hạn cho đến khi parser chứng minh
+request hoàn chỉnh. Byte pipelined ở lại trong buffer và được parse lại sau khi
+response complete.
+
+| Chủ đề                                               | Hành vi                                                                                                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Request target                                       | Origin-form, absolute-form cho `http` và `https`, và `*` cho `OPTIONS` toàn server. Authority-form, fragment và userinfo bị từ chối.                         |
+| Input sai định dạng                                  | `400 Bad Request`, sau đó connection đóng                                                                                                                    |
+| `Expect: 100-continue`                               | Được trả lời tự động trước khi đọc body; mọi giá trị `Expect` khác trả `417 Expectation Failed`                                                              |
+| Body quá lớn                                         | `413 Payload Too Large` với JSON document nêu giới hạn và giá trị                                                                                            |
+| Request line, header block hoặc header count quá lớn | `431 Request Header Fields Too Large` với cùng shape document                                                                                                |
+| Response framing                                     | Library tạo `Content-Length` hoặc chunked framing. Field `Content-Length` hoặc `Transfer-Encoding` do caller cung cấp bị từ chối với `error.InvalidHeaders`. |
+| Keep-alive                                           | Bị giới hạn bởi `idle_timeout_ms`, mặc định 120 giây. `Connection: close` được tôn trọng.                                                                    |
+
+Body cố định lớn phải vừa write queue của từng connection. Body không vừa trả
+`error.WouldBlock` từ `Response.end`; dùng streaming body cho payload lớn hơn.
+Trang [HTTP limits](/docs/http/limits) liệt kê mọi giới hạn.
+
+## Bản đồ phần
+
+Bắt đầu với các trang thiết lập request path, sau đó dùng trang reference và
+how-to phù hợp với việc bạn đang làm.
+
+### Khởi động và định tuyến
+
+| Trang                                                      | Đọc khi                                  |
+| ---------------------------------------------------------- | ---------------------------------------- |
+| [Vòng đời server](/docs/http/server-lifecycle)             | Bạn đang chọn initializer hoặc listener  |
+| [Định tuyến](/docs/http/routing)                           | Bạn đang chọn path, method và precedence |
+| [Route parameter và wildcard](/docs/http/route-parameters) | Bạn cần giá trị từ path                  |
+| [Handler](/docs/http/handlers)                             | Bạn đang chọn shape callback             |
+
+### Request, response và ghi body
+
+| Trang                                               | Đọc khi                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Request API](/docs/http/request)                   | Bạn đang đọc header, body, query, form hoặc cookie                       |
+| [Response API](/docs/http/response)                 | Bạn đang ghi status, body, stream hoặc file                              |
+| [Helpers](/docs/http/helpers)                       | Bạn cần utility query, multipart, cookie, compression, cache hoặc stream |
+| [Middleware](/docs/http/middleware)                 | Bạn cần một check trước mọi route                                        |
+| [Headers](/docs/http/headers)                       | Bạn cần semantics của header trùng lặp hoặc unique                       |
+| [JSON responses](/docs/http/json)                   | Bạn đang trả hoặc stream JSON                                            |
+| [Chunked responses](/docs/http/chunked)             | Bạn tự điều khiển từng chunk                                             |
+| [Streaming responses](/docs/http/streaming)         | Producer điền body khi transport drain                                   |
+| [Server-Sent Events](/docs/http/server-sent-events) | Bạn đang push event stream                                               |
+| [Static files](/docs/http/static-files)             | Bạn đang phục vụ một directory                                           |
+
+### Policy và bảo mật
+
+| Trang                                           | Đọc khi                                       |
+| ----------------------------------------------- | --------------------------------------------- |
+| [CORS](/docs/http/cors)                         | Một browser origin cần quyền truy cập rõ ràng |
+| [Security headers](/docs/http/security-headers) | Bạn cần baseline browser header               |
+| [Authentication](/docs/http/authentication)     | Bạn cần kiểm tra Basic hoặc Bearer            |
+| [Rate limiting](/docs/http/rate-limiting)       | Bạn cần giới hạn request theo key             |
+| [OpenAPI output](/docs/http/openapi)            | Bạn cần document route được tạo tự động       |
+
+### Chẩn đoán và vận hành
+
+| Trang                                      | Đọc khi                                    |
+| ------------------------------------------ | ------------------------------------------ |
+| [HTTP errors](/docs/http/errors)           | Bạn đang chuẩn hóa failure body            |
+| [RFC 10008 QUERY](/docs/http/query-method) | Bạn cần method query chỉ đọc               |
+| [TRACE](/docs/http/trace)                  | Bạn cần diagnostic echo rõ ràng            |
+| [HTTP limits](/docs/http/limits)           | Bạn đang chọn capacity cho server          |
+| [Kiểm tra HTTP server](/docs/http/testing) | Bạn đang kiểm tra một route hoặc rejection |
+
+[Helpers](/docs/http/helpers) là nhóm lồng cho các utility nhỏ như query parsing,
+cookie, compression và caching. Helper không bao giờ sở hữu wire behavior; link
+tới helper từ trang cần utility.
+
+## Tên gọi và ranh giới
+
+Đăng ký route dùng một tên cho mỗi method: `get`, `post`, `put`, `delete`,
+`patch`, `options`, `head`, `trace`, `query` và `any`. Các biến thể context và
+async giữ nguyên tên: `route_context`, `route_async`, `route_async_context`, và
+các shortcut GET `get_context`, `get_async`, `get_async_context`.
+
+Mọi failure trong phần này nêu cả HTTP status và Zig error khi có. Các call
+startup không có HTTP status vì chưa có request; chúng trả một error có tên.
+
+## Kiểm tra
+
+Chương trình trong [quickstart](/docs/getting-started/quickstart) là server nhỏ
+nhất chứng minh baseline của phần này:
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+Response bắt đầu bằng `HTTP/1.1 200 OK`, và body là text handler truyền cho
+`res.text`.
+
+## Tiếp theo
+
+- [Vòng đời server](/docs/http/server-lifecycle) trình bày khởi tạo, bind và
+  shutdown.
+- [Định tuyến](/docs/http/routing) trình bày cách chọn method và path.
+- [Handler](/docs/http/handlers) trình bày bốn shape callback.

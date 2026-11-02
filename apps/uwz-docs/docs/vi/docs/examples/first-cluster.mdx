@@ -102,9 +102,14 @@ có API hard-affinity.
 
 Thứ tự được hỗ trợ:
 
-```text
-build_cluster -> configure -> enable_https (optional) -> listen -> run
--> request_shutdown or signal -> deinit
+```mermaid
+flowchart TB
+  accTitle: Vòng đời cluster
+  accDescr: Build, configure, bật TLS tùy chọn, listen và run, rồi shutdown và release.
+  A["build_cluster rồi configure"] --> B["enable_https (tùy chọn)"]
+  B --> C["listen rồi run"]
+  C --> D["request_shutdown hoặc signal"]
+  D --> E["deinit"]
 ```
 
 | Lệnh gọi                 | Quy tắc                                                    |

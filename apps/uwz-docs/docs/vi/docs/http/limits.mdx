@@ -1,0 +1,137 @@
+---
+title: Giới hạn HTTP
+description: Đọc mọi default của ServerConfig, ghi đè builder, kết quả khi vượt giới hạn và các giá trị dùng chung với HTTP/2, HTTP/3.
+sidebar:
+  order: 23
+search:
+  tags: [reference, capacity]
+---
+
+Mọi capacity được cố định trước khi listener khởi động. Trang này liệt kê
+default `ServerConfig`, builder method thay đổi từng giá trị, và điều transport
+làm khi input vượt giới hạn.
+
+## Đặt giới hạn
+
+```zig src/main.zig
+var server = try uz.Server.builder(init.io)
+    .with_max_clients(2048)
+    .with_max_body_size(32 * 1024)
+    .with_max_header_size(24 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Các ghi đè nhận giá trị compile-time vì chúng quyết định kiểu application được
+sinh ra. Dùng literal hoặc giá trị `const`, và gọi `slab_bytes()` khi cần biết
+footprint chính xác trước khi cấp phát.
+
+## Giới hạn request
+
+| Giới hạn            |  Mặc định | Ghi đè builder                | Khi vượt giới hạn                  |
+| ------------------- | --------: | ----------------------------- | ---------------------------------- |
+| Request line        |     8 KiB | `with_max_request_line_size`  | `431` kèm JSON                     |
+| Header block        |    16 KiB | `with_max_header_size`        | `431` kèm JSON                     |
+| Số header           | 64 inline | `with_max_header_count`       | Tràn sang slab, rồi `431` kèm JSON |
+| Request body        |    16 KiB | `with_max_body_size`          | `413` kèm JSON                     |
+| Deadline đọc header |      30 s | `with_header_read_timeout_ms` | Đóng connection                    |
+| Idle timeout        |     120 s | `with_idle_timeout_ms`        | Đóng connection                    |
+
+`max_header_count` không thể thấp hơn 64 vì mảng `Request` inline không co lại
+được. Giá trị lớn hơn sẽ carve một cặp name/value cho mỗi header thừa vào slab
+của từng connection.
+
+## Giới hạn connection và routing
+
+| Giới hạn                 |  Mặc định | Ghi đè builder                                        | Khi vượt giới hạn                     |
+| ------------------------ | --------: | ----------------------------------------------------- | ------------------------------------- |
+| Connection               |     1.024 | `with_max_clients`                                    | Đóng TCP connection mới               |
+| Write queue              |    64 KiB | `with_write_queue_size`                               | `error.WouldBlock`                    |
+| Route node               |       256 | `with_max_route_nodes`                                | `error.RouteCapacityReached`          |
+| Pattern route            |        64 | `with_max_pattern_routes`                             | `error.RouteCapacityReached`          |
+| Route capture            | 16 inline | `with_max_route_params`                               | `error.RouteParameterCapacityReached` |
+| Route path               |     2 KiB | `with_max_route_path_size`                            | `error.InvalidRoutePath`              |
+| Middleware               |        32 | `with_max_middleware`                                 | `error.MiddlewareCapacityReached`     |
+| Route registry           |    64 KiB | `with_max_route_registry_size`                        | `error.RouteStorageCapacityReached`   |
+| Static mount             |         8 | Không cấu hình được                                   | `error.StaticRouteCapacityReached`    |
+| Route record cho OpenAPI |       320 | `with_max_route_nodes` cộng `with_max_pattern_routes` | `error.RouteCapacityReached`          |
+
+`max_route_params` không thể thấp hơn 16. Route registry phải chứa ít nhất một
+path dài `max_route_path_size`, và tổng số node cộng pattern phải vừa `u16`; cấu
+hình không biểu diễn được sẽ fail validation thay vì bị cắt bớt.
+
+## Giới hạn HTTP/2 và HTTP/3
+
+| Giới hạn                       |                               Mặc định | Ghi đè builder                                | Khi vượt giới hạn                         |
+| ------------------------------ | -------------------------------------: | --------------------------------------------- | ----------------------------------------- |
+| Header block HTTP/2            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` với `ENHANCE_YOUR_CALM`          |
+| Request body HTTP/2            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Connection đóng mà không có HTTP response |
+| Header block response HTTP/2   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                     |
+| Field header response HTTP/2   |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                     |
+| Request body HTTP/3            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                   |
+| Storage header response HTTP/3 |                                4.096 B | `with_max_h3_response_header_size`            | Response fails closed; tối đa 65.535      |
+| Field header response HTTP/3   |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; tối đa 4.096       |
+
+Giới hạn request body HTTP/2 là giá trị nhỏ hơn giữa `max_body_size` và
+`max_h2_body_size`: connection đặt `request_body_limit` từ `max_body_size`, còn
+slab theo stream đã compile là trần cứng. Header count vượt giới hạn trên HTTP/2
+là connection error, không phải document `431`. Giới hạn response HTTP/2 bao gồm
+field status và field `content-length` được sinh ra.
+
+## Giá trị dùng chung
+
+| Giá trị                  | Cũng quyết định                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `max_header_size`        | Storage request header HTTP/2 và HTTP/3; HTTP/3 yêu cầu tối đa 65.535                                                      |
+| `max_header_count`       | Giới hạn header decode của HTTP/2 và HTTP/3; phần thừa tràn vào slab                                                       |
+| `max_body_size`          | Body HTTP/1.1 và `request_body_limit` của HTTP/2; HTTP/2 vẫn không vượt `max_h2_body_size`; HTTP/3 dùng `max_h3_body_size` |
+| `write_queue_size`       | Pending output HTTP/1.1 và HTTP/2; response body HTTP/3                                                                    |
+| `max_connections`        | Connection pool và capacity connection QUIC                                                                                |
+| `idle_timeout_ms`        | Keep-alive HTTP/1.1 và idle deadline của connection HTTP/2                                                                 |
+| `header_read_timeout_ms` | Head và body HTTP/1.1; HTTP/2 dùng giới hạn header block và idle deadline                                                  |
+
+`max_header_size` trên 65.535 vẫn hợp lệ cho HTTP/1.1 và HTTP/2. `listen_udp` từ
+chối giá trị đó với `error.InvalidHttp3Capacity` vì độ dài field lsxpack là
+16-bit.
+
+## Rejection document
+
+Body hoặc header block quá lớn nhận document có cấu trúc, gồm rejection code và
+giá trị byte:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+Header quá lớn dùng cùng shape với `headers_too_large`. Request line hoặc số
+header quá lớn cũng trả `431`; document đó báo `max_header_size`, vì transport
+chỉ render một policy từ chối header. Cả hai đường không cấp phát và không cần
+handler.
+
+## Kiểm tra
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+curl -s -o rejection.json -w '%{http_code}\n' \
+  --data-binary @body.bin \
+  http://127.0.0.1:3000/upload
+grep -q '"code":"payload_too_large"' rejection.json
+```
+
+Với giới hạn body mặc định 16 KiB, status là `413` và document ghi
+`limit_bytes` 16384. Tăng `with_max_body_size` rồi lặp lại request để thấy giá trị
+mới ở cả hai chỗ.
+
+## Tiếp theo
+
+- [Lỗi HTTP](/docs/http/errors) trình bày shape của document và helper status.
+- [Kiểm thử server HTTP](/docs/http/testing) trình bày assert rejection và kiểm
+  tra loopback.
+- [Capacity model](/docs/concepts/capacity-model) giải thích cách một cấu hình
+  trở thành startup slab.

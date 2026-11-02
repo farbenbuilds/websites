@@ -1,0 +1,102 @@
+---
+title: Khái niệm
+description: Xây dựng cách hiểu nền tảng cho application type, vòng đời request và response, định tuyến, handler, middleware, bộ nhớ và ranh giới transport.
+search:
+  tags: [concept, reference]
+---
+
+Phần khái niệm giải thích cách một giá trị application trở thành hành vi runtime có
+giới hạn. Hãy đọc phần này trước các trang giao thức. Mỗi trang giao thức liên kết
+ngược về đây thay vì lặp lại mô hình.
+
+Sáu trang đầu bao phủ các phần của đường đi request: dựng application, parse
+request, hoàn tất response, match route, dạng handler và middleware. Các trang
+sau nói về bộ nhớ, concurrency và ranh giới lỗi phía sau đường đi đó.
+
+## Application và đường đi của request
+
+<CardGroup cols={2}>
+  <Card title="Mô hình application" href="/docs/concepts/application-model" icon="layers">
+    So sánh `App(N)`, các configured type và builder, rồi theo dõi lifecycle sở hữu một startup
+    slab.
+  </Card>
+  <Card title="Vòng đời request" href="/docs/concepts/request-lifecycle" icon="arrow-right-left">
+    Theo dõi một request từ accept qua parse, middleware, định tuyến đến slot reuse.
+  </Card>
+  <Card title="Vòng đời response" href="/docs/concepts/response-lifecycle" icon="send">
+    Xem cách helper, streaming path, file và async token hoàn tất một response.
+  </Card>
+  <Card title="Mô hình định tuyến" href="/docs/concepts/routing-model" icon="route">
+    Hiểu precedence của static, `:param` và `*wildcard`, method fallback và giới hạn route.
+  </Card>
+  <Card title="Dạng handler" href="/docs/concepts/handler-shapes" icon="braces">
+    Chọn callback sync, context, async hoặc async-context và giữ đúng quy tắc ownership.
+  </Card>
+  <Card title="Mô hình middleware" href="/docs/concepts/middleware-model" icon="filter">
+    Sắp thứ tự middleware, dừng dispatch có chủ đích và giữ state theo từng worker.
+  </Card>
+</CardGroup>
+
+## Công việc trì hoãn và ownership
+
+<CardGroup cols={2}>
+  <Card title="Response bất đồng bộ" href="/docs/concepts/async-responses" icon="clock">
+    Hoàn tất một response trì hoãn đúng một lần trên loop sở hữu nó.
+  </Card>
+  <Card
+    title="Quyền sở hữu và vòng đời"
+    href="/docs/concepts/ownership-and-lifetimes"
+    icon="key-round"
+  >
+    Biết slice được mượn nào còn hợp lệ sau khi callback trả về.
+  </Card>
+  <Card title="Mô hình capacity" href="/docs/concepts/capacity-model" icon="gauge">
+    Đọc preset, kích thước slab và hành vi khi cạn capacity trước khi chọn giới hạn.
+  </Card>
+  <Card title="Zero allocation" href="/docs/concepts/zero-allocation" icon="cpu">
+    Phân biệt cấp phát lúc khởi động với vài request API có cấp phát.
+  </Card>
+  <Card title="Worker shared-nothing" href="/docs/concepts/shared-nothing" icon="share-2">
+    Hiểu loop, slab, TLS context riêng của từng worker và inbox lock-free.
+  </Card>
+  <Card title="Backpressure" href="/docs/concepts/backpressure" icon="radio">
+    Xử lý write ring đầy, WebSocket drain và producer resume.
+  </Card>
+</CardGroup>
+
+## Ranh giới giao thức và lỗi
+
+<CardGroup cols={2}>
+  <Card title="Thương lượng giao thức" href="/docs/concepts/protocol-negotiation" icon="network">
+    Theo dõi ALPN, HTTP/2 preface và HTTP/3 context riêng.
+  </Card>
+  <Card title="Type safety" href="/docs/concepts/type-safety" icon="type">
+    Dùng capacity compile-time, JSON có kiểu và callback type có tên.
+  </Card>
+  <Card title="Lỗi và cách xử lý" href="/docs/concepts/errors" icon="alert-triangle">
+    Phân biệt Zig error với HTTP status và tìm lỗi có tên.
+  </Card>
+  <Card title="Mô hình cluster" href="/docs/concepts/cluster-model" icon="layers">
+    Cấu hình, chạy và giải phóng worker group mà không làm mất failure đầu tiên.
+  </Card>
+  <Card title="Mô hình bảo mật" href="/docs/concepts/security-model" icon="shield-check">
+    Lập bản đồ trust boundary, parser hardening, TLS policy và disclosure.
+  </Card>
+  <Card title="Ánh xạ chuẩn web" href="/docs/concepts/web-standards" icon="globe">
+    Xem tên Fetch và Streams nào áp dụng và chỗ nào Zig ownership khác đi.
+  </Card>
+</CardGroup>
+
+## Bắt đầu từ đâu
+
+Nếu bạn đang chọn giới hạn, đọc [Mô hình application](/docs/concepts/application-model)
+và [Mô hình capacity](/docs/concepts/capacity-model) trước. Nếu bạn đang viết
+handler, đọc [Vòng đời request](/docs/concepts/request-lifecycle) và
+[Dạng handler](/docs/concepts/handler-shapes). Nếu bạn đang thêm policy áp dụng
+cho nhiều route, đọc [Mô hình middleware](/docs/concepts/middleware-model).
+
+## Tiếp theo
+
+- [Mô hình application](/docs/concepts/application-model)
+- [HTTP và application API](/docs/http)
+- [Glossary](/docs/getting-started/glossary)

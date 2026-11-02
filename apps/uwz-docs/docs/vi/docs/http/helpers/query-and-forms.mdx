@@ -1,0 +1,177 @@
+---
+title: Query và form
+description: Cắt query string hoặc form body thành các cặp được mượn và chỉ decode những value bạn đọc như text mà không cấp phát.
+sidebar:
+  order: 1
+search:
+  tags: [helpers, how-to, http]
+---
+
+`uz.query` và `uz.form` biến query string hoặc body
+`application/x-www-form-urlencoded` thành view cặp key/value được mượn với
+capacity cố định. Parse không copy gì. Percent escape vẫn giữ nguyên như trên
+wire cho đến khi bạn decode đúng những byte sẽ đọc như text.
+
+## Hai input, cùng một bộ parse
+
+| Input         | Entry point                    | Nguồn                             | Kiểm tra            |
+| ------------- | ------------------------------ | --------------------------------- | ------------------- |
+| Query string  | `req.query_params()`           | `req.target` sau dấu `?` đầu tiên | Không               |
+| Query độc lập | `query.QueryParams.parse(raw)` | Slice của caller                  | Không               |
+| Form body     | `req.form()`                   | `req.body`                        | Chỉ form media type |
+
+`req.query_params()` gọi `QueryParams.parse_link(req.target)`. Phần path trước
+dấu `?` đầu tiên được tìm bằng vector scan và không bị copy. Target không có
+`?` tạo ra view rỗng.
+
+`req.form()` đọc field `Content-Type` duy nhất, trả `MissingContentType` khi
+field thiếu hoặc bị lặp, rồi gọi `form.parse`. So sánh media type không phân
+biệt hoa thường và bỏ qua parameter như `charset`.
+
+`form.parse(content_type, body)` áp dụng cùng kiểm tra khi bạn đã có sẵn value
+header và slice body. Media type không phải form trả về `UnsupportedMediaType`.
+Query vượt capacity trả về `TooManyQueryParameters`.
+
+## Capacity
+
+`QueryParams` là `QueryParamsOf(32)`, nên mặc định lưu 32 cặp inline. Chọn
+capacity lúc compile khi biết hình dạng input:
+
+```zig
+fn read_tags(req: *uz.Request) ![]const u8 {
+    const params = try req.query_params_of(8);
+    return params.get("tag") orelse "";
+}
+```
+
+`QueryParamsOf(0)` hợp lệ và từ chối cặp không rỗng đầu tiên bằng
+`TooManyQueryParameters`. View là struct gồm bốn mảng song song, nên capacity
+cố định tốn stack chứ không cấp phát heap. `QueryComponentTooLong` chỉ xảy ra
+khi một key hoặc value vượt giới hạn độ dài `u32`.
+
+## Lookup và iterator
+
+| Method              | Trả về        | Hành vi                            |
+| ------------------- | ------------- | ---------------------------------- |
+| `get(name)`         | `?[]const u8` | Value thô đầu tiên có key thô khớp |
+| `get_last(name)`    | `?[]const u8` | Value khớp cuối cùng               |
+| `has(name)`         | `bool`        | Có key thô khớp                    |
+| `count_named(name)` | `usize`       | Số key thô khớp                    |
+| `get_int(T, name)`  | `!?T`         | Parse cơ số 10 value thô đầu tiên  |
+| `at(index)`         | `?Pair`       | Cặp tại một vị trí                 |
+| `pairs()`           | `Iterator`    | Duyệt tiến qua các `Pair`          |
+
+Key được so sánh byte-exact và phân biệt hoa thường. Key lặp lại được giữ theo
+thứ tự xuất hiện, nên `get` và `get_last` trả value khác nhau cho
+`?tag=a&tag=b`. `get_int` trả `null` khi không có key và trả
+`std.fmt.ParseIntError` khi value thô không phải số nguyên cơ số 10.
+
+```zig
+fn current_page(params: *const uz.query.QueryParams) u32 {
+    return (params.get_int(u32, "page") catch null) orelse 1;
+}
+
+fn last_tag(params: *const uz.query.QueryParams) []const u8 {
+    return params.get_last("tag") orelse "";
+}
+```
+
+## Byte thô và text đã decode
+
+View lưu byte thô trên wire. Query `?q=hello%20world` cho value
+`hello%20world`, còn form body `q=hello+world` cho `hello+world`. Decode vào
+scratch của caller khi value là text:
+
+| Function               | Xử lý `+`        | Decode `%HH` | Lỗi                                     |
+| ---------------------- | ---------------- | ------------ | --------------------------------------- |
+| `query.percent_decode` | Dấu cộng literal | Có           | `InvalidPercentEncoding`, `NoSpaceLeft` |
+| `query.form_decode`    | Thành space      | Có           | `InvalidPercentEncoding`, `NoSpaceLeft` |
+
+Buffer scratch phải dài ít nhất bằng value đầu vào, vì value bị escape toàn bộ
+không bao giờ ngắn lại. Slice đầu vào không bị sửa. Decode cả key nếu cần so
+với một tên đã decode; `get` chỉ khớp cách viết thô.
+
+Với cùng view:
+
+```zig
+fn decoded_query(params: *const uz.query.QueryParams, scratch: []u8) []const u8 {
+    const raw = params.get("q") orelse "";
+    return uz.query.percent_decode(raw, scratch) catch "";
+}
+```
+
+## Allocation và lifetime
+
+Cả hai view đều mượn buffer request của connection. Chúng còn hợp lệ trong một
+handler đồng bộ hoặc cho đến khi một async response complete. Copy value vào
+vùng nhớ ứng dụng có giới hạn trước khi hoãn công việc. Hai API request duy nhất
+có cấp phát là `req.clone(allocator)` và `req.json(T, allocator)`; các helper
+này không bao giờ cấp phát.
+
+## Handler hoàn chỉnh
+
+Các handler dưới đây dùng được trong project quickstart. Phần đăng ký route và
+khởi động không đổi.
+
+```zig src/main.zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const params = req.query_params() catch |err| {
+        res.end("400 Bad Request", @errorName(err)) catch {};
+        return;
+    };
+
+    const page = (params.get_int(u32, "page") catch null) orelse 1;
+    const tag_count = params.count_named("tag");
+
+    var decoded: [128]u8 = undefined;
+    const raw = params.get("q") orelse "";
+    const text = uz.query.percent_decode(raw, &decoded) catch "";
+
+    var body_buffer: [192]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &body_buffer,
+        "page={d} tags={d} q={s}",
+        .{ page, tag_count, text },
+    ) catch return;
+    res.text(body) catch {};
+}
+
+fn subscribe(req: *uz.Request, res: *uz.Response) void {
+    const fields = req.form() catch |err| switch (err) {
+        error.MissingContentType, error.UnsupportedMediaType => {
+            res.end("415 Unsupported Media Type", "") catch {};
+            return;
+        },
+        else => {
+            res.end("400 Bad Request", @errorName(err)) catch {};
+            return;
+        },
+    };
+
+    var name_buffer: [64]u8 = undefined;
+    const name = uz.query.form_decode(fields.get("name") orelse "", &name_buffer) catch "";
+
+    var body_buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&body_buffer, "subscribed {s}", .{name}) catch return;
+    res.text(body) catch {};
+}
+```
+
+## Kiểm tra
+
+```sh
+curl -i 'http://127.0.0.1:3000/search?page=3&tag=zig&tag=http&q=slab%20size'
+curl -i -X POST http://127.0.0.1:3000/subscribe \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'name=Ada+Lovelace'
+```
+
+Response đầu tiên báo `page=3 tags=2 q=slab size`. Response thứ hai báo
+`subscribed Ada Lovelace` vì `form_decode` biến `+` thành space.
+
+## Tiếp theo
+
+Đọc [API request](/docs/http/request) cho các accessor body và header quanh
+hai view này, rồi [API response](/docs/http/response) để gửi value đã parse.
+Về các buffer cố định phía sau view, xem
+[capacity model](/docs/concepts/capacity-model).

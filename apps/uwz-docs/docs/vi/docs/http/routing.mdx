@@ -1,0 +1,177 @@
+---
+title: Định tuyến
+description: Đăng ký method, phân giải path static và parameterized, đọc header Allow và nhận diện lỗi đăng ký route chính xác.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, routing]
+---
+
+Trang này giải thích cách µWebZockets chọn route cho một request. Đăng ký route
+là hoạt động lúc startup: bảng route không đổi sau khi listener bind, và việc
+chọn route phụ thuộc vào shape của path chứ không phụ thuộc thứ tự đăng ký.
+
+## Đăng ký route
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn list_users(_: *uz.Request, res: *uz.Response) void {
+    res.text("users") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse "";
+    var buffer: [64]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{id}) catch return;
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_user(_: *uz.Request, res: *uz.Response) void {
+    res.end("201 Created", "created") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/users/me", index);
+    _ = try app.get("/users", list_users);
+    _ = try app.post("/users", create_user);
+    _ = try app.any("/health", health);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`/users/me` thắng `/users/:id` với mọi method, dù route parameterized được đăng
+ký trước. Đó là quy tắc static-first, không phải quy tắc theo thứ tự đăng ký.
+
+## Method
+
+| Đăng ký   | HTTP method         | Callback                        |
+| --------- | ------------------- | ------------------------------- |
+| `get`     | `GET`               | `fn (*Request, *Response) void` |
+| `head`    | `HEAD`              | Như trên                        |
+| `post`    | `POST`              | Như trên                        |
+| `put`     | `PUT`               | Như trên                        |
+| `delete`  | `DELETE`            | Như trên                        |
+| `patch`   | `PATCH`             | Như trên                        |
+| `options` | `OPTIONS`           | Như trên                        |
+| `trace`   | `TRACE`             | Như trên                        |
+| `query`   | `QUERY` (RFC 10008) | Như trên                        |
+| `any`     | Mọi method          | Như trên                        |
+
+`trace` đăng ký một handler tường minh. Library không tự thêm route và không
+tạo response echo theo RFC 9110. Request `QUERY` không có `Content-Type` hợp lệ
+bị từ chối với `400 Bad Request` trước khi handler chạy.
+
+## Thứ tự chọn route
+
+Với mỗi request, router thử các bước sau theo thứ tự:
+
+1. Path static chính xác qua hash index.
+2. Bước radix trên các segment static.
+3. Pattern parameterized tốt nhất.
+
+Trong các pattern parameterized, router ưu tiên pattern có nhiều byte literal
+nhất, rồi pattern không có wildcard, rồi pattern có ít capture hơn. Hai pattern
+cùng shape, ví dụ `/users/:id` và `/users/:name`, không thể cùng được đăng ký.
+Nếu hai shape khác nhau vẫn hòa ở cả ba tiêu chí, route đăng ký trước thắng.
+
+Một path static che khuất path parameterized với mọi method. Nếu `/users/me`
+chỉ có `POST`, thì `GET /users/me` nhận `405 Method Not Allowed`; request không
+rơi xuống `GET /users/:id`.
+
+`*name` là segment cuối và bắt phần path còn lại, kể cả remainder rỗng. Wildcard
+không ở cuối khiến đăng ký báo lỗi với `error.InvalidRoutePattern`. [Trang route
+parameter](/docs/http/route-parameters) trình bày cú pháp capture.
+
+## HEAD, OPTIONS và Allow
+
+- `HEAD` dùng route `head` tường minh khi có. Nếu không, nó chạy handler `GET`
+  và bỏ các byte body, nhưng giữ framing mà body đó sẽ tạo ra.
+- Khi path khớp và không có handler `OPTIONS`, server trả `OPTIONS` với
+  `204 No Content` và field `Allow`. `HEAD` được liệt kê mỗi khi `GET` được
+  đăng ký.
+- `OPTIONS *` được trả `204 No Content` và không có field `Allow`.
+- `any` xử lý mọi method, kể cả `OPTIONS` và method token không có trong enum.
+  Đăng ký `any` sẽ tắt câu trả lời `OPTIONS` tự động.
+- Request không khớp path nào nhận `404 Not Found`. Path khớp nhưng không có
+  handler cho method và không có `any` sẽ nhận `405 Method Not Allowed` kèm
+  `Allow`.
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/users
+```
+
+```text
+HTTP/1.1 204 No Content
+Allow: GET, HEAD, POST
+```
+
+## Giới hạn route
+
+| Tài nguyên               |  Mặc định | Ghi đè builder                      |
+| ------------------------ | --------: | ----------------------------------- |
+| Radix node               |       256 | `with_max_route_nodes`              |
+| Parameterized pattern    |        64 | `with_max_pattern_routes`           |
+| Route path               |     2 KiB | `with_max_route_path_size`          |
+| Capture mỗi request      | 16 inline | `with_max_route_params`             |
+| Global middleware        |        32 | `with_max_middleware`               |
+| Route record cho OpenAPI |       320 | Giới hạn node cộng giới hạn pattern |
+| Registry route (byte)    |    64 KiB | `with_max_route_registry_size`      |
+
+Radix node lưu path fragment đã nén, không phải một node cho mỗi segment; prefix
+chung tách thành node riêng, nên `/a`, `/a/b` và `/a/b/c` là ba node. Giới hạn
+route record cộng capacity node và pattern; registry giữ 64 KiB path.
+
+## Lỗi đăng ký
+
+Đăng ký chạy trước mọi request, nên các lỗi này trả Zig error và không có HTTP
+status.
+
+| Lỗi                                   | Nguyên nhân                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | Không có `/` ở đầu, có `?`, `#`, CR hoặc LF, hoặc path dài hơn 2 KiB                                    |
+| `error.InvalidRoutePattern`           | Tên capture rỗng, ký tự không hợp lệ trong tên, tên trùng trong một pattern, hoặc wildcard không ở cuối |
+| `error.RoutePatternConflicts`         | Hai pattern cùng shape chỉ khác tên capture                                                             |
+| `error.RouteAlreadyRegistered`        | Cùng path và method được đăng ký hai lần                                                                |
+| `error.RouteCapacityReached`          | Không còn radix node hoặc route record                                                                  |
+| `error.RouteStorageCapacityReached`   | Registry route 64 KiB đã đầy                                                                            |
+| `error.RouteParameterCapacityReached` | Pattern cần nhiều capture hơn `max_route_params`                                                        |
+
+Đăng ký sau khi bind thành công trả `error.RoutesLocked`. Thứ tự middleware tách
+biệt với thứ tự đăng ký route; thứ tự đăng ký cũng phá thế hòa giữa hai pattern
+có rank bằng nhau. Xem [Middleware](/docs/http/middleware).
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/users/me
+curl -s http://127.0.0.1:3000/users/42
+curl -i -X DELETE http://127.0.0.1:3000/users
+```
+
+Hai request đầu trả `index` và `user 42`. Request thứ ba trả
+`405 Method Not Allowed` với `Allow: GET, HEAD, POST`.
+
+## Tiếp theo
+
+- [Route parameter và wildcard](/docs/http/route-parameters) trình bày cú pháp
+  capture, decode và lifetime.
+- [Handler](/docs/http/handlers) trình bày các shape callback.
+- [Middleware](/docs/http/middleware) trình bày các check có thứ tự trước
+  dispatch.

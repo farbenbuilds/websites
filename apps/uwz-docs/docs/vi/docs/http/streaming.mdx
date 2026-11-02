@@ -1,0 +1,141 @@
+---
+title: Response streaming
+description: Tạo body lớn hơn write queue bằng begin_stream, xử lý backpressure khi write queue đầy và nắm khác biệt giữa các transport.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, streaming]
+---
+
+`begin_stream` cho transport kéo body từ producer chỉ khi có chỗ trong output.
+Queue giới hạn một lần gọi, không giới hạn tổng body, nên response nhiều gigabyte
+không cần buffer cùng kích thước.
+
+## Hợp đồng producer
+
+`StreamProducer` nhận con trỏ context của bạn và response đang hoạt động. Các
+khai báo này đến từ `src/http/response.zig`; đoạn trích bỏ qua import của module:
+
+```zig
+pub const StreamProducer = *const fn (*anyopaque, *Response) anyerror!StreamStatus;
+
+pub const StreamStatus = enum {
+    pending,
+    done,
+};
+```
+
+| Status     | Ý nghĩa                                       | Bước tiếp theo               |
+| ---------- | --------------------------------------------- | ---------------------------- |
+| `.pending` | Transport đã nhận mọi thứ có thể chứa lúc này | Producer chạy lại khi có chỗ |
+| `.done`    | Producer đã gọi `end_chunks`                  | Response hoàn tất            |
+
+Producer chạy ngay bên trong `begin_stream`, rồi chạy lại mỗi khi transport drain.
+Nó không được gọi theo timer, theo event ứng dụng mới hay theo lần đọc của peer.
+Chỉ trả `.pending` vì backpressure, không phải vì dữ liệu chưa sẵn sàng.
+
+## Giữ cursor
+
+Đoạn trích này cho thấy cursor và quy tắc retry. Nó bỏ qua import, `main`, đăng ký
+route và storage sở hữu `Download`:
+
+```zig
+const Download = struct {
+    chunks: []const []const u8,
+    index: usize = 0,
+};
+
+fn produce(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const download: *Download = @ptrCast(@alignCast(context));
+    while (download.index < download.chunks.len) {
+        const chunk = download.chunks[download.index];
+        res.write_chunk(chunk) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        download.index += 1;
+    }
+    try res.end_chunks();
+    return .done;
+}
+
+fn start(res: *uz.Response, download: *Download) !void {
+    return res.begin_stream(
+        "200 OK",
+        "Content-Type: application/octet-stream\r\n",
+        download,
+        produce,
+    );
+}
+```
+
+`error.WouldBlock` không queue gì, nên producer thử lại đúng chunk đó mà không
+tăng `index`. Trên HTTP/1.1, một chunk phải vừa write queue cùng chunk framing;
+trên HTTP/2 và HTTP/3, nó phải vừa flow-control window hiện có. Chia dữ liệu lớn
+thành chunk nhỏ hơn thay vì trả mãi một chunk quá lớn.
+
+Con trỏ context phải còn hợp lệ đến khi response hoàn tất. Value trên stack của
+handler không còn hợp lệ sau khi handler trả về, nên giữ một state cho mỗi
+response đang hoạt động trong storage của ứng dụng và reset trước
+`begin_stream`. Không chia sẻ một cursor giữa các response đồng thời.
+
+## Backpressure và completion
+
+- Write queue mặc định là 64 KiB mỗi connection.
+- Body stream có thể lớn hơn queue vì mỗi lần gọi dừng ở
+  `error.WouldBlock` đầu tiên.
+- Không lặp trên `error.WouldBlock` bên trong callback. Drain tạo chỗ mới không
+  thể chạy khi loop đang bận.
+- Gọi `end_chunks` một lần, rồi trả `.done`. Chỉ trả `.done` mà không gọi
+  `end_chunks` sẽ không kết thúc body.
+- Status và header được gửi trước khi producer chạy. Không thể đổi chúng sau
+  byte đầu tiên.
+
+Lỗi producer sau khi head đã gửi không thể thành HTTP status khác. Trên HTTP/1.1
+transport đóng connection; producer HTTP/2 đã arm sẽ reset stream. Gửi status
+bạn muốn trước khi bắt đầu stream.
+
+## Khác biệt transport
+
+| Transport                   | Body framing                 | Producer resume                | Ghi chú                          |
+| --------------------------- | ---------------------------- | ------------------------------ | -------------------------------- |
+| HTTP/1.1 plaintext hoặc TLS | `Transfer-Encoding: chunked` | Write ring drain               | `begin_stream` dùng head chunked |
+| HTTP/2                      | Frame `DATA`, không chunked  | Flow-control window của stream | Cần arming callback              |
+| HTTP/3                      | Frame `DATA`, không chunked  | Flow-control window của stream | Cần arming callback              |
+
+Target không có callback arm producer trả `error.ProducerStreamingUnsupported`
+trước khi ghi byte body nào. TCP luôn hỗ trợ producer. Trên HTTP/2 và HTTP/3,
+chunk framing là chi tiết transport; `write_chunk` ánh xạ thành một lần ghi body,
+không phải chunk header HTTP/1.1.
+
+## Lỗi
+
+| Lỗi                            | Xảy ra khi                                                     |
+| ------------------------------ | -------------------------------------------------------------- |
+| `InvalidStatus`                | Status sai định dạng hoặc ngoài 200 đến 599                    |
+| `InvalidHeaders`               | Raw field không qua kiểm tra response                          |
+| `BodyNotAllowed`               | Status không cho phép body, hoặc response `HEAD` trên HTTP/1.1 |
+| `ResponseAlreadyStarted`       | Helper khác đã bắt đầu response                                |
+| `ResponseNotStreaming`         | `write_chunk` hoặc `end_chunks` chạy ngoài streaming           |
+| `WouldBlock`                   | Write queue chưa nhận chunk này lúc này                        |
+| `ProducerStreamingUnsupported` | Transport không có callback arm producer                       |
+| `ConnectionClosed`             | Peer hoặc transport đang đóng                                  |
+
+## Kiểm tra
+
+```sh
+curl -i http://127.0.0.1:3000/download
+```
+
+Trên HTTP/1.1, kỳ vọng `200 OK`, `Transfer-Encoding: chunked` và không có
+`Content-Length`. Body đến theo chunk và kết thúc bằng terminal chunk. Thêm
+`--raw` để thấy kích thước chunk:
+
+```sh
+curl --raw -i http://127.0.0.1:3000/download
+```
+
+## Tiếp theo
+
+Đọc [backpressure](/docs/concepts/backpressure) cho hợp đồng `WouldBlock` dùng
+chung, sau đó [chunked response](/docs/http/chunked) cho lựa chọn đồng bộ.

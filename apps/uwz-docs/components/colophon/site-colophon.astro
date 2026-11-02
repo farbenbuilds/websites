@@ -20,20 +20,24 @@ const resolvedLocale = locale ?? resolveLocale(Astro.url.pathname);
 const label = siteColophonLabel(resolvedLocale);
 ---
 
-<footer class="docs-home-colophon" aria-label={label}>
-  <ul class="docs-home-colophon-links" role="list">
-    {SITE_LINKS.map((link) => (
-      <li>
-        <a
-          href={localizeHref(link.href, resolvedLocale)}
-          target={isExternalHref(link.href) ? "_blank" : undefined}
-          rel={isExternalHref(link.href) ? "noreferrer" : undefined}
-          aria-describedby={isExternalHref(link.href) ? "blume-new-tab-hint" : undefined}
-        >
-          {link.label[resolvedLocale]}
-        </a>
-      </li>
-    ))}
+<footer class="site-colophon" aria-label={label}>
+  <ul class="site-colophon-links" role="list">
+    {SITE_LINKS.map((link) => {
+      const href = localizeHref(link.href, resolvedLocale);
+      const external = isExternalHref(href);
+      return (
+        <li>
+          <a
+            href={href}
+            target={external ? "_blank" : undefined}
+            rel={external ? "noreferrer" : undefined}
+            aria-describedby={external ? "blume-new-tab-hint" : undefined}
+          >
+            {link.label[resolvedLocale]}
+          </a>
+        </li>
+      );
+    })}
   </ul>
   <p>{siteFooterNote(resolvedLocale)}</p>
 </footer>

@@ -1,0 +1,161 @@
+---
+title: Authentication
+description: Validate Basic and Bearer credentials at the middleware boundary, read the 401 challenge, and keep the credential check honest.
+sidebar:
+  order: 17
+search:
+  tags: [how-to, auth]
+---
+
+µWebZockets ships fixed-state Basic and Bearer authentication as middleware.
+You supply the accepted credentials, and every request that reaches the
+middleware must present one of them in a unique `Authorization` field. The
+middleware is allocation-free and compares secrets in constant time.
+
+## Register the middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn private_page(_: *uz.Request, res: *uz.Response) void {
+    res.text("private") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var credentials = uz.middleware.auth(.{
+        .realm = "ops",
+        .basic = &.{
+            .{ .username = "admin", .password = "secret" },
+            .{ .username = "deploy", .password = "rotate-me" },
+        },
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&credentials, uz.middleware.Auth.handler);
+
+    _ = try app.get("/private", private_page);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Credentials are borrowed slices. Keep the `Auth` value and every string it
+points at alive until `app.deinit()`, and register the middleware before
+`listen`.
+
+## Options
+
+| Type              | Field                  | Meaning                                  |
+| ----------------- | ---------------------- | ---------------------------------------- |
+| `AuthOptions`     | `realm`                | Challenge realm, default `restricted`    |
+| `AuthOptions`     | `basic`                | `[]const BasicCredential`, default empty |
+| `AuthOptions`     | `bearer`               | `[]const BearerToken`, default empty     |
+| `BasicCredential` | `username`, `password` | Plaintext accepted pair                  |
+| `BearerToken`     | `token`                | Plaintext accepted token                 |
+
+A request may match any entry in either list. There is no per-user identity
+attached to a match: the middleware answers "accepted" or "rejected", and the
+handler decides what the caller may do.
+
+## What the middleware checks
+
+1. `get_unique_header("authorization")` must return a value. A missing field or
+   a duplicate field returns `null`, so both cases are rejected.
+2. The value must start with `Basic` or `Bearer`, matched case-insensitively,
+   followed by at least one space or tab.
+3. For `Basic`, the remainder is decoded as RFC 4648 base64 into a fixed
+   512-byte stack buffer. Invalid base64 or a decoded payload above 512 bytes
+   is rejected.
+4. The decoded payload is split at the first `:`. Bytes before it are the
+   username; bytes after it are the password and may contain further colons.
+   A payload without `:` is rejected.
+5. Each configured credential is compared. Username, password, and bearer token
+   comparisons use `std.crypto.timing_safe.eql` over fixed 64-byte blocks. Every
+   configured credential is compared even after a match, so timing does not
+   reveal which entry matched.
+6. A `Bearer` value with an empty token is rejected.
+
+Length is treated as public metadata: two values of different length fail
+immediately instead of running the block loop. Constant-time comparison
+protects the content of a secret, not its length.
+
+A match returns `.continue_dispatch`. Everything else ends the response and
+returns `.stop`.
+
+## Rejected requests
+
+The middleware answers `401 Unauthorized` with an empty body and a
+`WWW-Authenticate` field that lists only the configured schemes:
+
+| Configured  | Challenge                   |
+| ----------- | --------------------------- |
+| Basic only  | `Basic realm="ops"`         |
+| Bearer only | `Bearer`                    |
+| Both        | `Basic realm="ops", Bearer` |
+| Neither     | No challenge field          |
+
+The last row is a configuration defect: an `Auth` with no credentials rejects
+every request and gives the client nothing to authenticate with.
+
+## Trust boundary
+
+- The middleware authenticates; it does not authorize. Roles, tenancy, and
+  route-level permissions belong in the handler or a middleware you write.
+- Credentials are stored and compared in plaintext. The comparison is
+  constant-time, but the values are not hashed, signed, or encrypted.
+- `Authorization` is cleartext on the wire. Terminate TLS, and do not log the
+  field or echo it in an error body.
+- A duplicate or malformed field fails closed with `401`. There is no fallback
+  to the first field.
+- Session state does not exist. Every request must carry credentials; there is
+  no cookie, token store, or expiry managed by the middleware.
+- Rotating a credential means rebuilding the borrowed options, which in
+  practice means a restart. Plan credential rotation around that.
+- In a cluster, construct one `Auth` per worker's app. The options are
+  immutable, so the same credential lists can be shared, but each worker's app
+  needs its own registration.
+
+The middleware is global, so it protects every route, including an
+`app.openapi` endpoint. If CORS runs first and answers a preflight with
+`204 No Content`, the preflight never reaches the credential check, which is
+what a browser needs.
+
+## Failure modes
+
+| Condition                                               | Result                                               |
+| ------------------------------------------------------- | ---------------------------------------------------- |
+| Missing, duplicate, malformed, or unmatched credentials | `401 Unauthorized`, empty body                       |
+| Basic payload decodes above 512 bytes                   | `401 Unauthorized`                                   |
+| `realm` contains `"`, CR, or LF                         | `500 Internal Server Error` via `error.InvalidRealm` |
+| Formatted challenge exceeds 1024 bytes                  | `500 Internal Server Error` via `error.NoSpaceLeft`  |
+
+The realm is validated when a challenge is formatted, not when the options are
+built. An invalid realm therefore shows up as a `500` on the first rejected
+request. With bearer-only configuration the realm is never formatted and the
+check never runs.
+
+## Verify
+
+```sh
+curl -i http://127.0.0.1:3000/private
+curl -i -u admin:secret http://127.0.0.1:3000/private
+curl -i -H 'Authorization: Bearer service-token' http://127.0.0.1:3000/private
+```
+
+The first command returns `401 Unauthorized` with
+`WWW-Authenticate: Basic realm="ops", Bearer`. The other two return
+`200 OK` with the body `private`. Repeating the `Authorization` field in one
+request returns `401` again.
+
+## Next
+
+- [Security headers](/docs/http/security-headers) covers the response fields
+  that apply next to authentication.
+- [Rate limiting](/docs/http/rate-limiting) limits how often one caller may
+  attempt a request.
+- [The security model](/docs/concepts/security-model) places authentication
+  inside the full trust boundary.
