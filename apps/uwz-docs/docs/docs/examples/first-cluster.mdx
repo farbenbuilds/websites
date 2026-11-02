@@ -103,9 +103,14 @@ platform exposes no hard-affinity API.
 
 The supported order is:
 
-```text
-build_cluster -> configure -> enable_https (optional) -> listen -> run
--> request_shutdown or signal -> deinit
+```mermaid
+flowchart TB
+  accTitle: Cluster lifecycle
+  accDescr: Build, configure, optionally enable TLS, listen and run, then shut down and release.
+  A["build_cluster then configure"] --> B["enable_https (optional)"]
+  B --> C["listen then run"]
+  C --> D["request_shutdown or signal"]
+  D --> E["deinit"]
 ```
 
 | Call                     | Rule                                                           |
