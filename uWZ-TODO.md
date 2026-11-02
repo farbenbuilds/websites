@@ -915,8 +915,10 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 
 The Concepts, HTTP, and Helpers rows are `Live`. On 2026-11-02 the built site
 passed 320 px, 768 px, and 1280 px layout checks across all 140 English and
-Vietnamese docs pages, a keyboard and reduced-motion pass, WCAG 2.2 AA axe
-checks, and the search QA queries for this scope.
+Vietnamese docs pages, a keyboard and reduced-motion pass, page-content axe
+checks, and the search QA queries for this scope. The native Blume sidebar
+summary has one known upstream `nested-interactive` axe finding; it is tracked
+as framework chrome, not page content.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain

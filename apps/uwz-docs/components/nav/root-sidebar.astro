@@ -1,7 +1,6 @@
 ---
 import type { NavNode, UIStrings } from "blume";
-
-import NavGroup from "./nav-group.astro";
+import NavTree from "blume/components/layout/NavTree.astro";
 
 type Props = {
   items: NavNode[];
@@ -11,7 +10,7 @@ type Props = {
   strings?: UIStrings["nav"];
 };
 
-const { items, currentRoute } = Astro.props;
+const { items, currentRoute, fragmentBase, ids, strings } = Astro.props;
 
 // Blume wraps the /docs folder in a "Documentation" group. Flatten it so its
 // pages and subgroups sit at the sidebar root without changing their routes.
@@ -22,6 +21,10 @@ const rootItems = items.flatMap((item) =>
 );
 ---
 
-<nav data-blume-nav-tree>
-  <NavGroup currentRoute={currentRoute} items={rootItems} />
-</nav>
+<NavTree
+  currentRoute={currentRoute}
+  fragmentBase={fragmentBase}
+  ids={ids}
+  items={rootItems}
+  strings={strings}
+/>
