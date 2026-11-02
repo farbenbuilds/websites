@@ -1,0 +1,85 @@
+---
+import type { NavNode } from "blume";
+import Icon from "blume/components/Icon.astro";
+import { withBase, withMountedBase } from "blume/components/islands/base-path.ts";
+
+import Self from "./nav-group.astro";
+
+type Props = {
+  items: NavNode[];
+  currentRoute: string;
+  depth?: number;
+};
+
+const { items, currentRoute, depth = 0 } = Astro.props;
+
+const hasActivePage = (item: NavNode): boolean =>
+  item.kind === "page"
+    ? item.route === currentRoute
+    : item.route === currentRoute || item.children.some(hasActivePage);
+
+const pageHref = (item: Extract<NavNode, { kind: "page" }>): string =>
+  item.pageId ? withMountedBase(item.route) : withBase(item.route);
+
+const groupHref = (item: Extract<NavNode, { kind: "group" }>): string =>
+  item.pageId ? withMountedBase(item.route) : withBase(item.route);
+---
+
+<ul class="m-0 list-none space-y-px p-0">
+  {items.map((item, index) => {
+    const spacing = index === 0 ? "mt-0" : "mt-6";
+
+    if (item.kind === "page") {
+      const current = item.route === currentRoute ? "page" : undefined;
+
+      return (
+        <li>
+          <a aria-current={current} class="blume-nav-link truncate" href={pageHref(item)}>
+            {item.label}
+          </a>
+        </li>
+      );
+    }
+
+    const active = hasActivePage(item);
+    const children = item.children;
+
+    return (
+      <li class={`sidebar-group ${spacing}`}>
+        <div class="sidebar-group-row">
+          {item.route ? (
+            <a
+              aria-current={item.route === currentRoute ? "page" : undefined}
+              class="sidebar-group-link"
+              href={groupHref(item)}
+            >
+              {item.icon && (
+                <Icon class="shrink-0 text-muted-foreground" name={item.icon} size={14} />
+              )}
+              <span class="flex-1 truncate">{item.label}</span>
+            </a>
+          ) : (
+            <span class="sidebar-group-link">
+              {item.icon && (
+                <Icon class="shrink-0 text-muted-foreground" name={item.icon} size={14} />
+              )}
+              <span class="flex-1 truncate">{item.label}</span>
+            </span>
+          )}
+          {children.length > 0 && (
+            <details class="sidebar-group-details" open={active}>
+              <summary class="sidebar-group-toggle" aria-label={`Toggle ${item.label}`}>
+                <Icon class="rtl:-scale-x-100" name="chevron-right" size={13} />
+              </summary>
+            </details>
+          )}
+        </div>
+        {children.length > 0 && (
+          <div class="sidebar-group-children">
+            <Self currentRoute={currentRoute} depth={depth + 1} items={children} />
+          </div>
+        )}
+      </li>
+    );
+  })}
+</ul>

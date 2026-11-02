@@ -45,7 +45,7 @@ export default defineConfig({
   },
   navigation: {
     sidebar: {
-      display: "flat",
+      display: "group",
     },
   },
   redirects: [
