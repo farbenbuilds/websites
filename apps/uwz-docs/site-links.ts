@@ -1,8 +1,13 @@
-import { localizeLocalePath } from "@farben/docs-components/docs-locale.ts";
+import {
+  localizeLocalePath,
+  resolveDocsLocale,
+  type DocsLocale,
+} from "@farben/docs-components/docs-locale.ts";
+import { isExternalHref } from "@farben/docs-components/inline-text.ts";
 
 import { siteMessages } from "./messages.ts";
 
-export type SiteLocale = "en" | "vi";
+export type SiteLocale = DocsLocale;
 
 export type SiteLink = {
   readonly label: Readonly<Record<SiteLocale, string>>;
@@ -16,6 +21,14 @@ export const PRODUCT_REPOSITORY_URL = "https://github.com/farbenbuilds/uWebZocke
 export const PRODUCT_LICENSE_URL = "https://github.com/farbenbuilds/uWebZockets/blob/main/LICENSE";
 
 export const AUTHOR_URL = "https://github.com/Coder-Blue";
+
+export const FACEBOOK_URL = "https://www.facebook.com/noah.tran1109";
+
+export const X_URL = "https://x.com/sh1ro_code";
+
+export const BENCHMARK_URL = "https://bench.zig.bd/";
+
+export const HTTP_ARENA_FRAMEWORK_URL = "https://http-arena.com/frameworks/uwebzockets/";
 
 const SITE_LINK_DEFINITIONS = [
   { key: "author", href: AUTHOR_URL },
@@ -43,7 +56,7 @@ export function siteColophonLabel(locale: SiteLocale): string {
 }
 
 export function resolveLocale(pathname: string): SiteLocale {
-  return pathname === "/vi" || pathname.startsWith("/vi/") ? "vi" : "en";
+  return resolveDocsLocale(pathname === "/vi" || pathname.startsWith("/vi/") ? "vi" : "en");
 }
 
 export function localizeHref(href: string, locale: SiteLocale): string {
@@ -51,11 +64,11 @@ export function localizeHref(href: string, locale: SiteLocale): string {
     return href;
   }
 
-  if (href.startsWith("https://")) {
-    return href;
+  if (isExternalHref(href)) {
+    return href.startsWith("https://") ? href : "/";
   }
 
-  if (href.startsWith("//") || !href.startsWith("/")) {
+  if (!href.startsWith("/")) {
     return "/";
   }
 

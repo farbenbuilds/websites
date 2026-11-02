@@ -31,6 +31,8 @@ Chỉ active worker mới cấp slab, inbox và thread handle, cộng TLS contex
 
 ```mermaid
 flowchart TB
+    accTitle: Topology của cluster
+    accDescr: Một listener cấp connection cho loop, slab, TLS context và inbox có giới hạn của từng worker.
     C["TCP connections"] --> K["SO_REUSEPORT listener"]
     K --> W["workers 0..N: loop, slab, TLS context"]
     P["Cluster.publish"] --> I["bounded inbox per worker"]
@@ -132,6 +134,8 @@ Gọi một trong hai đúng một lần sau `configure` và trước `listen`:
 
 ```mermaid
 flowchart TB
+    accTitle: Thứ tự startup của TLS cluster
+    accDescr: Configure, bật TLS, listen, run, rồi drain và release.
     A["build_cluster"] --> B["configure"]
     B --> C["enable_https / enable_https_ephemeral"]
     C --> D["listen rồi run"]

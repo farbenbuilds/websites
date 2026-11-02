@@ -32,6 +32,8 @@ memory for unused workers. `worker_count()` reports the active count and
 
 ```mermaid
 flowchart TB
+    accTitle: Cluster topology
+    accDescr: One listener feeds per-worker loops, slabs, TLS contexts, and bounded inboxes.
     C["TCP connections"] --> K["SO_REUSEPORT listener"]
     K --> W["workers 0..N: loop, slab, TLS context"]
     P["Cluster.publish"] --> I["bounded inbox per worker"]
@@ -137,6 +139,8 @@ Call one of these exactly once after `configure` and before `listen`:
 
 ```mermaid
 flowchart TB
+    accTitle: TLS cluster startup order
+    accDescr: Configure, enable TLS, listen, run, then drain and release.
     A["build_cluster"] --> B["configure"]
     B --> C["enable_https / enable_https_ephemeral"]
     C --> D["listen then run"]

@@ -13,6 +13,8 @@ Trang này theo dõi đường đó và chỉ ra nơi một request có thể g�
 
 ```mermaid
 flowchart TB
+  accTitle: Các checkpoint trong vòng đời request
+  accDescr: Năm checkpoint từ accept đến slot reuse.
   A["accept và bounded read"] --> B["strict parse và route match"]
   B --> C["middleware và handler"]
   C --> D["response parts và write queue"]

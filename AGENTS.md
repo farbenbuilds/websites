@@ -69,7 +69,7 @@ rules agents most often break:
   such as `GET`. This rule covers repository-authored TypeScript, not code
   samples in another language.
 - Documentation code samples follow the owning language and upstream project.
-  Zig samples use `snake_case` for functions, variables, parameters, and fields,
+  Zig samples follow the µWebZockets API spelling: `snake_case` for functions, variables, parameters, and fields,
   `PascalCase` for types, and the exact public spelling (`get_param`,
   `begin_stream`, `max_body_size`). Never camel-case a Zig identifier.
 - Vitest tests live under a category directory in `tests/`, for example

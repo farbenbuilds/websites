@@ -12,6 +12,7 @@
  * imports resolve from that generated directory rather than the app root. */
 @import "../../../components/butterfly-hero/butterfly-hero.css";
 @import "../../../styles/blume-chrome.css";
+@import "../../../styles/site-colophon.css";
 @import "../../../styles/blume-content.css";
 @import "../../../styles/docs-home.css";
 @import "../../../styles/docs-home-controls.css";

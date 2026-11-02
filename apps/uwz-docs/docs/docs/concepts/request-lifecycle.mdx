@@ -13,6 +13,8 @@ This page traces that path and shows where a request can fail.
 
 ```mermaid
 flowchart TB
+  accTitle: Request lifecycle checkpoints
+  accDescr: Five checkpoints from accept through slot reuse.
   A["accept and bounded read"] --> B["strict parse and route match"]
   B --> C["middleware and handler"]
   C --> D["response parts and write queue"]

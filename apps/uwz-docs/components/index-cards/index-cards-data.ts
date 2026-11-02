@@ -20,10 +20,10 @@ type IndexCardKey = keyof SiteMessages["indexCards"]["items"];
 
 const INDEX_CARD_DEFINITIONS = [
   { key: "gettingStarted", href: "/docs/getting-started" },
-  { key: "shareNothing", href: "/docs/examples/first-cluster" },
+  { key: "shareNothing", href: "/docs/concepts/shared-nothing" },
   { key: "migrate", href: "/docs/why-uwebsockets" },
-  { key: "configure", href: "/docs/getting-started/motivation" },
-  { key: "clusterWorker", href: "/docs/examples/first-cluster" },
+  { key: "configure", href: "/docs/concepts/capacity-model" },
+  { key: "clusterWorker", href: "/docs/concepts/cluster-model" },
   { key: "examples", href: "/docs/examples" },
 ] as const satisfies readonly { readonly key: IndexCardKey; readonly href: string }[];
 

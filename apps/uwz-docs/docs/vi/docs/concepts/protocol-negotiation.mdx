@@ -28,6 +28,8 @@ vụ cả ba giao thức trên các port bạn bind.
 
 ```mermaid
 flowchart TB
+  accTitle: Các lớp transport
+  accDescr: Application layer dùng chung nằm trên HTTP framing, TLS hoặc QUIC, và TCP hoặc UDP.
   H["handler, middleware, router"]
   A["HTTP/1.1, HTTP/2, HTTP/3 framing"]
   S["TLS 1.3 / QUIC"]

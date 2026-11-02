@@ -40,7 +40,7 @@ the working checklist.
   are PascalCase. Functions are camelCase, except exported HTTP method handlers
   such as `GET`. This rule covers repository-authored TypeScript, not code
   samples in another language.
-- Zig samples use upstream Zig style: `snake_case` functions, variables,
+- Zig samples follow the upstream µWebZockets API style: `snake_case` functions, variables,
   parameters, and fields, `PascalCase` types, and the exact public spelling.
   Never camel-case a Zig identifier to match the TypeScript rule.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See `tests/README.md`.

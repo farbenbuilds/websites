@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { on } from "svelte/events";
-  import { PlayPauseButton } from "@farben/ui/components/ui/play-pause-button";
-  import { ScrollCue } from "@farben/ui/components/ui/scroll-cue";
 
   import { DEFAULT_SPECIMEN_COUNT, fallbackSpecimenCount } from "./butterfly-density";
   import { createButterflyLoop, type ButterflyLoop } from "./butterfly-loop";
   import { generateStill } from "./butterfly-still";
+  import PlayPauseButton from "./play-pause-button.svelte";
+  import ScrollCue from "./scroll-cue.svelte";
 
   type ButterflyHeroProps = {
     labels: {

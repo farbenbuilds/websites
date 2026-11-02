@@ -29,6 +29,8 @@ one application can serve HTTP/1.1, HTTP/2, and HTTP/3 on the ports you bind.
 
 ```mermaid
 flowchart TB
+  accTitle: Transport stack
+  accDescr: The shared application layer sits above HTTP framing, TLS or QUIC, and TCP or UDP.
   H["handler, middleware, router"]
   A["HTTP/1.1, HTTP/2, HTTP/3 framing"]
   S["TLS 1.3 / QUIC"]

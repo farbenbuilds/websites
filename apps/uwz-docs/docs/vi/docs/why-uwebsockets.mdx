@@ -67,7 +67,7 @@ try group.run();
 Thiết kế có giới hạn luôn đi kèm đánh đổi:
 
 - Bạn phải tính số connection, request body, write queue, message WebSocket,
-  route, middleware và trạng thái giao thức. [Mô hình capacity](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/memory_model.md)
+  route, middleware và trạng thái giao thức. [Mô hình capacity](/docs/concepts/capacity-model)
   ghi các giá trị mặc định.
 - Cạn capacity được báo tường minh. Write queue đầy trả `error.WouldBlock`; request
   quá lớn nhận `413` hoặc `431` kèm tài liệu có cấu trúc.

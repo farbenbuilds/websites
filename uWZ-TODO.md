@@ -540,54 +540,54 @@ What/Why, and every shipped Getting Started page.
 
 | ID      | Route                                    | Page                     | Type        | Priority | Milestone | Source                              | Status |
 | ------- | ---------------------------------------- | ------------------------ | ----------- | -------- | --------- | ----------------------------------- | ------ |
-| UWZ-030 | `/docs/concepts`                         | Concepts                 | Index       | P0       | M1        | `docs/api.md`, CODEBASE             | Live   |
-| UWZ-031 | `/docs/concepts/application-model`       | Application model        | Explanation | P0       | M1        | `docs/api.md`                       | Live   |
-| UWZ-032 | `/docs/concepts/request-lifecycle`       | Request lifecycle        | Explanation | P0       | M1        | `docs/architecture.md`              | Live   |
-| UWZ-033 | `/docs/concepts/response-lifecycle`      | Response lifecycle       | Explanation | P0       | M1        | `docs/api.md`                       | Live   |
-| UWZ-034 | `/docs/concepts/routing-model`           | Routing model            | Explanation | P0       | M1        | `docs/http.md`                      | Live   |
-| UWZ-035 | `/docs/concepts/handler-shapes`          | Handler shapes           | Explanation | P0       | M1        | `docs/api.md`                       | Live   |
-| UWZ-036 | `/docs/concepts/middleware-model`        | Middleware model         | Explanation | P1       | M2        | `docs/http.md`                      | Live   |
-| UWZ-037 | `/docs/concepts/async-responses`         | Asynchronous responses   | Explanation | P0       | M2        | `docs/api.md`                       | Live   |
-| UWZ-038 | `/docs/concepts/ownership-and-lifetimes` | Ownership and lifetimes  | Explanation | P0       | M1        | `docs/api.md`                       | Live   |
-| UWZ-039 | `/docs/concepts/capacity-model`          | Capacity model           | Explanation | P0       | M1        | `docs/memory_model.md`              | Live   |
-| UWZ-040 | `/docs/concepts/zero-allocation`         | Zero allocation          | Explanation | P0       | M1        | `docs/memory_model.md`              | Live   |
-| UWZ-041 | `/docs/concepts/shared-nothing`          | Shared-nothing workers   | Explanation | P0       | M2        | `docs/architecture.md`              | Live   |
-| UWZ-042 | `/docs/concepts/backpressure`            | Backpressure             | Explanation | P0       | M2        | `docs/memory_model.md`              | Live   |
-| UWZ-043 | `/docs/concepts/protocol-negotiation`    | Protocol negotiation     | Explanation | P1       | M3        | `docs/http2.md`, `docs/quic.md`     | Live   |
-| UWZ-044 | `/docs/concepts/type-safety`             | Type safety              | Explanation | P0       | M2        | `docs/api.md`, `src/root.zig`       | Live   |
-| UWZ-045 | `/docs/concepts/errors`                  | Errors and failure modes | Explanation | P0       | M2        | `docs/troubleshooting.md`           | Live   |
-| UWZ-046 | `/docs/concepts/cluster-model`           | Cluster model            | Explanation | P1       | M3        | `docs/architecture.md`              | Live   |
-| UWZ-047 | `/docs/concepts/security-model`          | Security model           | Explanation | P0       | M4        | `SECURITY.md`, `docs/deployment.md` | Live   |
-| UWZ-048 | `/docs/concepts/web-standards`           | Web standards mapping    | Explanation | P2       | M5        | `docs/protocols.md`                 | Live   |
+| UWZ-030 | `/docs/concepts`                         | Concepts                 | Index       | P0       | M1        | `docs/api.md`, CODEBASE             | Draft  |
+| UWZ-031 | `/docs/concepts/application-model`       | Application model        | Explanation | P0       | M1        | `docs/api.md`                       | Draft  |
+| UWZ-032 | `/docs/concepts/request-lifecycle`       | Request lifecycle        | Explanation | P0       | M1        | `docs/architecture.md`              | Draft  |
+| UWZ-033 | `/docs/concepts/response-lifecycle`      | Response lifecycle       | Explanation | P0       | M1        | `docs/api.md`                       | Draft  |
+| UWZ-034 | `/docs/concepts/routing-model`           | Routing model            | Explanation | P0       | M1        | `docs/http.md`                      | Draft  |
+| UWZ-035 | `/docs/concepts/handler-shapes`          | Handler shapes           | Explanation | P0       | M1        | `docs/api.md`                       | Draft  |
+| UWZ-036 | `/docs/concepts/middleware-model`        | Middleware model         | Explanation | P1       | M2        | `docs/http.md`                      | Draft  |
+| UWZ-037 | `/docs/concepts/async-responses`         | Asynchronous responses   | Explanation | P0       | M2        | `docs/api.md`                       | Draft  |
+| UWZ-038 | `/docs/concepts/ownership-and-lifetimes` | Ownership and lifetimes  | Explanation | P0       | M1        | `docs/api.md`                       | Draft  |
+| UWZ-039 | `/docs/concepts/capacity-model`          | Capacity model           | Explanation | P0       | M1        | `docs/memory_model.md`              | Draft  |
+| UWZ-040 | `/docs/concepts/zero-allocation`         | Zero allocation          | Explanation | P0       | M1        | `docs/memory_model.md`              | Draft  |
+| UWZ-041 | `/docs/concepts/shared-nothing`          | Shared-nothing workers   | Explanation | P0       | M2        | `docs/architecture.md`              | Draft  |
+| UWZ-042 | `/docs/concepts/backpressure`            | Backpressure             | Explanation | P0       | M2        | `docs/memory_model.md`              | Draft  |
+| UWZ-043 | `/docs/concepts/protocol-negotiation`    | Protocol negotiation     | Explanation | P1       | M3        | `docs/http2.md`, `docs/quic.md`     | Draft  |
+| UWZ-044 | `/docs/concepts/type-safety`             | Type safety              | Explanation | P0       | M2        | `docs/api.md`, `src/root.zig`       | Draft  |
+| UWZ-045 | `/docs/concepts/errors`                  | Errors and failure modes | Explanation | P0       | M2        | `docs/troubleshooting.md`           | Draft  |
+| UWZ-046 | `/docs/concepts/cluster-model`           | Cluster model            | Explanation | P1       | M3        | `docs/architecture.md`              | Draft  |
+| UWZ-047 | `/docs/concepts/security-model`          | Security model           | Explanation | P0       | M4        | `SECURITY.md`, `docs/deployment.md` | Draft  |
+| UWZ-048 | `/docs/concepts/web-standards`           | Web standards mapping    | Explanation | P2       | M5        | `docs/protocols.md`                 | Draft  |
 
 ### 5.4 HTTP/1.1 and the application API
 
 | ID      | Route                           | Page                           | Type        | Priority | Milestone | Source                                 | Status |
 | ------- | ------------------------------- | ------------------------------ | ----------- | -------- | --------- | -------------------------------------- | ------ |
-| UWZ-060 | `/docs/http`                    | HTTP/1.1                       | Index       | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-061 | `/docs/http/server-lifecycle`   | Server lifecycle               | How-to      | P0       | M2        | `docs/api.md`                          | Live   |
-| UWZ-062 | `/docs/http/routing`            | Routing                        | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-063 | `/docs/http/route-parameters`   | Route parameters and wildcards | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-064 | `/docs/http/handlers`           | Handlers                       | How-to      | P0       | M2        | `docs/api.md`                          | Live   |
-| UWZ-065 | `/docs/http/middleware`         | Middleware                     | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-066 | `/docs/http/request`            | Request API                    | Reference   | P0       | M2        | `docs/api.md`                          | Live   |
-| UWZ-067 | `/docs/http/response`           | Response API                   | Reference   | P0       | M2        | `docs/api.md`                          | Live   |
-| UWZ-068 | `/docs/http/static-files`       | Static files                   | How-to      | P1       | M2        | `docs/http.md`                         | Live   |
-| UWZ-069 | `/docs/http/streaming`          | Streaming responses            | How-to      | P1       | M2        | `docs/api.md`                          | Live   |
-| UWZ-070 | `/docs/http/server-sent-events` | Server-Sent Events             | How-to      | P1       | M2        | `src/http/response.zig`                | Live   |
-| UWZ-071 | `/docs/http/chunked`            | Chunked responses              | How-to      | P2       | M5        | `src/http/response.zig`                | Live   |
-| UWZ-072 | `/docs/http/json`               | JSON responses                 | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-076 | `/docs/http/headers`            | Headers                        | Reference   | P1       | M2        | `docs/http.md`                         | Live   |
-| UWZ-080 | `/docs/http/cors`               | CORS                           | How-to      | P0       | M2        | `src/http/middleware.zig`              | Live   |
-| UWZ-081 | `/docs/http/security-headers`   | Security headers               | How-to      | P0       | M2        | `src/http/middleware.zig`              | Live   |
-| UWZ-082 | `/docs/http/authentication`     | Authentication                 | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-083 | `/docs/http/rate-limiting`      | Rate limiting                  | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-084 | `/docs/http/openapi`            | OpenAPI output                 | How-to      | P1       | M3        | `src/http/openapi.zig`                 | Live   |
-| UWZ-085 | `/docs/http/errors`             | HTTP errors                    | Reference   | P0       | M2        | `src/http/errors.zig`                  | Live   |
-| UWZ-086 | `/docs/http/query-method`       | RFC 10008 QUERY                | Explanation | P1       | M3        | `docs/quic.md`                         | Live   |
-| UWZ-087 | `/docs/http/trace`              | TRACE                          | Explanation | P2       | M5        | `docs/roadmap.md`                      | Live   |
-| UWZ-088 | `/docs/http/limits`             | HTTP limits                    | Reference   | P0       | M2        | `docs/http.md`, `docs/memory_model.md` | Live   |
-| UWZ-089 | `/docs/http/testing`            | Testing an HTTP server         | How-to      | P1       | M3        | `tests/`                               | Live   |
+| UWZ-060 | `/docs/http`                    | HTTP/1.1                       | Index       | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-061 | `/docs/http/server-lifecycle`   | Server lifecycle               | How-to      | P0       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-062 | `/docs/http/routing`            | Routing                        | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-063 | `/docs/http/route-parameters`   | Route parameters and wildcards | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-064 | `/docs/http/handlers`           | Handlers                       | How-to      | P0       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-065 | `/docs/http/middleware`         | Middleware                     | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-066 | `/docs/http/request`            | Request API                    | Reference   | P0       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-067 | `/docs/http/response`           | Response API                   | Reference   | P0       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-068 | `/docs/http/static-files`       | Static files                   | How-to      | P1       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-069 | `/docs/http/streaming`          | Streaming responses            | How-to      | P1       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-070 | `/docs/http/server-sent-events` | Server-Sent Events             | How-to      | P1       | M2        | `src/http/response.zig`                | Draft  |
+| UWZ-071 | `/docs/http/chunked`            | Chunked responses              | How-to      | P2       | M5        | `src/http/response.zig`                | Draft  |
+| UWZ-072 | `/docs/http/json`               | JSON responses                 | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-076 | `/docs/http/headers`            | Headers                        | Reference   | P1       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-080 | `/docs/http/cors`               | CORS                           | How-to      | P0       | M2        | `src/http/middleware.zig`              | Draft  |
+| UWZ-081 | `/docs/http/security-headers`   | Security headers               | How-to      | P0       | M2        | `src/http/middleware.zig`              | Draft  |
+| UWZ-082 | `/docs/http/authentication`     | Authentication                 | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-083 | `/docs/http/rate-limiting`      | Rate limiting                  | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-084 | `/docs/http/openapi`            | OpenAPI output                 | How-to      | P1       | M3        | `src/http/openapi.zig`                 | Draft  |
+| UWZ-085 | `/docs/http/errors`             | HTTP errors                    | Reference   | P0       | M2        | `src/http/errors.zig`                  | Draft  |
+| UWZ-086 | `/docs/http/query-method`       | RFC 10008 QUERY                | Explanation | P1       | M3        | `docs/quic.md`                         | Draft  |
+| UWZ-087 | `/docs/http/trace`              | TRACE                          | Explanation | P2       | M5        | `docs/roadmap.md`                      | Draft  |
+| UWZ-088 | `/docs/http/limits`             | HTTP limits                    | Reference   | P0       | M2        | `docs/http.md`, `docs/memory_model.md` | Draft  |
+| UWZ-089 | `/docs/http/testing`            | Testing an HTTP server         | How-to      | P1       | M3        | `tests/`                               | Draft  |
 
 ### 5.4.1 Helpers
 
@@ -597,15 +597,15 @@ section. The decision and boundary rules are in Section 4.7.
 
 | ID      | Route                                        | Page                       | Type   | Priority | Milestone | Source                                            | Status |
 | ------- | -------------------------------------------- | -------------------------- | ------ | -------- | --------- | ------------------------------------------------- | ------ |
-| UWZ-090 | `/docs/http/helpers`                         | Helpers                    | Index  | P1       | M2        | Section 4.7                                       | Live   |
-| UWZ-091 | `/docs/http/helpers/query-and-forms`         | Query and form parsing     | How-to | P1       | M2        | `src/http/query.zig`, `src/http/form.zig`         | Live   |
-| UWZ-092 | `/docs/http/helpers/multipart`               | Multipart parsing          | How-to | P1       | M3        | `src/http/multipart.zig`                          | Live   |
-| UWZ-093 | `/docs/http/helpers/cookies`                 | Cookies and signed cookies | How-to | P1       | M3        | `src/http/cookie.zig`                             | Live   |
-| UWZ-094 | `/docs/http/helpers/compression`             | Compression helpers        | How-to | P1       | M3        | `src/http/compression_stream.zig`, `response.zig` | Live   |
-| UWZ-095 | `/docs/http/helpers/caching`                 | Caching and ETags          | How-to | P1       | M3        | `src/http/cache.zig`                              | Live   |
-| UWZ-096 | `/docs/http/helpers/content-negotiation`     | Content negotiation        | How-to | P2       | M5        | `src/http/negotiate.zig`                          | Live   |
-| UWZ-097 | `/docs/http/helpers/fetch-streams-and-abort` | Fetch, Streams, and abort  | How-to | P1       | M3        | `src/http/fetch.zig`, `streams.zig`, `abort.zig`  | Live   |
-| UWZ-098 | `/docs/http/helpers/websocket-streams`       | WebSocket stream adapters  | How-to | P2       | M5        | `src/ws/stream.zig`, `src/ws/native_stream.zig`   | Live   |
+| UWZ-090 | `/docs/http/helpers`                         | Helpers                    | Index  | P1       | M2        | Section 4.7                                       | Draft  |
+| UWZ-091 | `/docs/http/helpers/query-and-forms`         | Query and form parsing     | How-to | P1       | M2        | `src/http/query.zig`, `src/http/form.zig`         | Draft  |
+| UWZ-092 | `/docs/http/helpers/multipart`               | Multipart parsing          | How-to | P1       | M3        | `src/http/multipart.zig`                          | Draft  |
+| UWZ-093 | `/docs/http/helpers/cookies`                 | Cookies and signed cookies | How-to | P1       | M3        | `src/http/cookie.zig`                             | Draft  |
+| UWZ-094 | `/docs/http/helpers/compression`             | Compression helpers        | How-to | P1       | M3        | `src/http/compression_stream.zig`, `response.zig` | Draft  |
+| UWZ-095 | `/docs/http/helpers/caching`                 | Caching and ETags          | How-to | P1       | M3        | `src/http/cache.zig`                              | Draft  |
+| UWZ-096 | `/docs/http/helpers/content-negotiation`     | Content negotiation        | How-to | P2       | M5        | `src/http/negotiate.zig`                          | Draft  |
+| UWZ-097 | `/docs/http/helpers/fetch-streams-and-abort` | Fetch, Streams, and abort  | How-to | P1       | M3        | `src/http/fetch.zig`, `streams.zig`, `abort.zig`  | Draft  |
+| UWZ-098 | `/docs/http/helpers/websocket-streams`       | WebSocket stream adapters  | How-to | P2       | M5        | `src/ws/stream.zig`, `src/ws/native_stream.zig`   | Draft  |
 
 ### 5.5 WebSocket
 
@@ -892,9 +892,9 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | --------------------- | ------: | -----: | ------: | -----: | -----: |
 | Landing and docs home |       4 |      3 |       1 |      0 |      4 |
 | Getting Started       |      15 |     10 |       5 |      0 |     15 |
-| Concepts              |      19 |     15 |       3 |      1 |     19 |
-| HTTP                  |      24 |     15 |       7 |      2 |     24 |
-| Helpers               |       9 |      0 |       7 |      2 |      9 |
+| Concepts              |      19 |     15 |       3 |      1 |      0 |
+| HTTP                  |      24 |     15 |       7 |      2 |      0 |
+| Helpers               |       9 |      0 |       7 |      2 |      0 |
 | WebSocket             |      14 |      4 |      10 |      0 |      0 |
 | HTTP/2                |      10 |      2 |       4 |      4 |      0 |
 | HTTP/3                |      12 |      2 |       6 |      4 |      0 |
@@ -911,7 +911,11 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Reference             |      11 |      7 |       4 |      0 |      0 |
 | Examples              |      11 |      1 |       8 |      2 |      0 |
 | Project               |       9 |      1 |       5 |      3 |      0 |
-| **Total**             | **268** | **96** | **125** | **47** | **71** |
+| **Total**             | **268** | **96** | **125** | **47** | **19** |
+
+The Concepts, HTTP, and Helpers rows are `Draft` because the manual 320 px,
+768 px, 1280 px, keyboard, and search QA pass has not run; their automated
+gates pass. Mark them `Live` only after that pass is recorded.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -1819,7 +1823,7 @@ at least two pages and a named owner.
   program includes the import and `main`." Do not leave a reader guessing which
   lines are missing.
 - Code comments are English in both locales. Translate prose, not identifiers.
-- Zig samples use upstream Zig style: `snake_case` functions, variables,
+- Zig samples use the upstream µWebZockets style: `snake_case` functions, variables,
   parameters, and fields; `PascalCase` types; exact API spelling from
   `src/root.zig`. Do not camel-case an API name or an example identifier.
 
