@@ -45,7 +45,7 @@ export default defineConfig({
   },
   navigation: {
     sidebar: {
-      display: "group",
+      display: "flat",
     },
   },
   redirects: [
@@ -116,6 +116,14 @@ export default defineConfig({
   ],
   deployment: {
     site: "https://uwz.farben.dev",
+  },
+  markdown: {
+    code: {
+      theme: {
+        light: "github-light-high-contrast",
+        dark: "github-dark-high-contrast",
+      },
+    },
   },
   integrations: [svelte()],
   agents: {

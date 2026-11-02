@@ -36,7 +36,7 @@ html {
   --blume-border: #d3ccbe;
   --blume-radius: 0;
   --blume-content-width: 42rem;
-  --blume-code-background: #fbf8f1;
+  --blume-code-background: #ffffff;
 
   /* The orange preset is 4.37:1 on this paper. This darker orange is 5.28:1. */
   --blume-accent: #a64600;
@@ -94,5 +94,6 @@ html {
   --farben-border-strong: #6b665c;
 }
 
-/* Generate the utility classes the shared components use. */
+/* Generate the utility classes the shared components and local Svelte islands use. */
 @source "../../packages/ui/src";
+@source "components";

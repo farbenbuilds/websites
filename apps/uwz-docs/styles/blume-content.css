@@ -67,9 +67,8 @@ html .prose :is(h1, h2, h3, h4, h5, h6) a.blume-heading-anchor:hover {
 
 html .prose pre.astro-code {
   border-radius: 0;
-  box-shadow:
-    inset 0 0 0 100vmax var(--blume-code-background),
-    inset 0 0 0 1px var(--blume-border);
+  background-color: var(--blume-code-background) !important;
+  box-shadow: inset 0 0 0 1px var(--blume-border);
   font-family: var(--blume-font-mono);
   font-size: 0.84rem;
   line-height: 1.7;

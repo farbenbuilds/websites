@@ -24,7 +24,7 @@ const INDEX_CARD_DEFINITIONS = [
   { key: "migrate", href: "/docs/why-uwebsockets" },
   { key: "configure", href: "/docs/concepts/capacity-model" },
   { key: "clusterWorker", href: "/docs/concepts/cluster-model" },
-  { key: "examples", href: "/docs/examples" },
+  { key: "typeSafety", href: "/docs/concepts/type-safety" },
 ] as const satisfies readonly { readonly key: IndexCardKey; readonly href: string }[];
 
 export function indexCardsCopy(locale: string | undefined): IndexCardsCopy {

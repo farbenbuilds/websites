@@ -140,7 +140,7 @@
   text-transform: uppercase;
 }
 
-.docs-home-arena-metric dd {
+.docs-home-arena-value-row {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
@@ -163,7 +163,7 @@
   letter-spacing: 0.04em;
 }
 
-.docs-home-arena-metric p {
+.docs-home-arena-detail {
   margin: 0.4rem 0 0;
   color: var(--blume-muted-foreground);
   font-family: var(--blume-font-body);

@@ -14,8 +14,8 @@ describe("docs home index", () => {
     expect(vietnamese.items).toHaveLength(6);
     expect(english.items[0]?.href).toBe("/docs/getting-started");
     expect(english.items.every(({ href }) => href.startsWith("/docs/"))).toBe(true);
-    expect(english.items[5]?.title).toBe("Explore the examples");
-    expect(vietnamese.items[5]?.title).toBe("Khám phá các ví dụ");
+    expect(english.items[5]?.title).toBe("Explore type safety");
+    expect(vietnamese.items[5]?.title).toBe("Tìm hiểu type safety");
   });
 
   it("renders the same entries for agent-facing markdown", () => {
@@ -23,7 +23,7 @@ describe("docs home index", () => {
 
     expect(markdown).toContain("## Start here.");
     expect(markdown).toContain("[Share nothing rule](/docs/concepts/shared-nothing)");
-    expect(markdown).toContain("[Explore the examples](/docs/examples)");
+    expect(markdown).toContain("[Explore type safety](/docs/concepts/type-safety)");
     expect(markdown).not.toContain("Semi-production ready.");
   });
 });

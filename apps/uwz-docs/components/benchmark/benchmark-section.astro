@@ -74,11 +74,11 @@ const copy = benchmarkCopy(locale);
       {copy.arenaMetrics.map((metric) => (
         <div class="docs-home-arena-metric">
           <dt>{metric.label}</dt>
-          <dd>
+          <dd class="docs-home-arena-value-row">
             <span class="docs-home-arena-value">{metric.value}</span>
             <span class="docs-home-arena-unit">{metric.unit}</span>
           </dd>
-          <p>{metric.detail}</p>
+          <dd class="docs-home-arena-detail">{metric.detail}</dd>
         </div>
       ))}
     </dl>
