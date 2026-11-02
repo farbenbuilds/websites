@@ -23,10 +23,10 @@ Khi chạm giới hạn, thư viện báo ra:
 - Write queue đầy trả `error.WouldBlock`.
 - Body quá lớn trả `413` kèm tài liệu JSON có cấu trúc.
 - Header block quá lớn trả `431`.
-- Inbox cluster đầy báo số message bị bỏ và wakeup thất bại thay vì block
+- Inbox cluster đầy báo số message bị bỏ và wakeup bị lỗi thay vì block
   publisher.
 
-Lợi ích là failure mode dễ dự đoán. Cái giá là không thể tăng capacity mà
+Lợi ích là cách lỗi dễ dự đoán. Cái giá là không thể tăng capacity mà
 không khởi động lại.
 
 ## Sở hữu tường minh [#explicit-ownership]

@@ -1,0 +1,108 @@
+---
+title: Mô hình định tuyến
+description: Hiểu cách static segment, parameter và terminal wildcard match, cách method fallback và những giới hạn route khiến đăng ký báo lỗi.
+sidebar:
+  order: 4
+search:
+  tags: [concept, routing]
+---
+
+Router ánh xạ path và method của request tới một callback đã đăng ký. Segment
+chính xác nằm trên radix fast path, pattern parameter và wildcard nằm trong side
+table có giới hạn, và static route luôn thắng pattern khớp.
+
+## Các loại pattern
+
+| Pattern        | Khớp                                      | Capture |
+| -------------- | ----------------------------------------- | ------- |
+| `/health`      | Chính xác `/health`                       | Không   |
+| `/users/:id`   | Một segment không rỗng, ví dụ `/users/42` | `id`    |
+| `/files/*path` | Phần path còn lại, kể cả rỗng             | `path`  |
+
+Capture `:name` khớp một segment path không rỗng. Wildcard `*name` là terminal,
+nên phải là segment cuối. `Request.get_param` đọc tối đa 16 capture được mượn theo
+mặc định.
+
+## Precedence
+
+Router kiểm tra exact static index trước. Hit được xác minh với segment đã lưu
+của node, nên hash collision không thể chọn sai route. Khi không static route
+nào khớp, router đánh giá các pattern đã đăng ký:
+
+1. Pattern có nhiều static byte hơn thắng.
+2. Cùng số static byte, pattern không wildcard thắng pattern có wildcard.
+3. Cùng wildcard shape, pattern có ít capture hơn thắng.
+
+Việc xếp hạng dựa trên shape chứ không dựa trên thứ tự đăng ký; nếu hai shape
+vẫn hòa, pattern đăng ký trước match. Hai pattern cùng shape, chỉ khác tên
+capture, khiến đăng ký báo lỗi với `error.RoutePatternConflicts` thay vì che
+khuất nhau.
+
+Các snippet đăng ký giả định `app` đã được khởi tạo và các handler function đã
+được khai báo ở nơi khác.
+
+```zig
+_ = try app.get("/", index);
+_ = try app.get("/users/:id", show_user);
+_ = try app.get("/files/*path", serve_file);
+_ = try app.post("/users", create_user);
+_ = try app.any("/health", health);
+```
+
+## Method
+
+`get`, `head`, `post`, `put`, `delete`, `patch`, `options`, `trace`, `query` và
+`any` đăng ký một method trên một path. `query` là method QUERY theo RFC 10008
+và `trace` là opt-in.
+
+Quy tắc fallback method hiện ra trong field `Allow`:
+
+- Handler `HEAD` tường minh thắng. Không có thì `HEAD` dùng handler `GET`.
+- Đăng ký `GET` cũng thêm `HEAD` vào tập method được phép của path.
+- Handler `OPTIONS` tường minh thắng. Không có thì path khớp trả
+  `204 No Content` kèm field `Allow`.
+- `OPTIONS *` trả `204 No Content` cho toàn server.
+- Method không có handler trên path đã khớp trả `405 Method Not Allowed` kèm
+  field `Allow`.
+- `any` đóng vai trò fallback handler cho mọi method và làm `Allow` báo toàn bộ
+  tập method.
+
+Route WebSocket cũng đóng góp `GET` vào tập được phép.
+
+## Giới hạn
+
+| Tài nguyên           |  Mặc định | Field `ServerConfig`      | Lỗi                                   |
+| -------------------- | --------: | ------------------------- | ------------------------------------- |
+| Radix node           |       256 | `max_route_nodes`         | `error.RouteCapacityReached`          |
+| Pattern parameter    |        64 | `max_pattern_routes`      | `error.RouteCapacityReached`          |
+| Route path           |     2 KiB | `max_route_path_size`     | `error.InvalidRoutePath`              |
+| Capture              | 16 inline | `max_route_params`        | `error.RouteParameterCapacityReached` |
+| Registry path đã lưu |    64 KiB | `max_route_registry_size` | `error.RouteStorageCapacityReached`   |
+
+Mỗi node lưu một segment path, nên prefix chung chỉ tính một lần.
+`max_route_params` lớn hơn sẽ carve thêm một cặp pointer name/value cho mỗi
+capture vào slab theo connection; mảng inline giữ 16. Registry lưu path route cho
+introspection và OpenAPI, không dùng để match.
+
+## Lỗi đăng ký
+
+Đăng ký route là hoạt động lúc khởi động. Khi listener bắt đầu, mảng route bất
+biến và lần gọi sau trả về `error.RoutesLocked`.
+
+| Lỗi                                   | Nguyên nhân                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | Path rỗng, không bắt đầu bằng `/`, có `?`, `#`, CR, LF, hoặc dài quá giới hạn |
+| `error.InvalidRoutePattern`           | Tên capture rỗng, tên capture trùng, hoặc wildcard không ở cuối               |
+| `error.RoutePatternConflicts`         | Pattern khác có cùng static byte, số capture và wildcard shape                |
+| `error.RouteAlreadyRegistered`        | Cùng method và path đã có handler                                             |
+| `error.RouteCapacityReached`          | Bảng node hoặc bảng pattern đầy                                               |
+| `error.RouteParameterCapacityReached` | Pattern cần nhiều capture hơn giới hạn đã cấu hình                            |
+
+Pattern sai cú pháp lỗi thay vì match mơ hồ. Pattern trùng hoặc sai không
+bao giờ bị bỏ qua âm thầm.
+
+## Tiếp theo
+
+- [Route parameter và wildcard](/docs/http/route-parameters)
+- [Định tuyến](/docs/http/routing)
+- [Dạng handler](/docs/concepts/handler-shapes)

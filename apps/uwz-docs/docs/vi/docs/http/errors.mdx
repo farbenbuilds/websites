@@ -1,0 +1,177 @@
+---
+title: Lỗi HTTP
+description: Trả về error document JSON có kiểu, dùng status line chuẩn và giữ chi tiết nội bộ ra khỏi response 500 khi có thể.
+sidebar:
+  order: 20
+search:
+  tags: [reference, http]
+---
+
+`uz.errors` biến một lỗi thành JSON document có giới hạn với machine code ổn
+định. Trang này trình bày shape của document, bốn helper gửi, đường 405 và 500,
+và khác biệt giữa HTTP status với Zig error.
+
+## Error document
+
+Mọi helper đều gửi cùng một shape khi scratch buffer đủ lớn:
+
+```json
+{ "error": { "code": "not_found", "message": "Not Found" } }
+```
+
+`code` là định danh ổn định để client rẽ nhánh. `message` là văn bản cho người
+đọc. `render` JSON-escape cả hai field, thay mỗi byte UTF-8 sai bằng U+FFFD và
+ghi vào storage do caller sở hữu. Hàm không cấp phát.
+
+`errors.max_document_bytes` là worst case 512 byte. Buffer nhỏ hơn document đã
+render sẽ nhận fallback cố định `{"error":{"code":"internal"}}`, nên đường từ
+chối không bao giờ gửi JSON dở dang.
+
+## Problem, render và send
+
+| Tên                                          | Dùng khi                                   |
+| -------------------------------------------- | ------------------------------------------ |
+| `errors.Problem`                             | Có các field `status`, `code` và `message` |
+| `errors.render(code, message, buffer)`       | Cần document dưới dạng slice               |
+| `errors.send(response, problem)`             | Gửi với buffer nội bộ 512 byte             |
+| `errors.send_buf(response, problem, buffer)` | Gửi với scratch do caller sở hữu           |
+
+`send` và `send_buf` ghi `Content-Type: application/json; charset=utf-8` và
+status line chuẩn từ `uz.status.line(problem.status)`. Dùng `send_buf` khi
+handler đã có scratch buffer và bạn muốn đường cấp phát hiện rõ trong code.
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [uz.errors.max_document_bytes]u8 = undefined;
+    if (req.text().len == 0) {
+        uz.errors.send_buf(res, .{
+            .status = .bad_request,
+            .code = "empty_body",
+            .message = "Request body is required",
+        }, &scratch) catch |err| std.log.err("error response failed: {}", .{err});
+        return;
+    }
+
+    res.end("201 Created", "created") catch |err| std.log.err("response failed: {}", .{err});
+}
+```
+
+Handler chọn status, code và message. Giữ code ổn định giữa các bản phát hành;
+đổi message khi cách giải thích cho người đọc tốt hơn.
+
+## Helper status
+
+`uz.status.StatusCode` liệt kê các final-response code có status line chuẩn.
+`uz.status.line(.not_found)` trả `404 Not Found`, và
+`uz.status.line(.too_many_requests)` trả `429 Too Many Requests`.
+
+Enum chỉ là helper, không phải bộ lọc. `Response.end` chấp nhận status line có ba
+byte đầu là code từ 200 đến 599, theo sau là space tùy chọn và reason phrase; giá
+trị khác trả `error.InvalidStatus`. Các code không có trong enum, ví dụ
+`431 Request Header Fields Too Large`, được truyền dưới dạng status line thô.
+`Problem.status` là `StatusCode`, nên `errors.send` chỉ phủ các member của enum.
+Với code ngoài enum, gọi `res.end_with_headers` với status line thô và document
+từ `errors.render`.
+
+Enum dùng tên `413 Content Too Large` theo RFC 9110. Parser HTTP/1 ghi
+`413 Payload Too Large` trên đường từ chối. Cả hai cùng một code, nên khi test đi
+qua cả hai đường hãy assert số 413.
+
+## Method not allowed
+
+`errors.method_not_allowed(response, allow)` thêm field `Allow` và gửi
+
+```json
+{ "error": { "code": "method_not_allowed", "message": "Method Not Allowed" } }
+```
+
+với `405 Method Not Allowed`. Tham số `allow` không được chứa CR hoặc LF. Giá
+trị không hợp lệ trả `error.InvalidHeaders` và để response ở trạng thái idle, nên
+giá trị do caller cung cấp không thể inject field.
+
+`405` tự động của router là đường riêng: server tự format field `Allow` và gửi
+body plain text `Method Not Allowed`. Chỉ dùng helper khi handler của bạn tự
+quyết định việc chọn method.
+
+## Rejection có cấu trúc
+
+Parser HTTP/1 trả lời input quá lớn trước khi handler tồn tại:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+`413` dùng `payload_too_large` và `431` dùng `headers_too_large`; cả hai có giá
+trị `limit_bytes`. Document `431` báo giới hạn header block đã cấu hình ngay cả
+khi request line hoặc số header kích hoạt rejection. Đây là document của
+transport, không phải giá trị `uz.errors.Problem`: không handler nào chạy, không
+dùng scratch buffer của application, và connection đóng sau response. Trang
+[Giới hạn HTTP](/docs/http/limits) liệt kê mọi trường hợp kích hoạt.
+
+## Lỗi nội bộ
+
+`errors.internal(response)` gửi `500 Internal Server Error` với code `internal`
+và message `Internal Server Error`. Hàm không bao giờ lặp lại allocator error,
+path, query, secret hay message từ database. Ghi nguyên nhân chi tiết vào log
+phía server và trả document cố định.
+
+Handler trả về mà không hoàn tất response sẽ nhận `500` do framework tạo. Đó là
+vi phạm contract, không phải error response của application.
+
+## Response đã bắt đầu
+
+Một response ở trạng thái `idle`, `streaming` hoặc `ended`. Khi đã rời `idle`,
+mọi complete writer và `append_header` trả `error.ResponseAlreadyStarted`.
+`errors.send` cũng lan truyền lỗi này từ lần ghi cuối.
+
+Kiểm tra `response.is_started()` trước khi chọn error document. Bạn không thể
+thay stream hoặc body đã ghi một phần bằng JSON problem sau lần ghi đầu tiên.
+Quyết định đường lỗi trước khi byte đầu tiên rời handler.
+
+## HTTP status và Zig error
+
+| Tình huống                                        | Client thấy                                        | Caller thấy                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Request sai định dạng, head quá lớn, body quá lớn | `400`, `413` hoặc `431` từ parser                  | Không có lời gọi handler                                                                                                      |
+| Path tồn tại, method không có                     | `405` kèm `Allow`                                  | Không có lời gọi handler                                                                                                      |
+| Handler dùng response writer sai                  | `500` do framework nếu handler trả về khi vẫn idle | `error.ResponseAlreadyStarted`, `error.InvalidStatus`, `error.InvalidHeaders`, `error.BodyNotAllowed` hoặc `error.WouldBlock` |
+| Capacity route hoặc middleware đã đầy             | Không có gì                                        | Lỗi đăng ký như `error.RouteCapacityReached`                                                                                  |
+| Application báo lỗi sau khi handler bắt đầu       | Status do handler chọn                             | Log entry của bạn                                                                                                             |
+
+Route callback trả `void`, nên application error không có kênh trả về. Hãy catch,
+log, rồi gọi `errors.internal` hoặc một problem cụ thể hơn khi response vẫn còn
+idle.
+
+## Kiểm tra
+
+```zig
+test "error document keeps the canonical shape" {
+    var buffer: [uz.errors.max_document_bytes]u8 = undefined;
+    const document = uz.errors.render("empty_body", "Request body is required", &buffer);
+    try std.testing.expectEqualStrings(
+        "{\"error\":{\"code\":\"empty_body\",\"message\":\"Request body is required\"}}",
+        document,
+    );
+}
+```
+
+```sh
+zig test src/main.zig
+```
+
+## Tiếp theo
+
+- [Giới hạn HTTP](/docs/http/limits) liệt kê các status parser trả trước khi
+  handler chạy.
+- [Kiểm thử server HTTP](/docs/http/testing) trình bày cách assert body của
+  rejection và `405` trước handler.
+- [Response API](/docs/http/response) trình bày các trạng thái và lỗi writer.

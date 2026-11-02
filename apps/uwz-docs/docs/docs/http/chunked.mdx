@@ -1,0 +1,139 @@
+---
+title: Chunked responses
+description: Drive an HTTP/1.1 chunked body with begin_chunked, write_chunk, and end_chunks, and know when a producer is better.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, streaming]
+---
+
+`begin_chunked` sends the response head and leaves the body open for explicit
+chunks. Use it when the body is produced synchronously in pieces that each fit
+the write queue. For a body pulled across drains, use
+[`begin_stream`](/docs/http/streaming) instead.
+
+## Write a chunked body
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn report(_: *uz.Request, res: *uz.Response) void {
+    res.begin_chunked(
+        "200 OK",
+        "Content-Type: text/plain; charset=utf-8\r\n",
+    ) catch |err| {
+        std.log.err("chunked start failed: {}", .{err});
+        return;
+    };
+
+    for ([_][]const u8{ "alpha\n", "beta\n", "gamma\n" }) |line| {
+        res.write_chunk(line) catch |err| {
+            std.log.err("chunk write failed: {}", .{err});
+            return;
+        };
+    }
+
+    res.end_chunks() catch |err| {
+        std.log.err("chunk end failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/report", report);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The handler must call `end_chunks` before it returns. If it returns with the
+response still streaming, HTTP/1.1 flushes the partial body and closes the
+connection, HTTP/2 ends the stream, and HTTP/3 closes only the stream.
+
+## Wire format
+
+On HTTP/1.1, `begin_chunked` sends a status line and
+`Transfer-Encoding: chunked`. Each `write_chunk` adds one chunk:
+
+```text
+<hex length>\r\n
+<body bytes>\r\n
+```
+
+The terminator is `0\r\n\r\n`. The hex length counts body bytes only; the
+framing is not included. A five-byte chunk is `5\r\nhello\r\n`.
+
+HTTP/2 and HTTP/3 do not use chunked transfer coding. The same calls send
+`DATA` frames, and `end_chunks` finishes the stream. No `Transfer-Encoding`
+field appears.
+
+## Chunk boundaries are not buffered
+
+On HTTP/1.1, every chunk is copied into the write path as three parts: the hex
+length, the body, and CRLF. There is no coalescing buffer between `write_chunk`
+calls, so tiny chunks pay framing and write overhead for every call. The JSON
+stream is different: `begin_json` coalesces small writes in a fixed 4096-byte
+buffer.
+
+Choose chunk sizes deliberately:
+
+- A chunk plus its framing must fit the free space in the write queue.
+- With the default 64 KiB queue, keep chunks well below the queue size.
+- A zero-length `write_chunk` is a no-op. It does not terminate the body.
+- Use `end_chunks` for the terminal chunk, not an empty write.
+
+## Queue behavior
+
+`write_chunk` returns `error.WouldBlock` when the queue cannot take the whole
+chunk. Nothing from that call is queued, so the caller can retry the same bytes
+after a drain.
+
+A synchronous handler cannot wait for the drain: blocking the loop prevents the
+write completion that frees space. If a chunk does not fit, the handler can only
+return and let the transport close the stream. Size the chunks up front, or use
+`begin_stream`, whose producer is re-invoked on the owning loop.
+
+## When to prefer begin_stream
+
+| Situation                                                    | Use             |
+| ------------------------------------------------------------ | --------------- |
+| All chunks are known in the callback and each fits the queue | `begin_chunked` |
+| The body comes from a cursor and may exceed the queue        | `begin_stream`  |
+| The body is JSON written incrementally                       | `begin_json`    |
+| The body is Server-Sent Events                               | `sse`           |
+
+`begin_stream` wraps the same chunked head on HTTP/1.1 and resumes the producer
+when output space frees. It is the only path that survives backpressure without
+manual retry state.
+
+## Errors
+
+| Error                    | Raised when                                         |
+| ------------------------ | --------------------------------------------------- |
+| `InvalidStatus`          | The status is malformed or outside 200 to 599       |
+| `InvalidHeaders`         | The raw fields fail response validation             |
+| `BodyNotAllowed`         | The status or a `HEAD` response forbids a body      |
+| `ResponseAlreadyStarted` | Another helper already started the response         |
+| `ResponseNotStreaming`   | `write_chunk` or `end_chunks` ran outside streaming |
+| `WouldBlock`             | The chunk does not fit the write queue now          |
+| `ConnectionClosed`       | The peer or transport is already closing            |
+
+## Verify
+
+```sh
+curl --raw -i http://127.0.0.1:3000/report
+```
+
+`--raw` keeps the chunk framing visible. Expect `200 OK`,
+`Transfer-Encoding: chunked`, the three chunks, and the terminating `0` chunk.
+Without `--raw`, curl decodes the body and prints the three lines.
+
+## Next
+
+Read [streaming responses](/docs/http/streaming) for producer-driven bodies,
+then [response lifecycle](/docs/concepts/response-lifecycle) for the start-once
+and completion rules.

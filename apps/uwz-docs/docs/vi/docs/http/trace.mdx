@@ -1,0 +1,138 @@
+---
+title: TRACE
+description: Đăng ký handler TRACE opt-in, loại bỏ field nhạy cảm và giữ byte phản chiếu trong response capacity trên public deployment.
+sidebar:
+  order: 22
+search:
+  tags: [how-to, http]
+---
+
+TRACE cho client hỏi server mô tả request mà nó nhận. Library không tự thêm
+route, không tạo echo và không loại bỏ gì thay bạn. Trang này trình bày đăng ký
+opt-in và việc loại bỏ field mà handler phải làm.
+
+## Bật tường minh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn is_sensitive(name: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(name, "Authorization") or
+        std.ascii.eqlIgnoreCase(name, "Cookie") or
+        std.ascii.eqlIgnoreCase(name, "Proxy-Authorization");
+}
+
+fn trace(req: *uz.Request, res: *uz.Response) void {
+    var buffer: [2048]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+
+    writer.print("{s} {s}\r\n", .{ req.method, req.target }) catch {
+        res.end("500 Internal Server Error", "trace buffer exhausted") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    };
+
+    var headers = req.header_entries();
+    while (headers.next()) |header| {
+        if (is_sensitive(header.name)) continue;
+        writer.print("{s}: {s}\r\n", .{ header.name, header.value }) catch {
+            res.end("500 Internal Server Error", "trace buffer exhausted") catch |err|
+                std.log.err("response failed: {}", .{err});
+            return;
+        };
+    }
+
+    res.end("200 OK", writer.buffered()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.trace("/probe", trace);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Không có lời gọi `app.trace`, request `TRACE` tới path chưa đăng ký nhận
+`404 Not Found`; trên path đã có method khác, nó nhận `405 Method Not Allowed`
+kèm `Allow`. Library không bao giờ đăng ký route echo dự phòng.
+
+## Không echo tự tạo
+
+Request `TRACE` đến handler đã đăng ký là một request bình thường. Handler quyết
+định status, field và body. Library không copy request line, không copy header và
+không áp dụng loại bỏ thay handler.
+
+Điều đó cũng có nghĩa handler sở hữu toàn bộ rủi ro phản chiếu. Nếu bạn không cần
+TRACE, đừng đăng ký nó.
+
+## Loại bỏ trước khi phản chiếu
+
+Chỉ phản chiếu field mà caller được phép thấy. Denylist tối thiểu là:
+
+| Field                 | Lý do                                     |
+| --------------------- | ----------------------------------------- |
+| `Authorization`       | Mang Basic, Bearer và các credential khác |
+| `Cookie`              | Mang session và trạng thái application    |
+| `Proxy-Authorization` | Mang credential cho proxy ở phía trước    |
+
+Cũng loại bỏ mọi secret riêng của application đi trong header, bao gồm API key,
+signed token và internal routing identifier. Allowlist cố định dễ audit hơn
+denylist: đặt tên các field bạn định phản chiếu và bỏ qua phần còn lại.
+
+Ví dụ so sánh tên field không phân biệt hoa thường. Tên header không phân biệt
+hoa thường trên wire, nên so sánh phân biệt hoa thường sẽ làm rò rỉ field được
+gửi với cách viết khác.
+
+## Nằm trong response capacity
+
+Body TRACE là response cố định, nên nó phải vừa write queue của connection, kể cả
+phần trống còn lại. `Response.end` trả `error.WouldBlock` khi body không vừa;
+body vượt queue không bao giờ đến client.
+
+Ví dụ giới hạn phản chiếu ở 2 KiB, thấp hơn nhiều so với write queue mặc định
+64 KiB. Nếu trace có thể lớn hơn, hãy từ chối bằng `500` có giới hạn hoặc dùng
+streaming response. Không dựng trace không giới hạn trong memory.
+
+## Triển khai công khai
+
+Ưu tiên tắt TRACE trên triển khai công khai trừ khi có yêu cầu vận hành. Khi có
+yêu cầu, đặt route sau cùng middleware authentication và rate limit như mọi
+diagnostic endpoint khác. Route TRACE không phải health check và không nên cho
+phép truy cập ẩn danh.
+
+`uz.http3_extensions.method_is_replay_safe` xếp `TRACE` là an toàn cho chính sách
+forwarding early data. Phân loại đó không làm việc phản chiếu trở nên an toàn và
+không cho phép 0-RTT. Live listener HTTP/3 từ chối 0-RTT.
+
+## Kiểm tra
+
+```sh
+curl -i -X TRACE \
+  -H 'Authorization: Bearer secret' \
+  http://127.0.0.1:3000/probe
+```
+
+Response bắt đầu bằng `200 OK` và chứa request line cùng các field không nhạy
+cảm. Nó không được chứa `Authorization`, `Cookie` hay `Proxy-Authorization`.
+Kiểm tra này fail verification khi có field rò rỉ:
+
+```sh
+if curl -s -X TRACE -H 'Authorization: Bearer secret' \
+  http://127.0.0.1:3000/probe | grep -qi authorization; then
+  echo "TRACE leaked Authorization"
+fi
+```
+
+## Tiếp theo
+
+- [QUERY theo RFC 10008](/docs/http/query-method) trình bày method mở rộng opt-in
+  còn lại.
+- [Middleware](/docs/http/middleware) trình bày authentication và rate limiting
+  cho diagnostic route.
+- [Lỗi HTTP](/docs/http/errors) trình bày error document mà handler TRACE bị từ
+  chối có thể gửi.

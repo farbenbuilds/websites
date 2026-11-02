@@ -1,0 +1,158 @@
+---
+title: Headers
+description: Read borrowed request headers, detect duplicates, and avoid reserved framing fields when you queue response headers.
+sidebar:
+  order: 14
+search:
+  tags: [reference, http]
+---
+
+Request headers are a borrowed, case-insensitive view over the connection
+buffer. Response headers are queued before the response starts and validated
+before any byte is written. The two sides have different rules, especially for
+singleton and framing fields.
+
+## Read headers in a handler
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn inspect(req: *uz.Request, res: *uz.Response) void {
+    if (req.count_headers("authorization") > 1) {
+        res.end("400 Bad Request", "duplicate Authorization") catch {};
+        return;
+    }
+
+    const raw_id = req.get_unique_header("x-request-id") orelse "anonymous";
+    const request_id = if (raw_id.len <= 64) raw_id else "invalid";
+    const accepts_json = req.header_has_token("accept", "application/json");
+
+    res.append_header("Vary", "Accept") catch return;
+
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &buffer,
+        "{s} json={}",
+        .{ request_id, accepts_json },
+    ) catch return;
+    res.text(body) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/inspect", inspect);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Accessors
+
+| Accessor                        | Returns          | Duplicate behavior                                 |
+| ------------------------------- | ---------------- | -------------------------------------------------- |
+| `get_header(name)`              | `?[]const u8`    | First matching field in arrival order              |
+| `get_unique_header(name)`       | `?[]const u8`    | `null` when zero or more than one field matches    |
+| `count_headers(name)`           | `usize`          | Counts every matching field                        |
+| `has_header(name)`              | `bool`           | Same as `get_header(name) != null`                 |
+| `header_has_token(name, token)` | `bool`           | True when any comma-delimited token matches        |
+| `headers()`                     | `HeadersView`    | `get`, `has`, and `entries` over the borrowed view |
+| `header_entries()`              | `HeaderIterator` | Iterates `{ name, value }` pairs                   |
+
+Names compare ASCII case-insensitively. Values are not normalized, joined, or
+decoded. Repeated fields stay in arrival order. Use `get_unique_header` for a
+singleton such as `Content-Type`, `Authorization`, `Origin`, `Range`, or
+`If-Range`; use `count_headers` when you need to distinguish a missing field
+from a duplicate one.
+
+`header_has_token` splits the field on commas, trims spaces and tabs around each
+candidate, and compares case-insensitively. It is the correct check for
+`Accept`, `Connection`, `Transfer-Encoding`, and cached-token fields. Do not use
+substring matching.
+
+## Lifetimes and capacity
+
+Every name and value borrows the connection request buffer. A slice stays valid
+through a synchronous handler or until an asynchronous response completes. Use
+`req.clone(allocator)` when you need an owned snapshot for later work; see
+[ownership and lifetimes](/docs/concepts/ownership-and-lifetimes).
+
+The inline `Request` arrays hold 64 fields. `max_header_count` above 64 carves
+extra name/value slots into the per-connection slab. The transport reuses those
+slots across requests on the same connection. Exhausting both capacities during
+parsing produces `431 Request Header Fields Too Large`.
+
+## Parser rejection
+
+The HTTP/1.1 parser validates the header block before the handler runs:
+
+| Input                                                          | Result                                |
+| -------------------------------------------------------------- | ------------------------------------- |
+| Non-token field name, missing colon, or folded line            | `400 Bad Request`                     |
+| Control character in a value other than horizontal tab, or DEL | `400 Bad Request`                     |
+| Missing, empty, or duplicate `Host`                            | `400 Bad Request`                     |
+| Duplicate `Content-Length`                                     | `400 Bad Request`                     |
+| Duplicate `Transfer-Encoding`                                  | `400 Bad Request`                     |
+| `Transfer-Encoding` other than exactly `chunked`               | `400 Bad Request`                     |
+| Both `Content-Length` and `Transfer-Encoding`                  | `400 Bad Request`                     |
+| Header block above `max_header_size`, 16 KiB by default        | `431 Request Header Fields Too Large` |
+| More fields than the configured capacity                       | `431 Request Header Fields Too Large` |
+
+The parser closes the connection after a rejection. A field value may contain
+bytes from space upward except DEL, plus horizontal tab. Field names use the HTTP
+token character set only. There is no obs-fold continuation.
+
+## Response headers
+
+`append_header(name, value)` queues one field while the response is `idle`:
+
+- CR or LF in the value returns `error.InvalidHeaders`.
+- A name or value above 1024 bytes, or a line above 1024 bytes, returns
+  `error.BufferOverflow`.
+- The 2048-byte pending block is a hard limit; adding past it returns
+  `error.BufferOverflow`.
+- Calling it after the response starts returns `error.ResponseAlreadyStarted`.
+
+`end_with_headers(status, headers, body)` accepts a raw `\r\n`-terminated field
+block. Each line needs a token name and a colon. Values reject control
+characters except horizontal tab. The block must end with CRLF.
+
+### Reserved framing fields
+
+The transport owns message framing. Response fields named `Content-Length` or
+`Transfer-Encoding` are rejected with `error.InvalidHeaders`, whether they come
+from `append_header` or a raw block. The framework writes the correct framing
+for a fixed body, a chunked body, or a file.
+
+`Content-Encoding` is allowed, but `end_gzip` rejects a duplicate when the
+caller already supplied one. That failure is `error.DuplicateContentEncoding`.
+
+## Verify
+
+```sh
+curl -i http://127.0.0.1:3000/inspect \
+  -H 'Accept: text/html, application/json' \
+  -H 'X-Request-Id: req-7'
+```
+
+Expect `200 OK`, `Vary: Accept`, and the body `req-7 json=true`.
+
+Send a duplicate singleton:
+
+```sh
+curl -i http://127.0.0.1:3000/inspect \
+  -H 'Authorization: Bearer one' \
+  -H 'Authorization: Bearer two'
+```
+
+Expect `400 Bad Request`. The handler rejects the duplicate before writing a
+normal response.
+
+## Next
+
+Read the [Request API](/docs/http/request) for the full body and query surface,
+then the [Response API](/docs/http/response) for ending helpers and their
+validation order.

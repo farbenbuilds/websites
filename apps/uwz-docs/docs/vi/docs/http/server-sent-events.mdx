@@ -1,0 +1,146 @@
+---
+title: Server-Sent Events
+description: Gửi event SSE có framing qua chunked response với default an toàn cho cache, heartbeat, close và hướng dẫn khi client reconnect.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, sse]
+---
+
+`res.sse()` bắt đầu event stream `200 OK` với content type và header chống
+buffer mà browser `EventSource` cần. Bạn ghi event qua helper nhỏ, và cùng các
+byte field đó hoạt động trên HTTP/1.1, HTTP/2 và HTTP/3.
+
+## Gửi một stream hữu hạn
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn events(_: *uz.Request, res: *uz.Response) void {
+    var stream = res.sse() catch |err| {
+        std.log.err("sse start failed: {}", .{err});
+        return;
+    };
+
+    stream.send_event("tick", "one\ntwo") catch return;
+    stream.heartbeat() catch return;
+    stream.send_event("tick", "three") catch return;
+    stream.close() catch return;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/events", events);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Callback ghi và đóng chuỗi event trước khi trả về. Nếu nó trả về khi stream còn
+mở và không có producer được arm, HTTP/1.1 flush những gì đã có rồi đóng
+connection, HTTP/2 kết thúc stream, và HTTP/3 đóng stream. Handler bắt đầu stream
+mà không hoàn tất sẽ không giữ response mở cho lần ghi sau.
+
+## Default
+
+`sse()` gọi `begin_chunked` với head sau:
+
+```text
+Content-Type: text/event-stream
+Cache-Control: no-cache
+X-Accel-Buffering: no
+```
+
+`no-cache` cho phép lưu nhưng buộc revalidate, nên proxy không phục vụ event
+stream cũ. `X-Accel-Buffering: no` yêu cầu proxy kiểu nginx không buffer
+response. Không header nào thay thế cấu hình proxy đúng.
+
+Trên HTTP/1.1 body dùng chunked transfer coding. HTTP/2 và HTTP/3 mang cùng các
+byte field trong frame `DATA`, không có chunk framing.
+
+## Event framing
+
+`send_event(event, data)` ghi:
+
+- `event: NAME` khi `event` không rỗng.
+- Một field `data: ` cho mỗi dòng trong `data`.
+- Một dòng trống để kết thúc event.
+
+Input được split theo `\n`. `\r` ở cuối mỗi dòng được bỏ trước khi framing, nên
+input CRLF cho ra cùng field như input LF. `data` rỗng vẫn tạo một field `data:`
+rỗng.
+
+```text
+event: tick
+data: one
+data: two
+
+: keep-alive
+
+event: tick
+data: three
+
+```
+
+CR hoặc LF trong tên event trả `error.InvalidEventName` trước khi helper ghi
+event đó. Tên event là field value, không phải nhãn tự do; giữ nó trên một dòng.
+
+## Heartbeat và close
+
+`heartbeat()` ghi comment field `: keep-alive` rồi một dòng trống. `EventSource`
+bỏ qua comment, nhưng chúng giữ proxy trung gian không đóng connection đang idle.
+Gửi heartbeat theo chu kỳ ngắn hơn idle timeout của proxy.
+
+`close()` gọi `end_chunks`. Nó không gửi event cuối và không gửi status marker;
+kết thúc HTTP body là tín hiệu close. Gọi đúng một lần, sau event cuối.
+
+## Hướng dẫn client reconnect
+
+Browser `EventSource` tự reconnect sau khi connection đứt. Helper không gửi field
+`id:` hoặc `retry:`, nên client không có vị trí `Last-Event-ID` để resume và
+không đặt được retry delay do server điều khiển.
+
+Thiết kế client cho một stream mới:
+
+- Fetch lại snapshot hoặc phát lại từ sequence ứng dụng mang trong `data`.
+- Loại bỏ event trùng nếu ứng dụng có thể giao một event hai lần.
+- Xem reconnect là một đăng ký mới, không phải resume.
+- Giữ heartbeat của server ngắn hơn idle timeout của client và proxy.
+
+Nếu ứng dụng cần giao hàng có thể resume, đặt sequence trong field `data` và để
+client gửi vị trí cuối trong request kế tiếp. Không tự tạo field SSE mà helper
+không ghi.
+
+## Lỗi
+
+| Lỗi                      | Xảy ra khi                                           |
+| ------------------------ | ---------------------------------------------------- |
+| `InvalidEventName`       | Tên event chứa CR hoặc LF                            |
+| `WouldBlock`             | Write queue chưa nhận field tiếp theo lúc này        |
+| `ResponseNotStreaming`   | Ghi event sau khi stream đã kết thúc                 |
+| `ResponseAlreadyStarted` | `sse()` chạy sau khi helper khác đã bắt đầu response |
+| `BodyNotAllowed`         | Method hoặc status không cho phép body               |
+| `ConnectionClosed`       | Peer hoặc transport đang đóng                        |
+
+Lỗi ghi trả về handler. Vì response đã bắt đầu, handler không thể thay bằng
+status lỗi; trả về sẽ để transport đóng stream đang mở sau khi flush.
+
+## Kiểm tra
+
+```sh
+curl -N -i http://127.0.0.1:3000/events
+```
+
+`-N` tắt buffer của curl. Kỳ vọng `200 OK`, `Content-Type: text/event-stream`,
+`Cache-Control: no-cache` và `X-Accel-Buffering: no`, sau đó là các event đã
+framing và comment heartbeat. Connection đóng sau `close()`.
+
+## Tiếp theo
+
+Đọc [response streaming](/docs/http/streaming) cho body do producer điều khiển,
+sau đó [vòng đời response](/docs/concepts/response-lifecycle) cho quy tắc
+completion.

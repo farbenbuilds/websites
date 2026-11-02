@@ -1,0 +1,128 @@
+---
+title: Errors and failure modes
+description: Separate Zig errors from HTTP status codes, read structured rejection documents, and decide whether a failure can be retried.
+sidebar:
+  order: 15
+search:
+  tags: [concept, troubleshooting]
+---
+
+µWebZockets reports failures on two channels. Framework calls return Zig errors,
+while a route handler has no error return and reports failure by ending the
+response with a status. Reading both channels together tells you whether the
+client sees a status, whether the server sees an error name, and whether another
+attempt can succeed.
+
+## A handler reports through the response
+
+A route handler returns `void`. It cannot return `error.PayloadTooLarge` to the
+transport. It can send any status, including one produced by a typed
+`uz.errors.Problem`:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    if (req.text().len == 0) {
+        var buffer: [uz.errors.max_document_bytes]u8 = undefined;
+        uz.errors.send_buf(res, .{
+            .status = .unprocessable_entity,
+            .code = "empty_body",
+            .message = "A request body is required.",
+        }, &buffer) catch {};
+        return;
+    }
+
+    res.end("201 Created", "created") catch {};
+}
+```
+
+The handler is an excerpt; route registration and `listen` are omitted.
+`Problem` carries a `StatusCode`, a machine code, and a message. Rendering writes
+into caller-owned storage, escapes attacker-influenced text, and substitutes
+invalid UTF-8 instead of producing invalid JSON.
+
+## Failures before the handler runs
+
+| Status | Cause                                                           |
+| ------ | --------------------------------------------------------------- |
+| `413`  | Body exceeded `max_body_size`                                   |
+| `431`  | Request line, header block, or field count exceeded its limit   |
+| `404`  | No route matched                                                |
+| `405`  | Another method has the route; the `Allow` field lists it        |
+| `425`  | A non-safe method arrived in TLS 0-RTT early data               |
+| `426`  | A WebSocket route was called without `Upgrade: websocket`       |
+| `501`  | HTTP/2 or HTTP/3 `CONNECT` outside RFC 8441 extended CONNECT    |
+| `503`  | A bounded resource is exhausted, such as a second HTTP/2 tunnel |
+
+The transport can reject an oversized request without invoking a handler. Its
+response is a structured JSON document that names the limit and value. With the
+default 16 KiB body limit, the `413` document is:
+
+```json
+{
+  "error": {
+    "code": "payload_too_large",
+    "message": "Request body exceeded the 16KB limit. Consider increasing 'max_body_size' in ServerConfig.",
+    "limit_bytes": 16384
+  }
+}
+```
+
+The `431` document uses the code `headers_too_large` and names
+`max_header_size`. Both are rendered into a 384-byte stack buffer, so the
+rejection path does not allocate and does not depend on application code.
+
+## Retryable and terminal failures
+
+| Failure                                  | Retry                                            |
+| ---------------------------------------- | ------------------------------------------------ |
+| `425 Too Early`                          | Yes, after the TLS handshake completes           |
+| `503` from a second HTTP/2 tunnel        | Yes, on a new connection                         |
+| `error.WouldBlock` from WebSocket `send` | Yes, after the `drain` callback reports capacity |
+| `ClusterQueueFull` or `report.dropped`   | Yes, after the consumer drains the inbox         |
+| `413` or `431` on the same request       | No; send a smaller request or raise the limit    |
+| `426` or `501`                           | No; change the route or protocol path            |
+| `error.AsyncResponseExpired`             | No; the peer is gone or the slot was reused      |
+| `error.ClusterWorkerFailed`              | No for that run; inspect `first_failure()`       |
+| `error.CertificateLoadFailed`            | No until the PEM files are corrected             |
+
+A capacity failure is not a promise that retrying forever works. Size the
+matching limit, then retry. A terminal failure means the same input cannot
+succeed without a code, configuration, or protocol change.
+
+## Where errors are named
+
+- Configuration: the `Error` set in `src/router/config.zig`.
+- Cluster: `MessageError`, `QueueError`, `PublishError`, and `RunError` in
+  `src/router/cluster.zig`.
+- Async completion: `src/http/response.zig`, summarized on the asynchronous
+  responses page.
+- JSON-RPC: `HandlerError`, `DispatchError`, and `RegistrationError` in
+  `src/rpc/json_rpc.zig`.
+- TLS: `src/crypto/tls.zig`; the upstream TLS document lists every value.
+- HTTP status lines: `src/http/status.zig`.
+
+Common registration and lifecycle errors are stable names, not formatted
+messages:
+
+- `error.RoutesLocked` after the first `listen`.
+- `error.AlreadyListening` on a second `listen`, `listen_all`, or `listen_udp`.
+- `error.ApplicationAlreadyRunning` when `run` is re-entered.
+- `error.ApplicationUnavailable` after shutdown or `deinit`.
+- `error.SignalWatcherAlreadyInstalled` on a second signal watcher.
+- `error.WouldBlock` when a bounded write queue or WebSocket send is full.
+
+An HTTP status is for the peer. A Zig error is for the caller that can branch on
+it. Do not parse a status string to recover an error name, and do not turn a
+terminal Zig error into a retry loop.
+
+## Next
+
+- [Type safety](/docs/concepts/type-safety) shows how schema issues and typed
+  error sets are produced.
+- [Protocol negotiation](/docs/concepts/protocol-negotiation) explains the
+  statuses that depend on the selected transport.
+- [HTTP errors](/docs/http/errors) is the reference for status documents and
+  response helpers.

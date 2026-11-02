@@ -1,0 +1,157 @@
+---
+title: Fetch, Streams và abort
+description: Chuyển byte qua header view được mượn, BYOB reader, writable stream và abort checkpoint mà không cấp phát trong hot path.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, streaming]
+---
+
+`uz.fetch`, `uz.streams` và `uz.abort` cung cấp primitive lấy cảm hứng từ Fetch
+và Streams cho code đã làm việc với byte được mượn. Chúng ưu tiên buffer tường
+minh và context do caller sở hữu thay vì promise và queue ẩn.
+
+Đây là primitive lấy cảm hứng từ Fetch và Streams, không phải tuyên bố tuân thủ
+chuẩn. Không có promise, không có stream controller, không có transferable
+stream và không có request body streaming.
+
+## Header view
+
+`HeadersView` là view chỉ đọc trên các mảng name và value song song.
+
+| Thành viên                         | Trả về           | Hành vi                                                             |
+| ---------------------------------- | ---------------- | ------------------------------------------------------------------- |
+| `HeadersView.init(names, values)`  | `HeadersView`    | Dùng độ dài slice ngắn hơn                                          |
+| `HeadersView.init_with_extra(...)` | `HeadersView`    | Thêm cặp mảng được mượn thứ hai                                     |
+| `get(name)`                        | `?[]const u8`    | Kết quả khớp đầu tiên, không phân biệt hoa thường, mảng chính trước |
+| `has(name)`                        | `bool`           | Tương đương `get(name) != null`                                     |
+| `entries()`                        | `HeaderIterator` | Duyệt mọi entry                                                     |
+
+`HeaderIterator.next()` trả `HeaderEntry { name, value }` và `reset()` tua lại
+iterator. `req.headers()` trả view của request, còn `req.header_entries()` trả
+thẳng iterator.
+
+`uz.fetch` cũng có predicate cho nhóm status: `is_ok` cho 200 đến 299,
+`is_redirect` cho 300 đến 399, `is_client_error` cho 400 đến 499 và
+`is_server_error` cho 500 đến 599.
+
+## Readable byte stream
+
+`ReadableByteStream` là reader kiểu pull với buffer do caller sở hữu. `read` là
+Bring Your Own Buffer: nó ghi vào slice bạn truyền và trả số byte.
+
+| Thành viên    | Hành vi                                                    |
+| ------------- | ---------------------------------------------------------- |
+| `read(dest)`  | Trả tối đa `dest.len` byte; `0` là EOF hoặc stream đã đóng |
+| `cancel()`    | Đóng stream và gọi close callback tùy chọn                 |
+| `is_closed()` | `true` sau EOF, cancel hoặc lỗi read                       |
+
+Read callback trả nhiều hơn `dest.len` byte sẽ đặt stream vào `errored` và trả
+`InvalidReadCount`. Lỗi từ callback cũng đánh dấu stream `errored`, nên các lần
+read sau trả `0` thay vì thử lại.
+
+`get_byob_reader(stream)` trả `ReadableStreamBYOBReader`. `read(view)` của nó
+trả `ReadResult { value, done }`, trong đó `value` là phần đầu đã được điền của
+`view`. Gọi `read` sau `release_lock` trả `ReaderReleased`.
+
+`SliceReaderContext` là reader dựng sẵn cho slice trong bộ nhớ. Nối nó vào
+stream khi nguồn đã được buffer:
+
+```zig
+var context = uz.streams.SliceReaderContext{ .data = "payload" };
+var reader = uz.streams.ReadableByteStream{
+    .context = &context,
+    .read_fn = uz.streams.SliceReaderContext.read,
+};
+```
+
+## Writable byte stream và pipe_to
+
+`WritableByteStream.write(chunk)` chuyển một chunk tới đích. `close()` kết thúc
+stream, và `is_backpressured()` báo transport có đang ép backpressure ghi hay
+không. Stream không có backpressure callback báo `false`.
+
+`pipe_to(reader, writer, buffer)` chuyển byte bằng transfer buffer của caller và
+không cấp phát. Nó đọc đến khi reader đóng, ghi từng chunk và đóng writer.
+Buffer rỗng trả `EmptyTransferBuffer`. Khi có lỗi, nó cancel reader và đóng
+writer theo kiểu best effort trước khi trả lỗi gốc.
+
+`pipe_to` không poll `is_backpressured`. Writer gắn với transport trả
+`error.WouldBlock` khi queue đầy, và lỗi đó dừng pipe. Tự kiểm tra
+`is_backpressured` khi bạn điều khiển phía writable trực tiếp.
+
+`res.writable_stream()` trả writer nối với response. Khi response còn idle, lần
+ghi đầu bắt đầu response chunked `200 OK`, và `close` kết thúc chuỗi chunk. Writer đưa byte vào write
+queue của response mà [capacity model](/docs/concepts/capacity-model) mô tả;
+[API response](/docs/http/response) bao quát các trạng thái response quanh nó.
+
+```zig
+fn download(_: *uz.Request, res: *uz.Response) void {
+    var context = uz.streams.SliceReaderContext{ .data = "streamed bytes" };
+    var reader = uz.streams.ReadableByteStream{
+        .context = &context,
+        .read_fn = uz.streams.SliceReaderContext.read,
+    };
+    var writer = res.writable_stream();
+    var buffer: [8]u8 = undefined;
+    _ = uz.streams.pipe_to(&reader, &writer, &buffer) catch |err| {
+        std.log.err("pipe failed: {}", .{err});
+    };
+}
+```
+
+## Abort hợp tác
+
+`AbortState` giữ atomic word đã đóng gói: một epoch cộng một `AbortReason`.
+`AbortController` sở hữu một `AbortState`, và `signal()` trả snapshot không sở
+hữu. Controller phải sống lâu hơn mọi bản copy của signal.
+
+| Thành viên                                    | Hành vi                                                      |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `AbortReason`                                 | `none`, `caller`, `timeout`, `connection_closed`, `shutdown` |
+| `controller.abort(reason)`                    | Công bố reason đầu tiên và trả về việc nó có thắng hay không |
+| `controller.reset()`                          | Bắt đầu epoch mới và xóa reason                              |
+| `signal.aborted()`                            | `true` sau abort hoặc sau khi epoch đổi                      |
+| `signal.reason()`                             | Reason đã lưu; `connection_closed` sau khi epoch đổi         |
+| `signal.checkpoint()`                         | Trả `error.Aborted` khi đã abort                             |
+| `abort_if_expired(controller, now, deadline)` | Abort với `timeout` tại deadline                             |
+
+Reason abort đầu tiên thắng; lần gọi sau không thay được nó, và `.none` bị từ
+chối. `reset()` tăng epoch, làm mọi signal cũ mất hiệu lực vĩnh viễn:
+`aborted()` thành `true` và `reason()` báo `connection_closed`.
+
+Checkpoint nên đặt trong vòng lặp hoặc giữa các bước, không phải quanh từng
+byte. Signal đọc một atomic word nên rẻ, nhưng nó vẫn là điểm hủy công việc chứ
+không phải một lần đọc transport.
+
+```zig
+fn run_step(
+    controller: *uz.abort.AbortController,
+    now_ms: i64,
+    deadline_ms: i64,
+) !void {
+    const signal = controller.signal();
+    _ = uz.abort.abort_if_expired(controller, now_ms, deadline_ms);
+    signal.checkpoint() catch |err| {
+        std.log.err("aborted: {s}", .{@tagName(signal.reason())});
+        return err;
+    };
+}
+```
+
+## Kiểm tra
+
+```sh
+curl -i http://127.0.0.1:3000/download
+```
+
+Response là `200 OK` với `Transfer-Encoding: chunked`, body là
+`streamed bytes`. Lỗi writer đóng chunk sớm và được `pipe_to` báo lại.
+
+## Tiếp theo
+
+Đọc [streaming response](/docs/http/streaming) cho response producer sở hữu
+transport framing. [API request](/docs/http/request) ghi lại header view mà
+`req.headers()` trả về, còn
+[quyền sở hữu và lifetime](/docs/concepts/ownership-and-lifetimes) giải
+thích các slice được mượn mà stream này chuyển.

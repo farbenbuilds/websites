@@ -1,0 +1,168 @@
+---
+title: CORS
+description: Cho phép origin cụ thể bằng CORS, trả lời preflight có chủ đích và nhận diện response 403 cùng 500 mà middleware tạo ra.
+sidebar:
+  order: 15
+search:
+  tags: [how-to, cors]
+---
+
+µWebZockets xem CORS là middleware bạn đăng ký, không phải hành vi server tự
+thêm. Bạn liệt kê các origin tin cậy, và middleware thêm những field response mà
+trình duyệt cần cho các origin đó. Origin khác không nhận field CORS nào.
+
+## Đăng ký middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn items(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var cors = uz.middleware.cors(.{
+        .origins = &.{ "https://app.example.com", "https://admin.example.com" },
+        .methods = &.{ .get, .post },
+        .allow_headers = &.{ "content-type", "x-request-id" },
+        .expose_headers = &.{"x-request-id"},
+        .allow_credentials = true,
+        .max_age = 600,
+    });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    _ = try app.get("/api/items", items);
+    _ = try app.post("/api/items", items);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`uz.middleware.cors` trả về một giá trị do bạn sở hữu. `app.use` lưu pointer tới
+giá trị đó, nên giữ nó sống đến `app.deinit()`.
+
+## Khớp origin chính xác
+
+Mỗi entry trong `origins` là một origin literal. Middleware so sánh byte bằng
+`std.mem.eql`, nên khớp chính xác và phân biệt hoa thường.
+`https://app.example.com` chỉ khớp đúng chuỗi đó: dấu `/` ở cuối, khác hoa
+thường hoặc khác port đều không khớp, và response không có field CORS.
+
+Không có wildcard reflection và không có prefix matching. Entry `*` chỉ khớp
+đúng giá trị literal `*`, thứ trình duyệt không bao giờ gửi.
+
+Request không có `Origin`, hoặc có nhiều hơn một field `Origin`, tiếp tục
+dispatch mà không có field CORS. Việc đọc dùng `get_unique_header`, hàm này trả
+`null` khi có field trùng.
+
+Request từ origin không nằm trong danh sách không bị từ chối. Nó chạy bình
+thường và trình duyệt chặn cross-origin read, vì response không có
+`Access-Control-Allow-Origin`. CORS là policy đọc của trình duyệt, không phải
+access control; xem [mô hình bảo mật](/docs/concepts/security-model).
+
+## Trả lời preflight
+
+Preflight là request `OPTIONS` có `Origin` và
+`Access-Control-Request-Method`, thường kèm `Access-Control-Request-Headers`.
+Middleware đi qua các check theo thứ tự:
+
+1. Nếu origin không khớp chính xác, dispatch tiếp tục mà không có field CORS.
+2. `Access-Control-Allow-Origin` (chính origin của request) và `Vary: Origin`
+   được thêm, cùng credential và expose header nếu đã cấu hình.
+3. Request không phải `OPTIONS`, hoặc `OPTIONS` không có
+   `Access-Control-Request-Method`, tiếp tục dispatch. Câu trả lời `OPTIONS` tự
+   động của router vẫn áp dụng ở trường hợp thứ hai.
+4. Method được yêu cầu phải parse thành method token và có trong `methods`, và
+   từng header được yêu cầu phải có trong `allow_headers`, so khớp không phân
+   biệt hoa thường. Lỗi trả `403 Forbidden` với body rỗng.
+5. Ngược lại middleware thêm `Access-Control-Allow-Methods`,
+   `Access-Control-Allow-Headers` và `Access-Control-Max-Age` nếu đã cấu hình,
+   rồi kết thúc `204 No Content` và dừng dispatch.
+
+Các check chạy trước route dispatch, nên không cần đăng ký route `OPTIONS`, và
+preflight cho path không tồn tại vẫn nhận `204 No Content`.
+
+Vì bước 1 và 2 chạy trước, `403 Forbidden` từ một preflight bị từ chối vẫn có
+`Access-Control-Allow-Origin` và `Vary`. Response đó không có
+`Access-Control-Allow-Methods` và `Access-Control-Allow-Headers`.
+
+## Tùy chọn
+
+| Field               | Kiểu                    | Mặc định                 | Tác dụng                                                   |
+| ------------------- | ----------------------- | ------------------------ | ---------------------------------------------------------- |
+| `origins`           | `[]const []const u8`    | bắt buộc                 | Các origin chính xác nhận field CORS                       |
+| `methods`           | `[]const uz.HttpMethod` | `.get`, `.head`, `.post` | Method được phép trong preflight                           |
+| `allow_headers`     | `[]const []const u8`    | rỗng                     | Request header được phép trong preflight, và được echo lại |
+| `expose_headers`    | `[]const []const u8`    | rỗng                     | Response header mà trình duyệt được đọc                    |
+| `allow_credentials` | `bool`                  | `false`                  | Thêm `Access-Control-Allow-Credentials: true`              |
+| `max_age`           | `?u32`                  | `null`                   | Thêm `Access-Control-Max-Age` theo giây                    |
+
+`allow_headers` và `expose_headers` được format thành một field phân tách bằng
+dấu phẩy, giới hạn 1024 byte mỗi field. Giá trị cấu hình chứa dấu phẩy, CR hoặc
+LF bị từ chối lúc format thay vì được ghi ra.
+
+Không đặt `.any` trong `methods`: nó vẫn qua check membership, nhưng
+`HttpMethod.name()` trả chuỗi rỗng nên danh sách được ghi ra có một entry rỗng.
+
+## Credential và cache
+
+`allow_credentials` thêm `Access-Control-Allow-Credentials: true` vào mọi
+response cho origin được phép, kể cả preflight. Trình duyệt vẫn quyết định có
+gửi cookie hay field `Authorization` hay không.
+
+`Vary: Origin` cho shared cache biết response phụ thuộc origin của request. Nếu
+thiếu field này, cache có thể trả field CORS của origin này cho origin khác.
+Middleware thêm dòng `Vary` riêng; nếu layer khác cũng ghi field này thì response
+có hai field và cache gộp chúng lại.
+
+## Áp dụng có chủ đích
+
+- Đăng ký đúng một middleware CORS cho mỗi app, trước `Auth` và `RateLimit`:
+  preflight không có field `Authorization` và không nên tiêu token rate limit.
+- Không dùng CORS làm authentication. Nó chỉ giới hạn origin mà trình duyệt cho
+  trang đọc; mọi client không phải trình duyệt đều bỏ qua nó.
+- Trong cluster, đăng ký middleware trên app của từng worker với cùng danh sách
+  origin.
+
+## Các lỗi thường gặp
+
+| Điều kiện                                                       | Kết quả                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------- |
+| Method token không nhận diện được hoặc không có trong `methods` | `403 Forbidden`, body rỗng                                 |
+| Header được yêu cầu thiếu trong `allow_headers`                 | `403 Forbidden`, body rỗng                                 |
+| Nhiều hơn 10 entry trong `methods`                              | `500 Internal Server Error` qua `error.TooManyCorsMethods` |
+| Danh sách header format vượt 1024 byte                          | `500 Internal Server Error` qua `error.BufferTooSmall`     |
+| Giá trị cấu hình chứa dấu phẩy, CR hoặc LF                      | `500 Internal Server Error` qua `error.InvalidHeaderValue` |
+| Buffer pending header không đủ chỗ                              | `500 Internal Server Error` qua `error.BufferOverflow`     |
+
+Bốn lỗi cuối là lỗi cấu hình; hãy thử một preflight lúc startup.
+
+## Kiểm tra
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: DELETE'
+```
+
+Lệnh đầu trả `204 No Content` với origin được phép, `Vary` và
+`Access-Control-Allow-Methods: GET, POST`. Với danh sách `methods` mặc định,
+field cuối đọc là `GET, HEAD, POST`. Lệnh thứ hai trả `403 Forbidden` vì
+`DELETE` không được cấu hình.
+
+## Tiếp theo
+
+- [Header bảo mật](/docs/http/security-headers) đặt các field response áp
+  dụng cho mọi trang, không chỉ cross-origin read.
+- [Xác thực](/docs/http/authentication) trình bày các check credential mà CORS
+  không thực hiện.

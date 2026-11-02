@@ -1,0 +1,182 @@
+---
+title: Handler
+description: Chọn callback synchronous, context, async hoặc async-context, complete response đúng một lần và báo lỗi qua Response.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, routing]
+---
+
+Handler nhận request được mượn và một response writer hoặc async token. Bốn
+shape dùng chung route table và chỉ khác chữ ký cùng cách complete.
+
+## Bốn shape
+
+| Đăng ký                                                                             | Chữ ký callback                                 | Dùng khi                             |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ |
+| `get`, `post`, `put`, `delete`, `patch`, `options`, `head`, `trace`, `query`, `any` | `fn (*Request, *Response) void`                 | Công việc xong ngay trong callback   |
+| `route_context`, `get_context`                                                      | `fn (*anyopaque, *Request, *Response) void`     | Công việc cần state do caller sở hữu |
+| `route_async`, `get_async`                                                          | `fn (*Request, AsyncResponse) void`             | Công việc complete sau               |
+| `route_async_context`, `get_async_context`                                          | `fn (*anyopaque, *Request, AsyncResponse) void` | Công việc deferred kèm state         |
+
+Chỉ `get` có shortcut `get_context`, `get_async` và `get_async_context`. Với
+method khác, gọi `route_context`, `route_async` hoặc `route_async_context` với
+`uz.HttpMethod.post`, v.v.
+
+## Chương trình hoàn chỉnh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const State = struct {
+    requests: u64 = 0,
+};
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn counted(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    state.requests += 1;
+    var buffer: [32]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "{d}", .{state.requests}) catch {
+        res.end("500 Internal Server Error", "format failed") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn later(_: *uz.Request, token: uz.AsyncResponse) void {
+    token.sleep_complete(250, "200 OK", "Content-Type: text/plain\r\n", "later") catch |err|
+        std.log.err("async completion failed: {}", .{err});
+}
+
+fn delayed(context: *anyopaque, _: *uz.Request, token: uz.AsyncResponse) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    state.requests += 1;
+    token.sleep_complete(100, "200 OK", "", "after state") catch |err|
+        std.log.err("async completion failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var state = State{};
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.get_context("/counted", &state, counted);
+    _ = try app.get_async("/later", later);
+    _ = try app.get_async_context("/delayed", &state, delayed);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Context pointer do caller sở hữu và không có kiểu cụ thể; cast một lần ở đầu
+callback. Việc sửa state chỉ nằm trong loop; không chia sẻ với thread khác.
+
+## Hoàn tất response
+
+Handler synchronous phải end response trước khi trả về.
+
+| Tình huống                                                                     | Kết quả                                                                        |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Handler gọi `end`, `text`, `html`, `bytes`, `json` hoặc writer hoàn chỉnh khác | Response được gửi                                                              |
+| Handler trả về mà không end hoặc start response                                | `500 Internal Server Error` với body `Handler did not complete the response`   |
+| Handler start stream hoặc chunked body rồi trả về mà chưa kết thúc             | HTTP/1.1 flush rồi đóng connection; HTTP/2 kết thúc stream; HTTP/3 đóng stream |
+| Handler start `begin_stream`                                                   | Producer sở hữu completion và resume dispatch khi xong                         |
+| Async token vẫn pending khi callback trả về                                    | Dispatch suspend; request buffer không được tái sử dụng                        |
+
+Async token complete đúng một lần, trên event loop sở hữu connection hoặc
+stream. Completion thứ hai trả `error.AsyncResponseAlreadyCompleted`. Token có
+transport slot đã bị tái sử dụng hoặc đã disconnect trả
+`error.AsyncResponseExpired`.
+
+Body `500` của framework là `Handler did not complete the response` trên HTTP/1.1
+và HTTP/2. HTTP/3 ghi `Handler did not complete response`, nên test chạy nhiều
+transport hãy assert status dạng số.
+
+`token.sleep_complete(delay_ms, status, headers, body)` park response và complete
+khi timer fire. Status, header và body được mượn đến lúc đó, nên truyền literal
+hoặc storage sống lâu hơn, không truyền stack buffer.
+
+Để làm việc khác sau đó, park bằng `token.sleep` và complete từ resume callback,
+hoặc đưa kết quả về loop sở hữu và gọi `token.complete`.
+
+## Báo lỗi
+
+Đoạn này lấy từ `src/main.zig` và bỏ qua import cùng `main`. Callback không có
+kênh trả error, nên báo failure qua response:
+
+```zig src/main.zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    if (body.len == 0) {
+        res.end("400 Bad Request", "empty body") catch |err| {
+            std.log.err("response failed: {}", .{err});
+        };
+        return;
+    }
+    res.end("201 Created", body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+Các response writer trả những error sau:
+
+| Lỗi                            | Nguyên nhân                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `error.ResponseAlreadyStarted` | Response đã rời idle state                                                                     |
+| `error.InvalidStatus`          | Status code nằm ngoài 200 đến 599                                                              |
+| `error.InvalidHeaders`         | Field sai định dạng, chứa control character, hoặc set `Content-Length` hay `Transfer-Encoding` |
+| `error.BodyNotAllowed`         | Status là `204`, `205` hoặc `304` và body không rỗng                                           |
+| `error.WouldBlock`             | Body cố định không vừa write queue hoặc phần trống của queue                                   |
+
+`end_best_effort` nhận cùng tham số và abort transport khi write bị lỗi: TCP
+đóng, HTTP/2 reset stream, HTTP/3 đóng stream. Chỉ dùng nó ở nơi callback không
+thể báo error.
+
+Một số failure không bao giờ tới handler: `404 Not Found`, `405 Method Not
+Allowed` kèm `Allow`, `OPTIONS` tự động với `204 No Content`, `426 Upgrade
+Required` cho route WebSocket không có upgrade, `425 Too Early` cho non-safe
+method trong TLS 0-RTT, và `413 Payload Too Large` hoặc `431 Request Header
+Fields Too Large` từ parser trước dispatch.
+
+## Những điều không nên làm
+
+- Không block loop; dùng async token và timer cho công việc delayed.
+- Không đăng ký route, gọi `listen` hoặc gọi `deinit` từ callback. Đăng ký trả
+  `error.RoutesLocked`, bind lần hai trả `error.AlreadyListening`, và `deinit`
+  panic trong loop.
+- Không gọi `shutdown` từ thread khác; `request_shutdown` an toàn từ mọi thread
+  và coalesce request.
+- Không giữ request field, header value, body slice hoặc capture sau khi callback
+  trả về hoặc async token complete. Copy giá trị hoặc gọi `req.clone(allocator)`.
+- Không tự set `Content-Length` hoặc `Transfer-Encoding`. Library sở hữu framing
+  và từ chối cả hai field.
+- Không complete async token hai lần, từ thread khác, hoặc sau khi generation
+  của nó đã bị tái sử dụng.
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3000/counted
+curl -s http://127.0.0.1:3000/later
+curl -s http://127.0.0.1:3000/delayed
+```
+
+Body là `hello`, `1`, `later` và `after state`; hai body cuối đến sau một delay
+ngắn trong khi token park request buffer.
+
+## Tiếp theo
+
+- [Request API](/docs/http/request) trình bày request value được mượn.
+- [Response API](/docs/http/response) trình bày status, header và body.
+- [Handler shape](/docs/concepts/handler-shapes) giải thích model.

@@ -38,6 +38,10 @@ description: Install the package, run the first example, and verify the result.
 - Procedures use numbered steps with one action per step.
 - Reference detail follows the task, not the reverse.
 - Every code fence declares a language.
+- Code samples follow their source language, not this repository's TypeScript
+  style. Zig samples use `snake_case` functions, variables, parameters, and
+  fields, `PascalCase` types, and the exact public API spelling. Never
+  camel-case a Zig identifier or rename an API for style.
 - Internal links are root-relative, such as `/docs/getting-started`.
 - External links name the destination instead of using "click here".
 - No emoji, exclamation mark, marketing filler, or unverified claim.

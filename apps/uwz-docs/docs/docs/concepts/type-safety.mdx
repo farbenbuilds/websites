@@ -1,0 +1,180 @@
+---
+title: Type safety
+description: Use compile-time capacities, typed JSON and RPC, schema rules, named callbacks, and explicit error sets without runtime reflection.
+sidebar:
+  order: 14
+search:
+  tags: [concept, schema]
+---
+
+µWebZockets keeps types visible at the boundary. Capacities that size the
+application are chosen before the server starts, JSON can be decoded into a Zig
+type with compile-time rules, callbacks use named function types, and errors stay
+in explicit sets instead of becoming strings.
+
+## Capacities belong to the type
+
+| Type                                                      | What it fixes                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| `App(N)`                                                  | `N` connections, 16 KiB WebSocket message, 64 KiB write queue |
+| `ConfiguredApp(N, message, queue)`                        | Connections, WebSocket message, and write queue               |
+| `ConfiguredAppWithTimeout(N, message, queue, timeout_ms)` | The same capacities plus the idle timeout                     |
+| `Server.builder(io)`                                      | A compile-time `ServerConfig`, resolved into one slab         |
+
+The first three forms size the generated application type, so their arguments
+must be literals or `const` values. `Server.builder` specializes the type from a
+compile-time `ServerConfig`; each `with_*` call also takes a compile-time value.
+`build` performs exactly one application allocation for the slab, request
+buffers, message regions, write queues, router storage, and optional compression
+scratch.
+
+## Decode JSON into a type
+
+`req.json(T, allocator)` parses the request body into `std.json.Parsed(T)`.
+`req.validate_json(T, allocator)` does the same and then applies the rules in
+`T.validation`. The allocation is always explicit, and `Parsed(T).deinit()`
+releases it.
+
+A schema is a struct with an optional `pub const validation` declaration. Each
+field in that declaration is a `uz.schema.Rule`:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const CreateUser = struct {
+    name: []const u8,
+    age: u8,
+
+    pub const validation = .{
+        .name = uz.schema.Rule{ .min_length = 1, .max_length = 64 },
+        .age = uz.schema.Rule{ .min = 18, .max = 120 },
+    };
+};
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    var issue = uz.schema.Issue{};
+
+    const parsed = uz.schema.validate_json_detailed(
+        CreateUser,
+        std.heap.page_allocator,
+        req.text(),
+        &issue,
+    ) catch |err| {
+        if (err == error.ConstraintViolation or err == error.MalformedJson) {
+            res.end("422 Unprocessable Entity", @tagName(issue.kind)) catch {};
+            return;
+        }
+        res.end("500 Internal Server Error", "validation failed") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    res.text(parsed.value.name) catch {};
+}
+```
+
+The handler is an excerpt; route registration and `listen` are omitted. The
+allocator is explicit: this excerpt uses the page allocator, and a production
+handler can pass a bounded arena or fixed buffer instead. `issue.field` names the
+offending field when decoding reached it, and `issue.kind` classifies the first
+failure.
+
+### Rule fields
+
+| Field                      | Applies to                                               |
+| -------------------------- | -------------------------------------------------------- |
+| `min`, `max`               | Integer fields                                           |
+| `min_float`, `max_float`   | Float fields; integer bounds are ignored                 |
+| `min_length`, `max_length` | Strings and `[]u8`/`[]const u8` values                   |
+| `min_items`, `max_items`   | Arrays and non-`u8` slices                               |
+| `allowed`                  | Enum tag names or whole string values; empty disables it |
+
+### Issue kinds
+
+- Parse failures: `malformed_json`, `syntax_error`, `unexpected_end_of_input`,
+  `unexpected_token`, `invalid_number`, `number_overflow`, `invalid_enum_tag`,
+  `length_mismatch`, `missing_field`, `duplicate_field`, `unknown_field`.
+- Rule failures: `below_minimum`, `above_maximum`, `too_short`, `too_long`,
+  `too_few_items`, `too_many_items`, `invalid_enum_tag`.
+- Depth failures: `too_deep`.
+
+Validation descends through nested structs and collection elements that declare
+their own `validation`. `uz.schema.max_nested_depth` is 4; a deeper walk fails
+with `too_deep` instead of silently dropping constraints. The depth bound is a
+runtime value so a self-referential schema type cannot recurse without end.
+
+## Register typed RPC procedures
+
+`register_typed` decodes parameters into a named type and serializes a named
+result. Its parameter scratch is a fixed 4 KiB buffer; a value that does not fit
+fails through `HandlerError` rather than growing memory.
+
+```zig
+const Add = struct { a: i64, b: i64 };
+
+fn add(params: Add) uz.json_rpc.HandlerError!i64 {
+    return params.a + params.b;
+}
+
+var service: uz.json_rpc.Service = .{};
+try service.register_typed("add", Add, i64, add);
+_ = try app.rpc("/rpc", &service);
+```
+
+`register_context` and `register_typed_context` add a caller-owned context
+pointer. A procedure that needs a custom application error returns
+`error.ApplicationError` from `Call.fail`, or writes a typed result through
+`Call.result`.
+
+## Callbacks have names
+
+- `uz.Handler` accepts `*const fn (*Request, *Response) void`.
+- `uz.ContextHandler` accepts `*const fn (*anyopaque, *Request, *Response) void`.
+- `uz.AsyncHandler` accepts `*const fn (*Request, AsyncResponse) void`.
+- `uz.ContextAsyncHandler` accepts
+  `*const fn (*anyopaque, *Request, AsyncResponse) void`.
+- `uz.MiddlewareHandler` returns `MiddlewareResult`, either
+  `.continue_dispatch` or `.stop`.
+- `uz.StreamProducer` accepts
+  `*const fn (*anyopaque, *Response) anyerror!StreamStatus`.
+- `Cluster.ConfigureCallback` accepts
+  `*const fn (*Worker, usize) anyerror!void`.
+
+The `*anyopaque` context is the deliberate exception to typed data. It points to
+caller-owned state that outlives the route, and the application casts it back to
+its own type. It is not a runtime type registry.
+
+## Errors stay in sets
+
+- `uz.cluster.MessageError` rejects `EmptyTopic`, `TopicTooLong`, and
+  `ClusterMessageTooLarge`.
+- `uz.cluster.QueueError` adds `ClusterQueueFull` to the message errors.
+- `uz.cluster.PublishError` adds cluster lifecycle rejection to the message
+  errors.
+- `uz.cluster.RunError` adds lifecycle and spawn errors, `InvalidWorkerCount`,
+  and `ClusterWorkerFailed`.
+- `uz.json_rpc.RegistrationError` rejects `DuplicateProcedure`,
+  `InvalidMethodName`, capacity limits, and `RegistryLocked`.
+- `uz.json_rpc.HandlerError` carries `Aborted`, `ApplicationError`,
+  `InvalidParams`, `ResultTooLarge`, and related procedure failures.
+
+Route registration and async completion use inferred error sets on the method
+that returns them; [Errors and failure modes](/docs/concepts/errors) maps those
+names to HTTP status and retry behavior.
+
+## No reflection-driven public API
+
+`uz.schema` inspects a type with Zig comptime features. It does not create
+runtime type metadata, accept a type name string, or select a serializer by a
+registry entry. Typed RPC stores a copied method name and a function pointer,
+not a type descriptor. The same rule applies to routes, middleware, and stream
+producers: the compiler knows the shape before the server starts.
+
+## Next
+
+- [Errors and failure modes](/docs/concepts/errors) turns these error names into
+  HTTP statuses and retry decisions.
+- [JSON responses](/docs/http/json) covers the response helpers in task order.
+- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service) builds a
+  service end to end.

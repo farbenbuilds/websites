@@ -1,0 +1,110 @@
+---
+title: Helpers
+description: Chọn helper nhỏ phù hợp để parse input, giữ state, đóng khung byte hoặc adapter một transport và không sở hữu wire behavior.
+search:
+  tags: [helpers, reference]
+---
+
+Helper là các utility nhỏ, ghép được trong `uz` và không sở hữu protocol nào.
+Chúng parse dữ liệu request mang tới, giữ state có giới hạn quanh một response,
+biến đổi byte bạn đã tạo, hoặc adapter một transport khác thành stream kiểu
+pull.
+
+Ở thời điểm request, mọi helper mượn từ buffer có giới hạn, ghi vào vùng nhớ của
+caller, hoặc trả về view cố định lúc compile. HTTP gzip pool cấp phát lúc
+application init. `CompressionStream` hoặc `DecompressionStream` cấp phát codec
+trong `init`, nên coi `init` đó là allocation tường minh, không phải chi phí ẩn
+trên request path.
+
+## Input
+
+<CardGroup cols={2}>
+  <Card title="Query và form" href="/docs/http/helpers/query-and-forms" icon="search">
+    `uz.query` và `uz.form` cắt query string hoặc form body thành các cặp được mượn, rồi chỉ decode
+    những value bạn đọc như text.
+  </Card>
+  <Card title="Multipart" href="/docs/http/helpers/multipart" icon="paperclip">
+    `uz.multipart` duyệt các part `multipart/form-data` có giới hạn, gồm filename và header của
+    part, mà không copy upload.
+  </Card>
+  <Card title="Thương lượng nội dung" href="/docs/http/helpers/content-negotiation" icon="scale">
+    `uz.negotiate` chấm điểm các range trong `Accept` và chọn representation tốt nhất trong những
+    loại bạn đã có.
+  </Card>
+</CardGroup>
+
+## State
+
+<CardGroup cols={2}>
+  <Card title="Cookie và cookie có chữ ký" href="/docs/http/helpers/cookies" icon="cookie">
+    `uz.cookie` đọc cặp RFC 6265, format attribute của `Set-Cookie` và xác minh chữ ký HMAC-SHA256
+    với key rotation.
+  </Card>
+  <Card title="Cache và ETag" href="/docs/http/helpers/caching" icon="tag">
+    `uz.cache` tạo ETag mạnh từ body và trả lời conditional GET bằng `304 Not Modified`.
+  </Card>
+</CardGroup>
+
+## Wire
+
+<CardGroup cols={2}>
+  <Card title="Nén" href="/docs/http/helpers/compression" icon="archive">
+    `Response.end_gzip` dùng pool của worker, còn `uz.compression_stream` và `uz.compression_pool`
+    cung cấp libdeflate stream có giới hạn cùng codec dùng lại.
+  </Card>
+  <Card
+    title="Fetch, Streams và abort"
+    href="/docs/http/helpers/fetch-streams-and-abort"
+    icon="arrow-right-left"
+  >
+    `uz.fetch`, `uz.streams` và `uz.abort` duyệt header, chuyển byte qua BYOB reader và writable
+    stream, rồi dừng công việc qua checkpoint hợp tác.
+  </Card>
+</CardGroup>
+
+## Adapters
+
+<CardGroup cols={2}>
+  <Card title="Adapter WebSocket stream" href="/docs/http/helpers/websocket-streams" icon="radio">
+    `uz.WebSocketStream` và `uz.NativeWebSocketStream` biến transport gửi nguyên message thành
+    stream byte kiểu pull với flow control tường minh.
+  </Card>
+</CardGroup>
+
+## Trang lõi không phải helper
+
+Các trang này thuộc application surface của HTTP, không thuộc nhóm helper.
+Bắt đầu ở đây khi tác vụ là một field của request, một response mode hoặc một
+quy tắc wire.
+
+| Trang                                               | Đọc để                                             |
+| --------------------------------------------------- | -------------------------------------------------- |
+| [API request](/docs/http/request)                   | Method, target, header, body và route capture      |
+| [API response](/docs/http/response)                 | Status, header, text, byte và trạng thái response  |
+| [JSON response](/docs/http/json)                    | `res.json`, `res.json_buf` và `begin_json`         |
+| [Streaming response](/docs/http/streaming)          | `begin_stream` và `StreamProducer` chạy theo drain |
+| [Server-Sent Events](/docs/http/server-sent-events) | Event framing, heartbeat và `res.sse()`            |
+| [HTTP error](/docs/http/errors)                     | Tài liệu rejection có cấu trúc và status helper    |
+| [Static file](/docs/http/static-files)              | Mount, confinement, validator và byte range        |
+
+## Ranh giới
+
+Helper không quyết định byte đi ra wire như thế nào. Parse HTTP/1.1, response
+framing, chunked transfer và keep-alive thuộc về
+[HTTP/1.1 và application API](/docs/http). Handshake, framing, masking và
+compression của WebSocket nằm trong tài liệu protocol tại `docs/websocket.md`.
+
+Những phần sau cố ý nằm ngoài nhóm này:
+
+- CORS, authentication, rate limiting và security header. Đây là security
+  control, được ghi trong [middleware](/docs/http/middleware).
+- JSON, streaming, SSE, chunked output, static file và OpenAPI. Đây là các
+  response mode lõi của mục HTTP.
+- `uz.schema` và typed RPC. Đây là tính năng type safety, không phải utility.
+
+## Tiếp theo
+
+Bắt đầu với [Query và form](/docs/http/helpers/query-and-forms) cho input
+request phổ biến nhất, sau đó đọc [API request](/docs/http/request) và
+[capacity model](/docs/concepts/capacity-model) để hiểu các buffer mà mọi
+helper mượn.

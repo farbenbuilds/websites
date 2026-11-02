@@ -1,0 +1,156 @@
+---
+title: Tài liệu OpenAPI
+description: Phục vụ tài liệu OpenAPI 3.1 sinh từ route đã đăng ký, đọc đúng shape, các giới hạn và phần không được sinh trước khi publish.
+sidebar:
+  order: 19
+search:
+  tags: [how-to, openapi]
+---
+
+`app.openapi(path)` đăng ký một route `GET` render bảng route hiện tại thành
+tài liệu OpenAPI 3.1. Tài liệu được sinh từ metadata lúc đăng ký route, nên
+không tốn allocation trên mỗi request và không thể lệch khỏi các route mà
+server thực sự đã đăng ký.
+
+## Đăng ký endpoint
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(_: *uz.Request, res: *uz.Response) void {
+    res.text("user") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.openapi("/openapi.json");
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.openapi` cũng là một lần đăng ký route. Nó phải chạy trước `listen`, tiêu
+một route record và chỗ trong registry, và path nó phục vụ xuất hiện trong tài
+liệu được sinh.
+
+## Tài liệu được sinh
+
+Endpoint trả JSON compact. Đây là cùng tài liệu đó, được format để đọc:
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": { "title": "uWebZockets API", "version": "2.1.6" },
+  "paths": {
+    "/": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    },
+    "/users/{id}": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    },
+    "/openapi.json": {
+      "get": { "responses": { "200": { "description": "Success" } } }
+    }
+  }
+}
+```
+
+| Thành phần        | Giá trị                                                         |
+| ----------------- | --------------------------------------------------------------- |
+| `openapi`         | Luôn là `3.1.0`                                                 |
+| `info.title`      | `uWebZockets API`, giá trị mặc định của `openapi.Options.title` |
+| `info.version`    | Version release (`2.1.6` ở baseline này)                        |
+| `paths`           | Một entry cho mỗi path phân biệt, theo thứ tự đăng ký           |
+| Key của operation | Tên method viết thường, trừ `x-any`, `x-query` và `x-connect`   |
+| Responses         | Đúng một `200` với description `Success`                        |
+| `x-websocket`     | `true` trên route đăng ký qua `app.ws`                          |
+
+Route WebSocket được ghi là `GET`, nên operation của nó có cả response `200` và
+`"x-websocket": true`. Các key `x-any` (từ `app.any`), `x-query` (`QUERY` theo
+RFC 10008) và `x-connect` không phải key operation của OpenAPI; validator nghiêm
+ngặt có thể từ chối tài liệu chứa chúng.
+
+Response có `Content-Type: application/json` và status `200 OK`.
+
+## Tham số path
+
+Generator chuyển pattern của router sang cú pháp template của OpenAPI:
+
+| Path đã đăng ký         | Path được ghi             |
+| ----------------------- | ------------------------- |
+| `/users/:id`            | `/users/{id}`             |
+| `/assets/*path`         | `/assets/{path}`          |
+| `/reports/:year/:month` | `/reports/{year}/{month}` |
+
+Chỉ `:` hoặc `*` ở đầu một segment mới bắt đầu tham số, khớp cách router phân
+tích pattern. Dấu `:` nằm giữa segment vẫn là ký tự literal. Việc chuyển đổi là
+textual: tên đến từ pattern mà router đã kiểm tra, nên tên capture trùng làm
+đăng ký lỗi trước khi tới tài liệu.
+
+## Giới hạn
+
+| Tài nguyên          | Mặc định                                                | Lỗi                                 |
+| ------------------- | ------------------------------------------------------- | ----------------------------------- |
+| Route record        | 320: 256 `max_route_nodes` cộng 64 `max_pattern_routes` | `error.RouteCapacityReached`        |
+| Path route được giữ | 64 KiB `max_route_registry_size`                        | `error.RouteStorageCapacityReached` |
+| Tài liệu được sinh  | buffer 64 KiB trong handler của endpoint                | `500 Internal Server Error`         |
+
+Buffer tài liệu cũng chứa một snapshot tạm của các route record, nên budget cho
+JSON thấp hơn 64 KiB. `write_openapi` trả `error.BufferTooSmall` khi snapshot
+không vừa và `error.WriteFailed` khi JSON dùng hết phần byte còn lại. Cả hai
+trường hợp handler trả `500 Internal Server Error` với body
+`OpenAPI document exceeds capacity`. Hai giá trị 64 KiB không liên quan nhau:
+một giá trị cấp cho path route được giữ, giá trị kia cấp cho một response được
+sinh.
+
+`max_route_registry_size` là tùy chọn builder (`with_max_route_registry_size`);
+buffer tài liệu là cố định trong endpoint có sẵn, nên bảng route lớn hơn vẫn có
+thể không render được. Giữ path ngắn và số route thấp hơn giới hạn record nếu
+bạn phụ thuộc vào endpoint này.
+
+Hai lỗi đầu là lỗi đăng ký route, không có HTTP status. Lỗi thứ ba là `500` lúc
+request tới endpoint.
+
+## Những gì không được sinh
+
+Tài liệu chỉ mô tả routing. Nó không có schema request hay response,
+`parameters`, `requestBody`, `components`, `tags`, `servers`, `security`,
+`summary` hay `description` của operation, và không có response nào ngoài `200`.
+Không có API router để gắn metadata đó.
+
+Fallback `HEAD` ngầm và câu trả lời `OPTIONS` tự động cũng không phải operation,
+vì cả hai đều không phải route đã đăng ký.
+
+Nếu cần tài liệu đầy đủ hơn, `uz.openapi.generate(buffer, routes, options)` là
+public. Khi đó bạn tự dựng danh sách `uz.openapi.Route` và metadata xung quanh,
+nghĩa là tài liệu không còn được suy ra từ bảng route của router.
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/openapi.json
+
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  http://127.0.0.1:3000/openapi.json
+```
+
+Lệnh đầu in tài liệu compact. Lệnh thứ hai in `200 application/json`.
+
+## Tiếp theo
+
+- [Định tuyến](/docs/http/routing) trình bày thứ tự đăng ký, pattern và các
+  giới hạn route mà tài liệu này phản ánh.
+- [Route parameter và wildcard](/docs/http/route-parameters) trình bày cú
+  pháp capture phía sau việc chuyển thành `{name}`.
+- [Response JSON](/docs/http/json) trình bày các helper response để tự phục
+  vụ file specification của bạn.

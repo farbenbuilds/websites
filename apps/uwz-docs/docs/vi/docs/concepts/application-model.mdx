@@ -1,0 +1,154 @@
+---
+title: Mô hình application
+description: So sánh App(N), các configured application type và Server.builder, rồi theo dõi lifecycle sở hữu một startup slab.
+sidebar:
+  order: 1
+search:
+  tags: [concept, capacity]
+---
+
+Chọn application type trước khi đăng ký route. Type quyết định connection
+capacity, WebSocket message size và write queue, là các giá trị định kích thước
+startup slab, cùng idle timeout vốn là runtime behavior chứ không phải slab
+storage.
+
+## Bốn cách tạo application
+
+| Cách tạo                                                     |    Connections | Kích thước message |    Write queue |   Idle timeout |
+| ------------------------------------------------------------ | -------------: | -----------------: | -------------: | -------------: |
+| `uz.App(N)`                                                  |            `N` |             16 KiB |         64 KiB |          120 s |
+| `uz.ConfiguredApp(N, message, queue)`                        |            `N` |            tham số |        tham số |          120 s |
+| `uz.ConfiguredAppWithTimeout(N, message, queue, timeout_ms)` |            `N` |            tham số |        tham số |        tham số |
+| `uz.Server.builder(init.io)`                                 | `ServerConfig` |     `ServerConfig` | `ServerConfig` | `ServerConfig` |
+
+`App(N)` là đường ngắn nhất. Nó truyền message size mặc định 16 KiB, write queue
+64 KiB và idle timeout 120 s cho `ConfiguredApp`. Capacity là compile-time vì
+chúng quyết định type của application được sinh ra, nên hãy truyền literal hoặc
+giá trị `const`.
+
+`Server.builder` bắt đầu từ một `ServerConfig` và nhận các override có tên
+`with_*`. Mỗi lần gọi trả về builder cho một cấu hình mới, và `build(allocator)`
+thực hiện một cấp phát cho application: slab liền mạch chứa connection pool,
+request buffer, WebSocket message region, write queue, router storage và
+compression scratch tùy chọn.
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .preset(uz.Presets.microservice)
+    .with_max_body_size(256 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`ServerConfig.slab_bytes()` và `Server.builder(...).slab_bytes()` báo kích thước
+slab chính xác trước khi cấp phát. Các giá trị phải khớp với type được sinh ra,
+nên builder từ chối capacity biến runtime ngay lúc compile. Snippet trên giả định
+có import `std` và `uz`, cùng giá trị `init` mà `main` nhận từ
+`std.process.Init`.
+
+## Một application hoàn chỉnh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`init` cấp phát slab và trả về application. `defer` đi kèm để một lần `listen`
+lỗi hay `run` đã drain vẫn giải phóng bộ nhớ đúng một lần.
+
+## Preset
+
+Preset là một `ServerConfig` có tên. Chỉ override những field mà workload của bạn
+thay đổi; các mặc định còn lại giữ nguyên.
+
+| Preset                   | Conn. | WS msg |   Queue |   Body |  Idle |
+| ------------------------ | ----: | -----: | ------: | -----: | ----: |
+| `Presets.microservice`   |   256 |  8 KiB |  16 KiB | 64 KiB |  30 s |
+| `Presets.websocket_chat` |   512 | 32 KiB |  32 KiB |  4 KiB | 120 s |
+| `Presets.file_server`    |   128 |  4 KiB | 512 KiB |  8 KiB | 300 s |
+
+`websocket_chat` cũng dự trữ RFC 7692 scratch theo từng connection bằng cách đặt
+`compression = true`. Message size, write queue và request body limit là những
+giá trị quyết định một connection có thể lớn đến đâu.
+
+## Một application hay worker group
+
+`App` chạy một event loop. `App.cluster(worker_count)` định nghĩa type của một
+group thread-per-core, còn
+`Server.builder(...).build_cluster(allocator, worker_count, options)` tạo một
+group như vậy. Mỗi worker sở hữu slab, event loop và khi bật TLS thì sở hữu
+`SSL_CTX` riêng. Worker bind port chung bằng `SO_REUSEPORT` ở nền tảng hỗ trợ.
+
+`worker_count` lúc compile là capacity, không phải giới hạn runtime cứng.
+`ClusterOptions.worker_count` có thể chọn ít worker active hơn, và chỉ worker
+active mới cấp phát slab, inbox và thread handle. `worker_count()` báo số đã cấp
+phát, `worker_capacity()` báo capacity lúc compile.
+
+| Hình thức | Dùng khi                                                                         |
+| --------- | -------------------------------------------------------------------------------- |
+| `App`     | Một event loop là đủ cho service, test hoặc runtime nhúng.                       |
+| Cluster   | Công việc cần chạy trên nhiều core, hoặc mỗi core cần slab và TLS context riêng. |
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Group = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Group.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/", hello);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+Cấu hình route cho từng worker trước `listen`, và gọi
+`group.catch_shutdown_signals()` khi group cần shutdown theo SIGINT hoặc
+SIGTERM. Listener của cluster chỉ hỗ trợ TCP/TLS; `init_http3` và `listen_udp`
+vẫn là API single-application.
+
+## Lifecycle
+
+| Bước                    | Quy tắc                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `init*`                 | Chọn plaintext, HTTPS, mTLS hoặc HTTP/3. Biến thể TLS nạp credential trước khi loop chạy.                                         |
+| Đăng ký route           | Trước lần `listen` đầu tiên. Lần gọi sau trả về `error.RoutesLocked`.                                                             |
+| `listen` / `listen_all` | `listen` bind một endpoint; `listen_all` bind tối đa bốn endpoint với barrier all-or-nothing. Application phải ở địa chỉ ổn định. |
+| `listen_udp`            | Bind QUIC sau một HTTP/3 initializer. Lệnh này cũng khóa việc thay đổi route.                                                     |
+| `run`                   | Chạy loop đến khi shutdown drain xong. Gọi lại trả về `error.ApplicationAlreadyRunning`.                                          |
+| `request_shutdown`      | An toàn từ mọi thread hoặc callback. Nó lưu yêu cầu, đánh thức loop sở hữu rồi trả về.                                            |
+| `shutdown`              | Chỉ trên loop thread. Gọi từ callback thì bắt đầu shutdown; gọi bên ngoài thì tự chạy loop và drain.                              |
+| `deinit`                | Panic khi gọi trong event loop. Luôn đi kèm `defer`.                                                                              |
+
+:::warning[Giữ application ở địa chỉ ổn định]
+Không di chuyển giá trị `App` sau `listen` hoặc `listen_udp`, hoặc sau một đăng
+ký giữ context như `openapi`, `datagram`, hay bước cài đặt observability mà `listen`
+thực hiện. Callback và completion vẫn giữ pointer vào đó.
+:::
+
+## Tiếp theo
+
+- [Vòng đời request](/docs/concepts/request-lifecycle)
+- [Server lifecycle](/docs/http/server-lifecycle)
+- [Mô hình capacity](/docs/concepts/capacity-model)

@@ -80,7 +80,7 @@ bindings on musl systems.
   frontmatter, or docs routes to locale JSON or x18n resources.
 - TypeScript strict. No `any` and no unchecked casts.
 - Semicolons, double quotes, and trailing commas are mandatory.
-- Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Functions are camelCase.
+- Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase. Repository-authored TypeScript functions are camelCase. Zig samples follow upstream Zig style: snake_case functions and variables, PascalCase types, exact public spelling.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See [tests/README.md](tests/README.md).
 - `lefthook` runs the pre-commit gate. Do not bypass it.
 - Do not weaken a lint, test, build, accessibility, or CI gate.

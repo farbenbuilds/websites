@@ -1,0 +1,171 @@
+---
+title: WebSocket stream adapters
+description: Adapt a complete-message WebSocket transport to a pull-based byte stream with explicit backpressure actions for callback-free code.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, websocket]
+---
+
+`uz.WebSocketStream` turns a complete-message WebSocket transport into a
+pull-based byte stream. You push each message into a bounded incoming ring and
+read bytes out on demand. The adapter reports flow control as a value instead of
+hiding it in a callback.
+
+The adapter does not parse frames, perform the upgrade handshake, validate
+UTF-8, or negotiate compression. The WebSocket protocol documentation in the
+repository (`docs/websocket.md`) owns those rules. This page covers only the
+adapter surface.
+
+## Construct a stream
+
+`web_socket_stream(Adapter)` is a compile-time constructor. `Adapter` must
+declare `send`, `close`, and `terminate`; a missing declaration fails the build
+with a compile error naming it.
+
+| Member          | Signature                                | Behavior                                  |
+| --------------- | ---------------------------------------- | ----------------------------------------- |
+| `init`          | `(context, incoming, high, low, signal)` | Validates buffers and water marks         |
+| `push_incoming` | `(message) !void`                        | Copies one complete message into the ring |
+| `read`          | `(destination) !usize`                   | Pulls bytes into caller storage           |
+| `send`          | `(message, kind) !Action`                | Sends and returns the flow-control action |
+| `flushed`       | `(byte_count) !Action`                   | Accounts for a transport drain            |
+| `close`         | `() !Action`                             | Starts an orderly close                   |
+| `abort`         | `() void`                                | Terminates the transport best effort      |
+
+`init` returns `EmptyIncomingBuffer` for a zero-length ring and
+`InvalidWaterMarks` when the high-water mark is zero or the low-water mark is
+above it. `push_incoming`, `read`, and `send` check a non-null `AbortSignal`
+before touching stream state.
+
+## Move messages and bytes
+
+`push_incoming` copies the message into the ring with no allocation. A message
+that does not fit returns `IncomingBufferFull`; the ring never grows. `read`
+copies up to `destination.len` bytes from the ring and returns the count, or `0`
+when the ring is empty.
+
+`MessageKind` is `binary` or `text`. `send` passes the message and kind to the
+adapter and adds the length to the queued-byte count.
+
+```zig
+fn forward(
+    stream: *uz.NativeWebSocketStream,
+    payload: []const u8,
+) !uz.websocket_backpressure.Action {
+    return stream.send(payload, .binary);
+}
+```
+
+On an adapter send error, `send` transitions the state to `aborted`, calls
+`Adapter.terminate`, and returns the original error. The stream is not reused
+after that.
+
+## Observe backpressure
+
+The adapter uses the pure transition model in `uz.websocket_backpressure`.
+`send` and `flushed` return a `uz.websocket_backpressure.Action`:
+
+| Action                | Meaning for the producer                        |
+| --------------------- | ----------------------------------------------- |
+| `none`                | No change                                       |
+| `write`               | Queue still below the high-water mark           |
+| `pause_producer`      | High-water mark reached; stop producing         |
+| `resume_producer`     | Drained to the low-water mark; resume           |
+| `close_transport`     | Output drained; the stream closed the transport |
+| `terminate_transport` | The stream terminated the transport             |
+
+`flushed(byte_count)` removes drained bytes from the queued count. A close
+requested while bytes remain moves to `closing` and returns `none`; the drain
+that empties the queue returns `close_transport`. `abort()` returns nothing
+because a stream that is already closed or aborted is left unchanged.
+
+The producer owns the pause: nothing in the stream calls your producer again.
+Stop on `pause_producer` and resume when a `flushed` call returns
+`resume_producer`. The queued-byte count is bounded by the water marks you pass
+at `init`; the [capacity model](/docs/concepts/capacity-model) explains how
+transport queues are sized.
+
+## Native adapter
+
+`uz.NativeWebSocketStream` binds the constructor to the server `WebSocket`:
+
+| Adapter call | Native behavior                                |
+| ------------ | ---------------------------------------------- |
+| `send`       | Maps `binary` or `text` to the matching opcode |
+| `close`      | Sends close code 1000 with an empty reason     |
+| `terminate`  | Drops the connection immediately               |
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, _: uz.Opcode) void {
+    var incoming: [16 * 1024]u8 = undefined;
+    var stream = uz.NativeWebSocketStream.init(
+        ws,
+        &incoming,
+        64 * 1024,
+        16 * 1024,
+        null,
+    ) catch |err| {
+        std.log.err("stream init failed: {}", .{err});
+        ws.terminate();
+        return;
+    };
+
+    stream.push_incoming(message) catch |err| {
+        std.log.err("stream buffer failed: {}", .{err});
+        stream.abort();
+        return;
+    };
+
+    var scratch: [512]u8 = undefined;
+    const count = stream.read(&scratch) catch |err| {
+        std.log.err("stream read failed: {}", .{err});
+        stream.abort();
+        return;
+    };
+
+    _ = stream.send(scratch[0..count], .text) catch |err| {
+        std.log.err("stream send failed: {}", .{err});
+        return;
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/chat", .{ .message = on_message });
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+The callback example copies one message through a local ring to show the API.
+Use the adapter when a different producer pushes many messages and a consumer
+pulls them at its own rate, not for a single echo.
+
+## Adapter or callback
+
+| Need                                                           | Use                                  |
+| -------------------------------------------------------------- | ------------------------------------ |
+| Ordinary server route with `open`, `message`, `drain`, `close` | `app.ws` callbacks                   |
+| Borrowed message slices for one callback                       | `app.ws` callbacks                   |
+| Pull bytes at the consumer's rate                              | `WebSocketStream`                    |
+| Pipe messages into another writer or parser                    | `WebSocketStream`                    |
+| Adapt a non-native transport or test harness                   | `web_socket_stream(YourAdapter)`     |
+| Framing, masking, handshake, compression                       | The protocol layer, not this adapter |
+
+No WebSocket client is shipped. The bundled client is HTTP/1.1 only, and a
+WebSocket client is listed as near-term roadmap work; see
+[the FAQ](/docs/getting-started/faq#client-scope). Do not use this adapter as a
+client: it has no upgrade, masking, or frame parser.
+
+## Next
+
+Read [your first WebSocket](/docs/examples/first-websocket) for a callback-based
+route, then [backpressure](/docs/concepts/backpressure) for the queue model the
+actions describe. The [streaming responses](/docs/http/streaming) page covers the
+same producer discipline on the HTTP side.

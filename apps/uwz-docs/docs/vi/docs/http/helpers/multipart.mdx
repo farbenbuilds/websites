@@ -1,0 +1,157 @@
+---
+title: Multipart
+description: Duyệt các part multipart form-data có giới hạn, đọc header và filename của part, rồi xử lý payload theo chunk được mượn.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, http]
+---
+
+`uz.multipart` parse một request body `multipart/form-data` hoàn chỉnh thành
+các part được mượn. Helper đọc boundary từ `Content-Type`, kiểm tra nó, rồi
+trả về header, name, filename, content type và payload của từng part mà không
+copy upload.
+
+Parser chạy trên request body mà server đã buffer sẵn. Không có API request body
+tăng dần, nên giới hạn kích thước chính là giới hạn body.
+
+## Quy tắc boundary
+
+`boundary_from_content_type` thực hiện phần trích xuất mà `req.multipart()`
+dùng:
+
+- Media type trước dấu `;` đầu tiên phải là `multipart/form-data`, không phân
+  biệt hoa thường. Nếu không, hàm trả `NotMultipartFormData`.
+- Parameter `boundary` là bắt buộc. Thiếu parameter trả
+  `MissingMultipartBoundary`.
+- Boundary phải dài 1 đến 70 byte (`max_boundary_length`), không kết thúc bằng
+  space, và chỉ chứa chữ số, chữ cái ASCII cùng các ký tự
+  `' ( ) + _ , - . / : = ?` và space.
+
+Boundary không hợp lệ trả `InvalidMultipartBoundary`. `Parser.init(body,
+boundary)` áp dụng cùng kiểm tra, nên parser tự dựng cũng không thể bắt đầu từ
+delimiter không hợp lệ.
+
+```zig
+fn open_multipart(req: *uz.Request) !uz.multipart.Parser {
+    const content_type = req.get_unique_header("content-type") orelse
+        return error.MissingContentType;
+    const boundary = try uz.multipart.boundary_from_content_type(content_type);
+    return uz.multipart.Parser.init(req.body, boundary);
+}
+```
+
+## Duyệt part
+
+| Lời gọi                       | Trả về          | Ghi chú                                 |
+| ----------------------------- | --------------- | --------------------------------------- |
+| `Parser.init(body, boundary)` | `!Parser`       | Kiểm tra boundary                       |
+| `next_part()`                 | `!?Part`        | `null` sau close delimiter              |
+| `Part.chunks(size)`           | `ChunkIterator` | Các chunk được mượn, kích thước cố định |
+| `ChunkIterator.next()`        | `?[]const u8`   | `null` ở cuối part                      |
+
+`Part` có `headers`, `name`, `filename`, `content_type` và `data`. Header block
+là text header thô của part, không gồm dòng trống kết thúc. `name` và `filename`
+đến từ `Content-Disposition`; `content_type` đến từ field `Content-Type` của
+chính part và là `null` khi không có.
+
+Token đầu tiên của `Content-Disposition` phải là `form-data`, nếu không part
+báo lỗi `InvalidContentDisposition`. Parameter `name` là bắt buộc; thiếu nó part
+báo lỗi `MissingPartName`.
+
+Parameter có thể có hoặc không có dấu ngoặc kép. Dấu ngoặc kép bao ngoài được
+bỏ. Value trong ngoặc kép có chứa backslash được coi là không tồn tại, nên nó
+không thể mang escape sequence vào đường dẫn của ứng dụng.
+
+Preamble RFC 2046 trước delimiter đầu tiên được bỏ qua, và epilogue sau close
+delimiter bị bỏ. Cả hai là chi tiết transport, không phải field của ứng dụng.
+
+## Đọc theo chunk
+
+`Part.data` là một slice được mượn của toàn bộ payload. Dùng `chunks` khi
+consumer muốn từng phần có giới hạn, ví dụ để hash hoặc copy upload theo bước
+cố định. Iterator trả các slice của `data`, không copy. Chunk size bằng 0 trả
+về không chunk nào. Parser và iterator không cấp phát; mọi slice đều mượn
+request body.
+
+```zig
+const std = @import("std");
+
+fn hash_part(part: uz.multipart.Part) u64 {
+    var hasher = std.hash.Wyhash.init(0);
+    var chunks = part.chunks(4096);
+    while (chunks.next()) |chunk| hasher.update(chunk);
+    return hasher.final();
+}
+```
+
+## Body được buffer và các giới hạn
+
+| Giới hạn        | Giá trị                                       | Kết quả khi vượt                                                                               |
+| --------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Request body    | `ServerConfig.max_body_size`, mặc định 16 KiB | `413 Payload Too Large` trước khi handler chạy trên HTTP/1.1 và HTTP/3; HTTP/2 đóng connection |
+| Độ dài boundary | 70 byte                                       | `InvalidMultipartBoundary`                                                                     |
+| Số part         | Không có giới hạn riêng                       | Bị chặn bởi giới hạn body                                                                      |
+
+Request body hoàn chỉnh trước khi handler được gọi. Điều này cho handler thấy
+đầy đủ mọi part, gồm header của part và payload rỗng, nhưng cũng có nghĩa upload
+không thể vượt kích thước body đã cấu hình. Tăng `max_body_size` bằng server
+builder khi cần upload lớn hơn. Trang [giới hạn HTTP](/docs/http/limits) liệt
+kê giới hạn của transport.
+
+## Handler hoàn chỉnh
+
+```zig src/main.zig
+fn upload(req: *uz.Request, res: *uz.Response) void {
+    var parser = req.multipart() catch |err| {
+        res.end("400 Bad Request", @errorName(err)) catch {};
+        return;
+    };
+
+    var total: usize = 0;
+    var files: usize = 0;
+
+    while (true) {
+        const maybe_part = parser.next_part() catch |err| {
+            res.end("400 Bad Request", @errorName(err)) catch {};
+            return;
+        };
+        const part = maybe_part orelse break;
+
+        if (part.filename == null) continue;
+        files += 1;
+        var chunks = part.chunks(1024);
+        while (chunks.next()) |chunk| total += chunk.len;
+    }
+
+    var body_buffer: [96]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &body_buffer,
+        "files={d} bytes={d}",
+        .{ files, total },
+    ) catch return;
+    res.text(body) catch {};
+}
+```
+
+Handler gửi kết quả bằng `res.text`. [API response](/docs/http/response) bao
+quát trạng thái response và thứ tự header.
+
+## Kiểm tra
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/upload \
+  -F 'title=helpers' \
+  -F 'avatar=@./avatar.png'
+```
+
+Handler đếm một file và báo độ dài byte của `avatar.png`. Body lớn hơn
+`max_body_size` trả `413 Payload Too Large` kèm rejection document, và handler
+không được gọi.
+
+## Tiếp theo
+
+Đọc [API request](/docs/http/request) cho quy tắc body và header quanh
+`req.multipart()`, rồi [Query và form](/docs/http/helpers/query-and-forms)
+cho input không phải multipart. [Capacity model](/docs/concepts/capacity-model)
+giải thích cách request body được cấp kích thước.

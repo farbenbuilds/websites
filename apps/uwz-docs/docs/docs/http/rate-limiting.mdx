@@ -1,0 +1,171 @@
+---
+title: Rate limiting
+description: Bound requests per key with a caller-owned token bucket, size the index table, and read the 429 and Retry-After contract.
+sidebar:
+  order: 18
+search:
+  tags: [how-to, rate-limit]
+---
+
+µWebZockets limits requests with a caller-owned token bucket per key. The
+middleware performs no allocation and takes no locks, and the O(1) constructor
+adds an open-addressed key index plus an intrusive LRU over the same fixed
+table.
+
+## Register the limiter
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn api(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var buckets: [256]uz.middleware.RateLimitBucket = @splat(.{});
+    var slots: [512]uz.middleware.RateLimitIndexSlot = @splat(.{});
+    var links: [256]uz.middleware.RateLimitLink = @splat(.{});
+
+    var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+        .rate_per_second = 2,
+        .burst = 4,
+        // One global budget. Use key_fn with an authenticated identity for
+        // separate client budgets.
+        .key_constant = 1,
+    }, &buckets, &slots, &links);
+    _ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+
+    _ = try app.get("/api", api);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+The buckets are limiter state, not configuration. Keep all three arrays alive
+until `app.deinit()`, and give each limiter its own arrays.
+
+## Choose the key
+
+`RateLimitOptions` resolves the key in this order:
+
+| Field          | Type              | Behavior                                              |
+| -------------- | ----------------- | ----------------------------------------------------- |
+| `key_fn`       | `?RateLimitKeyFn` | Called first when set; returns the key directly       |
+| `key_header`   | `?[]const u8`     | Hashed with FNV-1a when the request carries the field |
+| `key_constant` | `u64`             | Used when no function is set, or the header is absent |
+
+`RateLimitKeyFn` is `*const fn (request: *const Request) u64`. A `key_header`
+that the request does not carry falls back to `key_constant`, so all keyless
+requests share one budget. A `key_fn` result is used as given, including `0`.
+
+`key_header` is safe only when the value is derived by the server, for example
+`x-forwarded-for` written by a trusted proxy or an API key resolved from a
+stored record. A header the client can choose lets one client rotate keys. Each
+rotation creates a new bucket, and when the table is full every new key evicts
+the oldest bucket. The rotating client cannot refill its own budget, but it can
+push other clients out; an evicted client returns to a fresh bucket with zero
+tokens and receives `429`. Prefer `key_fn` with a server-derived value, or
+`key_constant` for one global limit.
+
+## Size the index table
+
+| Requirement                                   | Checked at construction       |
+| --------------------------------------------- | ----------------------------- |
+| `slots.len >= 2 * buckets.len`                | `error.InvalidIndexCapacity`  |
+| `links.len == buckets.len`                    | `error.InvalidIndexCapacity`  |
+| No duplicate key in a pre-seeded bucket array | `error.DuplicateRateLimitKey` |
+
+The two-to-one ratio bounds the open-addressing load factor at one half.
+`rate_limit_indexed` rebuilds the index from the bucket array, so a restored
+table keeps its placement and exact-oldest tie break.
+
+`rate_limit(init.io, options, buckets)` is the older constructor for callers
+that only have a bucket array. It scans the table and is the documented linear
+compatibility path for pre-populated tables without index storage. Do not share
+one live bucket array between both constructors.
+
+## Token bucket
+
+- `rate_per_second` is the refill rate in tokens per second. `0` disables
+  refill.
+- `burst` is the bucket capacity. `0` uses `rate_per_second` with a minimum of
+  one token.
+- Refill is continuous, driven by `std.Io.Clock.now(.awake)`, which is
+  `CLOCK_MONOTONIC` on Linux. Sub-token remainder stays in `last_refill_ns`, so
+  the bucket does not reset on a fixed window.
+- A full bucket does not bank idle time. Tokens are clamped to the effective
+  burst on every step.
+- A new request on a free slot starts with a full bucket. A new request that
+  evicted another key starts with zero tokens.
+
+The refill arithmetic is the exported pure function `rate_limit_step`, so you
+can test decisions without a socket or a clock.
+
+## Eviction
+
+The indexed table keeps an intrusive LRU over `links`. A hit and a free-slot
+insert are O(1) expected. When every bucket is occupied and a new key arrives,
+the middleware evicts the head of the LRU, which is the exact bucket with the
+smallest `last_refill_ns`. Equal timestamps keep the lowest bucket index first.
+
+Tombstones left by eviction trigger an index rebuild once they exceed a quarter
+of `slots`, which keeps probe chains short. The rebuild preserves LRU order.
+
+## Rejection
+
+An exhausted bucket receives `429 Too Many Requests` with an empty body and a
+`Retry-After: 1` field. The value is one second for any nonzero
+`rate_per_second`, because the header's resolution is one second and an integer
+rate supplies the next token within that second. A zero rate never refills, so
+the middleware omits `Retry-After` instead of promising a delay.
+
+Two cases fail closed with the same `429`: an empty bucket array, and a table
+lookup that cannot return a slot. A limiter configured with no storage rejects
+every request rather than admitting them.
+
+## Per worker
+
+One table belongs to one event loop. It is mutable state with no lock, so do not
+share it across workers. In a cluster, build one limiter per worker and account
+for the multiplication: a client that reaches `N` workers can spend the
+per-worker budget once on each. Keys are also only unique inside one worker's
+table, and traffic redistribution resets what a worker knows about a key.
+
+## Failure modes
+
+| Condition                                  | Result                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| Tokens exhausted                           | `429 Too Many Requests` plus `Retry-After` when the rate is nonzero |
+| Bucket array empty                         | `429 Too Many Requests` on every request                            |
+| `slots` below twice `buckets`              | Startup error `error.InvalidIndexCapacity`                          |
+| `links` length differs from `buckets`      | Startup error `error.InvalidIndexCapacity`                          |
+| Duplicate key in a pre-seeded bucket array | Startup error `error.DuplicateRateLimitKey`                         |
+
+The last three come from `rate_limit_indexed` before a listener binds, so they
+are Zig errors with no HTTP status.
+
+## Verify
+
+```sh
+for i in $(seq 1 6); do
+  curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api
+done
+```
+
+With `burst = 4`, the first four requests print `200` and later ones print
+`429` until the bucket refills at two tokens per second. Use `curl -i` on a
+rejected request to see `Retry-After: 1`.
+
+## Next
+
+- [Authentication](/docs/http/authentication) decides who may call before the
+  limiter counts how often.
+- [Middleware](/docs/http/middleware) covers ordering and per-worker
+  registration.
+- [Shared-nothing workers](/docs/concepts/shared-nothing) explains why the
+  table is per loop.

@@ -1,0 +1,109 @@
+---
+title: Routing model
+description: Learn how static segments, parameters, and terminal wildcards match, how methods fall back, and which route limits fail registration.
+sidebar:
+  order: 4
+search:
+  tags: [concept, routing]
+---
+
+The router maps a request path and method to one registered callback. Exact
+segments stay on a radix fast path, parameterized and wildcard patterns live in
+a bounded side table, and a static route always wins over a matching pattern.
+
+## Pattern kinds
+
+| Pattern        | Matches                                          | Captures |
+| -------------- | ------------------------------------------------ | -------- |
+| `/health`      | Exactly `/health`                                | None     |
+| `/users/:id`   | One nonempty segment, such as `/users/42`        | `id`     |
+| `/files/*path` | The remaining path, including an empty remainder | `path`   |
+
+A `:name` capture matches one nonempty path segment. A `*name` wildcard is
+terminal, so it must be the last segment. `Request.get_param` reads up to 16
+borrowed captures by default.
+
+## Precedence
+
+The router checks an exact static index first. A hit is verified against the
+node's stored segments, so a hash collision cannot select the wrong route. When
+no static route matches, the router evaluates the registered patterns:
+
+1. A pattern with more static bytes wins.
+2. With equal static byte counts, a pattern without a wildcard wins over one with
+   a wildcard.
+3. With equal wildcard shape, the pattern with fewer captures wins.
+
+Ranking uses shape rather than a registration sequence; if two shapes still tie,
+the earlier registration matches. Two patterns with the same shape, which differ
+only in capture names, fail registration with `error.RoutePatternConflicts`
+instead of shadowing one another.
+
+The registration snippets assume an initialized `app` and handler functions
+declared elsewhere.
+
+```zig
+_ = try app.get("/", index);
+_ = try app.get("/users/:id", show_user);
+_ = try app.get("/files/*path", serve_file);
+_ = try app.post("/users", create_user);
+_ = try app.any("/health", health);
+```
+
+## Methods
+
+`get`, `head`, `post`, `put`, `delete`, `patch`, `options`, `trace`, `query`, and
+`any` register one method on one path. `query` is the RFC 10008 QUERY method and
+`trace` is opt-in.
+
+The method fallback rules are visible in the `Allow` field:
+
+- An explicit `HEAD` handler wins. Without one, `HEAD` uses the `GET` handler.
+- Registering `GET` also adds `HEAD` to the path's allowed methods.
+- An explicit `OPTIONS` handler wins. Without one, a matching path answers
+  `204 No Content` with an `Allow` field.
+- `OPTIONS *` answers `204 No Content` for the server as a whole.
+- A method that has no handler on a matched path answers
+  `405 Method Not Allowed` with an `Allow` field.
+- `any` acts as the fallback handler for every method and makes `Allow` report
+  the full method set.
+
+A WebSocket route also contributes `GET` to the allowed set.
+
+## Limits
+
+| Resource               |   Default | `ServerConfig` field      | Failure                               |
+| ---------------------- | --------: | ------------------------- | ------------------------------------- |
+| Radix nodes            |       256 | `max_route_nodes`         | `error.RouteCapacityReached`          |
+| Parameterized patterns |        64 | `max_pattern_routes`      | `error.RouteCapacityReached`          |
+| Route path             |     2 KiB | `max_route_path_size`     | `error.InvalidRoutePath`              |
+| Captures               | 16 inline | `max_route_params`        | `error.RouteParameterCapacityReached` |
+| Retained path registry |    64 KiB | `max_route_registry_size` | `error.RouteStorageCapacityReached`   |
+
+Each node stores one path segment, so shared prefixes count once. A larger
+`max_route_params` carves an extra name/value pointer pair per capture into the
+per-connection slab; the inline arrays hold 16. The registry stores route paths
+for introspection and OpenAPI output, not for matching.
+
+## Registration failures
+
+Registration is a startup activity. Once a listener starts, route arrays are
+immutable and further calls return `error.RoutesLocked`.
+
+| Error                                 | Cause                                                                        |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | Empty path, no leading `/`, `?`, `#`, CR, LF, or length above the limit      |
+| `error.InvalidRoutePattern`           | Empty capture name, duplicate capture name, or a nonterminal wildcard        |
+| `error.RoutePatternConflicts`         | Another pattern has the same static bytes, capture count, and wildcard shape |
+| `error.RouteAlreadyRegistered`        | The same method and path already has a handler                               |
+| `error.RouteCapacityReached`          | Node table or pattern table is full                                          |
+| `error.RouteParameterCapacityReached` | The pattern needs more captures than the configured limit                    |
+
+Malformed patterns fail instead of matching ambiguously. A duplicate or
+malformed pattern is never silently ignored.
+
+## Next
+
+- [Route parameters and wildcards](/docs/http/route-parameters)
+- [Routing](/docs/http/routing)
+- [Handler shapes](/docs/concepts/handler-shapes)

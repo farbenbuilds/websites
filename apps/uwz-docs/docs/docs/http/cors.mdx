@@ -1,0 +1,170 @@
+---
+title: CORS
+description: Allow named origins with CORS, answer preflight requests deliberately, and recognize the 403 and 500 responses the middleware produces.
+sidebar:
+  order: 15
+search:
+  tags: [how-to, cors]
+---
+
+µWebZockets treats CORS as middleware you register, not as behavior the server
+adds. You list the trusted origins, and the middleware adds the response fields
+a browser needs for them. Other origins get no CORS fields.
+
+## Register the middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn items(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var cors = uz.middleware.cors(.{
+        .origins = &.{ "https://app.example.com", "https://admin.example.com" },
+        .methods = &.{ .get, .post },
+        .allow_headers = &.{ "content-type", "x-request-id" },
+        .expose_headers = &.{"x-request-id"},
+        .allow_credentials = true,
+        .max_age = 600,
+    });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    _ = try app.get("/api/items", items);
+    _ = try app.post("/api/items", items);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`uz.middleware.cors` returns a value you own. `app.use` stores a pointer to it,
+so keep the value alive until `app.deinit()`.
+
+## Match origins exactly
+
+Every entry in `origins` is a literal origin. The middleware compares bytes
+with `std.mem.eql`, so the match is exact and case-sensitive.
+`https://app.example.com` matches only that string: a trailing slash, a
+different case, or a different port does not match, and the response carries no
+CORS fields.
+
+There is no wildcard reflection and no prefix matching. An entry of `*` matches
+only the literal value `*`, which browsers never send.
+
+A request without `Origin`, or with more than one `Origin` field, continues
+dispatch without CORS fields. The read uses `get_unique_header`, which returns
+`null` on a duplicate.
+
+A request from an origin that is not listed is not rejected. It runs normally
+and the browser blocks the cross-origin read, because the response carries no
+`Access-Control-Allow-Origin`. CORS is a browser read policy, not access
+control; see the [security model](/docs/concepts/security-model).
+
+## Answer preflight requests
+
+A preflight is an `OPTIONS` request with `Origin` and
+`Access-Control-Request-Method`, and usually `Access-Control-Request-Headers`.
+The middleware steps through these checks in order:
+
+1. If the origin is not an exact match, dispatch continues with no CORS fields.
+2. `Access-Control-Allow-Origin` (the request origin) and `Vary: Origin` are
+   appended, plus credentials and expose headers when configured.
+3. A non-`OPTIONS` request, or an `OPTIONS` request without
+   `Access-Control-Request-Method`, continues dispatch. The router's automatic
+   `OPTIONS` answer still applies in the second case.
+4. The requested method must parse as a method token and appear in `methods`,
+   and each requested header must appear in `allow_headers`, matched
+   case-insensitively. A failure ends `403 Forbidden` with an empty body.
+5. Otherwise the middleware appends `Access-Control-Allow-Methods`,
+   `Access-Control-Allow-Headers`, and `Access-Control-Max-Age` when
+   configured, then ends `204 No Content` and stops dispatch.
+
+The checks run before route dispatch, so they need no registered `OPTIONS`
+route and a preflight for an unknown path still receives `204 No Content`.
+
+Because steps 1 and 2 run first, a `403 Forbidden` from a rejected preflight
+still carries `Access-Control-Allow-Origin` and `Vary`. It carries no
+`Access-Control-Allow-Methods` and no `Access-Control-Allow-Headers`.
+
+## Options
+
+| Field               | Type                    | Default                  | Effect                                             |
+| ------------------- | ----------------------- | ------------------------ | -------------------------------------------------- |
+| `origins`           | `[]const []const u8`    | required                 | Exact origins that receive CORS fields             |
+| `methods`           | `[]const uz.HttpMethod` | `.get`, `.head`, `.post` | Methods allowed in a preflight                     |
+| `allow_headers`     | `[]const []const u8`    | empty                    | Request headers allowed in a preflight, and echoed |
+| `expose_headers`    | `[]const []const u8`    | empty                    | Response headers a browser may read                |
+| `allow_credentials` | `bool`                  | `false`                  | Adds `Access-Control-Allow-Credentials: true`      |
+| `max_age`           | `?u32`                  | `null`                   | Adds `Access-Control-Max-Age` in seconds           |
+
+`allow_headers` and `expose_headers` are formatted as one comma-separated
+field, limited to 1024 bytes each. A configured value that contains a comma,
+CR, or LF is rejected while formatting rather than written.
+
+Do not put `.any` in `methods`: it passes the membership check, but
+`HttpMethod.name()` returns an empty string, so the emitted list contains an
+empty entry.
+
+## Credentials and caching
+
+`allow_credentials` adds `Access-Control-Allow-Credentials: true` to every
+response for an allowed origin, including preflights. The browser still decides
+whether to send cookies or an `Authorization` field.
+
+`Vary: Origin` tells a shared cache that the response depends on the request
+origin. Without it, a cache can serve one origin's CORS fields to another
+origin. The middleware appends its own `Vary` line; a second one from another
+layer leaves two fields that caches combine.
+
+## Apply it deliberately
+
+- Register one CORS middleware per app, before `Auth` and `RateLimit`: a
+  preflight carries no `Authorization` field and should not consume a
+  rate-limit token.
+- Do not use CORS as authentication. It only limits which origins a browser
+  lets a page read from; any non-browser client ignores it.
+- In a cluster, register it on each worker's app with the same origin list.
+
+## Failure modes
+
+| Condition                                             | Result                                                     |
+| ----------------------------------------------------- | ---------------------------------------------------------- |
+| Requested method token is unknown or not in `methods` | `403 Forbidden`, empty body                                |
+| A requested header is missing from `allow_headers`    | `403 Forbidden`, empty body                                |
+| More than 10 entries in `methods`                     | `500 Internal Server Error` via `error.TooManyCorsMethods` |
+| A formatted header list exceeds 1024 bytes            | `500 Internal Server Error` via `error.BufferTooSmall`     |
+| A configured list value contains a comma, CR, or LF   | `500 Internal Server Error` via `error.InvalidHeaderValue` |
+| Pending header buffer cannot hold the appended fields | `500 Internal Server Error` via `error.BufferOverflow`     |
+
+The last four are configuration defects; test a preflight at startup.
+
+## Verify
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: DELETE'
+```
+
+The first command returns `204 No Content` with the allowed origin, `Vary`, and
+`Access-Control-Allow-Methods: GET, POST`. With the default `methods` list the
+last field reads `GET, HEAD, POST`. The second returns `403 Forbidden` because
+`DELETE` is not configured.
+
+## Next
+
+- [Security headers](/docs/http/security-headers) sets response fields that
+  apply to every page, not only cross-origin reads.
+- [Authentication](/docs/http/authentication) covers the credential checks that
+  CORS does not perform.

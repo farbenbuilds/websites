@@ -1,0 +1,144 @@
+---
+title: Mô hình bảo mật
+description: Nắm các trust boundary, parser hardening, TLS policy, kiểm soát authentication, xử lý secret và đường disclosure.
+sidebar:
+  order: 17
+search:
+  tags: [concept, security]
+---
+
+Security model tách phần framework thực thi khỏi phần deployment phải sở hữu.
+µWebZockets giới hạn mọi network input và fail closed khi protocol data
+malformed. Certificate trust, identity policy, secret storage và capacity sizing
+vẫn là trách nhiệm của bạn.
+
+## Trust boundary
+
+- **TCP và TLS.** Framework chỉ cho phép TLS 1.3, ALPN `h2` rồi `http/1.1`,
+  safe-method 0-RTT và QUIC 0-RTT tắt. Bạn sở hữu certificate, CA bundle,
+  rotation và network policy.
+- **HTTP parsing.** Framework dùng buffer cố định, framing chặt và rejection
+  document `413`/`431`. Bạn sở hữu capacity sizing và OS resource limit.
+- **Authentication.** `middleware.Auth` so sánh constant-time, và xác minh mTLS
+  chạy trong TLS layer. Bạn sở hữu user store, token issuance và phân quyền theo
+  route.
+- **Rate limiting.** `middleware.RateLimit` dùng token bucket cố định. Bạn sở hữu
+  việc chọn key, threshold và chính sách shared-state.
+- **C ABI.** Framework cung cấp opaque handle, destroy rõ ràng và error code khác 0. Bạn sở hữu vòng đời handle và việc copy slice được borrow.
+
+Bề mặt mạng live là HTTP/1.1, HTTP/2 có giới hạn, WebSocket RFC 6455,
+per-message deflate RFC 7692, HTTPS và HTTP/3 request/response routing có giới
+hạn. Raw QUIC engine, stream, packet và QPACK callback dưới `src/quic` là
+internal và không phải consumer interface được hỗ trợ. HTTP/1.1 client outbound
+cũng thuộc bề mặt: nó xác minh certificate khi bật `verify`, yêu cầu trust store
+do caller cung cấp và từ chối dùng lại một client với trust rule khác.
+`verify = false` chỉ dành cho development.
+
+## Parser hardening
+
+HTTP/1.1 parsing chứng minh completeness trước dispatch và từ chối framing mơ hồ.
+Bộ h1spec và adversarial case tất định bao phủ request target, framing,
+pipelining và input quá lớn. HTTP/2 kiểm tra client preface, frame size, frame
+sequencing, HPACK state và flow control, đồng thời giới hạn mỗi connection ở tám
+stream. HTTP/3 yêu cầu pseudo-field đứng trước regular field và duy nhất, và từ
+chối connection-specific field là malformed với `H3_MESSAGE_ERROR` ở phạm vi
+stream.
+
+Input quá lớn trở thành rejection có cấu trúc thay vì connection bị drop. Đường
+rejection ghi từ stack buffer cố định và không đến handler. WebSocket parsing
+theo RFC 6455 và RFC 7692, và server vượt 517/517 Autobahn server case, gồm
+compression group 12 và 13. Per-message deflate tắt mặc định. Khi bật,
+negotiation yêu cầu no context takeover, input và output dùng scratch slice
+riêng, và decompression không vượt message capacity đã cấu hình.
+
+Các giá trị mặc định sau giới hạn parser trước khi application code chạy:
+
+| Setting                  | Mặc định |
+| ------------------------ | -------: |
+| `max_connections`        |    1.024 |
+| `max_request_line_size`  |    8 KiB |
+| `max_header_size`        |   16 KiB |
+| `max_header_count`       |       64 |
+| `max_body_size`          |   16 KiB |
+| `max_ws_message_size`    |   16 KiB |
+| `write_queue_size`       |   64 KiB |
+| `max_middleware`         |       32 |
+| `idle_timeout_ms`        |  120.000 |
+| `header_read_timeout_ms` |   30.000 |
+| `compression`            |  `false` |
+
+`ConfiguredAppWithTimeout` đổi hoặc tắt idle deadline bằng 0.
+`ServerConfig.header_read_timeout_ms` giới hạn HTTP/1 request chưa hoàn chỉnh; 0
+tắt deadline đó. Chọn kích thước các giá trị này cho traffic của bạn và áp OS limit
+bình thường như boundary thứ hai.
+
+## TLS policy
+
+TLS context chỉ dùng TLS 1.3; phiên bản cũ bị từ chối tại context. Context TCP
+quảng bá `h2` rồi `http/1.1`, còn context HTTP/3 chỉ quảng bá `h3`. TLS 1.3 early
+data chỉ được nhận cho safe method đến khi handshake được xác nhận, và QUIC giữ
+early data tắt. Non-safe method trong TCP early data nhận `425 Too Early`.
+
+Mutual TLS dùng `init_https_mtls` với một trong ba mode `tls.ClientAuth`: `none`,
+`optional` hoặc `required`. Mode khác `none` yêu cầu `ca_path` không rỗng, và
+`required` fail handshake closed khi client không xuất trình certificate. Mode
+optional và required tắt TLS 1.3 early data vì certificate được kiểm tra ở flight
+thứ hai. Client CA bundle được đọc một lần khi tạo context; thay nó cần restart.
+CRL trong bundle được nạp vào trust store nhưng revocation không được enforce,
+nên certificate đã revoke vẫn validate đến khi hết hạn trừ khi ứng dụng tự kiểm
+tra.
+
+`Cluster.enable_https` không cấu hình client certificate. HTTP/3 client
+authentication chưa được nối qua QUIC transport. Certificate và key file được đọc
+một lần mỗi worker, và rotation cần rolling restart. Ephemeral certificate là
+self-signed, tạo trong memory, không export được và dành cho development.
+
+## Authentication và rate limiting
+
+`middleware.Auth` hỗ trợ credential Basic và Bearer và so sánh constant-time. Nó
+fail closed khi field malformed hoặc trùng và dùng storage cố định do caller sở
+hữu. Authorization theo route vẫn là application policy; middleware xác minh
+credential, không phải permission model.
+
+`middleware.RateLimit` dùng token bucket cố định và được thiết kế để chống
+rotation qua bucket. Chọn key và threshold cho traffic của bạn. CORS và
+security-header middleware chạy trước route handler, nên policy giống nhau trên
+mọi transport.
+
+## Secret và supply chain
+
+- Không commit file PEM, private key, CA bundle hoặc token.
+- Giữ TLS credential ngoài repository và đọc từ môi trường deployment.
+- Coi private report là nhạy cảm: chỉ gửi log và sanitizer output sau khi xóa
+  secret.
+- Pin hash source hoặc release chính xác, xem `THIRD_PARTY_NOTICES.md` và test
+  library dưới workload của bạn trước production.
+- Destroy mọi C ABI handle rõ ràng và copy giá trị `uwz_slice` được borrow trước
+  khi callback trả về.
+
+Buffer có giới hạn và compliance test giảm risk, nhưng không đảm bảo không có
+defect. ASan, UBSan, leak detection, fuzzing, h1spec, Autobahn và HTTP/3
+cross-implementation gate là bằng chứng, không phải chứng minh an toàn tuyệt đối.
+
+## Disclosure
+
+Bản sửa bảo mật áp dụng cho revision development hiện tại và minor line đã release
+gần nhất. Tag release cũ và snapshot trước đó không nhận backport.
+
+Không mở issue, pull request, discussion hoặc Autobahn report công khai cho lỗ
+hổng chưa công bố. Gửi private report đến địa chỉ trong
+[SECURITY.md](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+Bao gồm revision và platform bị ảnh hưởng, reproducer tối thiểu hoặc packet
+sequence, hành vi mong đợi và quan sát được, impact và precondition, log đã xóa
+secret và mitigation đề xuất. Maintainer xác nhận, reproduce, đánh giá, sửa, thêm
+regression test và điều phối disclosure. Không có SLA cố định. Cho một khoảng
+remediation và release hợp lý trước khi công bố; advisory ghi công reporter nếu
+được yêu cầu.
+
+## Tiếp theo
+
+- [Thương lượng giao thức](/docs/concepts/protocol-negotiation) giải thích
+  ALPN, early data và context HTTP/3 riêng.
+- [Authentication](/docs/http/authentication) đưa middleware vào route.
+- [Rate limiting](/docs/http/rate-limiting) trình bày giới hạn tần suất request có
+  giới hạn.

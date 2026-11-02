@@ -86,12 +86,12 @@ server bằng Ctrl+C.
 
 ## Lỗi thường gặp khi bắt đầu
 
-| Triệu chứng                  | Nguyên nhân và cách sửa                                                                      |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| `error: invalid Zig version` | Compiler đang dùng không phải 0.16.0. Tải Zig 0.16.0 và chọn nó.                             |
-| Hash dependency không khớp   | Package cache hỏng hoặc URL đổi. Xóa package đã cache và fetch lại. Không sửa hash được pin. |
-| Build đầu có vẻ treo         | Zig đang biên dịch source C và C++ đi kèm. Kiểm tra CPU và đĩa trước khi ngắt.               |
-| Tải dependency thất bại      | Kiểm tra kết nối mạng tới GitHub, rồi chạy lại lệnh `zig fetch`.                             |
+| Triệu chứng                     | Nguyên nhân và cách sửa                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `error: invalid Zig version`    | Compiler đang dùng không phải 0.16.0. Tải Zig 0.16.0 và chọn nó.                             |
+| Hash dependency không khớp      | Package cache hỏng hoặc URL đổi. Xóa package đã cache và fetch lại. Không sửa hash được pin. |
+| Build đầu có vẻ treo            | Zig đang biên dịch source C và C++ đi kèm. Kiểm tra CPU và đĩa trước khi ngắt.               |
+| Tải dependency không thành công | Kiểm tra kết nối mạng tới GitHub, rồi chạy lại lệnh `zig fetch`.                             |
 
 ## Bước tiếp theo
 

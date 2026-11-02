@@ -1,0 +1,164 @@
+---
+title: Middleware
+description: Đăng ký middleware toàn cục có giới hạn, điều khiển thứ tự dispatch và nối CORS, security header, auth, rate limit theo worker.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, middleware]
+---
+
+Middleware chạy sau khi router thử match route và trước handler. Chain là toàn
+cục, có thứ tự và cố định lúc startup. Nó cũng chạy khi không route nào khớp,
+trước khi framework gửi `404`. Dùng nó cho policy cắt ngang request, không dùng
+để rẽ nhánh theo từng route. [Mô hình middleware](/docs/concepts/middleware-model)
+giải thích hợp đồng dispatch; trang này hướng dẫn nối các middleware có sẵn.
+
+## Đăng ký chain
+
+`App.use(context, handler)` thêm một callback. Đăng ký mọi callback trước lần
+gọi `listen` hoặc `listen_udp` đầu tiên:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var headers = uz.middleware.security_headers(.{});
+    _ = try app.use(&headers, uz.middleware.SecurityHeaders.handler);
+
+    var cors = uz.middleware.cors(.{ .origins = &.{"https://example.com"} });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    var credentials = uz.middleware.auth(.{
+        .realm = "ops",
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&credentials, uz.middleware.Auth.handler);
+
+    var buckets: [256]uz.middleware.RateLimitBucket = @splat(.{});
+    var slots: [512]uz.middleware.RateLimitIndexSlot = @splat(.{});
+    var links: [256]uz.middleware.RateLimitLink = @splat(.{});
+    var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+        .rate_per_second = 20,
+        .burst = 40,
+        // Một budget cho demo. Dùng key_fn với identity đã xác thực khi mỗi
+        // client cần budget riêng.
+        .key_constant = 1,
+    }, &buckets, &slots, &links);
+    _ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Con trỏ context được mượn, không được copy. Giữ value còn sống trong suốt vòng
+đời ứng dụng. Các mảng rate-limit thuộc caller và phải ở địa chỉ ổn định.
+
+## Điều khiển dispatch
+
+Mỗi callback trả về `uz.MiddlewareResult`:
+
+| Kết quả              | Tác dụng                                 |
+| -------------------- | ---------------------------------------- |
+| `.continue_dispatch` | Chạy callback tiếp theo, rồi đến handler |
+| `.stop`              | Kết thúc chain mà không chạy handler     |
+
+Dispatch cũng dừng khi một callback bắt đầu response, kể cả khi callback trả về
+`.continue_dispatch`. Router kiểm tra `response.is_started()` sau mỗi callback,
+nên response đã bắt đầu trong middleware không thể bị handler ghi tiếp. Nhờ đó
+`Cors` có thể gửi `204 No Content` cho preflight rồi trả `.stop`.
+
+Middleware vẫn chạy khi không route nào khớp, trước khi framework gửi
+`404 Not Found`. Vì vậy header dùng chung và request logging cũng thấy response 404.
+
+## Giới hạn và quy tắc đăng ký
+
+| Quy tắc               | Giá trị                                   | Lỗi                                          |
+| --------------------- | ----------------------------------------- | -------------------------------------------- |
+| Số callback           | 32 mặc định (`max_middleware`)            | `error.MiddlewareCapacityReached`            |
+| Thời điểm đăng ký     | Trước `listen` hoặc `listen_udp` đầu tiên | `error.RoutesLocked`                         |
+| Đăng ký khi shutdown  | Không được                                | `error.ApplicationUnavailable`               |
+| Middleware theo route | Không có                                  | Dùng một callback toàn cục và đọc `req.path` |
+| Thêm hoặc bớt động    | Không có                                  | Tạo lại ứng dụng                             |
+
+Không có biến thể `use` nhận path prefix, và chain không đổi sau khi listener
+khởi động. Callback cần quyết định theo route phải đọc request được mượn và trả
+về sớm.
+
+## Middleware có sẵn
+
+| Kiểu              | Hành vi                                        | Trang chính                                    |
+| ----------------- | ---------------------------------------------- | ---------------------------------------------- |
+| `Cors`            | Khớp origin chính xác và xử lý preflight       | [CORS](/docs/http/cors)                        |
+| `SecurityHeaders` | Cấu hình HSTS, CSP, frame, referrer và nosniff | [Security header](/docs/http/security-headers) |
+| `Auth`            | Basic và Bearer, challenge `401`               | [Authentication](/docs/http/authentication)    |
+| `RateLimit`       | Token bucket, `429`, `Retry-After`             | [Rate limiting](/docs/http/rate-limiting)      |
+
+Cả bốn đều không cấp phát và dùng option hoặc state do caller sở hữu. Default và
+status lỗi chính xác thuộc trang canonical; trang này chỉ xác định vị trí của
+chúng trong chain.
+
+## Quy tắc thứ tự
+
+Thứ tự đăng ký là thứ tự thực thi. Hai quy tắc tránh kết quả bất ngờ:
+
+- Đặt `SecurityHeaders` trước mọi thứ có thể kết thúc response. Các field đã
+  queue sẽ được merge vào helper kết thúc, nên response `401` hoặc `429` vẫn
+  mang chúng.
+- Đặt `Cors` trước `Auth`. Preflight của browser là request `OPTIONS` không có
+  credential; CORS trả `204 No Content` và dừng chain, nên preflight không bị
+  challenge.
+
+Đặt `RateLimit` sau `Auth` khi chỉ request đã xác thực mới tiêu token. Đặt trước
+`Auth` khi limiter cũng phải bảo vệ đường authentication. Framework không tự
+chọn thay bạn.
+
+## State theo worker
+
+Mỗi callback thuộc một event loop. Bảng rate-limit là state mutable của limiter,
+và chỉ một limiter được sở hữu một bảng đang sống:
+
+- Tạo mảng bucket, slot và link trong bước setup của worker, không tạo trong
+  handler.
+- Tạo một limiter cho mỗi cluster worker. Không chia sẻ bảng đang sống giữa các
+  loop.
+- Dùng `key_fn` hoặc `key_constant` khi client có thể đặt header làm key.
+  `key_header` hash một giá trị do server suy ra như `x-forwarded-for` sau một
+  proxy tin cậy.
+
+[Mô hình shared-nothing](/docs/concepts/shared-nothing) giải thích vì sao bảng
+không được đi qua ranh giới worker.
+
+## Kiểm tra
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/ \
+  -H 'Origin: https://example.com' \
+  -H 'Access-Control-Request-Method: GET'
+```
+
+Kỳ vọng `204 No Content`, `Access-Control-Allow-Origin: https://example.com` và
+`Vary: Origin`. Cùng request đó không có bearer token vẫn đến CORS trước, nên
+preflight không bị `Auth` từ chối.
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+Kỳ vọng `401 Unauthorized` với `WWW-Authenticate: Bearer`. Thêm
+`-H 'Authorization: Bearer service-token'` để nhận `200 OK`.
+
+## Tiếp theo
+
+Đọc [CORS](/docs/http/cors) cho policy origin và preflight, sau đó
+[rate limiting](/docs/http/rate-limiting) cho sizing bảng và eviction.

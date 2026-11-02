@@ -24,7 +24,7 @@ giới hạn và tính năng chưa được hỗ trợ. Nội dung giới thiệ
   <Card title="Tôi mới bắt đầu" href="/docs/getting-started" icon="rocket">
     Cài Zig 0.16.0, chạy quickstart và thêm route vào server.
   </Card>
-  <Card title="Tôi đang đánh giá" href="/docs/what-is-uwebsockets" icon="search">
+  <Card title="Tôi đang đánh giá" href="/docs/concepts" icon="search">
     Hiểu mô hình lập trình, protocol surface và các ranh giới có chủ đích.
   </Card>
   <Card title="Tôi đang vận hành" href="/docs/examples/first-cluster" icon="server">
@@ -38,7 +38,9 @@ giới hạn và tính năng chưa được hỗ trợ. Nội dung giới thiệ
 | ---------------------------------------- | ------------------------------------------------------------------ |
 | Cài Zig và thêm package                  | [Cài đặt](/docs/getting-started/installation)                      |
 | Tạo và chạy dự án quickstart             | [Quickstart](/docs/getting-started/quickstart)                     |
+| Hiểu runtime model                       | [Khái niệm](/docs/concepts)                                        |
 | Thêm route HTTP và kiểm tra bằng `curl`  | [HTTP server đầu tiên](/docs/examples/first-http-server)           |
+| Tra cứu HTTP type, helper hoặc limit     | [HTTP/1.1 và application API](/docs/http)                          |
 | Thêm route WebSocket echo                | [WebSocket đầu tiên](/docs/examples/first-websocket)               |
 | Phục vụ procedure JSON-RPC có kiểu       | [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service) |
 | Kết thúc TLS bằng chứng chỉ trong bộ nhớ | [TLS server đầu tiên](/docs/examples/first-tls-server)             |
@@ -54,11 +56,7 @@ tài khoản. Trình duyệt tải search index từ site này trong lần dùng
 ## Helpers
 
 <CardGroup cols={1}>
-  <Card
-    title="Helpers"
-    href="https://github.com/farbenbuilds/uWebZockets/blob/main/docs/http.md#request-and-response-helpers"
-    icon="wrench"
-  >
+  <Card title="Helpers" href="/docs/http/helpers" icon="wrench">
     Phân tích query và form, multipart, cookie, nén, ETag và conditional GET, thương lượng `Accept`,
     primitive fetch và stream, cùng adapter WebSocket stream.
   </Card>

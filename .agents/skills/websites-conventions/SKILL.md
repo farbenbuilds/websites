@@ -38,7 +38,11 @@ the working checklist.
   live in `.oxfmtrc.json`.
 - Files are kebab-case, including Svelte and Astro files; component identifiers
   are PascalCase. Functions are camelCase, except exported HTTP method handlers
-  such as `GET`.
+  such as `GET`. This rule covers repository-authored TypeScript, not code
+  samples in another language.
+- Zig samples use upstream Zig style: `snake_case` functions, variables,
+  parameters, and fields, `PascalCase` types, and the exact public spelling.
+  Never camel-case a Zig identifier to match the TypeScript rule.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See `tests/README.md`.
 - No second formatter, linter, package manager, or test runner.
 - Check `packages/ui/src/lib/components/ui` before installing a shadcn-svelte

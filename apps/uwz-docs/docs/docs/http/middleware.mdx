@@ -1,0 +1,165 @@
+---
+title: Middleware
+description: Register bounded global middleware, control dispatch order, and wire CORS, security headers, auth, and rate limiting per worker.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, middleware]
+---
+
+Middleware runs after the router attempts a match and before the handler. The
+chain is global, ordered, and fixed at startup. It also runs when no route
+matched, before the framework sends `404`. Use it for cross-cutting request
+policy, not for per-route branching. The [middleware model](/docs/concepts/middleware-model)
+explains the dispatch contract; this page shows how to wire the built-ins.
+
+## Register the chain
+
+`App.use(context, handler)` appends one callback. Register every callback before
+the first `listen` or `listen_udp` call:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var headers = uz.middleware.security_headers(.{});
+    _ = try app.use(&headers, uz.middleware.SecurityHeaders.handler);
+
+    var cors = uz.middleware.cors(.{ .origins = &.{"https://example.com"} });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    var credentials = uz.middleware.auth(.{
+        .realm = "ops",
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&credentials, uz.middleware.Auth.handler);
+
+    var buckets: [256]uz.middleware.RateLimitBucket = @splat(.{});
+    var slots: [512]uz.middleware.RateLimitIndexSlot = @splat(.{});
+    var links: [256]uz.middleware.RateLimitLink = @splat(.{});
+    var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+        .rate_per_second = 20,
+        .burst = 40,
+        // One budget for the demo. Use key_fn with an authenticated identity
+        // when clients must have separate budgets.
+        .key_constant = 1,
+    }, &buckets, &slots, &links);
+    _ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The context pointer is borrowed, not copied. Keep the value alive for the
+application lifetime. The rate-limit arrays must be caller-owned and must stay
+at a stable address.
+
+## Control dispatch
+
+Each callback returns `uz.MiddlewareResult`:
+
+| Result               | Effect                                    |
+| -------------------- | ----------------------------------------- |
+| `.continue_dispatch` | Run the next callback, then the handler   |
+| `.stop`              | End the chain without running the handler |
+
+Dispatch also stops when a callback starts a response, even if it returns
+`.continue_dispatch`. The router checks `response.is_started()` after every
+callback, so a response started in middleware cannot be followed by a handler.
+That is why `Cors` can send `204 No Content` for a preflight and return `.stop`.
+
+Middleware runs even when no route matches, before the framework sends
+`404 Not Found`. Shared headers and request logging therefore see 404 responses
+too.
+
+## Limits and registration rules
+
+| Rule                         | Value                                     | Failure                                        |
+| ---------------------------- | ----------------------------------------- | ---------------------------------------------- |
+| Callback capacity            | 32 by default (`max_middleware`)          | `error.MiddlewareCapacityReached`              |
+| Registration window          | Before the first `listen` or `listen_udp` | `error.RoutesLocked`                           |
+| Registration during shutdown | Never                                     | `error.ApplicationUnavailable`                 |
+| Per-route middleware         | Not provided                              | Use one global callback and inspect `req.path` |
+| Dynamic add or remove        | Not provided                              | Rebuild the application                        |
+
+There is no `use` variant that takes a path prefix, and the chain cannot change
+after the listener starts. A callback that needs a route decision reads the
+borrowed request and returns early.
+
+## Built-in middleware
+
+| Type              | Behavior                                                  | Canonical page                                  |
+| ----------------- | --------------------------------------------------------- | ----------------------------------------------- |
+| `Cors`            | Exact origin match and preflight handling                 | [CORS](/docs/http/cors)                         |
+| `SecurityHeaders` | Configures HSTS, CSP, frame, referrer, and nosniff fields | [Security headers](/docs/http/security-headers) |
+| `Auth`            | Basic and Bearer credentials, `401` challenge             | [Authentication](/docs/http/authentication)     |
+| `RateLimit`       | Token bucket, `429`, `Retry-After`                        | [Rate limiting](/docs/http/rate-limiting)       |
+
+All four are allocation-free and use caller-owned options or state. Their
+defaults and exact failure statuses belong to the canonical pages; this page
+only fixes their place in the chain.
+
+## Ordering rules
+
+Registration order is the execution order. Two rules prevent surprising
+results:
+
+- Put `SecurityHeaders` before anything that can end the response. Its queued
+  fields merge into the ending helper, so a `401` or `429` still carries them.
+- Put `Cors` before `Auth`. A browser preflight is an `OPTIONS` request without
+  credentials; CORS answers it with `204 No Content` and stops the chain, so the
+  preflight is not challenged.
+
+Place `RateLimit` after `Auth` when only authenticated requests should consume
+tokens. Place it before `Auth` when the limiter must also protect the
+authentication path. The framework does not choose for you.
+
+## Per-worker state
+
+Every callback belongs to one event loop. A rate-limit table is mutable limiter
+state, and exactly one limiter may own a live table:
+
+- Create the bucket, slot, and link arrays in worker setup, not in a handler.
+- Create one limiter per cluster worker. Never share a live table between
+  loops.
+- Use `key_fn` or `key_constant` when the client can set the key header.
+  `key_header` hashes a server-derived value such as `x-forwarded-for` behind a
+  trusted proxy.
+
+The [shared-nothing model](/docs/concepts/shared-nothing) explains why a table
+must not cross a worker boundary.
+
+## Verify
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/ \
+  -H 'Origin: https://example.com' \
+  -H 'Access-Control-Request-Method: GET'
+```
+
+Expect `204 No Content`, `Access-Control-Allow-Origin: https://example.com`, and
+`Vary: Origin`. The same request without a bearer token reaches CORS first, so
+the preflight is not rejected by `Auth`.
+
+```sh
+curl -i http://127.0.0.1:3000/
+```
+
+Expect `401 Unauthorized` with `WWW-Authenticate: Bearer`. Add
+`-H 'Authorization: Bearer service-token'` to reach `200 OK`.
+
+## Next
+
+Read [CORS](/docs/http/cors) for origin and preflight policy, then
+[rate limiting](/docs/http/rate-limiting) for table sizing and eviction.

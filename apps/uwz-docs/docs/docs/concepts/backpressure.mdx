@@ -1,0 +1,150 @@
+---
+title: Backpressure
+description: Read error.WouldBlock correctly across the write ring, WebSocket drain, stream producers, and cluster publish.
+sidebar:
+  order: 12
+search:
+  tags: [concept, streaming]
+---
+
+Backpressure is what happens when a peer reads slower than the server writes.
+µWebZockets reports it instead of buffering without a bound, and each surface
+has one named resume point. This page maps every signal to its recovery path.
+
+## The write ring
+
+Every HTTP/1.1 connection owns one bounded ring sized by `write_queue_size`,
+64 KiB by default. Response heads, chunk framing, chunk bodies, and terminators
+are copied into that ring as parts, so a single response step never needs a
+second buffer. HTTP/2 and HTTP/3 use their own bounded stream storage and flow
+control, but report the same `error.WouldBlock` when that storage cannot accept a
+write.
+
+When the ring is full, the write returns `error.WouldBlock`. Nothing is queued
+and nothing grows. When the ring fully drains, its head is normalized so the
+next logical write stays contiguous instead of creating a wrap split that later
+stalls on a delayed ACK.
+
+The ring bounds one step of a response, not the total size of a body. A
+streamed body can be larger than the queue because the producer is re-invoked as
+space frees.
+
+## One signal per surface
+
+| Surface                | Signal                                              | Resume point                                                |
+| ---------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| Response body write    | `error.WouldBlock`                                  | Write again after the transport drains                      |
+| WebSocket `send`       | `error.WouldBlock`                                  | The route's `drain` callback                                |
+| Chunked or JSON stream | `error.WouldBlock` from `write_chunk`               | No automatic resume; write again after the transport drains |
+| Stream producer        | Return `.pending`                                   | The transport re-invokes the producer                       |
+| Cluster publish        | `PublishReport.dropped` or `error.ClusterQueueFull` | No retry signal; publish again later and inspect the report |
+
+`error.WouldBlock` is not a retry-forever signal. It means this write did not
+fit; a handler that loops on it without yielding blocks the worker's event loop
+and prevents the drain that would make room.
+
+## WebSocket drain
+
+A WebSocket route can register a `drain` callback with the signature
+`fn (*uz.WebSocket) void`. It runs after write backpressure falls below the
+connection threshold. The pattern is:
+
+- Call `ws.send(frame, opcode)`.
+- On `error.WouldBlock`, keep the frame in application-owned storage and return
+  from the callback without spinning.
+- In `drain`, retry the parked frame.
+- Use `ws.buffered_amount()` to decide whether more frames fit before the next
+  attempt.
+
+`send_close` queues a close frame and closes after it drains. `terminate` closes
+immediately and drops pending output. Neither blocks waiting for the peer.
+
+This retry pattern applies to HTTP/1.1 connections, which have a pending write
+ring. An HTTP/2 tunnel has no per-stream pending queue, so a send that cannot fit
+ends the tunnel instead of parking the frame.
+
+## Stream producers resume
+
+`Response.begin_stream` arms a producer and calls it immediately. The producer
+writes as much as the transport accepts, returns `.pending` when it is
+backpressured, and returns `.done` after calling `end_chunks`:
+
+```zig src/http/response.zig
+/// Outcome of one drain-driven producer invocation.
+pub const StreamStatus = enum {
+    /// The transport accepted all bytes it can hold; the producer runs again
+    /// when output space frees.
+    pending,
+    /// The producer called `end_chunks`; the response is complete.
+    done,
+};
+
+/// Pull-based chunked response body producer.
+pub const StreamProducer = *const fn (*anyopaque, *Response) anyerror!StreamStatus;
+```
+
+Arm it with a context pointer you own:
+
+```zig
+try res.begin_stream(
+    "200 OK",
+    "Content-Type: application/octet-stream\r\n",
+    &state,
+    produce,
+);
+```
+
+This excerpt omits the `state` and `produce` definitions; the context must
+outlive the response. All transports resume producers. A target without a
+producer callback fails closed with `error.ProducerStreamingUnsupported` before
+any bytes are written.
+
+Because the producer is re-invoked on the owning loop, a large body never
+requires sizing the write queue to the body size. The queue only bounds one
+invocation.
+
+## Cluster publish reports drops
+
+Cross-worker publish is bounded too. `Cluster.publish` offers the message to
+every active worker inbox and returns the number queued. It keeps its `!usize`
+shape and returns `error.ClusterStopped` after `run` instead of queueing into
+loops that no longer consume.
+
+`Cluster.publish_report` returns the detail:
+
+| Field                  | Meaning                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `queued`               | Workers whose inbox accepted the message                                     |
+| `dropped`              | Workers whose bounded inbox was full                                         |
+| `notify_failed`        | Accepted messages whose loop wakeup failed or was suppressed during shutdown |
+| `first_dropped_worker` | Index of the first full inbox, when any                                      |
+
+`all_delivered()` is true only when `dropped` and `notify_failed` are both zero.
+It means every inbox accepted the message and every wakeup was posted; it does
+not mean an application subscriber consumed it. A worker can still drop the
+message after dispatch.
+
+Validation happens before any inbox is mutated, so an empty topic, an oversized
+topic, or an oversized payload fails without partially delivering. The advanced
+`uz.cluster.message_queue` helper reports the same conditions and returns
+`error.ClusterQueueFull` instead of blocking.
+
+## Size the queue deliberately
+
+A larger ring absorbs a longer burst before a producer sees backpressure, at the
+cost of more memory per connection and a later signal. A smaller ring reacts
+sooner and keeps the working set tight. Neither changes the total bytes a
+stream producer may send.
+
+For a WebSocket route, `max_ws_message_size` bounds one inbound message, while
+`write_queue_size` bounds pending outbound bytes; they are separate limits. See
+[Capacity model](/docs/concepts/capacity-model) for both.
+
+## Next
+
+- [Capacity model](/docs/concepts/capacity-model) sizes the write ring and the
+  per-worker inbox.
+- [Streaming responses](/docs/http/streaming) covers the full producer procedure
+  and the other response modes.
+- [Cluster model](/docs/concepts/cluster-model) covers publish ordering and
+  lifecycle.

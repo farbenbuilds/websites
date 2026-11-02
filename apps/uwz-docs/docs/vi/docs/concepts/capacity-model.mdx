@@ -1,0 +1,148 @@
+---
+title: Mô hình capacity
+description: Đọc một ServerConfig, dự đoán startup slab và biết giới hạn nào từ chối request khi hết capacity trước khi tăng tải.
+sidebar:
+  order: 9
+search:
+  tags: [concept, capacity]
+---
+
+Capacity được chọn trước khi listener đầu tiên khởi động và không bao giờ tăng
+lúc runtime. Trang này chỉ cách `ServerConfig` trở thành một slab, cách đọc
+kích thước chính xác, các preset có sẵn, và điều client thấy khi chạm giới hạn.
+
+## Một slab, carve một lần
+
+`App.init` cấp phát khối qua `std.heap.page_allocator`; `App.init_configured` và
+`Server.builder(...).build` dùng allocator bạn truyền. `App.init_from_slab` nhận
+storage do caller sở hữu với cùng hợp đồng. Khối này được chia theo thứ tự bên
+dưới; region tuỳ chọn có độ dài 0 khi tính năng của nó tắt.
+
+| #   | Region               | Byte mỗi connection                            |
+| --- | -------------------- | ---------------------------------------------- |
+| 1   | Connection pool      | `sizeof(TcpConnection)`                        |
+| 2   | Freelist index       | `sizeof(usize)`                                |
+| 3   | Request buffer       | `request_stride`                               |
+| 4   | Header extras        | `extra_header_stride`                          |
+| 5   | Route-capture extras | `extra_route_param_stride`                     |
+| 6   | HTTP/2 session       | `h2_session_stride`                            |
+| 7   | Write queue          | `write_queue_size`                             |
+| 8   | WebSocket message    | `max_ws_message_size`                          |
+| 9   | RFC 7692 scratch     | `2 * worst_case_scratch` khi bật `compression` |
+| 10  | Datagram ring        | `datagram_stride` khi bật datagram             |
+
+Sau các region theo connection là AF_XDP UMEM căn theo page khi chọn kernel
+bypass, rồi storage toàn ứng dụng. Nhân từng dòng theo connection với
+`max_connections`.
+
+| Region toàn ứng dụng | Kích thước                            |
+| -------------------- | ------------------------------------- |
+| Router storage       | Node, pattern, middleware và registry |
+| Metrics registry     | Một registry căn theo cache line      |
+
+`request_stride` bằng `max_request_line_size + max_header_size + max_body_size`
+cộng 1024 byte slack cho framing, làm tròn lên bội số 16 byte. Write queue bắt
+đầu tại cache line 64 byte. Region datagram và AF_XDP có độ dài 0 nếu không chọn
+các tính năng đó.
+
+HTTP/2 session chiếm phần lớn footprint mỗi connection. Nó nhúng tám stream với
+storage cho request, body và response, nên preset dồn byte vào chiều mà workload
+thực sự dùng thay vì tối đa hoá mọi chiều.
+
+## Bắt đầu từ preset
+
+| Preset                   | Connection | Idle timeout |
+| ------------------------ | ---------: | -----------: |
+| `Presets.microservice`   |        256 |         30 s |
+| `Presets.websocket_chat` |        512 |        120 s |
+| `Presets.file_server`    |        128 |        300 s |
+
+Các capacity cho workload của cùng bộ preset:
+
+| Preset                   | WS message | Write queue | Request body |
+| ------------------------ | ---------: | ----------: | -----------: |
+| `Presets.microservice`   |      8 KiB |      16 KiB |       64 KiB |
+| `Presets.websocket_chat` |     32 KiB |      32 KiB |        4 KiB |
+| `Presets.file_server`    |      4 KiB |     512 KiB |        8 KiB |
+
+Mỗi preset là một `ServerConfig` bình thường, nên preset chỉ là điểm bắt đầu
+chứ không phải profile đóng.
+
+## Ghi đè từng field
+
+`Server.builder` có một method `with_*` cho mỗi field capacity. Override chỉ thay
+field được nêu và giữ nguyên phần còn lại của preset. Capacity vẫn ở mức
+compile-time vì chúng định cỡ kiểu ứng dụng được sinh ra, nên truyền literal hoặc
+giá trị `const`:
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .preset(uz.Presets.microservice)
+    .with_max_body_size(256 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Các method thường dùng là `with_max_clients`, `with_max_ws_message_size`,
+`with_write_queue_size`, `with_max_body_size`, `with_max_header_size`,
+`with_max_header_count`, `with_idle_timeout_ms` và `with_http_compression`. Các
+method còn lại ánh xạ field `ServerConfig`;
+[Mô hình application](/docs/concepts/application-model) cho thấy builder kết
+hợp chúng thế nào.
+
+## Đọc kích thước chính xác trước
+
+`slab_bytes()` chạy đúng layout có kiểm tra như `carve`, nên sizing và phân
+vùng không thể lệch nhau. Gọi nó trên configuration hoặc builder trước khi cấp
+phát:
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+};
+const bytes = try config.slab_bytes();
+std.debug.print("startup slab: {d} bytes\n", .{bytes});
+```
+
+`ServerConfig.validate` từ chối tổ hợp bất khả thi bằng một error có tên thay
+vì làm tròn. Ví dụ: body capacity bằng 0 (`error.InvalidBodyCapacity`), header
+count dưới mức inline 64 (`error.InvalidHeaderCapacity`), và tràn số học
+(`error.SlabSizeOverflow`).
+
+`slab_bytes()` chỉ tính application slab. Nó không tính bảng backend của libxev,
+HTTP gzip pool mỗi worker do `with_http_compression(true)` tạo, compression
+engine RFC 7692 do `compression = true` tạo, inbox của từng worker trong cluster,
+các object `SSL_CTX` mỗi worker, và pool của QUIC engine do `listen_udp` tạo.
+
+## Khi hết capacity
+
+| Tài nguyên hết                          | Kết quả                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| Request line hoặc header block          | `431 Request Header Fields Too Large` kèm document có cấu trúc          |
+| Request body                            | `413 Payload Too Large` trên HTTP/1.1 và HTTP/3; HTTP/2 đóng connection |
+| WebSocket tunnel hoặc giới hạn capacity | `503 Service Unavailable`                                               |
+| Write ring của response                 | `error.WouldBlock`                                                      |
+| `send` của WebSocket                    | `error.WouldBlock`                                                      |
+| Route node, pattern hoặc registry       | Error capacity lúc đăng ký                                              |
+
+Input quá lớn bị từ chối, không bao giờ được mở rộng. Document từ chối nêu tên
+giới hạn và giá trị của nó, nên client phân biệt được giới hạn body 64 KiB với
+giới hạn header mà không cần đọc log server.
+
+## Bộ nhớ inbox mỗi worker
+
+Cluster thêm bộ nhớ nằm ngoài slab. Mỗi worker đang hoạt động giữ chỗ 64 message
+có kích thước `max_ws_message_size` cộng một scratch buffer cỡ một message cho
+inbox, tức khoảng 1.0 MiB mỗi worker với mặc định 16 KiB. Chỉ worker đang hoạt
+động mới cấp phát inbox, nên capacity compile lớn không giữ chỗ cho worker không
+bao giờ khởi động.
+
+## Tiếp theo
+
+- [Zero allocation](/docs/concepts/zero-allocation) liệt kê allocation lúc
+  startup và các request API cấp phát tường minh.
+- [Backpressure](/docs/concepts/backpressure) giải thích write ring làm gì khi
+  đầy.
+- [Mô hình application](/docs/concepts/application-model) bao quát builder,
+  preset và vòng đời sở hữu slab.

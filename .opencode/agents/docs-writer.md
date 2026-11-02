@@ -24,6 +24,9 @@ app's `docs/` folder before writing.
 
 - No emoji, exclamation mark, marketing filler, or unverified claim.
 - No comments in code unless the owning file needs a non-obvious why.
+- Code samples follow their source language. Zig samples use `snake_case`
+  functions, variables, parameters, and fields, `PascalCase` types, and the
+  exact public spelling; never camel-case a Zig identifier.
 - Do not edit generated output under `dist/` or `.blume/`.
 - Do not change navigation or build configuration without `astro-blume`.
 - Localize documentation as mirrored `docs/` and `docs/vi/` MDX. Do not add

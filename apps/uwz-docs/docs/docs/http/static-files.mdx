@@ -1,0 +1,170 @@
+---
+title: Static files
+description: Mount a confined asset directory with MIME detection, ETag, conditional GET, one byte range, and the plaintext sendfile path.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, static-files]
+---
+
+`App.static(prefix, root, options)` mounts one directory at startup and serves
+its files without allocating on the request path. The mount is traversal-safe,
+supports conditional requests, and uses a kernel file boundary on plaintext
+connections.
+
+## Mount a directory
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("assets live under /assets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.static("/assets", "public", .{
+        .index = "index.html",
+        .etag = true,
+        .max_age = 3600,
+    });
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`root` is opened once when the mount is created, relative to the working
+directory. Mount all directories before the first listener starts.
+
+## Mount contract
+
+| Item        | Rule                                                        | Failure                                                     |
+| ----------- | ----------------------------------------------------------- | ----------------------------------------------------------- |
+| Prefix      | Nonempty, starts with `/`, no `?`, `#`, CR, LF, `:`, or `*` | `error.InvalidRoutePath`                                    |
+| Route       | `GET {prefix}/*path`; `HEAD` falls back to `GET`            | Other methods receive `405 Method Not Allowed` with `Allow` |
+| Mount count | 8 per application                                           | `error.StaticRouteCapacityReached`                          |
+| Index name  | Validated at mount time                                     | `error.InvalidStaticPath`                                   |
+| Root        | Opened with `follow_symlinks = false`                       | Startup error                                               |
+
+## Confinement and symlinks
+
+The captured `*path` is percent-decoded, then checked:
+
+- NUL and backslash bytes are rejected.
+- Any `.` or `..` segment is rejected after decoding.
+- Leading slashes are trimmed before the relative open.
+- A decoded path longer than the internal 1024-byte buffer is rejected.
+
+Every directory component and the final file are opened with
+`follow_symlinks = false`. A symlink anywhere in the path fails instead of
+escaping the root. The handler maps the failure to a status:
+
+| Zig error                                          | Status                      |
+| -------------------------------------------------- | --------------------------- |
+| `InvalidStaticPath`, `AccessDenied`, `SymLinkLoop` | `403 Forbidden`             |
+| `FileNotFound`, `NotDir`                           | `404 Not Found`             |
+| `FileTooLarge`                                     | `413 Content Too Large`     |
+| Any other error                                    | `500 Internal Server Error` |
+
+## Options
+
+| Field                | Default        | Effect                                                                |
+| -------------------- | -------------- | --------------------------------------------------------------------- |
+| `index: ?[]const u8` | `"index.html"` | Appended when the path ends in `/`; `null` disables directory indexes |
+| `etag: bool`         | `true`         | Emits a strong `ETag` derived from size and modification time         |
+| `max_age: u32`       | `0`            | Nonzero emits `Cache-Control: public, max-age=N`; zero omits it       |
+
+`max_age` is a public cache directive. Do not mount private files with a
+nonzero `max_age`.
+
+## MIME and metadata
+
+`Content-Type` is chosen from the extension:
+
+| Extension                                                | Content type                                                                          |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `.html`, `.htm`                                          | `text/html; charset=utf-8`                                                            |
+| `.css`                                                   | `text/css; charset=utf-8`                                                             |
+| `.js`, `.mjs`                                            | `text/javascript; charset=utf-8`                                                      |
+| `.json`                                                  | `application/json`                                                                    |
+| `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.ico` | `image/svg+xml`, `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/x-icon` |
+| `.wasm`                                                  | `application/wasm`                                                                    |
+| `.txt`, `.xml`, `.pdf`, `.zip`                           | `text/plain; charset=utf-8`, `application/xml`, `application/pdf`, `application/zip`  |
+| Anything else                                            | `application/octet-stream`                                                            |
+
+Every response also carries `Accept-Ranges: bytes`. `ETag` and `Last-Modified`
+are emitted when available. The ETag is strong; `max_age` controls only the
+`Cache-Control` field, not validator behavior.
+
+## Conditional requests
+
+`If-None-Match` takes precedence over `If-Modified-Since`. It handles `*`,
+comma-separated lists, and weak comparison, and a match returns
+`304 Not Modified` with the same validators and no body. `If-Modified-Since` is
+compared as an exact HTTP-date string after trimming spaces and tabs.
+
+## Byte ranges
+
+The mount supports one RFC 9110 range, taken from a unique `Range` field. The
+forms are `bytes=start-end`, `bytes=start-`, and `bytes=-suffix`.
+
+A successful range returns `206 Partial Content` with `Content-Range`. Multiple
+ranges, an unknown unit, and an unsatisfiable range return `416 Range Not
+Satisfiable` with `Content-Range: bytes */SIZE`. The errors involved are
+`MultipleRangesUnsupported`, `InvalidRange`, and `RangeNotSatisfiable`.
+
+`If-Range` must match the current strong ETag or the exact `Last-Modified`
+value. A weak validator never matches. A mismatch ignores `Range` and returns
+the full `200 OK` body, so a stale range does not produce `416`. A duplicate
+`Range` field is not unique, so the mount ignores it and serves the full file.
+
+## sendfile boundary
+
+On a plaintext HTTP/1.1 connection, `GET` and `HEAD` responses stream the file
+through the kernel `sendfile` boundary (`Response.send_file`). The file is not
+copied into a user-space buffer and is not capped by the per-mount file buffer;
+`HEAD` keeps the transfer length and sends no body.
+
+TLS, HTTP/2, and HTTP/3 return `error.ZeroCopyUnavailable` from `send_file`, so
+the mount falls back to a bounded buffered read. The buffer is sized at compile
+time as:
+
+```text
+static_file_capacity = write_queue_size - 4096
+```
+
+The capacity is the full write queue at 4096 bytes or smaller; at the default
+64 KiB queue it holds 60 KiB. A larger file returns `FileTooLarge`, mapped to `413 Content Too Large`.
+
+## Verify
+
+Create `public/index.html`, start the server, then run:
+
+```sh
+curl -i http://127.0.0.1:3000/assets/
+curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+```
+
+The first request returns `200 OK`. The second returns `206 Partial Content`
+when the file is large enough. A multiple-range field returns
+`416 Range Not Satisfiable`.
+
+Repeat the first request with the returned validator:
+
+```sh
+curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
+```
+
+Replace `ETAG` with the exact value and expect `304 Not Modified`.
+
+## Next
+
+Read [caching and ETags](/docs/http/helpers/caching) for validator generation
+outside static mounts, then [HTTP limits](/docs/http/limits) for body and header
+capacities.

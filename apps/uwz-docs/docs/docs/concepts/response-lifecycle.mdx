@@ -1,0 +1,141 @@
+---
+title: Response lifecycle
+description: Choose a response helper, start it once, and complete it through a fixed body, a queue-driven stream, a file, or an async token.
+sidebar:
+  order: 3
+search:
+  tags: [concept, http]
+---
+
+A response starts once and completes once. The helper you choose decides whether
+the body is queued in one call, pulled as the transport drains, streamed from a
+file, or completed later through an async token.
+
+The snippets on this page omit the `std` and `uz` imports.
+
+## Choose a body path
+
+| Need                       | API                                          | Completion                  |
+| -------------------------- | -------------------------------------------- | --------------------------- |
+| Fixed text, HTML, or bytes | `res.text`, `res.html`, `res.bytes`          | Body queued, response ended |
+| JSON from a value          | `res.json`, `res.json_buf`                   | Body queued, response ended |
+| JSON written incrementally | `res.begin_json`                             | `JsonStream.end`            |
+| Chunked output you drive   | `begin_chunked`, `write_chunk`, `end_chunks` | `end_chunks`                |
+| A body produced on drain   | `res.begin_stream`                           | Producer returns `.done`    |
+| Server-Sent Events         | `res.sse`                                    | Stream close or disconnect  |
+| A file from disk           | `res.send_file`, `App.static`                | File body drains            |
+| Compressed fixed body      | `res.end_gzip`                               | Body queued, response ended |
+
+`res.text` sends `200 OK` with `text/plain; charset=utf-8`; `res.html` and
+`res.bytes` set their matching content types. `res.json` renders through a
+caller-provided allocator and releases the temporary buffer before returning,
+while `res.json_buf` renders into a caller-owned buffer and never allocates.
+
+## Start once
+
+`Response` keeps one state: `idle`, `streaming`, or `ended`. Every helper that
+starts a response checks for `idle` first. A second start returns
+`error.ResponseAlreadyStarted`:
+
+```zig
+fn handler(_: *uz.Request, res: *uz.Response) void {
+    res.text("first") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+    // The second call fails with error.ResponseAlreadyStarted.
+    res.text("second") catch |err| {
+        std.log.err("second response rejected: {}", .{err});
+    };
+}
+```
+
+Header mutation follows the same rule. `append_header` and the cookie helpers
+queue fields only while the response is `idle`; a later call returns
+`error.ResponseAlreadyStarted`. Status lines and raw headers are validated
+before any byte is queued, so an invalid status, a header with a control
+character, or a body on a status that forbids one fails without a partial
+response.
+
+`res.is_started()` reports whether any response bytes were started.
+`res.is_complete()` reports whether the response reached `ended`.
+
+## Completion
+
+A synchronous handler that ends its response leaves nothing else to do. The
+dispatch code checks three outcomes:
+
+- The response is complete, so dispatch advances to the next pipelined request.
+- A producer stream is armed, so dispatch suspends until the producer finishes.
+- The response started but never completed, so the transport closes the
+  connection after flushing what it has.
+
+A synchronous handler that returns without starting any response receives
+`500 Internal Server Error` with `Handler did not complete the response`.
+
+A finished HTTP/1.1 response keeps the connection available unless the response
+carried `Connection: close`. The idle deadline, controlled by
+`ServerConfig.idle_timeout_ms`, closes a drained keep-alive connection after
+120 s by default.
+
+## Best-effort endings
+
+The synchronous callback ABI returns `void`, so it cannot report a write error.
+`end_best_effort` and `end_with_headers_best_effort` end the response and, on
+any failure, abort the transport: TCP closes the connection, HTTP/2 resets the
+stream, and HTTP/3 closes the stream.
+
+That is a narrow escape hatch for callbacks that have already validated a fixed
+response. A validation error and an already-started response take the same
+abort path, because the callback has no return channel.
+
+## Async tokens
+
+`AsyncResponse` is a copyable, generation-checked token for one deferred
+response. Hand it to another task, then complete it on the event loop that owns
+the connection:
+
+```zig
+fn delayed(req: *uz.Request, token: uz.AsyncResponse) void {
+    const delay_ms = std.fmt.parseInt(u64, req.get_param("ms") orelse "0", 10) catch 0;
+    // The transport retains the token and these slices for delay_ms.
+    token.sleep_complete(delay_ms, "200 OK", "Content-Type: text/plain\r\n", "later") catch |err| {
+        std.log.err("deferred response failed: {}", .{err});
+    };
+}
+```
+
+A pending token keeps the HTTP/1.1 request buffer, HTTP/2 stream slot, or HTTP/3
+stream from being reused. `complete` and `complete_with_headers` complete the
+response once; a reused generation returns `error.AsyncResponseExpired`, and a
+token that already completed returns `error.AsyncResponseAlreadyCompleted`. A
+disconnected peer cancels the slot, so a stale token fails closed.
+
+`sleep` parks a custom resume callback. `sleep_complete` parks the response and
+the three borrowed fields in a connection-owned slot, so the delay path does not
+allocate. Do not block the loop while a token is pending, and do not complete a
+token from another thread before marshalling the result back to its loop.
+
+## Streaming, SSE, and files
+
+`begin_stream` runs the producer immediately and again whenever output space
+frees. The producer writes through `res.write_chunk` and returns `.pending` when
+the transport backpressures, or `.done` after calling `res.end_chunks`.
+Arbitrarily large bodies therefore do not size the write queue.
+
+`res.sse()` starts a `200 OK` event stream with `text/event-stream`,
+`Cache-Control: no-cache`, and `X-Accel-Buffering: no`. `res.begin_json()` starts
+a chunked JSON response and returns a `JsonStream` that terminates the body
+through `JsonStream.end`.
+
+`res.send_file` streams an opened regular file at the kernel boundary on a
+plaintext TCP connection. TLS-framed, HTTP/2, and HTTP/3 responses return
+`error.ZeroCopyUnavailable`, so `App.static` falls back to its bounded buffered
+path. `end_gzip` uses the per-worker codec pool on HTTP/1.1 and HTTP/2; the pool
+must be enabled with `with_http_compression(true)`. HTTP/3 returns
+`error.CompressionUnsupported`.
+
+## Next
+
+- [Asynchronous responses](/docs/concepts/async-responses)
+- [Response API](/docs/http/response)
+- [Streaming responses](/docs/http/streaming)

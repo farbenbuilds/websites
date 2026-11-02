@@ -1,0 +1,146 @@
+---
+title: Backpressure
+description: Đọc error.WouldBlock đúng cách trên write ring, WebSocket drain, stream producer và cluster publish mà không làm hỏng producer.
+sidebar:
+  order: 12
+search:
+  tags: [concept, streaming]
+---
+
+Backpressure là điều xảy ra khi peer đọc chậm hơn server ghi. µWebZockets báo
+hiện tượng đó thay vì buffer không giới hạn, và mỗi bề mặt có một điểm resume có
+tên. Trang này ánh xạ mọi tín hiệu với đường phục hồi của nó.
+
+## Write ring
+
+Mỗi connection HTTP/1.1 sở hữu một ring có giới hạn, kích thước do
+`write_queue_size` quyết định, mặc định 64 KiB. Response head, chunk framing,
+chunk body và terminator được copy vào ring đó như các part, nên một bước
+response không cần buffer thứ hai. HTTP/2 và HTTP/3 dùng stream storage và flow
+control có giới hạn riêng, nhưng cùng báo `error.WouldBlock` khi storage đó
+không nhận được lần write.
+
+Khi ring đầy, thao tác write trả `error.WouldBlock`. Không có gì được xếp vào
+queue và không có gì mở rộng. Khi ring drain hoàn toàn, head được chuẩn hoá để
+write logic tiếp theo vẫn liền mạch thay vì tạo wrap split khiến delayed ACK
+sau đó bị stall.
+
+Ring giới hạn một bước của response, không giới hạn tổng kích thước body. Body
+stream có thể lớn hơn queue vì producer được gọi lại khi có chỗ trống.
+
+## Mỗi bề mặt một tín hiệu
+
+| Bề mặt                   | Tín hiệu                                              | Điểm resume                                            |
+| ------------------------ | ----------------------------------------------------- | ------------------------------------------------------ |
+| Write body response      | `error.WouldBlock`                                    | Write lại sau khi transport drain                      |
+| `send` của WebSocket     | `error.WouldBlock`                                    | Callback `drain` của route                             |
+| Chunked hoặc JSON stream | `error.WouldBlock` từ `write_chunk`                   | Không tự resume; write lại sau khi transport drain     |
+| Stream producer          | Trả `.pending`                                        | Transport gọi lại producer                             |
+| Cluster publish          | `PublishReport.dropped` hoặc `error.ClusterQueueFull` | Không có tín hiệu retry; publish lại sau và đọc report |
+
+`error.WouldBlock` không phải tín hiệu thử lại mãi. Nó nghĩa là lần write này
+không vừa; handler lặp trên nó mà không nhường event loop sẽ chặn worker và ngăn
+luôn quá trình drain có thể tạo chỗ.
+
+## WebSocket drain
+
+Route WebSocket có thể đăng ký callback `drain` với chữ ký
+`fn (*uz.WebSocket) void`. Nó chạy sau khi write backpressure xuống dưới ngưỡng
+của connection. Cách làm là:
+
+- Gọi `ws.send(frame, opcode)`.
+- Khi gặp `error.WouldBlock`, giữ frame trong storage do ứng dụng sở hữu và trả
+  về khỏi callback, không spin.
+- Trong `drain`, thử lại frame đã park.
+- Dùng `ws.buffered_amount()` để quyết định còn vừa bao nhiêu frame trước lần thử
+  tiếp theo.
+
+`send_close` xếp close frame vào queue và đóng sau khi frame drain. `terminate`
+đóng ngay và bỏ output đang chờ. Cả hai đều không block chờ peer.
+
+Cách retry này áp dụng cho connection HTTP/1.1, nơi có write ring chờ sẵn.
+HTTP/2 tunnel không có queue chờ riêng cho từng stream, nên lần send không vừa
+sẽ kết thúc tunnel thay vì park frame lại.
+
+## Stream producer được resume
+
+`Response.begin_stream` arm một producer và gọi nó ngay. Producer ghi tới mức
+transport nhận được, trả `.pending` khi bị backpressure, và trả `.done` sau khi
+gọi `end_chunks`:
+
+```zig src/http/response.zig
+/// Outcome of one drain-driven producer invocation.
+pub const StreamStatus = enum {
+    /// The transport accepted all bytes it can hold; the producer runs again
+    /// when output space frees.
+    pending,
+    /// The producer called `end_chunks`; the response is complete.
+    done,
+};
+
+/// Pull-based chunked response body producer.
+pub const StreamProducer = *const fn (*anyopaque, *Response) anyerror!StreamStatus;
+```
+
+Arm nó với con trỏ context do bạn sở hữu:
+
+```zig
+try res.begin_stream(
+    "200 OK",
+    "Content-Type: application/octet-stream\r\n",
+    &state,
+    produce,
+);
+```
+
+Đoạn trích này bỏ qua định nghĩa `state` và `produce`; context phải sống lâu hơn
+response. Mọi transport đều resume producer. Target không có producer callback
+fail closed với `error.ProducerStreamingUnsupported` trước khi ghi byte nào.
+
+Vì producer được gọi lại trên owning loop, body lớn không bao giờ đòi hỏi write
+queue phải lớn bằng body. Queue chỉ giới hạn một lần gọi.
+
+## Cluster publish báo drop
+
+Publish giữa worker cũng có giới hạn. `Cluster.publish` đưa message tới inbox của
+mọi worker đang hoạt động và trả số đã xếp vào queue. Nó giữ dạng `!usize` và trả
+`error.ClusterStopped` sau `run` thay vì xếp vào loop không còn consume.
+
+`Cluster.publish_report` trả chi tiết:
+
+| Field                  | Ý nghĩa                                                               |
+| ---------------------- | --------------------------------------------------------------------- |
+| `queued`               | Worker có inbox nhận message                                          |
+| `dropped`              | Worker có inbox đầy                                                   |
+| `notify_failed`        | Message được nhận nhưng wakeup của loop lỗi hoặc bị chặn lúc shutdown |
+| `first_dropped_worker` | Index của inbox đầy đầu tiên, nếu có                                  |
+
+`all_delivered()` chỉ đúng khi cả `dropped` và `notify_failed` đều bằng 0. Nó
+nghĩa là mọi inbox đã nhận message và mọi wakeup đã được gửi; nó không có nghĩa
+là subscriber của ứng dụng đã consume. Worker vẫn có thể drop message sau khi
+dispatch.
+
+Validate diễn ra trước khi bất kỳ inbox nào bị sửa, nên topic rỗng, topic quá dài
+hoặc payload quá lớn fail mà không giao một phần. Helper nâng cao
+`uz.cluster.message_queue` báo cùng các điều kiện và trả
+`error.ClusterQueueFull` thay vì block.
+
+## Chọn kích thước queue có chủ đích
+
+Ring lớn hơn hấp thụ burst dài hơn trước khi producer thấy backpressure, đổi lại
+tốn bộ nhớ mỗi connection nhiều hơn và tín hiệu đến muộn hơn. Ring nhỏ phản ứng
+sớm hơn và giữ working set gọn. Cả hai đều không đổi tổng số byte mà stream
+producer có thể gửi.
+
+Với route WebSocket, `max_ws_message_size` giới hạn một message đến, còn
+`write_queue_size` giới hạn byte đi ra đang chờ; đây là hai giới hạn riêng. Xem
+[Mô hình capacity](/docs/concepts/capacity-model) để biết cả hai.
+
+## Tiếp theo
+
+- [Mô hình capacity](/docs/concepts/capacity-model) định cỡ write ring và inbox
+  mỗi worker.
+- [Response streaming](/docs/http/streaming) trình bày đầy đủ quy trình producer
+  và các response mode khác.
+- [Mô hình cluster](/docs/concepts/cluster-model) bao quát thứ tự publish và
+  lifecycle.

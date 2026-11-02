@@ -1,0 +1,152 @@
+---
+title: Capacity model
+description: Read one ServerConfig, predict the startup slab, and know which limit rejects a request when capacity runs out.
+sidebar:
+  order: 9
+search:
+  tags: [concept, capacity]
+---
+
+Capacity is chosen before the first listener starts and is never grown at
+runtime. This page shows how `ServerConfig` becomes one slab, how to read its
+exact size, which presets exist, and what a client sees when a limit is reached.
+
+## One slab, carved once
+
+`App.init` allocates the block through `std.heap.page_allocator`;
+`App.init_configured` and `Server.builder(...).build` use the allocator you pass.
+`App.init_from_slab` accepts caller-owned storage with the same contract. The
+block is partitioned in the order below; an optional region has zero length when
+its feature is off.
+
+| #   | Region               | Bytes per connection                              |
+| --- | -------------------- | ------------------------------------------------- |
+| 1   | Connection pool      | `sizeof(TcpConnection)`                           |
+| 2   | Freelist indices     | `sizeof(usize)`                                   |
+| 3   | Request buffers      | `request_stride`                                  |
+| 4   | Header extras        | `extra_header_stride`                             |
+| 5   | Route-capture extras | `extra_route_param_stride`                        |
+| 6   | HTTP/2 sessions      | `h2_session_stride`                               |
+| 7   | Write queues         | `write_queue_size`                                |
+| 8   | WebSocket messages   | `max_ws_message_size`                             |
+| 9   | RFC 7692 scratch     | `2 * worst_case_scratch` when `compression` is on |
+| 10  | Datagram rings       | `datagram_stride` when datagrams are on           |
+
+The per-connection regions are followed by page-aligned AF_XDP UMEM when kernel
+bypass is selected, then application-wide storage. Multiply each per-connection
+row by `max_connections`.
+
+| Application-wide region | Size                                      |
+| ----------------------- | ----------------------------------------- |
+| Router storage          | Nodes, patterns, middleware, and registry |
+| Metrics registry        | One cache-line-aligned registry           |
+
+`request_stride` is `max_request_line_size + max_header_size + max_body_size`
+plus 1024 bytes of framing slack, rounded up to 16 bytes. Write queues start on
+a 64-byte cache line. Datagram and AF_XDP regions have zero length unless those
+features are selected.
+
+The HTTP/2 session dominates the per-connection footprint. It embeds eight
+streams with request, body, and response storage, which is why presets spend
+bytes on the dimensions a workload actually uses instead of maximizing all of
+them.
+
+## Start from a preset
+
+| Preset                   | Connections | Idle timeout |
+| ------------------------ | ----------: | -----------: |
+| `Presets.microservice`   |         256 |         30 s |
+| `Presets.websocket_chat` |         512 |        120 s |
+| `Presets.file_server`    |         128 |        300 s |
+
+The workload capacities for the same presets:
+
+| Preset                   | WS message | Write queue | Request body |
+| ------------------------ | ---------: | ----------: | -----------: |
+| `Presets.microservice`   |      8 KiB |      16 KiB |       64 KiB |
+| `Presets.websocket_chat` |     32 KiB |      32 KiB |        4 KiB |
+| `Presets.file_server`    |      4 KiB |     512 KiB |        8 KiB |
+
+Every preset is a plain `ServerConfig`, so a preset is a starting point rather
+than a closed profile.
+
+## Override individual fields
+
+`Server.builder` exposes one `with_*` method per capacity field. Overrides
+replace only the named field and leave the rest of the preset intact. Capacities
+stay compile-time because they size the generated application type, so pass
+literals or `const` values:
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .preset(uz.Presets.microservice)
+    .with_max_body_size(256 * 1024)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+The common ones are `with_max_clients`, `with_max_ws_message_size`,
+`with_write_queue_size`, `with_max_body_size`, `with_max_header_size`,
+`with_max_header_count`, `with_idle_timeout_ms`, and
+`with_http_compression`. The remaining methods mirror the `ServerConfig` fields;
+[Application model](/docs/concepts/application-model) shows how the builder
+composes them.
+
+## Read the exact size first
+
+`slab_bytes()` runs the same checked layout as `carve`, so sizing and
+partitioning cannot disagree. Call it on a configuration or on a builder before
+allocating:
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+};
+const bytes = try config.slab_bytes();
+std.debug.print("startup slab: {d} bytes\n", .{bytes});
+```
+
+`ServerConfig.validate` rejects an impossible combination with a named error
+instead of rounding it. Examples are a zero body capacity
+(`error.InvalidBodyCapacity`), a header count below the inline 64
+(`error.InvalidHeaderCapacity`), and an arithmetic overflow
+(`error.SlabSizeOverflow`).
+
+`slab_bytes()` covers the application slab only. It excludes the libxev backend
+table, the per-worker HTTP gzip pool created by `with_http_compression(true)`,
+the RFC 7692 compression engines created by `compression = true`, per-worker
+cluster inboxes, per-worker `SSL_CTX` objects, and the QUIC engine pools created
+by `listen_udp`.
+
+## What exhaustion looks like
+
+| Resource exhausted                 | Result                                                                       |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| Request line or header block       | `431 Request Header Fields Too Large` with a structured document             |
+| Request body                       | `413 Payload Too Large` on HTTP/1.1 and HTTP/3; HTTP/2 closes the connection |
+| WebSocket tunnel or capacity limit | `503 Service Unavailable`                                                    |
+| Response write ring                | `error.WouldBlock`                                                           |
+| WebSocket `send`                   | `error.WouldBlock`                                                           |
+| Route nodes, patterns, or registry | A capacity error at registration                                             |
+
+Oversized input is rejected, never expanded. The rejection document names the
+limit and its value, so a client can tell a 64 KiB body limit apart from a
+header limit without reading the server log.
+
+## Per-worker inbox memory
+
+A cluster adds memory outside the slab. Each active worker reserves 64 messages
+of `max_ws_message_size` plus one message-sized scratch buffer for its inbox,
+which is about 1.0 MiB per worker at the 16 KiB default. Only active workers
+allocate an inbox, so a large compiled capacity does not reserve memory for
+workers that never start.
+
+## Next
+
+- [Zero allocation](/docs/concepts/zero-allocation) lists the startup
+  allocations and the request APIs that allocate explicitly.
+- [Backpressure](/docs/concepts/backpressure) explains what the write ring does
+  when it is full.
+- [Application model](/docs/concepts/application-model) covers the builder,
+  presets, and the lifecycle that owns the slab.

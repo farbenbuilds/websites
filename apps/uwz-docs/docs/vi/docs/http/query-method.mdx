@@ -1,0 +1,145 @@
+---
+title: QUERY theo RFC 10008
+description: Đăng ký route QUERY an toàn, vượt qua gate cú pháp Content-Type và tự sở hữu media policy trong handler trên mọi transport.
+sidebar:
+  order: 21
+search:
+  tags: [how-to, http]
+---
+
+RFC 10008 thêm `QUERY` như một method an toàn, idempotent, với request content
+mang query. µWebZockets đăng ký method này như mọi method khác và chạy cùng
+handler trên HTTP/1.1, HTTP/2 và HTTP/3.
+
+## Đăng ký route QUERY
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_unique_header("Content-Type") orelse "";
+    const separator = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media_type = std.mem.trim(u8, content_type[0..separator], " \t");
+
+    if (!std.ascii.eqlIgnoreCase(media_type, "application/json")) {
+        res.end("415 Unsupported Media Type", "QUERY expects application/json") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    }
+
+    const query = req.text();
+    if (query.len == 0) {
+        res.end("400 Bad Request", "empty query") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    }
+
+    res.end("200 OK", query) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.query("/search", search);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Ví dụ lặp lại nội dung query. Thay `res.end` cuối bằng công việc mà query mô tả.
+Lời gọi đăng ký là contract: `app.query` dùng cùng route table, cùng middleware
+và cùng giá trị `Request`, `Response` như mọi method khác.
+
+## Gate Content-Type
+
+Transport kiểm tra `Content-Type` trước khi middleware chạy và trước khi chọn
+route. Request `QUERY` phải có đúng một field `Content-Type` với giá trị là media
+type hợp lệ về cú pháp: một token, `/`, một token, và các tham số
+`;name=value` tùy chọn. Ký tự token như `%`, giá trị tham số trong quote và
+whitespace quanh `;` và `=` đều được chấp nhận.
+
+Field bị thiếu, field bị trùng hoặc cú pháp sai sẽ nhận
+
+```text
+HTTP/1.1 400 Bad Request
+```
+
+với body `QUERY requires a valid Content-Type`. Handler không chạy. Vì bước kiểm
+tra diễn ra trước routing, một path không tồn tại nhưng có `Content-Type` sai
+cũng nhận `400`, không phải `404`.
+
+Gate này chỉ kiểm tra cú pháp. Nó không quyết định media type có phù hợp với
+resource hay không, charset có chấp nhận được hay không, hoặc body có khớp với
+type đã khai báo hay không.
+
+## Media policy do handler sở hữu
+
+Media policy thuộc về application. Nhánh `415 Unsupported Media Type` trong ví dụ
+từ chối mọi thứ không phải `application/json`. Handler chấp nhận nhiều type có
+thể rẽ nhánh theo media type và parse nội dung tương ứng. Handler chấp nhận mọi
+type hợp lệ về cú pháp có thể bỏ qua bước kiểm tra.
+
+Giữ hai quy tắc trong handler:
+
+- Tự chọn các type được chấp nhận. Library không có default ở mức resource.
+- Kiểm tra nội dung khớp với type đã khai báo trước khi xử lý. Header
+  `Content-Type` hợp lệ không chứng minh body đúng định dạng.
+
+:::warning[Kiểm tra trước khi tin]
+Gate cú pháp chạy trước handler, nhưng nó không validate JSON, schema hay field
+constraint. Parse nội dung bằng `req.json` hoặc `req.validate_json` khi handler
+phụ thuộc vào cấu trúc của nó.
+:::
+
+## An toàn replay
+
+`QUERY` an toàn và idempotent ở mức protocol. Helper
+`uz.http3_extensions.method_is_replay_safe` xếp `QUERY` cùng `GET`, `HEAD`,
+`OPTIONS` và `TRACE`.
+
+Phân loại đó là input cho chính sách forwarding. Nó không chứng minh handler của
+bạn idempotent và không tự nó cho phép TLS 0-RTT. Live listener HTTP/3 từ chối
+0-RTT, nên request `QUERY` không bao giờ đến handler dưới dạng early data. Nếu
+sau này bạn thêm chính sách early data, hãy xem helper là một tín hiệu chứ không
+phải bảo đảm.
+
+## Một handler trên mọi transport
+
+`app.query` đăng ký method vào router dùng chung. Transport cung cấp method token:
+
+| Transport | Cách đến                 |
+| --------- | ------------------------ |
+| HTTP/1.1  | `QUERY /search HTTP/1.1` |
+| HTTP/2    | `:method: QUERY`         |
+| HTTP/3    | `:method: QUERY`         |
+
+Route, gate `Content-Type` và handler hoàn toàn giống nhau. Handler chạy được
+trên HTTP/1.1 không cần nhánh riêng theo transport.
+
+## Kiểm tra
+
+```sh
+curl -i -X QUERY \
+  -H 'Content-Type: application/json' \
+  --data '{"term":"slab"}' \
+  http://127.0.0.1:3000/search
+```
+
+Response là `200 OK` và lặp lại JSON body. Request không có field
+`Content-Type` sẽ gặp gate thay vì handler:
+
+```sh
+curl -i -X QUERY http://127.0.0.1:3000/search
+```
+
+Response là `400 Bad Request` với `QUERY requires a valid Content-Type`.
+
+## Tiếp theo
+
+- [TRACE](/docs/http/trace) trình bày method mở rộng opt-in còn lại.
+- [Lỗi HTTP](/docs/http/errors) trình bày error document có kiểu.
+- [Query và form parsing](/docs/http/helpers/query-and-forms) trình bày parser
+  zero-allocation cho request target và form body.

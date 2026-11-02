@@ -1,0 +1,167 @@
+---
+title: Header bảo mật
+description: Áp dụng năm security header mặc định của middleware, ghi đè hoặc tắt từng field và biết những gì mặc định không bảo đảm.
+sidebar:
+  order: 16
+search:
+  tags: [how-to, security]
+---
+
+µWebZockets cung cấp một middleware ghi năm response header. Các giá trị mặc
+định là baseline cho app hướng tới trình duyệt; chúng không phải policy bảo mật
+đầy đủ và không thay thế authentication, TLS hay kiểm tra input.
+
+## Đăng ký middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.html("<h1>Status</h1>") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init_https_ephemeral(init.io);
+    defer app.deinit();
+
+    var headers = uz.middleware.security_headers(.{});
+    _ = try app.use(&headers, uz.middleware.SecurityHeaders.handler);
+
+    _ = try app.get("/", index);
+
+    try app.listen("0.0.0.0", 3443);
+    try app.run();
+}
+```
+
+Initializer TLS ở đây là có chủ đích: một header mặc định chỉ có ý nghĩa trên
+HTTPS. `uz.middleware.security_headers` trả về một giá trị do bạn sở hữu, và
+`app.use` lưu pointer tới nó, nên giữ nó sống đến `app.deinit()`.
+
+## Giá trị mặc định
+
+| Tùy chọn                    | Header                      | Mặc định                              |
+| --------------------------- | --------------------------- | ------------------------------------- |
+| `strict_transport_security` | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| `content_security_policy`   | `Content-Security-Policy`   | `default-src 'self'`                  |
+| `x_content_type_options`    | `X-Content-Type-Options`    | `true`, ghi ra `nosniff`              |
+| `x_frame_options`           | `X-Frame-Options`           | `DENY`                                |
+| `referrer_policy`           | `Referrer-Policy`           | `no-referrer`                         |
+
+Mọi field trừ `x_content_type_options` có kiểu `?[]const u8`. Middleware chỉ
+thêm header khi option khác null. `x_content_type_options` là `bool`: `true` ghi
+`nosniff`, `false` không ghi gì.
+
+Middleware thêm các field theo thứ tự trên và trả `.continue_dispatch`, nên nó
+không bao giờ dừng request. Nó chạy cho mọi request tới dispatch, kể cả request
+kết thúc bằng `404 Not Found`, và chỉ khi response còn idle.
+
+## Ghi đè hoặc tắt một field
+
+Truyền một tập con bất kỳ; field không nêu giữ giá trị mặc định:
+
+```zig
+var headers = uz.middleware.security_headers(.{
+    .content_security_policy = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+    .referrer_policy = "strict-origin-when-cross-origin",
+});
+```
+
+Tắt một field bằng `null`, hoặc `false` với `nosniff`:
+
+```zig
+var headers = uz.middleware.security_headers(.{
+    .strict_transport_security = null,
+    .content_security_policy = null,
+    .x_frame_options = null,
+});
+```
+
+Middleware không gộp field mà bạn đặt ở nơi khác. Nếu handler cũng thêm
+`Content-Security-Policy`, response có hai field, và trình duyệt áp dụng cả hai
+policy cùng lúc, nên policy hiệu dụng là giao của chúng. Mỗi header chỉ nên có
+một nơi sở hữu.
+
+## HSTS chỉ có ý nghĩa trên HTTPS
+
+`Strict-Transport-Security` là transport policy mà trình duyệt lưu cho một
+origin sau khi nhận header qua HTTPS. Header gửi qua plaintext HTTP không có
+tác dụng: trình duyệt không có origin đã xác thực để gắn policy vào. Gửi nó từ
+listener plaintext không gây hại nhưng dễ gây hiểu nhầm.
+
+- `max-age=31536000` ghi nhớ policy trong một năm.
+- `includeSubDomains` mở rộng policy cho mọi subdomain, kể cả host chưa chuyển
+  sang HTTPS.
+- `max-age=0` xoá policy đã lưu.
+- Mặc định không có token `preload`. Thêm token đó là một cam kết riêng với quy
+  trình gỡ bỏ riêng.
+
+Nếu có proxy kết thúc TLS phía trước server, trình duyệt vẫn nhận header qua
+HTTPS và policy vẫn áp dụng. Chặng proxy tới server là một trust boundary riêng;
+đừng xem header này là bằng chứng chặng cuối đã được mã hoá.
+
+## CSP là điểm khởi đầu
+
+`default-src 'self'` cho phép tài nguyên từ chính origin của response và chặn
+phần còn lại. Nó cũng chặn nội dung `<script>` và `<style>` inline, `eval`, cùng
+font, ảnh và API call của bên thứ ba. App dựa vào bất kỳ mục nào trong số đó sẽ
+hỏng cho đến khi policy nêu rõ nguồn.
+
+Middleware ghi đúng chuỗi bạn cấu hình. Nó không sinh nonce hay hash, không đọc
+HTML của bạn và không có report-only mode. Một policy chưa được nạp thử với các
+trang thật không phải bằng chứng là trang an toàn; đó chỉ là một giá trị header.
+Bắt đầu từ mặc định, thêm nguồn mà từng trang thực sự dùng, rồi thử trang với
+console của trình duyệt mở.
+
+`frame-ancestors 'none'` trong CSP và `X-Frame-Options: DENY` cùng hạn chế
+framing. Trình duyệt hiện đại dùng directive CSP và fallback về header; giữ cả
+hai khi còn hỗ trợ client cũ.
+
+## Những gì middleware không làm
+
+- Nó chỉ đặt năm field ở trên. Nó không đặt `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`,
+  `Cross-Origin-Resource-Policy`, `Cache-Control`, `ETag` hay `Server`.
+- Không cấu hình CORS. Đó là middleware riêng với danh sách origin riêng; xem
+  [CORS](/docs/http/cors).
+- Không áp dụng theo từng route. Mọi route trong app nhận cùng năm field.
+- Không xoá header mà layer khác đã đặt.
+
+## Các lỗi thường gặp
+
+| Điều kiện                          | Kết quả                                                |
+| ---------------------------------- | ------------------------------------------------------ |
+| Giá trị cấu hình chứa CR hoặc LF   | `500 Internal Server Error` qua `error.InvalidHeaders` |
+| Buffer pending header không đủ chỗ | `500 Internal Server Error` qua `error.BufferOverflow` |
+
+Cả hai lỗi kết thúc response từ middleware với body rỗng, nên giá trị cấu hình
+sai hiện ra thành `500` ở request đầu tiên thay vì lúc startup. Hãy kiểm tra giá
+trị trước `listen`.
+
+## Kiểm tra
+
+```sh
+curl -k -sI https://127.0.0.1:3443/
+```
+
+```text
+HTTP/1.1 200 OK
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Content-Security-Policy: default-src 'self'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+```
+
+`curl -k` bỏ qua kiểm tra certificate cho certificate self-signed tạm thời; các
+header không bị ảnh hưởng.
+
+## Tiếp theo
+
+- [CORS](/docs/http/cors) trình bày cross-origin policy mà middleware này
+  không cung cấp.
+- [Xác thực](/docs/http/authentication) trình bày check credential ở cùng
+  middleware boundary.
+- [Mô hình bảo mật](/docs/concepts/security-model) ánh xạ các trust boundary
+  quanh TLS, parser và application policy.

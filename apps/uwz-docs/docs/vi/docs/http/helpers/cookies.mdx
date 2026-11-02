@@ -1,0 +1,179 @@
+---
+title: Cookie và cookie có chữ ký
+description: Đọc cookie RFC 6265, format attribute của Set-Cookie và ký value bằng HMAC-SHA256 với key rotation; chữ ký không thay thế mã hoá.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, cookies]
+---
+
+`uz.cookie` parse field `Cookie` của request, format field `Set-Cookie` đã được
+kiểm tra, và ký value bằng HMAC-SHA256. Parse và format mượn dữ liệu hoặc ghi
+vào vùng nhớ của caller; không cấp phát.
+
+Chữ ký chứng minh value đến từ server của bạn và không bị sửa. Nó không giấu
+value.
+
+## Đọc cookie
+
+| API                               | Phạm vi            | Hành vi                                      |
+| --------------------------------- | ------------------ | -------------------------------------------- |
+| `cookie.find(header, name)`       | Một field `Cookie` | Cặp đầu tiên có tên đó, chỉ khi value hợp lệ |
+| `cookie.iterator(header)`         | Một field `Cookie` | Bỏ qua cặp không hợp lệ                      |
+| `CookieJar.parse(header)`         | Một field `Cookie` | View tối đa 32 cặp với capacity cố định      |
+| `req.cookie(name)`                | Mọi field `Cookie` | Kết quả khớp đầu tiên trong request          |
+| `req.signed_cookie(name, secret)` | Mọi field `Cookie` | Xác minh chữ ký HMAC-SHA256                  |
+
+`CookieJar` là `CookieJarOf(32)`. Parse một field có hơn 32 cặp hợp lệ sẽ giữ
+32 cặp đầu và bỏ phần còn lại. Cặp không hợp lệ bị bỏ qua thay vì làm parse
+lỗi. Tên được so sánh byte-exact.
+
+```zig
+const jar = uz.cookie.CookieJar.parse(req.get_header("cookie") orelse "");
+const theme = jar.get("theme") orelse "light";
+
+var pairs = jar.pairs();
+while (pairs.next()) |pair| {
+    std.debug.print("{s}={s}\n", .{ pair.name, pair.value });
+}
+```
+
+`find` kiểm tra value của cặp khớp. Value không hợp lệ trả `null` ngay cả khi
+một bản lặp phía sau hợp lệ; dùng iterator khi cần xem mọi cặp hợp lệ. Jar và
+các value của nó mượn buffer request; [capacity model](/docs/concepts/capacity-model)
+giải thích vùng lưu trữ cố định phía sau view.
+
+## Ghi cookie
+
+`cookie.format(buffer, name, value, options)` ghi field hoàn chỉnh, gồm cả
+`Set-Cookie: ` và CRLF cuối; không truyền kết quả đó cho `append_header`.
+`Response.set_cookie` gọi hàm với buffer stack 1024 byte và đưa field vào pending
+header; `set_signed_cookie` ký trước khi queue. `BufferOverflow` nghĩa là field không vừa buffer.
+
+| Option             | Mặc định | Tác dụng                                 |
+| ------------------ | -------- | ---------------------------------------- |
+| `path`             | `"/"`    | Attribute `Path`                         |
+| `domain`           | `null`   | Attribute `Domain`                       |
+| `max_age`          | `null`   | `Max-Age` tính bằng giây                 |
+| `expires_unix`     | `null`   | `Expires` dạng IMF-fixdate               |
+| `http_only`        | `false`  | `HttpOnly`                               |
+| `secure`           | `false`  | `Secure`                                 |
+| `same_site`        | `null`   | `Strict`, `Lax` hoặc `None`              |
+| `enforce_prefixes` | `false`  | Áp dụng quy tắc `__Host-` và `__Secure-` |
+
+`expires_unix` được format bằng `format_http_date` vào `HttpDateBuffer` 29 byte
+và ghi sau `Max-Age`. Giây trước Unix epoch hoặc năm vượt 9999 trả
+`InvalidExpires`.
+
+## Prefix và SameSite
+
+`SameSite=None` yêu cầu `secure = true`; nếu không, `format` trả
+`InsecureSameSiteNone`. Kiểm tra này áp dụng cả khi prefix enforcement tắt.
+
+Prefix enforcement là opt-in qua `enforce_prefixes = true`:
+
+- `__Host-` yêu cầu `secure = true`, `domain = null` và `path = "/"`.
+- `__Secure-` yêu cầu `secure = true`.
+
+Vi phạm trả `InsecureCookiePrefix`. Browser áp dụng cùng quy tắc, nên kiểm tra
+này biến một cookie lẽ ra bị bỏ thành lỗi thấy được ngay lúc chạy.
+
+```zig
+fn set_session(res: *uz.Response, session_id: []const u8) !void {
+    return res.set_cookie("__Host-session", session_id, .{
+        .secure = true,
+        .http_only = true,
+        .same_site = .lax,
+        .enforce_prefixes = true,
+    });
+}
+```
+
+## Ký và xác minh
+
+| Function                             | Output                                            | Lỗi                                                                            |
+| ------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `sign(buffer, value, secret)`        | `value.hex(HMAC-SHA256(value, secret))`           | `CookieSecretTooShort`, `InvalidCookieValue`, `BufferTooSmall`                 |
+| `verify_signed(value, secret)`       | Payload được mượn                                 | `CookieSecretTooShort`, `InvalidCookieSignature`                               |
+| `sign_versioned(buffer, value, key)` | `id.payload.hex(HMAC-SHA256(id.payload, secret))` | `InvalidKeyId`, `CookieSecretTooShort`, `InvalidCookieValue`, `BufferTooSmall` |
+| `verify_versioned(value, keys)`      | Payload được mượn                                 | `UnknownKeyId`, `CookieSecretTooShort`, `InvalidCookieSignature`               |
+
+Secret ngắn hơn 32 byte bị từ chối. `sign` cần buffer
+`value.len + 1 + 64` byte vì chữ ký hex dài 64 ký tự. `verify_signed` so sánh
+constant time và phân biệt cấu trúc sai, hex sai và tag không khớp bằng
+`InvalidCookieSignature`.
+
+Ký không phải mã hóa. Payload vẫn đọc được trong cookie; ai thấy value cũng
+đọc được. Dùng chữ ký cho tính toàn vẹn, không phải bảo mật nội dung.
+
+## Rotate key
+
+`Key` ghép một id công khai với secret dài ít nhất 32 byte. Id tối đa 32 byte,
+phải là cookie name hợp lệ và không chứa dấu chấm. `verify_versioned` tra id
+trong danh sách key của caller, nên cookie cũ vẫn dùng được trong khi key mới
+ký value mới.
+
+```zig
+const keys = [_]uz.cookie.Key{
+    .{ .id = "2026-11", .secret = "0123456789abcdef0123456789abcdef" },
+    .{ .id = "2026-10", .secret = "fedcba9876543210fedcba9876543210" },
+};
+
+fn read_session(value: []const u8) ![]const u8 {
+    return uz.cookie.verify_versioned(value, &keys);
+}
+```
+
+Cả hai literal trên là ví dụ. Nạp mọi secret từ configuration. Id không xác
+định trả `UnknownKeyId`. Giữ key cũ trong danh sách cho đến khi cookie sống lâu
+nhất hết hạn, rồi bỏ nó.
+
+## Kiểm tra bằng request
+
+```zig
+const secret = "0123456789abcdef0123456789abcdef";
+
+fn login(_: *uz.Request, res: *uz.Response) void {
+    res.set_signed_cookie("__Host-session", "user=42", secret, .{
+        .secure = true,
+        .http_only = true,
+        .same_site = .lax,
+        .enforce_prefixes = true,
+    }) catch |err| {
+        res.end("500 Internal Server Error", @errorName(err)) catch {};
+        return;
+    };
+    res.end("204 No Content", "") catch {};
+}
+
+fn profile(req: *uz.Request, res: *uz.Response) void {
+    const maybe = req.signed_cookie("__Host-session", secret) catch |err| {
+        res.end("401 Unauthorized", @errorName(err)) catch {};
+        return;
+    };
+    const value = maybe orelse {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(value) catch {};
+}
+```
+
+Literal ở trên chỉ là ví dụ. Nạp secret từ configuration và giữ nó ngoài source
+control.
+
+```sh
+curl -i -c jar.txt http://127.0.0.1:3000/login
+curl -i -b jar.txt http://127.0.0.1:3000/profile
+```
+
+Response đầu mang `Set-Cookie: __Host-session=user=42.<hex>` với các attribute
+đã yêu cầu. Response thứ hai trả `user=42`. Sửa một ký tự trong cookie trả
+`401 Unauthorized` với `InvalidCookieSignature`.
+
+## Tiếp theo
+
+Đọc [API request](/docs/http/request) cho truy cập header và
+[API response](/docs/http/response) cho `set_cookie`.
+[Mô hình bảo mật](/docs/concepts/security-model) bao quát ranh giới tin cậy
+quanh session state.

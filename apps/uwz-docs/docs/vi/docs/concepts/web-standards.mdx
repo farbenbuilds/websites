@@ -1,0 +1,125 @@
+---
+title: Ánh xạ chuẩn web
+description: Ánh xạ tên Fetch và Streams sang µWebZockets, và thấy rõ nơi WHATWG conformance và ownership tự động dừng lại.
+sidebar:
+  order: 18
+search:
+  tags: [concept, http]
+---
+
+Bề mặt HTTP mượn tên từ chuẩn WHATWG Fetch và Streams khi phù hợp với Zig. Hành
+vi không phải triển khai JavaScript: allocation, ownership và fallible I/O vẫn rõ
+ràng, và tuyên bố conformance chỉ giới hạn ở các protocol suite dự án chạy.
+
+## Tên được ánh xạ
+
+- `Request.url` ánh xạ sang `req.url()`, một request target được borrow.
+- `Headers.get`, `has` và `entries` ánh xạ sang `req.headers()`, view chỉ đọc trên
+  field có giới hạn.
+- Body `text`, bytes và JSON ánh xạ sang `req.text()`, `req.bytes()` và
+  `req.json(T, allocator)`. Byte được borrow; JSON đã parse cần allocator rõ ràng.
+- Text, HTML, bytes và JSON response ánh xạ sang `res.text()`, `res.html()`,
+  `res.bytes()`, `res.json()` và `res.json_buf()`. Chúng ghi vào storage có giới
+  hạn hoặc allocator tạm thời rõ ràng.
+- `Response.redirect` ánh xạ sang `res.redirect(location, code)`, validate
+  `Location` và từ chối CR cùng LF.
+- Readable và writable stream ánh xạ sang `uz.streams.ReadableByteStream` và
+  `res.writable_stream()`, với BYOB read và ghi có giới hạn theo transport.
+- `pipeTo` ánh xạ sang `uz.streams.pipe_to(reader, writer, buffer)`, với transfer
+  buffer do caller sở hữu và close tất định.
+
+Response helper `text`, `html`, `bytes`, `json` và `json_buf` gửi `200 OK`. Dùng
+`res.end` hoặc `res.end_with_headers` khi status không phải `200`. `redirect` mặc
+định `302 Found` và nhận `301`, `302`, `303`, `307`, `308`; code lạ fallback về
+`302`.
+
+## Điều không phải WHATWG conformance
+
+- Đây không phải JavaScript API. Không có object `Response`, không có `Promise`,
+  và không có event loop ẩn cho caller.
+- Mọi lệnh gọi có thể phát sinh lỗi đều trả Zig error union. Write hoặc parse lỗi là giá
+  trị bạn xử lý, không phải exception bạn catch.
+- Request body được buffer trước dispatch. Không có async body reader stream
+  upload đến handler; boundary đó được ghi trong
+  [roadmap upstream](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md).
+- `req.headers()` là view chỉ đọc. Nó không phải `Headers` map có thể sửa.
+- Stream là byte stream với BYOB read và backpressure theo transport. Chúng không
+  phải JavaScript queued stream với strategy object.
+- Allocation hiện rõ. `req.json(T, allocator)`, `req.validate_json(T, allocator)`
+  và `Request.clone(allocator)` nhận allocator; `res.json_buf` và `pipe_to` ghi
+  vào storage của caller.
+- Fixed response body bị giới hạn bởi write queue đã cấu hình hoặc buffer bạn
+  cung cấp, ngoại trừ `res.json` render qua allocator và giải phóng phần tạm
+  trước khi trả về. Dùng `res.json_buf` cho đường có giới hạn.
+
+## Ownership hiện rõ
+
+- Request field và route capture có hiệu lực đến khi handler đồng bộ trả về hoặc
+  async token của nó complete.
+- WebSocket `message` slice chỉ có hiệu lực trong callback của nó.
+- Client `ResponseView` có hiệu lực trong callback hoặc vòng đời `FetchStorage`.
+- `AsyncResponse` token complete đúng một lần; bản thân token có thể copy.
+- Giá trị `App` không được move sau `listen` hoặc `listen_udp`.
+- Giá trị `Cluster` có một owner và không được move sau `run` hoặc khi signal
+  watcher bắt đầu.
+- C ABI `uwz_slice` được borrow; copy trước khi callback trả về.
+
+Copy request bằng `req.clone(allocator)` khi công việc phải sống lâu hơn callback.
+Các public request API nhận allocator là `Request.clone`, `req.json(T, allocator)`
+và `req.validate_json(T, allocator)`; mọi helper khác trả lỗi có giới hạn thay vì
+tăng memory.
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Greeting = struct { name: []const u8 };
+
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&scratch);
+    const parsed = req.json(Greeting, fba.allocator()) catch {
+        res.end("400 Bad Request", "invalid JSON") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    var out: [256]u8 = undefined;
+    res.json_buf(.{ .greeting = parsed.value.name }, &out) catch {
+        res.end("500 Internal Server Error", "") catch {};
+    };
+}
+```
+
+Handler là excerpt; đăng ký route và `listen` được lược bỏ. Request body vẫn được
+borrow. Giá trị parse dùng fixed buffer, và response được format vào buffer có
+giới hạn thứ hai trước khi vào write queue.
+
+## Chuẩn và protocol coverage
+
+| Khu vực        | Coverage                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| HTTP/1.1       | Bộ h1spec cộng adversarial case tất định trong unit suite                                                           |
+| HTTP/2         | RFC 9113 routing có giới hạn; một tunnel WebSocket RFC 8441 mỗi connection                                          |
+| HTTP/3         | RFC 9114 request/response routing có giới hạn, xác minh với curl/ngtcp2 và aioquic                                  |
+| WebSocket      | RFC 6455 và RFC 7692 per-message deflate; 517/517 Autobahn server case được chấp nhận (514 `OK`, 3 `INFORMATIONAL`) |
+| HTTP extension | RFC 10008 `QUERY` routing với kiểm tra cú pháp `Content-Type`; `TRACE` routing opt-in                               |
+
+HTTP/3 cross-implementation gate bao phủ request bình thường, trailing field
+section hợp lệ và rejection pseudo-header malformed. Extended CONNECT,
+WebTransport, push và application datagram vẫn helper-only; QUIC listener live từ
+chối `CONNECT` với `501 Not Implemented`. WebTransport chỉ mô hình draft-16 và
+không phải tuyên bố interoperability đã triển khai.
+
+:::warning[Không hỗ trợ]
+HTTP/2 server push, h2c Upgrade, WebTransport live và streaming request body là
+boundary có chủ đích, không phải phần chuẩn còn thiếu. Xem
+[roadmap upstream](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md).
+:::
+
+## Tiếp theo
+
+- [An toàn kiểu](/docs/concepts/type-safety) bao gồm schema rule và RPC có kiểu.
+- [Fetch, Streams và abort](/docs/http/helpers/fetch-streams-and-abort) dùng
+  stream và cancellation primitive.
+- [Request API](/docs/http/request) là reference theo từng field.

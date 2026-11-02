@@ -1,0 +1,176 @@
+---
+title: An toàn kiểu
+description: Dùng capacity lúc compile, JSON và RPC có kiểu, schema rule, callback type và error set rõ ràng mà không cần reflection runtime.
+sidebar:
+  order: 14
+search:
+  tags: [concept, schema]
+---
+
+µWebZockets giữ kiểu hiện rõ tại boundary. Capacity quyết định kích thước ứng
+dụng được chọn trước khi server chạy, JSON có thể decode vào một kiểu Zig với
+rule lúc compile, callback dùng function type có tên, và lỗi nằm trong error set
+rõ ràng thay vì chuỗi.
+
+## Capacity thuộc về kiểu
+
+| Type                                                      | Điều được cố định                                            |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| `App(N)`                                                  | `N` connection, WebSocket message 16 KiB, write queue 64 KiB |
+| `ConfiguredApp(N, message, queue)`                        | Connection, WebSocket message và write queue                 |
+| `ConfiguredAppWithTimeout(N, message, queue, timeout_ms)` | Cùng capacity cộng idle timeout                              |
+| `Server.builder(io)`                                      | `ServerConfig` lúc compile, resolve thành một slab           |
+
+Ba dạng đầu định kích thước kiểu ứng dụng được tạo, nên đối số phải là literal
+hoặc giá trị `const`. `Server.builder` chuyên biệt hóa kiểu từ `ServerConfig`
+lúc compile; mỗi call `with_*` cũng nhận giá trị lúc compile. `build` thực hiện
+đúng một lần cấp phát ứng dụng cho slab, request buffer, message region, write
+queue, router storage và compression scratch tùy chọn.
+
+## Decode JSON vào một kiểu
+
+`req.json(T, allocator)` parse request body thành `std.json.Parsed(T)`.
+`req.validate_json(T, allocator)` làm điều tương tự rồi áp các rule trong
+`T.validation`. Allocation luôn rõ ràng, và `Parsed(T).deinit()` giải phóng nó.
+
+Schema là struct với khai báo `pub const validation` tùy chọn. Mỗi field trong
+khai báo đó là một `uz.schema.Rule`:
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const CreateUser = struct {
+    name: []const u8,
+    age: u8,
+
+    pub const validation = .{
+        .name = uz.schema.Rule{ .min_length = 1, .max_length = 64 },
+        .age = uz.schema.Rule{ .min = 18, .max = 120 },
+    };
+};
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    var issue = uz.schema.Issue{};
+
+    const parsed = uz.schema.validate_json_detailed(
+        CreateUser,
+        std.heap.page_allocator,
+        req.text(),
+        &issue,
+    ) catch |err| {
+        if (err == error.ConstraintViolation or err == error.MalformedJson) {
+            res.end("422 Unprocessable Entity", @tagName(issue.kind)) catch {};
+            return;
+        }
+        res.end("500 Internal Server Error", "validation failed") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    res.text(parsed.value.name) catch {};
+}
+```
+
+Handler là excerpt; đăng ký route và `listen` được lược bỏ. Allocator là rõ ràng:
+excerpt này dùng page allocator, và handler production có thể truyền arena hoặc
+fixed buffer có giới hạn. `issue.field` nêu tên field lỗi khi decode đã đến field
+đó, và `issue.kind` phân loại lỗi đầu tiên.
+
+### Field của Rule
+
+| Field                      | Áp dụng cho                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `min`, `max`               | Field số nguyên                                               |
+| `min_float`, `max_float`   | Field số thực; bound số nguyên bị bỏ qua                      |
+| `min_length`, `max_length` | Chuỗi và giá trị `[]u8`/`[]const u8`                          |
+| `min_items`, `max_items`   | Array và slice không phải `u8`                                |
+| `allowed`                  | Tên enum tag hoặc toàn bộ giá trị chuỗi; rỗng để tắt kiểm tra |
+
+### Loại issue
+
+- Lỗi parse: `malformed_json`, `syntax_error`, `unexpected_end_of_input`,
+  `unexpected_token`, `invalid_number`, `number_overflow`, `invalid_enum_tag`,
+  `length_mismatch`, `missing_field`, `duplicate_field`, `unknown_field`.
+- Lỗi rule: `below_minimum`, `above_maximum`, `too_short`, `too_long`,
+  `too_few_items`, `too_many_items`, `invalid_enum_tag`.
+- Lỗi độ sâu: `too_deep`.
+
+Validation đi xuống qua struct lồng nhau và phần tử collection có khai báo
+`validation` riêng. `uz.schema.max_nested_depth` là 4; đi sâu hơn sẽ báo lỗi
+`too_deep` thay vì âm thầm bỏ constraint. Giới hạn độ sâu là giá trị runtime để
+schema type tự tham chiếu không thể đệ quy vô hạn.
+
+## Đăng ký procedure RPC có kiểu
+
+`register_typed` decode tham số vào một kiểu có tên và serialize kết quả có tên.
+Buffer tạm cho tham số là buffer cố định 4 KiB; giá trị không vừa sẽ báo lỗi qua
+`HandlerError` thay vì tăng memory.
+
+```zig
+const Add = struct { a: i64, b: i64 };
+
+fn add(params: Add) uz.json_rpc.HandlerError!i64 {
+    return params.a + params.b;
+}
+
+var service: uz.json_rpc.Service = .{};
+try service.register_typed("add", Add, i64, add);
+_ = try app.rpc("/rpc", &service);
+```
+
+`register_context` và `register_typed_context` thêm con trỏ context do caller sở
+hữu. Procedure cần application error tùy chỉnh thì trả `error.ApplicationError`
+từ `Call.fail`, hoặc ghi kết quả có kiểu qua `Call.result`.
+
+## Callback có tên
+
+- `uz.Handler` nhận `*const fn (*Request, *Response) void`.
+- `uz.ContextHandler` nhận `*const fn (*anyopaque, *Request, *Response) void`.
+- `uz.AsyncHandler` nhận `*const fn (*Request, AsyncResponse) void`.
+- `uz.ContextAsyncHandler` nhận
+  `*const fn (*anyopaque, *Request, AsyncResponse) void`.
+- `uz.MiddlewareHandler` trả `MiddlewareResult`, hoặc `.continue_dispatch` hoặc
+  `.stop`.
+- `uz.StreamProducer` nhận
+  `*const fn (*anyopaque, *Response) anyerror!StreamStatus`.
+- `Cluster.ConfigureCallback` nhận
+  `*const fn (*Worker, usize) anyerror!void`.
+
+`*anyopaque` context là ngoại lệ có chủ đích cho dữ liệu có kiểu. Nó trỏ đến
+state do caller sở hữu, sống lâu hơn route, và ứng dụng cast ngược về kiểu của
+mình. Đây không phải runtime type registry.
+
+## Lỗi nằm trong set
+
+- `uz.cluster.MessageError` từ chối `EmptyTopic`, `TopicTooLong` và
+  `ClusterMessageTooLarge`.
+- `uz.cluster.QueueError` thêm `ClusterQueueFull` vào các message error.
+- `uz.cluster.PublishError` thêm rejection lifecycle của cluster vào các message
+  error.
+- `uz.cluster.RunError` thêm lifecycle error, spawn error, `InvalidWorkerCount`
+  và `ClusterWorkerFailed`.
+- `uz.json_rpc.RegistrationError` từ chối `DuplicateProcedure`,
+  `InvalidMethodName`, giới hạn capacity và `RegistryLocked`.
+- `uz.json_rpc.HandlerError` mang `Aborted`, `ApplicationError`, `InvalidParams`,
+  `ResultTooLarge` và các lỗi procedure liên quan.
+
+Đăng ký route và async completion dùng inferred error set trên method trả chúng;
+[Lỗi và cách xử lý](/docs/concepts/errors) ánh xạ các tên đó sang HTTP
+status và hành vi retry.
+
+## Không có public API dựa trên reflection
+
+`uz.schema` kiểm tra một kiểu bằng tính năng comptime của Zig. Nó không tạo
+runtime type metadata, không nhận chuỗi tên kiểu, và không chọn serializer qua
+entry trong registry. RPC có kiểu lưu method name đã copy và function pointer,
+không lưu type descriptor. Cùng quy tắc áp dụng cho route, middleware và stream
+producer: compiler biết shape trước khi server chạy.
+
+## Tiếp theo
+
+- [Lỗi và cách xử lý](/docs/concepts/errors) biến các error name này
+  thành HTTP status và quyết định retry.
+- [JSON response](/docs/http/json) bao gồm các response helper theo task.
+- [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service) xây một
+  service từ đầu đến cuối.

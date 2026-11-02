@@ -1,0 +1,177 @@
+---
+title: Vòng đời server
+description: Chọn initializer, đăng ký route, bind TCP hoặc QUIC, chạy loop và shutdown sạch mà không làm application value di chuyển.
+sidebar:
+  order: 1
+search:
+  tags: [how-to, http]
+---
+
+Trang này đưa một application từ lúc khởi tạo đến shutdown đã drain. Trang nêu
+mọi call trong lifecycle, thời điểm route trở nên bất biến và lỗi mà mỗi bước
+trả về.
+
+## Chương trình hoàn chỉnh
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+
+    try app.catch_shutdown_signals();
+    try app.listen_all(&.{
+        .{ .address = "127.0.0.1", .port = 3000 },
+        .{ .address = "127.0.0.1", .port = 3001 },
+    });
+    try app.run();
+}
+```
+
+`defer app.deinit()` là call release duy nhất. Hai listener bind trước khi một
+trong hai accept, nên port bận làm startup báo lỗi mà không để lại server nửa
+mở.
+
+## Các giai đoạn
+
+Thứ tự là construct, register, bind, run, stop, release. Đăng ký chỉ thành công
+trước listener đầu tiên; bind không thành công vẫn mở route để có thể thử lại startup.
+
+## Khởi tạo
+
+| Initializer                              | Transport       | Ghi chú                                                         |
+| ---------------------------------------- | --------------- | --------------------------------------------------------------- |
+| `init(io)`                               | TCP plaintext   | Đường ngắn nhất                                                 |
+| `init_https(io, cert, key)`              | TCP TLS 1.3     | ALPN `h2` rồi `http/1.1`; 0-RTT bật cho safe method             |
+| `init_https_mtls(io, cert, key, config)` | TCP TLS 1.3     | Client certificate; 0-RTT tắt khi có yêu cầu client certificate |
+| `init_http3(io, cert, key)`              | TCP TLS và QUIC | Hai context tách biệt; QUIC chỉ quảng bá `h3`                   |
+| `init_https_ephemeral(io)`               | TCP TLS 1.3     | Certificate self-signed cho `localhost`, `127.0.0.1`, `::1`     |
+| `init_http3_ephemeral(io)`               | TCP TLS và QUIC | Cả hai context được tạo trong memory                            |
+
+```zig src/main.zig
+var app = try uz.App(128).init_https(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer app.deinit();
+
+_ = try app.get("/", index);
+try app.listen("0.0.0.0", 8443);
+```
+
+Đoạn này thay call `init` trong chương trình hoàn chỉnh; phần còn lại của `main`
+không đổi.
+
+Với mutual TLS, dùng cùng shape với client-auth config:
+`init_https_mtls(io, cert, key, .{ .mode = .required, .ca_path = "certs/clients-ca.pem" })`.
+`mode` là `.none`, `.optional` hoặc `.required`; mọi mode khác `.none` cần
+`ca_path` và tắt TLS 1.3 0-RTT, vì certificate được xác minh ở flight thứ hai.
+
+TLS load không thành công sẽ release slab và trả
+`error.CertificateLoadFailed`, `error.PrivateKeyLoadFailed`,
+`error.TrustStoreLoadFailed` hoặc `error.InvalidClientAuthConfig`.
+
+## Khóa đăng ký route
+
+Mọi helper đăng ký đều đi qua cùng một guard. Trước khi listener bind, guard
+kiểm tra router storage và đăng ký route. Sau khi `listen_all` hoặc `listen_udp`
+thành công, call trả `error.RoutesLocked`.
+
+- `listen_all` không thành công sẽ đóng các socket do call đó tạo, giữ `listener_count`
+  bằng 0 và để route mở khóa, nên bạn có thể sửa port và thử lại.
+- Call sau khi shutdown bắt đầu hoặc sau `deinit` trả
+  `error.ApplicationUnavailable`.
+- `openapi`, `datagram` và `static` giữ pointer vào application hoặc caller
+  storage, nên đăng ký chúng trước khi bind.
+
+## Listener
+
+| Call                        | Endpoint        | Contract                                                        |
+| --------------------------- | --------------- | --------------------------------------------------------------- |
+| `listen(address, port)`     | Một TCP         | Wrapper tiện dụng cho `listen_all`                              |
+| `listen_all(endpoints)`     | Một đến bốn TCP | Bind mọi endpoint, xác minh mọi local port, rồi arm accept      |
+| `listen_udp(address, port)` | Một UDP         | Cần `init_http3` hoặc `init_http3_ephemeral`; start QUIC engine |
+
+Một endpoint là `{ .address, .port, .tls }`. `tls` là optional; `null` theo việc
+application có TLS context hay không. Endpoint TLS trên application plaintext
+trả `error.TlsNotInitialized`.
+
+`listen_all` là all-or-none. Không accept completion nào được arm cho đến khi
+mọi socket đã bind và báo một local port dùng được. Lỗi ở phase bind hoặc
+verification sẽ đóng các socket do call đó tạo.
+
+`listen_udp` chỉ dành cho single application. Call cũng từ chối
+`max_header_size` dùng chung lớn hơn 65535 với `error.InvalidHttp3Capacity`, vì
+field header của QUIC là 16-bit.
+
+## Chạy và shutdown
+
+| Call                 | Thread                   | Contract                                                                              |
+| -------------------- | ------------------------ | ------------------------------------------------------------------------------------- |
+| `run()`              | Owning thread            | Block cho đến khi shutdown drain; re-entry trả `error.ApplicationAlreadyRunning`      |
+| `request_shutdown()` | Mọi thread hoặc callback | Lưu stop flag, đánh thức loop sở hữu, trả về ngay                                     |
+| `shutdown()`         | Loop thread              | Từ callback, call bắt đầu shutdown rồi trả về; ngoài run, call tự drive loop và drain |
+| `deinit()`           | Owner                    | Idempotent; panic nếu gọi từ trong event loop                                         |
+
+Sau khi shutdown bắt đầu hoặc `deinit` chạy, `run` và các call listen trả
+`error.ApplicationUnavailable`. `shutdown` trả
+`error.ApplicationDeinitialized` sau release, và `error.ShutdownIncomplete` khi
+connection, timer, watcher, listener hoặc QUIC transport chưa drain; `run` thực
+hiện cùng verification khi shutdown được request trong loop.
+
+## Tín hiệu
+
+Gọi `try app.catch_shutdown_signals()` trước `try app.run()`. Watcher xử lý
+SIGINT và SIGTERM, hoặc console-control event trên Windows, và request cùng
+shutdown path như `shutdown`. Cài một lần mỗi process: call thứ hai trả
+`error.SignalWatcherAlreadyInstalled`, và call sau khi shutdown bắt đầu trả
+`error.ApplicationUnavailable`. Signal lặp lại được coalesce thành một request.
+
+## Địa chỉ ổn định
+
+Giữ application ở một địa chỉ kể từ call đầu tiên lấy `&app`: `listen`,
+`listen_all`, `listen_udp`, `catch_shutdown_signals`, `openapi` hoặc `datagram`.
+Listener, completion và signal watcher giữ pointer đó đến `deinit`, nên không
+bao giờ copy hoặc move value.
+
+## Lỗi
+
+Các call startup và shutdown chạy ngoài request dispatch, nên trả Zig error và
+không có HTTP response.
+
+| Điều kiện                                           | Kết quả                         |
+| --------------------------------------------------- | ------------------------------- |
+| Bind TCP lần thứ hai, hoặc `listen_udp` lần thứ hai | `error.AlreadyListening`        |
+| Hơn bốn TCP endpoint                                | `error.ListenerCapacityReached` |
+| `listen_udp` không có HTTP/3 initializer            | `error.Http3NotInitialized`     |
+| Giới hạn header dùng chung lớn hơn 65535 với HTTP/3 | `error.InvalidHttp3Capacity`    |
+| `deinit` từ trong loop                              | Panic, không phải error         |
+
+## Kiểm tra
+
+```sh
+zig build run
+```
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3001/
+```
+
+Cả hai port trả `ok`. Nhấn Ctrl+C để request shutdown; `run` trả về sau drain và
+`deinit` release slab.
+
+## Tiếp theo
+
+- [Định tuyến](/docs/http/routing) trình bày cách chọn path đã đăng ký.
+- [Handler](/docs/http/handlers) trình bày bốn shape callback.
+- [Request API](/docs/http/request) trình bày request value được mượn.

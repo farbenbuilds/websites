@@ -1,0 +1,148 @@
+---
+title: RFC 10008 QUERY
+description: Register a safe QUERY route, pass the Content-Type syntax gate, and own the media-type policy inside the handler.
+sidebar:
+  order: 21
+search:
+  tags: [how-to, http]
+---
+
+RFC 10008 adds `QUERY` as a safe, idempotent method whose request content
+carries the query. µWebZockets registers it like any other method and runs the
+same handler on HTTP/1.1, HTTP/2, and HTTP/3.
+
+## Register a QUERY route
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_unique_header("Content-Type") orelse "";
+    const separator = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media_type = std.mem.trim(u8, content_type[0..separator], " \t");
+
+    if (!std.ascii.eqlIgnoreCase(media_type, "application/json")) {
+        res.end("415 Unsupported Media Type", "QUERY expects application/json") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    }
+
+    const query = req.text();
+    if (query.len == 0) {
+        res.end("400 Bad Request", "empty query") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    }
+
+    res.end("200 OK", query) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.query("/search", search);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+The example echoes the query content. Replace the final `res.end` with the work
+the query describes. The registration call is the contract: `app.query` uses the
+same route table, the same middleware, and the same `Request` and `Response`
+values as every other method.
+
+## The Content-Type gate
+
+The transport validates `Content-Type` before middleware runs and before route
+selection. A `QUERY` request must carry exactly one `Content-Type` field whose
+value is a syntactically valid media type: a token, `/`, a token, and optional
+`;name=value` parameters. Token characters such as `%`, quoted parameter values,
+and whitespace around `;` and `=` are accepted.
+
+A missing field, a duplicate field, or malformed syntax receives
+
+```text
+HTTP/1.1 400 Bad Request
+```
+
+with the body `QUERY requires a valid Content-Type`. The handler never runs.
+Because the check is earlier than routing, an unknown path with a bad
+`Content-Type` also receives `400`, not `404`.
+
+This gate checks syntax only. It does not decide whether the media type suits the
+resource, whether the charset is acceptable, or whether the body matches the
+declared type.
+
+## Handler-owned media policy
+
+Media policy belongs to the application. The `415 Unsupported Media Type` branch
+in the example rejects anything that is not `application/json`. A handler that
+accepts several types can branch on the media type and parse the content
+accordingly. A handler that accepts any syntactically valid type can skip the
+check entirely.
+
+Keep two rules in the handler:
+
+- Choose the accepted types yourself. The library has no resource-level default.
+- Check that the content matches the declared type before acting on it. A valid
+  `Content-Type` header is not proof that the body is well formed.
+
+:::warning[Validate before you trust]
+The syntax gate runs before the handler, but it does not validate JSON, schema,
+or field constraints. Parse the content with `req.json` or `req.validate_json`
+when the handler depends on its structure.
+:::
+
+## Replay safety
+
+`QUERY` is safe and idempotent at the protocol level. The
+`uz.http3_extensions.method_is_replay_safe` helper includes `QUERY` alongside
+`GET`, `HEAD`, `OPTIONS`, and `TRACE`.
+
+That classification is an input to a forwarding policy. It does not prove that
+your handler is idempotent, and it does not authorize TLS 0-RTT by itself. The
+live HTTP/3 listener rejects 0-RTT, so a `QUERY` request never reaches a handler
+as early data. If you add an early-data policy later, treat the helper as one
+signal rather than a guarantee.
+
+## One handler on every transport
+
+`app.query` registers the method in the shared router. The transport supplies the
+method token:
+
+| Transport | Arrival                  |
+| --------- | ------------------------ |
+| HTTP/1.1  | `QUERY /search HTTP/1.1` |
+| HTTP/2    | `:method: QUERY`         |
+| HTTP/3    | `:method: QUERY`         |
+
+The route, the `Content-Type` gate, and the handler are identical. A handler that
+works over HTTP/1.1 needs no transport-specific branch.
+
+## Verify
+
+```sh
+curl -i -X QUERY \
+  -H 'Content-Type: application/json' \
+  --data '{"term":"slab"}' \
+  http://127.0.0.1:3000/search
+```
+
+The response is `200 OK` and echoes the JSON body. A request without a
+`Content-Type` field reaches the gate instead of the handler:
+
+```sh
+curl -i -X QUERY http://127.0.0.1:3000/search
+```
+
+The response is `400 Bad Request` with `QUERY requires a valid Content-Type`.
+
+## Next
+
+- [TRACE](/docs/http/trace) covers the other opt-in extension method.
+- [HTTP errors](/docs/http/errors) covers typed failure documents.
+- [Query and form parsing](/docs/http/helpers/query-and-forms) covers the
+  zero-allocation parsers for request targets and form bodies.

@@ -1,0 +1,129 @@
+---
+title: Web standards mapping
+description: Map Fetch and Streams names to µWebZockets, and see exactly where WHATWG conformance and automatic ownership stop.
+sidebar:
+  order: 18
+search:
+  tags: [concept, http]
+---
+
+The HTTP surface borrows names from the WHATWG Fetch and Streams standards where
+they fit Zig. The behavior is not a JavaScript implementation: allocation,
+ownership, and fallible I/O stay explicit, and conformance claims are limited to
+the protocol suites the project runs.
+
+## Names that map
+
+- `Request.url` maps to `req.url()`, a borrowed request target.
+- `Headers.get`, `has`, and `entries` map to `req.headers()`, a read-only view
+  over bounded fields.
+- Body `text`, bytes, and JSON map to `req.text()`, `req.bytes()`, and
+  `req.json(T, allocator)`. Bytes are borrowed; parsed JSON needs an explicit
+  allocator.
+- Text, HTML, bytes, and JSON responses map to `res.text()`, `res.html()`,
+  `res.bytes()`, `res.json()`, and `res.json_buf()`. They write into bounded
+  storage or an explicit temporary allocator.
+- `Response.redirect` maps to `res.redirect(location, code)`, which validates the
+  `Location` and rejects CR and LF.
+- Readable and writable streams map to `uz.streams.ReadableByteStream` and
+  `res.writable_stream()`, with BYOB reads and transport-aware bounded writes.
+- `pipeTo` maps to `uz.streams.pipe_to(reader, writer, buffer)`, with a
+  caller-owned transfer buffer and deterministic close.
+
+The response helpers `text`, `html`, `bytes`, `json`, and `json_buf` send
+`200 OK`. Use `res.end` or `res.end_with_headers` when the status is not `200`.
+`redirect` defaults to `302 Found` and accepts `301`, `302`, `303`, `307`, and
+`308`; an unknown code falls back to `302`.
+
+## What is not WHATWG conformance
+
+- This is not a JavaScript API. There is no `Response` object, no `Promise`, and
+  no hidden event loop for the caller.
+- Every fallible call returns a Zig error union. A failed write or parse is a
+  value you handle, not an exception you catch.
+- Request bodies are buffered before dispatch. There is no async body reader that
+  streams an upload to the handler; that boundary is recorded in the
+  [upstream roadmap](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md).
+- `req.headers()` is a read-only view. It is not a mutable `Headers` map.
+- The streams are byte streams with BYOB reads and transport-aware backpressure.
+  They are not JavaScript queued streams with a strategy object.
+- Allocation is visible. `req.json(T, allocator)`, `req.validate_json(T, allocator)`,
+  and `Request.clone(allocator)` take an allocator; `res.json_buf` and `pipe_to`
+  write into caller storage.
+- A fixed response body is bounded by the configured write queue or by the buffer
+  you provide, except `res.json`, which renders through an allocator and releases
+  the temporary before returning. Use `res.json_buf` for the bounded path.
+
+## Ownership is explicit
+
+- Request fields and route captures are valid until the synchronous handler
+  returns or its async token completes.
+- A WebSocket `message` slice is valid only for its callback.
+- A client `ResponseView` is valid for its callback or the `FetchStorage`
+  lifetime.
+- An `AsyncResponse` token completes exactly once; the token itself is copyable.
+- The `App` value must not move after `listen` or `listen_udp`.
+- A `Cluster` value has one owner and must not move after `run` or the signal
+  watcher starts.
+- A C ABI `uwz_slice` is borrowed; copy it before the callback returns.
+
+Copy a request with `req.clone(allocator)` when work must outlive the callback.
+The public request APIs that take an allocator are `Request.clone`,
+`req.json(T, allocator)`, and `req.validate_json(T, allocator)`; every other
+helper returns a bounded error instead of growing memory.
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Greeting = struct { name: []const u8 };
+
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&scratch);
+    const parsed = req.json(Greeting, fba.allocator()) catch {
+        res.end("400 Bad Request", "invalid JSON") catch {};
+        return;
+    };
+    defer parsed.deinit();
+
+    var out: [256]u8 = undefined;
+    res.json_buf(.{ .greeting = parsed.value.name }, &out) catch {
+        res.end("500 Internal Server Error", "") catch {};
+    };
+}
+```
+
+The handler is an excerpt; route registration and `listen` are omitted. The
+request body stays borrowed. The parsed value uses the fixed buffer, and the
+response is formatted into a second bounded buffer before it enters the write
+queue.
+
+## Standards and protocol coverage
+
+| Area           | Coverage                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| HTTP/1.1       | h1spec suite plus deterministic adversarial cases in the unit suite                                             |
+| HTTP/2         | Bounded RFC 9113 routing; one RFC 8441 WebSocket tunnel per connection                                          |
+| HTTP/3         | Bounded RFC 9114 request/response routing verified against curl/ngtcp2 and aioquic                              |
+| WebSocket      | RFC 6455 and RFC 7692 per-message deflate; 517/517 Autobahn server cases accepted (514 `OK`, 3 `INFORMATIONAL`) |
+| HTTP extension | RFC 10008 `QUERY` routing with syntactic `Content-Type` checks; opt-in `TRACE` routing                          |
+
+The HTTP/3 cross-implementation gate covers a normal request, a valid trailing
+field section, and malformed pseudo-header rejection. Extended CONNECT,
+WebTransport, push, and application datagrams remain helper-only; the live QUIC
+listener rejects `CONNECT` with `501 Not Implemented`. WebTransport models
+draft-16 only and is not a deployed interoperability claim.
+
+:::warning[Not supported]
+HTTP/2 server push, h2c Upgrade, live WebTransport, and streaming request bodies
+are deliberate boundaries, not missing standards work. See the
+[upstream roadmap](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md).
+:::
+
+## Next
+
+- [Type safety](/docs/concepts/type-safety) covers schema rules and typed RPC.
+- [Fetch, Streams, and abort](/docs/http/helpers/fetch-streams-and-abort) uses
+  the stream and cancellation primitives.
+- [Request API](/docs/http/request) is the field-by-field reference.

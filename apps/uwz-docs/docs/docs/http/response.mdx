@@ -1,0 +1,218 @@
+---
+title: Response API
+description: Send fixed, JSON, chunked, streamed, SSE, file, and compressed responses with start-once validation on every helper.
+sidebar:
+  order: 6
+search:
+  tags: [reference, http]
+---
+
+A `Response` starts idle and ends exactly once. Every ending helper validates
+the status and response fields before writing bytes. Pick the highest-level
+helper that fits and handle its error at the handler boundary.
+
+## Start-once state
+
+| State       | Meaning                              | Entered by                                           |
+| ----------- | ------------------------------------ | ---------------------------------------------------- |
+| `idle`      | No response bytes written            | Initial state                                        |
+| `streaming` | Head or body started; chunks allowed | `begin_chunked`, `begin_stream`, `begin_json`, `sse` |
+| `ended`     | Response complete                    | `end`, `send_file`, `end_chunks`                     |
+
+`is_started()` reports whether the state left `idle`. `is_complete()` reports
+whether it reached `ended`. A second start returns
+`error.ResponseAlreadyStarted`. `write_chunk` and `end_chunks` outside the
+`streaming` state return `error.ResponseNotStreaming`.
+
+## Fixed bodies
+
+| Method                          | Status   | Content type                      |
+| ------------------------------- | -------- | --------------------------------- |
+| `text(content)`                 | `200 OK` | `text/plain; charset=utf-8`       |
+| `html(content)`                 | `200 OK` | `text/html; charset=utf-8`        |
+| `bytes(content)`                | `200 OK` | `application/octet-stream`        |
+| `json(value, allocator)`        | `200 OK` | `application/json; charset=utf-8` |
+| `json_buf(value, buffer)`       | `200 OK` | `application/json; charset=utf-8` |
+| `json_value(value, allocator)`  | `200 OK` | `application/json; charset=utf-8` |
+| `json_value_buf(value, buffer)` | `200 OK` | `application/json; charset=utf-8` |
+
+`json` and `json_buf` accept any value that `std.json.Stringify` supports.
+`json_value` and `json_value_buf` are the named alternatives for a
+`std.json.Value`. The allocator variants free temporary rendering before
+returning; `_buf` variants render into caller storage and return
+`error.BufferOverflow` when it is too small.
+
+```zig
+fn item(_: *uz.Request, res: *uz.Response) void {
+    var buffer: [256]u8 = undefined;
+    res.json_buf(.{ .id = 7, .name = "slab" }, &buffer) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+## Status and raw headers
+
+`end(status, body)` and `end_with_headers(status, headers, body)` send a
+complete response. A status is `NNN` or `NNN reason`. The code must be between
+200 and 599. Statuses 204, 205, and 304 forbid a body; a non-empty body returns
+`error.BodyNotAllowed`.
+
+Raw response fields must be a `\r\n`-terminated block. Each line needs a
+non-empty token name and a colon, and values reject control characters except
+tab. `Content-Length`, `Transfer-Encoding`, and a duplicate `Content-Encoding`
+in `end_gzip` are rejected.
+
+`append_header(name, value)` queues one field before the response starts. It
+uses a 2048-byte block, rejects CR or LF in the value, and returns
+`error.BufferOverflow` when one line exceeds 1024 bytes or the block is full.
+`end_with_headers` and every start helper merge pending fields.
+
+| Error                    | Raised when                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| `InvalidStatus`          | Status is malformed or outside 200 to 599                    |
+| `InvalidHeaders`         | Fields are malformed, injected, or use reserved framing      |
+| `BodyNotAllowed`         | A body is supplied for 204, 205, or 304                      |
+| `ResponseAlreadyStarted` | A helper runs after the response left `idle`                 |
+| `BufferOverflow`         | Pending fields, redirect target, or JSON buffer is too large |
+
+`redirect(location, code: ?u16)` defaults to `302 Found` and preserves only 301,
+302, 303, 307, and 308; any other code sends `302 Found`. A CR or LF returns
+`error.InvalidHeaders`, and a location above 512 bytes returns
+`error.BufferOverflow`.
+
+`set_cookie(name, value, options)` queues one `Set-Cookie` field.
+`set_signed_cookie(name, value, secret, options)` signs it with HMAC-SHA256.
+The secret must be at least 32 bytes, and signing is not encryption. These
+helpers only queue bytes, so add them before an ending or start helper. See
+[cookies and signed cookies](/docs/http/helpers/cookies) for options and prefix
+rules.
+
+`end_best_effort(status, body)` and
+`end_with_headers_best_effort(status, headers, body)` serve callbacks whose ABI
+cannot report an error. They call the normal helpers and abort the transport on
+failure: TCP closes the connection, and HTTP/2 or HTTP/3 resets or closes the
+stream. Validation errors and an already-started response follow the same path.
+
+## Streaming JSON
+
+`begin_json()` starts a `200 OK` chunked response with
+`Content-Type: application/json; charset=utf-8` and returns a `JsonStream`.
+Small writes coalesce in a 4096-byte stack buffer.
+
+| Method               | Behavior                                                        |
+| -------------------- | --------------------------------------------------------------- |
+| `writer()`           | Returns the buffered `std.Io.Writer`                            |
+| `stringify()`        | Returns a `std.json.Stringify` bound to the stream              |
+| `write(bytes)`       | Writes raw JSON bytes; backpressure becomes `error.WriteFailed` |
+| `flush()`            | Emits buffered bytes as chunks                                  |
+| `write_chunk(bytes)` | Flushes, then propagates the real transport error               |
+| `end()`              | Flushes and terminates the chunked body                         |
+
+```zig
+fn stream(_: *uz.Request, res: *uz.Response) void {
+    var json = res.begin_json() catch return;
+    json.write("{\"items\":[") catch return;
+    json.write("1,2,3") catch return;
+    json.write("]}") catch return;
+    json.end() catch return;
+}
+```
+
+Keep the `JsonStream` at a stable address while it is active. Do not copy it
+after the first write.
+
+## Chunked and pull streaming
+
+| Method                           | Behavior                                 |
+| -------------------------------- | ---------------------------------------- |
+| `begin_chunked(status, headers)` | Sends the head and enters `streaming`    |
+| `write_chunk(chunk)`             | Writes one chunk; requires `streaming`   |
+| `end_chunks()`                   | Writes the terminator and enters `ended` |
+
+`begin_stream(status, headers, context, producer)` lets the transport pull the
+body. A `StreamProducer` is
+`*const fn (*anyopaque, *Response) anyerror!StreamStatus`. Return `.pending` to
+be re-entered and `.done` after `end_chunks`. The producer runs immediately and
+again whenever output space frees, so arbitrarily large bodies need no queue
+sizing.
+
+```zig
+fn produce(_: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    try res.write_chunk("streamed body");
+    try res.end_chunks();
+    return .done;
+}
+```
+
+A real producer keeps its cursor in `context`, returns `.pending` when a chunk
+write returns `error.WouldBlock`, and resumes from that cursor. A transport
+without a producer callback fails closed with
+`error.ProducerStreamingUnsupported` before writing any bytes. See [streaming
+responses](/docs/http/streaming) for transport differences.
+
+## Server-Sent Events
+
+`sse()` starts a `200 OK` chunked event stream with
+`Content-Type: text/event-stream`, `Cache-Control: no-cache`, and
+`X-Accel-Buffering: no`.
+
+| Method                    | Behavior                                            |
+| ------------------------- | --------------------------------------------------- |
+| `send_event(event, data)` | Writes `event:` and one `data:` line per input line |
+| `heartbeat()`             | Writes the `: keep-alive` comment                   |
+| `close()`                 | Calls `end_chunks`                                  |
+
+`send_event` rejects CR or LF in the event name with
+`error.InvalidEventName`. Input lines split on `\n`, and a trailing `\r` is
+removed before framing.
+
+```zig
+fn events(_: *uz.Request, res: *uz.Response) void {
+    var stream = res.sse() catch return;
+    stream.send_event("tick", "one\ntwo") catch return;
+    stream.heartbeat() catch return;
+    stream.close() catch return;
+}
+```
+
+## Files, gzip, and writable streams
+
+| Method                                             | Behavior                                         |
+| -------------------------------------------------- | ------------------------------------------------ |
+| `send_file(status, headers, file, offset, length)` | Streams an open file on plaintext TCP            |
+| `end_gzip(status, headers, body)`                  | Compresses through the per-worker codec pool     |
+| `writable_stream()`                                | Returns a `WritableByteStream` for this response |
+
+`send_file` hands the file to the connection on success and closes it when the
+body drains; on any error the caller keeps ownership. HTTP/2, HTTP/3, and
+TLS-framed streams return `error.ZeroCopyUnavailable`, so fall back to a
+bounded buffered body.
+
+`end_gzip` requires `with_http_compression(true)`. It adds
+`Content-Encoding: gzip` and `Vary: Accept-Encoding`. A missing pool returns
+`error.CompressionUnavailable`, HTTP/3 returns
+`error.CompressionUnsupported`, a caller-supplied `Content-Encoding` returns
+`error.DuplicateContentEncoding`, and merged fields above 2048 bytes return
+`error.HeadersTooLarge`.
+
+`writable_stream()` starts `200 OK` chunked on the first write, with no content
+type. Its `close` ends the chunked body when the response is streaming.
+
+## Errors
+
+| Error                    | Meaning                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `ResponseAlreadyStarted` | The response left `idle` before this call            |
+| `ResponseNotStreaming`   | A chunk write ran outside `streaming`                |
+| `BodyNotAllowed`         | The status forbids a body, or the body is suppressed |
+| `InvalidStatus`          | The status code is outside 200 to 599                |
+| `InvalidHeaders`         | Fields are malformed or contain control characters   |
+| `BufferOverflow`         | A bounded pending or caller buffer is too small      |
+| `CompressionUnavailable` | Gzip was requested without an enabled pool           |
+| `ZeroCopyUnavailable`    | `send_file` ran on a non-plaintext transport         |
+
+## Next
+
+Continue with [streaming responses](/docs/http/streaming), then read
+[chunked responses](/docs/http/chunked) and [HTTP errors](/docs/http/errors).

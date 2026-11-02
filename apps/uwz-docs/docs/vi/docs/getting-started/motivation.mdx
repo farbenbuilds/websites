@@ -14,7 +14,7 @@ nguyên trước, rồi dùng lại chúng trên hot path.
 ## Vấn đề của cấp phát không giới hạn
 
 Request path thông thường cấp phát cho request, header, body, giá trị đã parse,
-response part và output đang chờ. Mỗi lần cấp phát thêm một failure mode:
+response part và output đang chờ. Mỗi lần cấp phát thêm một kiểu lỗi:
 
 - Allocator có thể chậm hoặc bị tranh chấp dưới tải.
 - Bộ nhớ có thể tăng đến khi process bị dừng.

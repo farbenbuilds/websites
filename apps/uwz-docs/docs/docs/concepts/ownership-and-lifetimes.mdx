@@ -1,0 +1,126 @@
+---
+title: Ownership and lifetimes
+description: Track which slice borrows which connection slot, when it expires, and what to copy before the callback returns.
+sidebar:
+  order: 8
+search:
+  tags: [concept, capacity]
+---
+
+µWebZockets hands out borrowed slices, not copies. Each slice points into a
+connection slot that the owning worker reuses, so the page tells you exactly how
+long every value stays valid and what to copy before it expires.
+
+## The validity table
+
+| Value                               | Valid until                                           | Keep it longer by                                   |
+| ----------------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
+| `Request` fields and route captures | Synchronous handler return, or async token completion | Copying into bounded storage, or `Request.clone`    |
+| WebSocket `message` slice           | Callback return                                       | Copying the bytes you need                          |
+| Client `ResponseView`               | Callback return, or the `FetchStorage` lifetime       | Keeping the `FetchStorage` alive                    |
+| `AsyncResponse` token               | Completed exactly once, or invalidated by disconnect  | Copying the token value is allowed; the slot is not |
+| `App` value                         | Process lifetime, at a stable address after `listen`  | Declaring it once and never moving it               |
+| `Cluster` value                     | Single owner, until `deinit_checked` returns          | Never copying or moving it after `run` starts       |
+| `Cluster.worker(i)`                 | Until release begins                                  | Re-reading it from the cluster, not storing it      |
+
+The transport owns every borrowed buffer in the table. None of these values is
+reference counted, and no borrowed slice keeps connection storage alive once the
+owning slot is reused.
+
+## Read request fields inside the callback
+
+`req.method`, `req.target`, `req.path`, `req.query`, header slices, the body, and
+route captures all borrow the connection's request buffer. They stay valid
+through a synchronous callback, and through an async response until the token
+completes. Copy what must survive either boundary:
+
+```zig
+fn request_id(req: *uz.Request) [32]u8 {
+    var copy: [32]u8 = @splat(0);
+    const value = req.get_header("x-request-id") orelse return copy;
+    const length = @min(value.len, copy.len);
+    @memcpy(copy[0..length], value[0..length]);
+    return copy;
+}
+```
+
+A truncated copy is deliberate here: the fixed buffer bounds memory and the
+header never outlives the callback. A handler that needs an exact, unbounded
+snapshot uses `Request.clone` instead.
+
+## WebSocket message slices
+
+The `message` slice passed to a WebSocket callback is valid only for that
+callback. A fragmented message is assembled in the connection's message region,
+and the next frame can overwrite it. Copy the bytes into application storage
+before returning, or forward them with `send`, which consumes them into the
+connection's bounded output storage before it returns.
+
+## Client response views
+
+The outbound client returns a `ResponseView` with `status`, `headers`, and
+`body`. The view borrows the client slot's response buffer and is valid only for
+the duration of the `FetchCallback`. After the callback returns, the slot can be
+reused for another request.
+
+`fetch_blocking` runs one request on a temporary client and copies the response
+into a caller-owned `FetchStorage`. That extends the view's lifetime to the
+storage lifetime. Keep the `FetchStorage` alive for as long as you read the
+view, and do not keep the view after the storage is reused.
+
+## Clone a request for later work
+
+`Request.clone(allocator)` returns an `OwnedRequest`: one allocation for the
+bytes, one per header and capture array, and a stable `*Request` view. Release it
+with `deinit`:
+
+```zig
+fn audit(req: *uz.Request) !void {
+    var owned = try req.clone(std.heap.page_allocator);
+    defer owned.deinit();
+
+    const snapshot = owned.view();
+    std.log.info("{s} {s}", .{ snapshot.method, snapshot.path });
+}
+```
+
+`clone` is one of the two explicitly allocating public request APIs; the other
+is `req.json(T, allocator)`. It gives you ownership of the bytes, not permission
+to complete an async token from another thread. The token stays on its owning
+loop.
+
+## Keep App and Cluster at a stable address
+
+An `App` embeds completions and timer nodes that are registered by address, and
+`listen` installs parts of the value into the event loop. After `listen` or
+`listen_udp`, and after any context-capturing registration such as `openapi`,
+`datagram`, or the observability install performed by `listen`, the value must
+not move.
+
+Declaring it once in `main` is enough:
+
+```zig
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+A factory that returns the `App` by value after listening moves it and breaks
+that contract. A `Cluster` is stricter: it has a single owner, it must not be
+copied, it must not move after `catch_shutdown_signals` or `run` starts, and it
+must stay alive through `deinit_checked`. A `Cluster.worker(i)` pointer is
+borrowed until release begins and must not be stored across `deinit_checked`.
+
+## Next
+
+- [Capacity model](/docs/concepts/capacity-model) shows what each connection slot
+  reserves before the process starts.
+- [Asynchronous responses](/docs/concepts/async-responses) explains the token
+  that extends a request field's lifetime.
+- [Request API](/docs/http/request) lists the borrowed fields and their
+  accessors.

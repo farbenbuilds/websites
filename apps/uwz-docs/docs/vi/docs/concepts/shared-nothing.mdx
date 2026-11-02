@@ -1,0 +1,114 @@
+---
+title: Worker shared-nothing
+description: Hiểu mỗi worker sở hữu gì, cách một port nuôi mọi loop và vì sao connection state không bao giờ được chia sẻ giữa các worker.
+sidebar:
+  order: 11
+search:
+  tags: [concept, cluster]
+---
+
+Cluster là tập các worker không chia sẻ gì ngoài port lắng nghe. Mỗi worker sở
+hữu một event loop, một slab và TLS context riêng, nên việc định tuyến một
+connection không cần lock. Trang này giải thích cách tách đó hoạt động và cái giá
+của nó.
+
+## Mỗi worker sở hữu gì
+
+| Tài nguyên   | Quyền sở hữu                                                      |
+| ------------ | ----------------------------------------------------------------- |
+| Event loop   | Một libxev loop trên một OS thread, pin khi platform cho phép     |
+| Startup slab | Pool, request buffer, message region, write queue, bảng protocol  |
+| TLS context  | Một `SSL_CTX` BoringSSL mỗi worker, tạo trước khi listen          |
+| Listener     | Cùng địa chỉ và port với mọi worker khác                          |
+| Inbox        | Một ring lock-free có giới hạn cho message do worker khác publish |
+| Timer        | Một timing wheel mỗi worker cho keep-alive và response trì hoãn   |
+
+Không tài nguyên nào được reference count hay chia sẻ. Connection được accept rơi
+trọn vào slab của worker accept nó và chỉ event loop của worker đó chạm tới.
+
+## Topology
+
+Mỗi worker sở hữu loop, slab và TLS context của chính nó. Kernel phân phối
+connection được accept cho các listener, và mỗi worker chỉ drain inbox của chính
+nó. Một publish đưa message tới mọi inbox; nó không bao giờ ghi vào storage của
+connection. [Mô hình cluster](/docs/concepts/cluster-model) trình bày topology và
+đường publish trong một sơ đồ.
+
+## Một port, không chia sẻ connection
+
+Mọi worker bind cùng địa chỉ và port. Trên Linux và các platform có
+`SO_REUSEPORT`, kernel cân bằng tải connection đến giữa các listener. Windows
+không có `SO_REUSEPORT`, nên cluster mode bind bằng `SO_REUSEADDR`; việc kernel
+phân phối giữa các listener không được bảo đảm ở đó, và cluster trên Windows
+được ghi nhận là đường dự phòng chứ không phải đường cân bằng tải.
+
+Vì worker accept sở hữu connection suốt vòng đời của nó, trạng thái read, write,
+parse và timer không bao giờ vượt ranh giới thread. Đó là lý do hot path I/O ở
+trạng thái ổn định không có mutex hay spinlock.
+
+## Affinity là best effort
+
+Pin theo physical core. Trên Linux, runtime đọc tập CPU được phép và bỏ qua các
+SMT sibling, rồi pin worker `i` bằng `sched_setaffinity`. Windows dùng
+`SetThreadAffinityMask`. Platform khác báo `error.UnsupportedPlatform` và tiếp
+tục không pin; macOS không có API hard-affinity.
+
+Cpuset bị hạn chế hoặc syscall bị lỗi sẽ log một lần và để worker không pin
+thay vì từ chối khởi động. Worker vượt quá số physical core sẽ quay vòng lựa
+chọn, nên affinity không trở thành lỗi startup trên máy oversubscribe.
+
+## Inbox là đường duy nhất giữa các worker
+
+Publish giữa worker dùng một ring Vyukov sequence có giới hạn cho mỗi inbox
+(`src/router/cluster.zig`). Mọi worker thread đều có thể publish; chỉ worker sở
+hữu mới consume trên event loop của nó. Vị trí enqueue và dequeue nằm trên cache
+line riêng để tránh false sharing, và ring không cấp phát.
+
+Inbox đầy không block và không mở rộng. Publisher thấy `error.ClusterQueueFull`
+từ queue helper, hoặc một drop được đếm trong `Cluster.publish_report`. Việc
+validate diễn ra trước khi bất kỳ inbox nào bị sửa, nên topic sai hoặc payload
+quá lớn không thể giao một phần.
+
+Owning loop copy từng message qua scratch thuộc queue. Vì vậy publish không thể
+ghi đè buffer lắp ghép WebSocket đang phân mảnh của một connection, kể cả khi hai
+bên chạy trên worker khác nhau.
+
+## Capacity không phải số worker đang hoạt động
+
+`App.cluster(N)` và `Server.builder(...).build_cluster(allocator, N, options)`
+compile capacity `N` worker. Runtime có thể dùng ít hơn:
+
+- `ClusterOptions.worker_count` chọn số worker hoạt động tường minh.
+- `build_cluster_from_environment` ưu tiên option đó, rồi tới
+  `UWEBZOCKETS_WORKERS`, rồi tới số CPU của platform.
+
+Chỉ worker đang hoạt động mới cấp phát slab, inbox và thread handle, nên capacity
+compile lớn không giữ chỗ cho worker không bao giờ khởi động. `worker_count()`
+báo số đã cấp phát, `worker_capacity()` báo capacity compile, và `worker(i)` trả
+null khi nhóm có ít worker hoạt động hơn.
+
+## Vì sao không có connection state chia sẻ
+
+Chia sẻ một connection sẽ cần lock cho mọi thao tác read, write, completion và
+timeout, đồng thời đặt hai event loop lên cùng một buffer. Mô hình tránh điều đó
+bằng cách cho mỗi connection đúng một chủ sở hữu:
+
+- Connection slot được carve từ slab của worker accept.
+- Completion của nó là thành viên inline của connection, không phải object trên
+  heap.
+- Async token của nó chỉ được dùng trên event loop.
+- Deadline của nó nằm trên timing wheel của worker.
+- TLS session của nó đến từ `SSL_CTX` của worker.
+
+Cái giá là bộ nhớ tăng theo số worker hoạt động chứ không chỉ theo số
+connection: mỗi worker mang một slab, một inbox và, khi có TLS, một context. Lợi
+ích là hot path không cần phối hợp giữa các thread. Xem
+[Mô hình capacity](/docs/concepts/capacity-model) để biết con số mỗi worker.
+
+## Tiếp theo
+
+- [Mô hình cluster](/docs/concepts/cluster-model) bao quát lifecycle, báo cáo
+  failure và publish semantics.
+- [Backpressure](/docs/concepts/backpressure) giải thích inbox đầy và write
+  ring đầy báo gì.
+- [Mô hình capacity](/docs/concepts/capacity-model) định cỡ slab và inbox.

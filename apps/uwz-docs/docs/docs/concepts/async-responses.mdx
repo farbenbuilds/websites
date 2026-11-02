@@ -1,0 +1,141 @@
+---
+title: Asynchronous responses
+description: Defer a response with a copyable token, complete it exactly once, and know what a disconnect cancels on the owning loop.
+sidebar:
+  order: 7
+search:
+  tags: [concept, streaming]
+---
+
+An asynchronous handler returns before it has a response body and finishes the
+response later through an `AsyncResponse` token. The token guarantees a single
+completion, fails closed after the peer is gone, and adds no allocation to the
+request path.
+
+## Register a deferred handler
+
+Use `route_async` or a method shortcut such as `get_async` when the work cannot
+finish inside the callback: a timer, a lookup, or a result produced elsewhere.
+The callback receives the request and the token instead of a `*Response`:
+
+```zig
+fn handler(req: *uz.Request, token: uz.AsyncResponse) void
+```
+
+Request fields stay valid until the token completes, so a slice captured by the
+handler can still be read while the response is parked. The `*Request` value
+itself is valid only during the callback.
+
+## Complete once, on the owning loop
+
+```zig examples/delay_server.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+/// Largest delay the example accepts; keeps parked requests bounded.
+const max_delay_ms: u64 = 60_000;
+
+fn parse_delay(raw: []const u8) ?u64 {
+    if (raw.len == 0) return null;
+    const value = std.fmt.parseInt(u64, raw, 10) catch return null;
+    return @min(value, max_delay_ms);
+}
+
+fn delay_handler(req: *uz.Request, token: uz.AsyncResponse) void {
+    const delay = parse_delay(req.get_param("ms") orelse "");
+    if (delay == null) {
+        token.complete("400 Bad Request", "Invalid delay") catch |err| {
+            std.log.err("delay response failed: {}", .{err});
+        };
+        return;
+    }
+
+    // The response fields are static, so the parked request needs no
+    // allocation while it waits on the worker's timing wheel.
+    token.sleep_complete(
+        delay.?,
+        "200 OK",
+        "Content-Type: text/plain\r\n",
+        "delayed response",
+    ) catch |err| {
+        token.complete("500 Internal Server Error", @errorName(err)) catch |complete_err| {
+            std.log.err("delay response failed: {} (after {})", .{ complete_err, err });
+        };
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.route_async(.get, "/delay/:ms", delay_handler);
+
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The token is a small value: a pointer to a connection- or stream-owned slot plus
+the generation that armed it. Copying it is safe. Any copy may complete the
+response, and the first completion wins.
+
+The slot belongs to the transport's event loop, so every completion method is
+event-loop confined: `complete`, `complete_with_headers`, `sleep`, and
+`sleep_complete`. If another thread produces the body, marshal the bytes back to
+that loop through your own mechanism and call `complete` there. Passing a token
+to a thread does not move the slot or make the call thread-safe.
+
+## What completion can report
+
+| Result                                | Meaning                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `error.AsyncResponseExpired`          | The generation changed: the peer disconnected, the slot was reused, or the response was cancelled. |
+| `error.AsyncResponseAlreadyCompleted` | This generation already completed.                                                                 |
+| `error.InvalidStatus`                 | The status line is not a valid response status.                                                    |
+| `error.InvalidHeaders`                | The header block fails response validation.                                                        |
+| `error.BodyNotAllowed`                | A body was supplied for a status that forbids one.                                                 |
+| `error.TimerUnavailable`              | The transport has no connection-owned timer slot.                                                  |
+
+`AsyncResponseExpired` is terminal. The connection is gone or the slot already
+belongs to another request, so retrying cannot deliver the response. Drop the
+work instead of parking it for later.
+
+## Park without allocating
+
+`AsyncResponse.sleep` parks a custom resume callback:
+
+```zig
+token.sleep(delay_ms, resume_context, resume) catch {};
+```
+
+`resume` runs on the owning loop after `delay_ms`; it must complete this exact
+token. `sleep_complete` parks the completion itself:
+
+```zig
+token.sleep_complete(delay_ms, status, headers, body) catch {};
+```
+
+With `sleep_complete`, the three slices are stored in the connection-owned
+parking slot, so the caller must keep them valid until the delay expires. Static
+strings, handler-owned buffers, and request fields borrowed from this connection
+all work as long as they stay valid for that window.
+
+Both methods use the per-worker timing wheel. HTTP/1.1 has one parking slot per
+connection and HTTP/2 maps one slot per stream, so neither path allocates.
+
+## Cancellation on disconnect
+
+A peer disconnect cancels the connection slot and increments its generation.
+Every outstanding copy then fails with `error.AsyncResponseExpired`, including a
+copy parked in a timer that has not fired yet. A pending token keeps the request
+buffer or the stream it parked on from being reused, so cancellation is also what
+releases that storage.
+
+## Next
+
+- [Response lifecycle](/docs/concepts/response-lifecycle) covers synchronous
+  endings, streaming, and best-effort completion.
+- [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) explains how
+  long borrowed request fields stay valid.
+- [Backpressure](/docs/concepts/backpressure) shows what to do when the write
+  ring is full instead of deferring the response.

@@ -1,0 +1,140 @@
+---
+title: TRACE
+description: Register an opt-in TRACE handler, redact sensitive fields, and keep reflected bytes inside the response capacity.
+sidebar:
+  order: 22
+search:
+  tags: [how-to, http]
+---
+
+TRACE lets a client ask a server to describe the request it received. The
+library does not add the route, build the echo, or redact anything for you. This
+page covers the opt-in registration and the redaction a handler must perform.
+
+## Opt in explicitly
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn is_sensitive(name: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(name, "Authorization") or
+        std.ascii.eqlIgnoreCase(name, "Cookie") or
+        std.ascii.eqlIgnoreCase(name, "Proxy-Authorization");
+}
+
+fn trace(req: *uz.Request, res: *uz.Response) void {
+    var buffer: [2048]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buffer);
+
+    writer.print("{s} {s}\r\n", .{ req.method, req.target }) catch {
+        res.end("500 Internal Server Error", "trace buffer exhausted") catch |err|
+            std.log.err("response failed: {}", .{err});
+        return;
+    };
+
+    var headers = req.header_entries();
+    while (headers.next()) |header| {
+        if (is_sensitive(header.name)) continue;
+        writer.print("{s}: {s}\r\n", .{ header.name, header.value }) catch {
+            res.end("500 Internal Server Error", "trace buffer exhausted") catch |err|
+                std.log.err("response failed: {}", .{err});
+            return;
+        };
+    }
+
+    res.end("200 OK", writer.buffered()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.trace("/probe", trace);
+
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Without the `app.trace` call, a `TRACE` request to an unregistered path receives
+`404 Not Found`; on a path that exists for another method it receives `405 Method
+Not Allowed` with `Allow`. The library never registers a fallback echo route.
+
+## No synthesized echo
+
+A `TRACE` request that reaches a registered handler is an ordinary request. The
+handler decides the status, the fields, and the body. The library does not copy
+the request line, does not copy the headers, and does not apply redaction on the
+handler's behalf.
+
+That also means the handler owns the entire risk of reflection. If you do not
+need TRACE, do not register it.
+
+## Redact before reflecting
+
+Reflect only fields the caller is allowed to see. The minimum denylist is:
+
+| Field                 | Why                                          |
+| --------------------- | -------------------------------------------- |
+| `Authorization`       | Carries Basic, Bearer, and other credentials |
+| `Cookie`              | Carries session and application state        |
+| `Proxy-Authorization` | Carries credentials for an upstream proxy    |
+
+Also remove any application-specific secret that travels in a header, including
+API keys, signed tokens, and internal routing identifiers. A fixed allowlist is
+easier to audit than a denylist: name the fields you intend to reflect and skip
+everything else.
+
+The example compares names case-insensitively. Header names are not
+case-sensitive on the wire, so an exact-case comparison would leak a field sent
+with different capitalization.
+
+## Stay inside the response capacity
+
+A TRACE body is a fixed response, so it must fit the per-connection write queue
+and its free space. `Response.end` returns `error.WouldBlock` when the body does
+not fit; a body that exceeds the queue never reaches the client.
+
+The example caps reflection at 2 KiB, far below the default 64 KiB write queue.
+If a trace can be larger, reject it with a bounded `500` or use a streaming
+response. Do not build an unbounded trace in memory.
+
+## Public deployments
+
+Prefer disabling TRACE on public deployments unless an operational requirement
+exists. When the requirement exists, put the route behind the same
+authentication and rate-limit middleware as any other diagnostic endpoint. A
+TRACE route is not a health check and should not be reachable anonymously.
+
+`uz.http3_extensions.method_is_replay_safe` classifies `TRACE` as safe for
+early-data forwarding policy. That classification does not make reflection safe
+and does not authorize 0-RTT. The live HTTP/3 listener rejects 0-RTT.
+
+## Verify
+
+```sh
+curl -i -X TRACE \
+  -H 'Authorization: Bearer secret' \
+  http://127.0.0.1:3000/probe
+```
+
+The response starts with `200 OK` and contains the request line and the
+non-sensitive fields. It must not contain `Authorization`, `Cookie`, or
+`Proxy-Authorization`. This check fails the verification when a field leaks:
+
+```sh
+if curl -s -X TRACE -H 'Authorization: Bearer secret' \
+  http://127.0.0.1:3000/probe | grep -qi authorization; then
+  echo "TRACE leaked Authorization"
+fi
+```
+
+## Next
+
+- [RFC 10008 QUERY](/docs/http/query-method) covers the other opt-in extension
+  method.
+- [Middleware](/docs/http/middleware) covers authentication and rate limiting
+  for diagnostic routes.
+- [HTTP errors](/docs/http/errors) covers the error documents a rejected TRACE
+  handler can send.

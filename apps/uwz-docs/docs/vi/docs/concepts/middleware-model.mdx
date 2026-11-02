@@ -1,0 +1,103 @@
+---
+title: Mô hình middleware
+description: Chạy middleware theo thứ tự giữa route resolution và handler, dừng dispatch an toàn và giữ mỗi callback có giới hạn, theo worker.
+sidebar:
+  order: 6
+search:
+  tags: [concept, middleware]
+---
+
+Middleware là danh sách callback có thứ tự chạy sau khi router resolve request
+và trước handler được chọn. Mỗi callback nhận request được mượn và response đang
+được dựng, rồi quyết định dispatch có tiếp tục không.
+
+## Thứ tự và control flow
+
+`App.use(context, handler)` thêm một callback. Middleware chạy theo thứ tự đăng
+ký. Các snippet trên trang này bỏ qua import `std` và `uz`.
+
+```zig
+const Policy = struct { header: []const u8 };
+
+fn require_header(context: *anyopaque, req: *uz.Request, res: *uz.Response) uz.MiddlewareResult {
+    const policy: *const Policy = @ptrCast(@alignCast(context));
+    if (req.get_header(policy.header) != null) return .continue_dispatch;
+
+    res.end("400 Bad Request", "missing header") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+    return .stop;
+}
+```
+
+Trong `main`, sau `init` và trước `listen`, đăng ký callback với state do caller
+sở hữu:
+
+```zig
+var policy = Policy{ .header = "x-api-version" };
+_ = try app.use(&policy, require_header);
+```
+
+Callback trả về một trong hai giá trị:
+
+- `.continue_dispatch` chạy callback middleware tiếp theo.
+- `.stop` kết thúc chuỗi middleware mà không chạy handler.
+
+Dispatch cũng dừng khi callback khởi động response, kể cả khi nó trả
+`.continue_dispatch`. Router kiểm tra response state sau mỗi callback, nên
+response đã khởi động không thể bị handler khác tiếp nối. Response đã khởi động
+sau đó hoàn tất theo đường bình thường.
+
+## Middleware thấy gì
+
+Route resolution xảy ra trước middleware, nên dispatch có thể dừng cho một route
+đã khớp trước khi handler chạy. Middleware cũng chạy khi không route nào khớp,
+trước khi framework gửi `404 Not Found`. Nhờ vậy đây là chỗ tốt cho request
+logging và header dùng chung.
+
+Middleware không chọn route. Nó có thể hoàn tất response, thêm header trước khi
+response khởi động, xem field request và dừng dispatch.
+
+## Giới hạn 32 callback
+
+Router giữ tối đa `max_middleware` callback, mặc định là 32. Thêm một callback nữa
+trả về `error.MiddlewareCapacityReached`. Tăng giới hạn qua
+`ServerConfig.max_middleware` hoặc `with_max_middleware` của builder trước khi
+application được build.
+
+Giới hạn này áp dụng cho bảng router cố định, không phải cấp phát theo request. Không
+có API middleware động: route và middleware cùng khóa ở lần `listen` hoặc
+`listen_udp` đầu tiên, và đăng ký sau đó trả về `error.RoutesLocked`. Trong
+shutdown, đăng ký trả về `error.ApplicationUnavailable`.
+
+## State theo worker
+
+Mỗi entry middleware lưu một pointer context được cung cấp lúc đăng ký. Framework
+không copy và không giải phóng state đó. Giữ nó sống trong suốt lifetime của
+application.
+
+Trong cluster, cấu hình middleware bên trong `Cluster.configure` để mỗi worker
+đăng ký callback và context riêng. State mà một loop mutate không được chia sẻ
+với loop khác. Rate limiter là ví dụ rõ nhất: một bảng bucket thuộc một event
+loop, nên tạo một bảng cho mỗi worker.
+
+## Middleware built-in
+
+µWebZockets có bốn loại middleware. Mỗi loại không cấp phát và dùng option hoặc
+state do caller sở hữu.
+
+| Middleware        | Mục đích                                    |
+| ----------------- | ------------------------------------------- |
+| `Cors`            | Khớp origin chính xác và response preflight |
+| `SecurityHeaders` | Các security header response đã cấu hình    |
+| `Auth`            | Credential Basic và Bearer kèm challenge    |
+| `RateLimit`       | Token bucket với `429` và `Retry-After`     |
+
+Đọc [Middleware](/docs/http/middleware) để biết option chính xác, cách gọi builder và
+cách thiết lập theo worker.
+
+## Tiếp theo
+
+- [Async response](/docs/concepts/async-responses)
+- [Middleware](/docs/http/middleware)
+- [Dạng handler](/docs/concepts/handler-shapes)

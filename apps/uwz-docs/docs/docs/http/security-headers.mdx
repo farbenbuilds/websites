@@ -1,0 +1,170 @@
+---
+title: Security headers
+description: Apply the middleware's five default security headers, override or disable each one, and know what the defaults do not promise.
+sidebar:
+  order: 16
+search:
+  tags: [how-to, security]
+---
+
+µWebZockets ships one middleware that writes five response headers. The
+defaults are a baseline for a browser-facing app; they are not a complete
+security policy and they do not replace authentication, TLS, or input
+validation.
+
+## Register the middleware
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.html("<h1>Status</h1>") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init_https_ephemeral(init.io);
+    defer app.deinit();
+
+    var headers = uz.middleware.security_headers(.{});
+    _ = try app.use(&headers, uz.middleware.SecurityHeaders.handler);
+
+    _ = try app.get("/", index);
+
+    try app.listen("0.0.0.0", 3443);
+    try app.run();
+}
+```
+
+The TLS initializer is deliberate: one of the default headers only has meaning
+on HTTPS. `uz.middleware.security_headers` returns a value you own, and
+`app.use` stores a pointer to it, so keep it alive until `app.deinit()`.
+
+## Defaults
+
+| Option                      | Header                      | Default                               |
+| --------------------------- | --------------------------- | ------------------------------------- |
+| `strict_transport_security` | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| `content_security_policy`   | `Content-Security-Policy`   | `default-src 'self'`                  |
+| `x_content_type_options`    | `X-Content-Type-Options`    | `true`, emitted as `nosniff`          |
+| `x_frame_options`           | `X-Frame-Options`           | `DENY`                                |
+| `referrer_policy`           | `Referrer-Policy`           | `no-referrer`                         |
+
+Every field except `x_content_type_options` is `?[]const u8`. The middleware
+appends a header only when the option is non-null. `x_content_type_options` is
+a `bool`: `true` emits `nosniff`, `false` emits nothing.
+
+The middleware appends the fields in this order and returns
+`.continue_dispatch`, so it never stops a request. It runs for every request
+that reaches dispatch, including one that ends as `404 Not Found`, and only
+while the response is still idle.
+
+## Override or disable a field
+
+Pass any subset; unspecified fields keep their defaults:
+
+```zig
+var headers = uz.middleware.security_headers(.{
+    .content_security_policy = "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+    .referrer_policy = "strict-origin-when-cross-origin",
+});
+```
+
+Disable a field with `null`, or `false` for `nosniff`:
+
+```zig
+var headers = uz.middleware.security_headers(.{
+    .strict_transport_security = null,
+    .content_security_policy = null,
+    .x_frame_options = null,
+});
+```
+
+The middleware does not merge a field you set elsewhere. If your handler also
+appends `Content-Security-Policy`, the response carries two fields, and the
+browser enforces both policies together, so the effective policy is their
+intersection. Pick one owner for each header.
+
+## HSTS applies to HTTPS only
+
+`Strict-Transport-Security` is a transport policy that a browser stores for an
+origin after it receives the header over HTTPS. A header delivered over
+plaintext HTTP has no effect: the browser has no authenticated origin to attach
+it to. Sending it from a plaintext listener is harmless but misleading.
+
+- `max-age=31536000` remembers the policy for one year.
+- `includeSubDomains` extends it to every subdomain, including hosts you have
+  not migrated to HTTPS.
+- `max-age=0` clears a stored policy.
+- The default does not include the `preload` token. Adding it is a separate
+  commitment with its own removal process.
+
+If a TLS-terminating proxy sits in front of the server, the browser still
+receives the header over HTTPS and the policy applies. The proxy-to-server hop
+is a separate trust boundary; do not treat the header as evidence that the last
+hop is encrypted.
+
+## CSP is a starting point
+
+`default-src 'self'` allows resources from the response's own origin and blocks
+everything else. It also blocks inline `<script>` and `<style>` content,
+`eval`, and third-party fonts, images, and API calls. An app that relies on any
+of those breaks until the policy names them.
+
+The middleware writes the string you configure. It does not generate nonces or
+hashes, does not inspect your HTML, and has no report-only mode. A policy that
+has not been loaded against the real pages is not evidence that the pages are
+safe; it is a header value. Start from the default, add the sources each page
+actually uses, and test the page with the browser console open.
+
+`frame-ancestors 'none'` in the CSP and `X-Frame-Options: DENY` both restrict
+framing. Modern browsers honor the CSP directive and fall back to the header;
+keep both while you support older clients.
+
+## What the middleware does not do
+
+- It sets only the five fields above. It does not set `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`,
+  `Cross-Origin-Resource-Policy`, `Cache-Control`, `ETag`, or `Server`.
+- It does not configure CORS. That is a separate middleware with its own origin
+  list; see [CORS](/docs/http/cors).
+- It does not apply per route. Every route in the app gets the same five fields.
+- It does not remove a header another layer set.
+
+## Failure modes
+
+| Condition                                        | Result                                                 |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| A configured value contains CR or LF             | `500 Internal Server Error` via `error.InvalidHeaders` |
+| The pending header buffer cannot hold the fields | `500 Internal Server Error` via `error.BufferOverflow` |
+
+Both failures end the response from the middleware with an empty body, so a
+misconfigured value shows up as a `500` on the first request rather than at
+startup. Validate configured values before `listen`.
+
+## Verify
+
+```sh
+curl -k -sI https://127.0.0.1:3443/
+```
+
+```text
+HTTP/1.1 200 OK
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Content-Security-Policy: default-src 'self'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+```
+
+`curl -k` skips certificate verification for the ephemeral self-signed
+certificate; the headers are unaffected.
+
+## Next
+
+- [CORS](/docs/http/cors) covers the cross-origin policy this middleware does
+  not provide.
+- [Authentication](/docs/http/authentication) covers credential checks at the
+  same middleware boundary.
+- [The security model](/docs/concepts/security-model) maps the trust boundaries
+  around TLS, parsing, and application policy.

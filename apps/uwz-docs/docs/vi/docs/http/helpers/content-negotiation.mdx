@@ -1,0 +1,119 @@
+---
+title: Thương lượng nội dung
+description: Parse range trong Accept, chấm điểm theo quality phần nghìn và chọn representation tốt nhất trong những loại bạn đã có.
+sidebar:
+  order: 6
+search:
+  tags: [how-to, http]
+---
+
+`uz.negotiate` parse field `Accept` và chấm điểm các media type bạn đã sản xuất.
+Đây là bộ so khớp thuần, capacity cố định: entry không hợp lệ bị bỏ, registry
+giữ tối đa 16 entry, và không bước nào cấp phát.
+
+Helper không tạo representation, không đặt `Content-Type` và không chọn charset.
+Bạn cung cấp danh sách offer và gửi kết quả thắng.
+
+## Parse và chấm điểm
+
+| Function                      | Trả về        | Hành vi                                |
+| ----------------------------- | ------------- | -------------------------------------- |
+| `parse(header)`               | `Accept`      | Danh sách best-effort tối đa 16 entry  |
+| `score(accept, media_type)`   | `u16`         | Quality phần nghìn, `0` khi không khớp |
+| `accepts(accept, media_type)` | `bool`        | `score(...) > 0`                       |
+| `best(accept, offers)`        | `?[]const u8` | Offer điểm cao nhất, hoặc `null`       |
+
+`parse` bỏ whitespace, bỏ entry không hợp lệ và bỏ entry vượt mốc 16. Nó không
+lỗi. Vì vậy `Accept` không hợp lệ hành xử như `Accept` rỗng, và `Accept`
+rỗng chấp nhận mọi media type với quality `1000`. 16 entry nằm inline trong
+`Accept`, theo quy tắc lưu trữ cố định của
+[capacity model](/docs/concepts/capacity-model).
+
+`score` tách offer thành type và subtype rồi tìm entry khớp cụ thể nhất. Độ cụ
+thể quan trọng hơn quality:
+
+| Khớp                      | Độ cụ thể | Ví dụ                       |
+| ------------------------- | --------: | --------------------------- |
+| Type và subtype chính xác |         3 | `text/html` cho `text/html` |
+| Wildcard ở type           |         2 | `text/*` cho `text/html`    |
+| Wildcard toàn bộ          |         1 | `*/*` cho `text/html`       |
+| Không khớp                |         0 | `image/*` cho `text/html`   |
+
+Khi hai entry có cùng độ cụ thể, entry xuất hiện trước thắng. Wildcard chỉ hợp
+lệ khi là toàn bộ type hoặc subtype: `*/*` và `text/*` parse được, còn `*/json`
+bị bỏ.
+
+## Quality value
+
+Entry không có `q` có quality `1000`. `q=0` từ chối range một cách tường minh.
+Parser chấp nhận `0`, `1`, `0.` theo sau bởi một đến ba chữ số, và `1.000`. Nó
+từ chối parameter `q` bị lặp, `q` trần không có value, và weight bắt đầu bằng 0
+có hơn ba chữ số thập phân, đồng thời bỏ toàn bộ entry.
+
+```text
+Accept: text/html, application/json;q=0.9, image/avif;q=0
+```
+
+Chuỗi này cho `text/html` quality `1000`, `application/json` quality `900` và
+`image/avif` quality `0`.
+
+Vì độ cụ thể được giải quyết trước quality, `text/*;q=1, text/html;q=0.5` cho
+`text/html` quality `500`, không phải `1000`. Đó là quy tắc RFC 9110: range khớp
+cụ thể nhất quyết định quality.
+
+## Chọn offer
+
+`best(accept, offers)` chấm mọi offer và giữ offer đầu tiên có quality cao
+nhất. Điểm bằng nhau giữ thứ tự của `offers`. Khi mọi offer đều `0`, hàm trả
+`null`.
+
+```zig
+fn represent(req: *uz.Request, res: *uz.Response) void {
+    const accept = uz.negotiate.parse(req.get_header("accept") orelse "");
+    const offers = [_][]const u8{ "application/json", "text/html" };
+    const selected = uz.negotiate.best(accept, &offers) orelse {
+        res.end("406 Not Acceptable", "") catch {};
+        return;
+    };
+
+    if (std.mem.eql(u8, selected, "application/json")) {
+        res.end_with_headers(
+            "200 OK",
+            "Content-Type: application/json\r\n",
+            "{\"ok\":true}",
+        ) catch {};
+        return;
+    }
+    res.end_with_headers("200 OK", "Content-Type: text/html\r\n", "<p>ok</p>") catch {};
+}
+```
+
+| `Accept`               | `best`             | Lý do                                    |
+| ---------------------- | ------------------ | ---------------------------------------- |
+| Rỗng                   | `application/json` | Cả hai đạt 1000; thứ tự offer quyết định |
+| `text/html`            | `text/html`        | Chỉ offer HTML khớp                      |
+| `application/*`        | `application/json` | Wildcard ở type khớp JSON                |
+| `*/*;q=0.1`            | `application/json` | Điểm bằng nhau giữ thứ tự offer          |
+| `application/json;q=0` | `null`             | Cả hai offer đều 0                       |
+
+`req.accepts(media_type)` là dạng ngắn. Nó parse field `Accept` đầu tiên và trả
+về việc score có lớn hơn 0 hay không. Nó không cho biết offer nào thắng; gọi
+`best` khi có nhiều hơn một offer.
+
+## Giới hạn và lỗi
+
+| Điều kiện                                                | Kết quả                            |
+| -------------------------------------------------------- | ---------------------------------- |
+| Hơn 16 entry                                             | Entry dư bị bỏ                     |
+| Entry không hợp lệ                                       | Entry bị bỏ                        |
+| Offer không hợp lệ khi `Accept` không rỗng, ví dụ `json` | Score `0`                          |
+| Không có offer chấp nhận được                            | `best` trả `null`; `score` trả `0` |
+| Caller xử lý không khớp                                  | Gửi `406 Not Acceptable`           |
+
+## Tiếp theo
+
+Đọc [API request](/docs/http/request) cho `get_header` và `accepts`, cùng
+[API response](/docs/http/response) cho `Content-Type` và
+`end_with_headers`. Trang
+[thương lượng giao thức](/docs/concepts/protocol-negotiation) nói về việc
+chọn phiên bản HTTP ở tầng transport, một quyết định khác.

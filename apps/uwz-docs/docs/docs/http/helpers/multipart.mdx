@@ -1,0 +1,158 @@
+---
+title: Multipart parsing
+description: Walk bounded multipart form-data parts, read part headers and filenames, and process each payload as borrowed chunks.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, http]
+---
+
+`uz.multipart` parses one complete `multipart/form-data` request body into
+borrowed parts. It reads the boundary from `Content-Type`, validates it, and
+returns each part's headers, name, filename, content type, and payload without
+copying the upload.
+
+The parser is over the request body that the server already buffered. There is
+no incremental request-body API, so the size limit is the body limit.
+
+## Boundary rules
+
+`boundary_from_content_type` performs the extraction that `req.multipart()`
+uses:
+
+- The media type before the first `;` must be `multipart/form-data`,
+  case-insensitively. Otherwise it returns `NotMultipartFormData`.
+- A `boundary` parameter is required. A missing parameter returns
+  `MissingMultipartBoundary`.
+- The boundary must be 1 to 70 bytes (`max_boundary_length`), must not end with
+  a space, and may contain only ASCII alphanumerics and the characters
+  `' ( ) + _ , - . / : = ?` plus space.
+
+A boundary that fails validation returns `InvalidMultipartBoundary`.
+`Parser.init(body, boundary)` applies the same validation, so a hand-built
+parser cannot start from an illegal delimiter.
+
+```zig
+fn open_multipart(req: *uz.Request) !uz.multipart.Parser {
+    const content_type = req.get_unique_header("content-type") orelse
+        return error.MissingContentType;
+    const boundary = try uz.multipart.boundary_from_content_type(content_type);
+    return uz.multipart.Parser.init(req.body, boundary);
+}
+```
+
+## Part iteration
+
+| Call                          | Returns         | Notes                            |
+| ----------------------------- | --------------- | -------------------------------- |
+| `Parser.init(body, boundary)` | `!Parser`       | Validates the boundary           |
+| `next_part()`                 | `!?Part`        | `null` after the close delimiter |
+| `Part.chunks(size)`           | `ChunkIterator` | Fixed-size borrowed chunks       |
+| `ChunkIterator.next()`        | `?[]const u8`   | `null` at the end of the part    |
+
+`Part` exposes `headers`, `name`, `filename`, `content_type`, and `data`. The
+header block is the raw part header text without the terminating blank line.
+`name` and `filename` come from `Content-Disposition`; `content_type` comes from
+the part's own `Content-Type` field and is `null` when absent.
+
+The first token of `Content-Disposition` must be `form-data`, otherwise the part
+fails with `InvalidContentDisposition`. The `name` parameter is mandatory;
+without it the part fails with `MissingPartName`.
+
+Parameters may be quoted or unquoted. Surrounding quotes are removed. A quoted
+value containing a backslash is treated as absent, so it cannot carry an escape
+sequence into an application path.
+
+An RFC 2046 preamble before the first delimiter is skipped, and an epilogue
+after the close delimiter is ignored. Both are transport details, not
+application fields.
+
+## Chunked reads
+
+`Part.data` is one borrowed slice of the complete payload. Use `chunks` when a
+consumer wants bounded pieces, for example to hash or copy an upload in fixed
+steps. The iterator returns slices of `data`, not copies. A chunk size of zero
+returns no chunks. The parser and the iterator allocate nothing; every slice
+borrows the request body.
+
+```zig
+const std = @import("std");
+
+fn hash_part(part: uz.multipart.Part) u64 {
+    var hasher = std.hash.Wyhash.init(0);
+    var chunks = part.chunks(4096);
+    while (chunks.next()) |chunk| hasher.update(chunk);
+    return hasher.final();
+}
+```
+
+## Buffered body and limits
+
+| Bound           | Value                                           | Result when exceeded                                                                                 |
+| --------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Request body    | `ServerConfig.max_body_size`, 16 KiB by default | `413 Payload Too Large` before the handler runs on HTTP/1.1 and HTTP/3; HTTP/2 closes the connection |
+| Boundary length | 70 bytes                                        | `InvalidMultipartBoundary`                                                                           |
+| Part count      | No separate part limit                          | Bounded by the body limit                                                                            |
+
+The request body is complete before the handler is called. This gives the
+handler full visibility of every part, including part headers and an empty
+payload, but it also means the upload cannot exceed the configured body size.
+Raise `max_body_size` with the server builder when uploads are larger. The
+[HTTP limits](/docs/http/limits) page lists the transport bound.
+
+## Complete handler
+
+```zig src/main.zig
+fn upload(req: *uz.Request, res: *uz.Response) void {
+    var parser = req.multipart() catch |err| {
+        res.end("400 Bad Request", @errorName(err)) catch {};
+        return;
+    };
+
+    var total: usize = 0;
+    var files: usize = 0;
+
+    while (true) {
+        const maybe_part = parser.next_part() catch |err| {
+            res.end("400 Bad Request", @errorName(err)) catch {};
+            return;
+        };
+        const part = maybe_part orelse break;
+
+        if (part.filename == null) continue;
+        files += 1;
+        var chunks = part.chunks(1024);
+        while (chunks.next()) |chunk| total += chunk.len;
+    }
+
+    var body_buffer: [96]u8 = undefined;
+    const body = std.fmt.bufPrint(
+        &body_buffer,
+        "files={d} bytes={d}",
+        .{ files, total },
+    ) catch return;
+    res.text(body) catch {};
+}
+```
+
+The handler sends the result with `res.text`. The
+[Response API](/docs/http/response) covers response state and header ordering.
+
+## Verify
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/upload \
+  -F 'title=helpers' \
+  -F 'avatar=@./avatar.png'
+```
+
+The handler counts one file and reports the byte length of `avatar.png`. A body
+larger than `max_body_size` returns `413 Payload Too Large` with the rejection
+document, and the handler is not called.
+
+## Next
+
+Read the [Request API](/docs/http/request) for the body and header rules around
+`req.multipart()`, then [query and form parsing](/docs/http/helpers/query-and-forms)
+for non-multipart input. The [capacity model](/docs/concepts/capacity-model)
+explains how the request body is sized.

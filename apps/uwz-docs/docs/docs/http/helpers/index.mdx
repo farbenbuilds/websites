@@ -1,0 +1,110 @@
+---
+title: Helpers
+description: Choose the small utility for parsing input, keeping state, framing bytes, or adapting a transport. Helpers never own wire behavior.
+search:
+  tags: [helpers, reference]
+---
+
+Helpers are the small composable utilities in `uz` that do not own a protocol.
+They parse what a request carries, keep bounded state around a response,
+transform bytes you already produced, or adapt another transport to a
+pull-based stream.
+
+At request time, every helper borrows from a bounded buffer, writes into caller
+storage, or returns a compile-time fixed view. The HTTP gzip pool allocates at
+application init. A `CompressionStream` or `DecompressionStream` allocates its
+codec in `init`, so treat that init as an explicit allocation, not a hidden
+request-path cost.
+
+## Input
+
+<CardGroup cols={2}>
+  <Card title="Query and form parsing" href="/docs/http/helpers/query-and-forms" icon="search">
+    `uz.query` and `uz.form` slice a query string or form body into borrowed pairs, then decode only
+    the values you read as text.
+  </Card>
+  <Card title="Multipart parsing" href="/docs/http/helpers/multipart" icon="paperclip">
+    `uz.multipart` walks bounded `multipart/form-data` parts, filenames, and part headers without
+    copying the upload.
+  </Card>
+  <Card title="Content negotiation" href="/docs/http/helpers/content-negotiation" icon="scale">
+    `uz.negotiate` scores `Accept` ranges and selects the best representation you already offer.
+  </Card>
+</CardGroup>
+
+## State
+
+<CardGroup cols={2}>
+  <Card title="Cookies and signed cookies" href="/docs/http/helpers/cookies" icon="cookie">
+    `uz.cookie` reads RFC 6265 pairs, formats `Set-Cookie` attributes, and verifies HMAC-SHA256
+    signatures with rotating keys.
+  </Card>
+  <Card title="Caching and ETags" href="/docs/http/helpers/caching" icon="tag">
+    `uz.cache` generates a strong ETag from a body and answers a conditional GET with `304 Not
+    Modified`.
+  </Card>
+</CardGroup>
+
+## Wire
+
+<CardGroup cols={2}>
+  <Card title="Compression" href="/docs/http/helpers/compression" icon="archive">
+    `Response.end_gzip` uses the per-worker pool, while `uz.compression_stream` and
+    `uz.compression_pool` expose bounded libdeflate streams and the reusable codec.
+  </Card>
+  <Card
+    title="Fetch, Streams, and abort"
+    href="/docs/http/helpers/fetch-streams-and-abort"
+    icon="arrow-right-left"
+  >
+    `uz.fetch`, `uz.streams`, and `uz.abort` iterate headers, move bytes through BYOB readers and
+    writable streams, and stop cooperative work.
+  </Card>
+</CardGroup>
+
+## Adapters
+
+<CardGroup cols={2}>
+  <Card title="WebSocket streams" href="/docs/http/helpers/websocket-streams" icon="radio">
+    `uz.WebSocketStream` and `uz.NativeWebSocketStream` turn a complete-message transport into a
+    pull-based byte stream with explicit flow control.
+  </Card>
+</CardGroup>
+
+## Core pages that are not helpers
+
+These pages are part of the HTTP application surface, not the helper group.
+Start here when the task is a request field, a response mode, or a wire rule.
+
+| Page                                                | Read it for                                          |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| [Request API](/docs/http/request)                   | Method, target, headers, body, and route captures    |
+| [Response API](/docs/http/response)                 | Status, headers, text, bytes, and response state     |
+| [JSON responses](/docs/http/json)                   | `res.json`, `res.json_buf`, and `begin_json`         |
+| [Streaming responses](/docs/http/streaming)         | `begin_stream` and the drain-driven `StreamProducer` |
+| [Server-Sent Events](/docs/http/server-sent-events) | Event framing, heartbeat, and `res.sse()`            |
+| [HTTP errors](/docs/http/errors)                    | Structured rejection documents and status helpers    |
+| [Static files](/docs/http/static-files)             | Mounts, confinement, validators, and byte ranges     |
+
+## Boundaries
+
+A helper never decides how bytes reach the wire. HTTP/1.1 parsing, response
+framing, chunked transfer, and keep-alive belong to
+[HTTP/1.1 and the application API](/docs/http). WebSocket handshake, framing,
+masking, and compression stay in the protocol documentation at
+`docs/websocket.md`.
+
+The following are deliberately outside this group:
+
+- CORS, authentication, rate limiting, and security headers. They are security
+  controls documented under [middleware](/docs/http/middleware).
+- JSON, streaming, SSE, chunked output, static files, and OpenAPI. They are core
+  response modes in the HTTP section.
+- `uz.schema` and typed RPC. They are type-safety features, not utilities.
+
+## Next
+
+Start with [Query and form parsing](/docs/http/helpers/query-and-forms) for the
+most common request input, then read the [Request API](/docs/http/request) and
+the [capacity model](/docs/concepts/capacity-model) for the buffers that every
+helper borrows.

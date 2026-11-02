@@ -1,0 +1,165 @@
+---
+title: Fetch, Streams, and abort
+description: Move bytes through borrowed header views, BYOB readers, writable streams, and cooperative abort checks without allocating.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, streaming]
+---
+
+`uz.fetch`, `uz.streams`, and `uz.abort` provide Fetch- and Streams-inspired
+primitives for code that already works with borrowed bytes. They favor explicit
+buffers and caller-owned context over promises and hidden queues.
+
+These are inspired by the Fetch and Streams APIs, not a conformance claim. There
+are no promises, no stream controllers, no transferable streams, and no request
+body streaming.
+
+## Header views
+
+`HeadersView` is a read-only view over parallel name and value slices.
+
+| Member                             | Returns          | Behavior                                           |
+| ---------------------------------- | ---------------- | -------------------------------------------------- |
+| `HeadersView.init(names, values)`  | `HeadersView`    | Uses the shorter slice length                      |
+| `HeadersView.init_with_extra(...)` | `HeadersView`    | Adds a second borrowed pair of arrays              |
+| `get(name)`                        | `?[]const u8`    | First case-insensitive match, primary arrays first |
+| `has(name)`                        | `bool`           | Same as `get(name) != null`                        |
+| `entries()`                        | `HeaderIterator` | Iterates every entry                               |
+
+`HeaderIterator.next()` returns `HeaderEntry { name, value }` and `reset()`
+rewinds it. `req.headers()` returns the request view, and
+`req.header_entries()` returns the iterator directly.
+
+`uz.fetch` also exposes status-class predicates: `is_ok` for 200 to 299,
+`is_redirect` for 300 to 399, `is_client_error` for 400 to 499, and
+`is_server_error` for 500 to 599.
+
+## Readable byte streams
+
+`ReadableByteStream` is a pull-based reader with a caller-owned buffer. `read`
+is Bring Your Own Buffer: it writes into the slice you pass and returns the byte
+count.
+
+| Member        | Behavior                                                         |
+| ------------- | ---------------------------------------------------------------- |
+| `read(dest)`  | Returns up to `dest.len` bytes; `0` means EOF or a closed stream |
+| `cancel()`    | Closes the stream and runs the optional close callback           |
+| `is_closed()` | `true` after EOF, cancel, or a read error                        |
+
+A read callback that returns more than `dest.len` bytes sets the stream to
+`errored` and returns `InvalidReadCount`. A callback error also marks the stream
+`errored`, so later reads return `0` instead of retrying.
+
+`get_byob_reader(stream)` returns a `ReadableStreamBYOBReader`. Its
+`read(view)` returns `ReadResult { value, done }`, where `value` is the filled
+prefix of `view`. Calling `read` after `release_lock` returns
+`ReaderReleased`.
+
+`SliceReaderContext` is a ready-made reader over an in-memory slice. Wire it
+into a stream when the source is already buffered:
+
+```zig
+var context = uz.streams.SliceReaderContext{ .data = "payload" };
+var reader = uz.streams.ReadableByteStream{
+    .context = &context,
+    .read_fn = uz.streams.SliceReaderContext.read,
+};
+```
+
+## Writable byte streams and pipe_to
+
+`WritableByteStream.write(chunk)` forwards one chunk to the destination.
+`close()` finalizes it, and `is_backpressured()` reports whether the transport
+currently asserts write pressure. A stream without a backpressure callback
+reports `false`.
+
+`pipe_to(reader, writer, buffer)` moves bytes with the caller's transfer buffer
+and performs no allocation. It reads until the reader closes, writes each chunk,
+and closes the writer. An empty buffer returns `EmptyTransferBuffer`. On any
+error it cancels the reader and closes the writer best effort before returning
+the original error.
+
+`pipe_to` does not poll `is_backpressured`. A transport-backed writer reports
+`error.WouldBlock` when its queue is full, and that error stops the pipe. Check
+`is_backpressured` yourself when you drive the writable side directly.
+
+`res.writable_stream()` returns a writer connected to the response. While the
+response is still idle, the first write begins a `200 OK` chunked response, and
+`close` ends the chunk sequence.
+The writer feeds the response write queue described by the
+[capacity model](/docs/concepts/capacity-model); the
+[Response API](/docs/http/response) covers the response states around it.
+
+```zig
+fn download(_: *uz.Request, res: *uz.Response) void {
+    var context = uz.streams.SliceReaderContext{ .data = "streamed bytes" };
+    var reader = uz.streams.ReadableByteStream{
+        .context = &context,
+        .read_fn = uz.streams.SliceReaderContext.read,
+    };
+    var writer = res.writable_stream();
+    var buffer: [8]u8 = undefined;
+    _ = uz.streams.pipe_to(&reader, &writer, &buffer) catch |err| {
+        std.log.err("pipe failed: {}", .{err});
+    };
+}
+```
+
+## Cooperative abort
+
+`AbortState` holds the packed atomic word: an epoch plus one `AbortReason`.
+`AbortController` owns an `AbortState`, and `signal()` returns a non-owning
+snapshot. The controller must outlive every signal copy.
+
+| Member                                        | Behavior                                                     |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `AbortReason`                                 | `none`, `caller`, `timeout`, `connection_closed`, `shutdown` |
+| `controller.abort(reason)`                    | Publishes the first reason and returns whether it won        |
+| `controller.reset()`                          | Starts a new epoch and clears the reason                     |
+| `signal.aborted()`                            | `true` after an abort or an epoch change                     |
+| `signal.reason()`                             | Stored reason; `connection_closed` after an epoch change     |
+| `signal.checkpoint()`                         | Returns `error.Aborted` when aborted                         |
+| `abort_if_expired(controller, now, deadline)` | Aborts with `timeout` at the deadline                        |
+
+The first abort reason wins; later calls cannot replace it, and `.none` is
+rejected. `reset()` increments the epoch, which permanently invalidates every
+older signal: `aborted()` becomes `true` and `reason()` reports
+`connection_closed`.
+
+Checkpoints belong in a loop or between steps, not around every byte. The
+signal reads an atomic word, so it is cheap, but it is still a cancellation
+point rather than a transport read.
+
+```zig
+fn run_step(
+    controller: *uz.abort.AbortController,
+    now_ms: i64,
+    deadline_ms: i64,
+) !void {
+    const signal = controller.signal();
+    _ = uz.abort.abort_if_expired(controller, now_ms, deadline_ms);
+    signal.checkpoint() catch |err| {
+        std.log.err("aborted: {s}", .{@tagName(signal.reason())});
+        return err;
+    };
+}
+```
+
+## Verify
+
+```sh
+curl -i http://127.0.0.1:3000/download
+```
+
+The response is `200 OK` with `Transfer-Encoding: chunked`, and the body is
+`streamed bytes`. A writer error closes the chunks early and is reported by
+`pipe_to`.
+
+## Next
+
+Read [streaming responses](/docs/http/streaming) for the response producer that
+owns transport framing. The [Request API](/docs/http/request) documents the
+header view returned by `req.headers()`, and
+[ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) explains the
+borrowed slices these streams move.
