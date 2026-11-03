@@ -1,0 +1,101 @@
+---
+title: HTTP/3 limits
+description: Đọc mọi bound HTTP/3 của engine, stream, header, body, datagram và response, cùng memory mà từng bound reserve.
+sidebar:
+  order: 10
+search:
+  tags: [reference, http3, quic, capacity]
+---
+
+HTTP/3 limit đến từ ba nơi: policy lsquic cố định, field `ServerConfig` size engine
+storage, và rule HTTP trong adapter. Trang này liệt kê cả ba cùng kết quả khi vượt.
+
+## Engine limit
+
+| Giới hạn               | Giá trị           | Nguồn                            |
+| ---------------------- | ----------------- | -------------------------------- |
+| Connection capacity    | `max_connections` | Pool stream và connection engine |
+| Header list size       | `max_header_size` | `es_max_header_list_size`        |
+| Header set outstanding | 1                 | `es_max_header_sets`             |
+| QPACK decoder table    | 0 byte            | `es_qpack_dec_max_size`          |
+| Blocked QPACK stream   | 0                 | `es_qpack_dec_max_blocked`       |
+| UDP receive payload    | 2048 byte         | Packet slot                      |
+| Base PLPMTU            | 1200 byte         | Tối thiểu QUIC                   |
+| Max PLPMTU             | 1472 byte         | An toàn Ethernet                 |
+| Send batch             | 16 packet         | Coalesced transmit               |
+| Delayed 0-RTT packet   | 0                 | TLS từ chối 0-RTT                |
+| Processing threshold   | 10 ms             | Một lượt lsquic                  |
+
+## HTTP limit
+
+| Giới hạn                       | Default | Builder override                    | Khi vượt                        |
+| ------------------------------ | ------- | ----------------------------------- | ------------------------------- |
+| `max_h3_body_size`             | 16 KiB  | `with_max_h3_body_size`             | `413 Payload Too Large`         |
+| `max_h3_response_header_size`  | 4 KiB   | `with_max_h3_response_header_size`  | `error.BufferOverflow`          |
+| `max_h3_response_header_count` | 64      | `with_max_h3_response_header_count` | `error.BufferOverflow`          |
+| `max_header_count`             | 64      | `with_max_header_count`             | Request bị từ chối              |
+| `max_header_size`              | 16 KiB  | `with_max_header_size`              | Request bị từ chối              |
+| Response body mỗi stream       | 64 KiB  | `with_write_queue_size`             | `end` one-shot trả `WouldBlock` |
+
+`max_h3_response_header_size` trên 65535 và `max_h3_response_header_count` trên
+4096 bị từ chối lúc startup với `error.InvalidHttp3Capacity`.
+
+## Kết quả validation
+
+| Điều kiện                              | Kết quả                        |
+| -------------------------------------- | ------------------------------ |
+| Pseudo-field trùng                     | Stream `H3_MESSAGE_ERROR`      |
+| Pseudo-field sau regular field         | Stream `H3_MESSAGE_ERROR`      |
+| Field name viết hoa hoặc sai           | Stream `H3_MESSAGE_ERROR`      |
+| Connection-specific field              | Stream `H3_MESSAGE_ERROR`      |
+| Body vượt `max_h3_body_size`           | `413 Payload Too Large`        |
+| Body không khớp `content-length`       | `400 Bad Request`              |
+| `QUERY` không có `Content-Type` hợp lệ | `400 Bad Request`              |
+| Request `CONNECT`                      | `501 Not Implemented`          |
+| Request WebTransport session           | Không quảng bá; không tới được |
+
+## Memory
+
+Engine cấp phát các region này lúc startup, ngoài application slab:
+
+| Region                  | Công thức                                |
+| ----------------------- | ---------------------------------------- |
+| Header storage          | `2 * capacity * max_header_size`         |
+| Request body storage    | `capacity * max_h3_body_size`            |
+| Response header storage | `capacity * max_h3_response_header_size` |
+| Response body storage   | `capacity * write_queue_size`            |
+| Packet storage          | `max(16, capacity * 4) * 2048`           |
+
+Với default và `max_connections = 1024`:
+
+| Region          | Byte   |
+| --------------- | ------ |
+| Header          | 32 MiB |
+| Request body    | 16 MiB |
+| Response header | 4 MiB  |
+| Response body   | 64 MiB |
+| Packet          | 8 MiB  |
+
+Đó là khoảng 124 MiB engine storage trước application slab, lý do deployment HTTP/3
+chọn connection count nhỏ hơn service chỉ TCP. Default `max_connections = 1024`
+được tune cho TCP; đặt tường minh cho QUIC listener.
+
+## Datagram
+
+| Field               | Default | Tác dụng                |
+| ------------------- | ------- | ----------------------- |
+| `max_datagram_size` | 0       | Datagram bị tắt         |
+| `datagram_slots`    | 0       | Không reserve ring slot |
+
+Bật cả hai không bật live WebTransport path. Listener không quảng bá datagram
+support. Xem [WebTransport status](/docs/http3/webtransport).
+
+## Clustering
+
+Không có HTTP/3 cluster mode. Một process sở hữu một QUIC engine và một UDP socket.
+`listen_udp` không có trên cluster worker group.
+
+## Tiếp theo
+
+- [Configuration](/docs/http3/configuration) cho builder call.
+- [QUIC transport](/docs/http3/quic-transport) cho policy cố định.

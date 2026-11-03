@@ -1,0 +1,102 @@
+---
+title: HTTP/2 observability
+description: Tìm development-log record và request counter mà HTTP/2 cập nhật, đồng thời biết session không báo cáo gì theo từng frame.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, http2, observability]
+---
+
+HTTP/2 báo cáo tại ranh giới exchange. Một request trải qua HEADERS frame, nhiều
+DATA frame và một response tạo một log record và một counter increment, không phải
+một record mỗi frame. Trang này chỉ ra nguồn của các tín hiệu đó và cách đọc.
+
+## Development log
+
+HTTP/2 dispatch phát một record `http_request` khi response hoàn tất, ví dụ
+`14:32:18.412 | GET[/items] : 200`.
+
+| Field     | Nguồn                                       |
+| --------- | ------------------------------------------- |
+| Timestamp | Wall clock dẫn xuất từ monotonic mỗi worker |
+| Method    | `:method` đã decode                         |
+| Path      | `:path` đã decode                           |
+| Status    | Status response đã commit                   |
+
+Record được phát khi hoàn tất, nên response stream log một lần sau DATA frame cuối.
+Nó không được phát mỗi frame, mỗi DATA chunk hay mỗi header block.
+
+WebSocket tunnel log response upgrade khi tunnel được thiết lập. Nó không log từng
+message tunnel như HTTP exchange; message event là record riêng.
+
+Bật log bằng config mặc định hoặc `with_dev_log(true)`. Sink mặc định ghi ra stderr
+và im lặng khi stderr không phải terminal, nên run redirect không bị chậm. Dùng
+`set_dev_log_file` cho file sink.
+
+## Request counter
+
+Mỗi HTTP/2 exchange hoàn tất tăng counter `http_requests`. Prometheus rendering
+công bố nó dưới dạng counter `uwz_http_requests_total`.
+
+Registry tính theo worker. Cluster bốn worker có bốn registry, mỗi cái có count
+riêng, và không có bước aggregate dùng chung.
+
+## Bật metrics endpoint
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_observability(true)
+    .with_metrics_path("/metrics");
+```
+
+Endpoint được đăng ký như một route `GET` bình thường với context pointer, trước
+khi route bị lock. Nó không nằm trong route registry và không xuất hiện trong
+OpenAPI output. Bảo vệ nó ở network layer; framework không thêm authentication.
+
+## HTTP/2 không báo gì
+
+| Tín hiệu                  | Trạng thái      |
+| ------------------------- | --------------- |
+| Counter theo frame        | Không phát      |
+| Duration theo stream      | Không phát      |
+| HPACK table size hoặc hit | Không công bố   |
+| Flow-control stall        | Không đếm riêng |
+| Reset theo error code     | Không đếm       |
+| Stream reuse              | Không đếm       |
+
+Với những thứ đó, dùng development log, proxy phía trước hoặc profiler ngoài. Không
+suy ra hành vi stream từ request counter; nó chỉ đếm exchange hoàn tất.
+
+## Khác biệt HTTP/3
+
+QUIC path phát cùng record `http_request` trong development log nhưng không tăng
+metrics registry trong release này. Request HTTP/3 vô hình với
+`uwz_http_requests_total`. Xem
+[HTTP/3 observability](/docs/http3/observability).
+
+## Kiểm tra
+
+1. Start server với `with_observability(true)`.
+2. Gửi mười HTTP/2 request trên một connection:
+
+   ```sh
+   for i in $(seq 1 10); do curl --http2 -s -k https://127.0.0.1:3443/ > /dev/null; done
+   ```
+
+3. Đọc counter:
+
+   ```sh
+   curl -s --http2 -k https://127.0.0.1:3443/metrics | grep uwz_http_requests
+   ```
+
+4. Xác nhận giá trị tăng mười, và development log hiện mười dòng `GET` thay vì một
+   dòng mỗi frame.
+
+Nếu gửi cả mười request trên một connection bằng client reuse, counter vẫn hiện
+mười. Counter tính theo exchange, không theo connection.
+
+## Tiếp theo
+
+- [Kiểm thử HTTP/2](/docs/http2/testing) cho gate exercise các path này.
+- [HTTP/2 limits](/docs/http2/limits) cho capacity đứng sau counter.

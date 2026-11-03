@@ -1,0 +1,164 @@
+---
+title: Kiểm thử WebSocket route
+description: Kiểm thử echo route bằng wscat, browser, handler test trong project của bạn và một load client đo backpressure.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, websocket, operations]
+---
+
+Kiểm thử route bạn đã ship, không phải framework. Ba lớp bao phủ một WebSocket
+endpoint: một phiên client thủ công cho behavior, một check tự động cho failure
+path, và một load client cho capacity. Cả ba chạy với application của bạn.
+
+## Điều kiện trước
+
+- Application đang chạy với một WebSocket route. Bắt đầu từ
+  [WebSocket quickstart](/docs/websocket/quickstart).
+- `npx` cho `wscat`, hoặc browser có JavaScript console.
+- Zig 0.16.0 cho handler test.
+
+## Phiên thủ công
+
+Start server:
+
+```sh
+zig build run
+```
+
+Kết nối client:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< welcome
+< hello
+```
+
+Kiểm tra những hành vi dễ hỏng:
+
+- Message chào đến sau `open`, trước echo đầu tiên.
+- Binary frame round-trip. Trong `wscat`, dùng escape `\x` hoặc gửi từ browser
+  với `ArrayBuffer`.
+- Đóng client log đúng một close trên server.
+- Restart server đóng client thay vì để nó half-open.
+
+## Failure path
+
+Kiểm tra handshake trước khi tin happy path:
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 12" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  http://127.0.0.1:3000/echo
+```
+
+Kỳ vọng `426 Upgrade Required` và `Sec-WebSocket-Version: 13`. Request không có
+`Sec-WebSocket-Key` kỳ vọng `400 Bad Request`. `upgrade` callback từ chối kỳ vọng
+`403 Forbidden`.
+
+Sau đó test message vượt route limit. Đặt `max_message_size` thấp trong test build
+và gửi message lớn hơn. Server close với `1009` và callback `message` của bạn
+không chạy.
+
+## Kiểm tra bằng browser
+
+```js
+const ws = new WebSocket("ws://127.0.0.1:3000/echo");
+ws.onopen = () => ws.send("browser");
+ws.onmessage = (event) => console.log(event.data);
+ws.onclose = (event) => console.log(event.code, event.reason);
+```
+
+Browser thực thi masking và công bố close code. Xác nhận code và reason server gửi,
+và xác nhận upgrade bị từ chối tạo error event thay vì `open` gây nhầm.
+
+## Handler test
+
+Giữ message parsing và authorization trong hàm thuần và test bằng `zig test`
+trong project của bạn:
+
+```zig
+const std = @import("std");
+
+const Command = enum { ping, status };
+
+fn parseCommand(message: []const u8) ?Command {
+    if (std.mem.eql(u8, message, "ping")) return .ping;
+    if (std.mem.eql(u8, message, "status")) return .status;
+    return null;
+}
+
+test "unknown commands are rejected" {
+    try std.testing.expect(parseCommand("shutdown") == null);
+    try std.testing.expectEqual(Command.ping, parseCommand("ping").?);
+}
+```
+
+```sh
+zig test src/ws/commands.zig
+```
+
+Handler test không chứng minh được upgrade handshake. Ghép nó với phiên thủ công ở
+trên; cùng nhau chúng bao phủ logic và wire behavior.
+
+## Load test
+
+Dùng client ngoài giữ được nhiều connection. Một kịch bản `k6` giữ hình dạng nhỏ:
+
+```js
+import ws from "k6/ws";
+
+export const options = { vus: 200, duration: "30s" };
+
+export default function () {
+  ws.connect("ws://127.0.0.1:3000/echo", {}, (socket) => {
+    socket.on("open", () => socket.send("hello"));
+    socket.on("message", () => socket.close());
+  });
+}
+```
+
+Báo cáo:
+
+- Connection thiết lập mỗi giây.
+- Message mỗi giây và round-trip latency.
+- Dòng log `WouldBlock` và drain trên server.
+- Byte đang chờ ở đỉnh, từ `buffered_amount()` trong drain log.
+- Phân bố close code.
+
+Chạy client trên host riêng cho số liệu throughput. Chạy trên cùng host đo client
+nhiều như đo server.
+
+## Bằng chứng upstream
+
+Maintainer của framework công bố kết quả compliance protocol cho mỗi release.
+Baseline v2.1.6 chấp nhận toàn bộ 517 Autobahn server case được chọn, với 514 `OK`
+và 3 `INFORMATIONAL`, gồm compression group 12 và 13. Kết quả đó mô tả framework
+build, không mô tả route hay deployment của bạn. Trích dẫn khi cần chứng minh
+protocol coverage. Đó không phải bước trong test plan application của bạn.
+
+## Giả định capacity
+
+| Giả định         | Giá trị                                |
+| ---------------- | -------------------------------------- |
+| Message capacity | `max_ws_message_size`, default 16 KiB  |
+| Frame capacity   | Route `max_frame_size`, default 16 KiB |
+| Write queue      | `write_queue_size`, default 64 KiB     |
+| Connection count | `App(N)` hoặc `with_max_clients`       |
+
+Protocol pass không chứng minh lựa chọn capacity của bạn. Size slab riêng và load
+test ở connection count bạn định chạy.
+
+## Tiếp theo
+
+- [WebSocket limits](/docs/websocket/limits) cho mọi bound dưới test.
+- [Backpressure và drain](/docs/websocket/backpressure) cho hành vi queue đứng sau
+  số liệu load.

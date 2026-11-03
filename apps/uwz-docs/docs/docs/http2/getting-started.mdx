@@ -1,0 +1,132 @@
+---
+title: HTTP/2 quickstart
+description: Enable HTTP/2 through TLS ALPN or cleartext prior knowledge, then verify the negotiated protocol and stream limit with curl.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, http2, tls]
+---
+
+There is no separate HTTP/2 application type. A TLS application advertises `h2`
+through ALPN, and a plaintext application detects the HTTP/2 preface. Both run
+the routes you already registered.
+
+## Prerequisites
+
+- A µWebZockets project with an HTTP route. Start from
+  [Your first HTTP server](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- A `curl` build with HTTP/2 support. `curl --version` lists `HTTP2` in its
+  features.
+
+## Serve HTTP/2 over TLS
+
+Replace `src/main.zig` with:
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("Hello over HTTP/2") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+fn echo(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.bytes()) catch |err| {
+        std.log.err("echo failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    _ = try server.post("/echo", echo);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+`init_https_ephemeral` generates an in-memory ECDSA certificate for local work.
+It advertises `h2` and `http/1.1` in that order. For production certificates, use
+`init_https` with PEM paths; see
+[Your first TLS server](/docs/examples/first-tls-server).
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify the protocol
+
+```sh
+curl --http2 -k -v https://127.0.0.1:3443/ 2>&1 | grep -E "ALPN|HTTP/2"
+```
+
+```console
+* ALPN: server accepted h2
+< HTTP/2 200
+Hello over HTTP/2
+```
+
+The `ALPN: server accepted h2` line proves the connection negotiated HTTP/2. If
+it says `http/1.1`, either the client lacks HTTP/2 support or the application was
+built without a TLS context.
+
+Request a body and check the framing:
+
+```sh
+curl --http2 -k -d "hello" https://127.0.0.1:3443/echo
+```
+
+```console
+hello
+```
+
+## Cleartext prior knowledge
+
+A plaintext listener accepts HTTP/2 when the first bytes are the client preface:
+
+```sh
+curl --http2-prior-knowledge http://127.0.0.1:3000/
+```
+
+The same `App` value serves HTTP/1.1 clients on that port. A request that starts
+with a normal request line is parsed as HTTP/1.1. `curl --http2` without
+`--prior-knowledge` sends an `Upgrade: h2c` request, which this server does not
+implement; use the prior-knowledge flag or TLS.
+
+## What just happened
+
+1. The TLS context advertised `h2` and `http/1.1` through ALPN.
+2. The client selected `h2` and sent the connection preface followed by SETTINGS.
+3. The session decoded the HEADERS block with HPACK and produced a `Request`.
+4. The same router matched `/` and called `index`.
+5. The response became a HEADERS block plus DATA frames on one stream.
+
+The connection now holds the session state until either side sends GOAWAY or the
+TCP connection closes.
+
+## Check the stream budget
+
+Open one connection and send eight concurrent requests. The ninth waits until
+another stream completes; the session advertises a maximum of eight concurrent
+streams.
+
+```sh
+h2load -n 32 -c 1 -m 8 https://127.0.0.1:3443/
+```
+
+`h2load` reports the negotiated protocol and the stream concurrency. It requires
+a build with HTTP/2 support.
+
+## Next
+
+- [Configuration](/docs/http2/configuration) to raise body or header capacities.
+- [Frames and streams](/docs/http2/frames-and-streams) to read a protocol error.

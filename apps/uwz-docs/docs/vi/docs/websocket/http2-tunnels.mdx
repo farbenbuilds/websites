@@ -1,0 +1,110 @@
+---
+title: RFC 8441 tunnel
+description: Nhận WebSocket qua HTTP/2 bằng extended CONNECT, hiểu giới hạn một tunnel mỗi connection và lý do tunnel không được nén.
+sidebar:
+  order: 11
+search:
+  tags: [websocket, http2, concept]
+---
+
+RFC 8441 mang WebSocket frame qua một HTTP/2 stream. Client mở connection bằng
+HTTP/2, gửi extended `CONNECT` cho route, và sau `200 OK` connection đó mang
+WebSocket frame dưới dạng DATA. Route dùng cùng callback với upgrade HTTP/1.1.
+
+## Yêu cầu
+
+| Yêu cầu          | Chi tiết                                          |
+| ---------------- | ------------------------------------------------- |
+| Transport        | TLS với ALPN `h2`, hoặc cleartext prior knowledge |
+| Method           | `CONNECT` với `:protocol: websocket`              |
+| Version          | Đúng một `Sec-WebSocket-Version: 13`              |
+| Key              | Không bắt buộc và không được kiểm tra             |
+| Compression      | Không thương lượng; frame không nén               |
+| Tunnel đồng thời | Một cho mỗi HTTP/2 connection                     |
+
+Route phải được đăng ký bằng `App.ws`. Một `CONNECT` trên WebSocket route mà
+không có `:protocol: websocket` nhận `501 Not Implemented`, và `CONNECT` không
+khớp route nào nhận `404 Not Found`.
+
+## Hình dạng request
+
+| Pseudo-field / field    | Giá trị       |
+| ----------------------- | ------------- |
+| `:method`               | `CONNECT`     |
+| `:protocol`             | `websocket`   |
+| `:scheme`               | `https`       |
+| `:path`                 | `/chat`       |
+| `:authority`            | `example.com` |
+| `sec-websocket-version` | `13`          |
+
+Pseudo-field phải đứng trước regular field và duy nhất. HPACK decoder thực thi
+thứ tự đó trước khi route được match, nên request sai không bao giờ tới
+application code.
+
+## Nhận và từ chối
+
+Tunnel path dùng lại `upgrade` callback của route:
+
+| Điều kiện                           | Response                                               |
+| ----------------------------------- | ------------------------------------------------------ |
+| Version thiếu, trùng hoặc khác `13` | `426 Upgrade Required` kèm `Sec-WebSocket-Version: 13` |
+| `upgrade` callback trả false        | `403 Forbidden`                                        |
+| Route limit vượt message capacity   | `500 Internal Server Error`                            |
+| Đã có tunnel active                 | `503 Service Unavailable`                              |
+| Được nhận                           | `200 OK`, sau đó trao đổi frame                        |
+
+`503` chỉ áp dụng cho request thứ hai. Tunnel đầu vẫn active và không bị ảnh
+hưởng.
+
+## Vì sao chỉ một tunnel
+
+Frame parsing và message storage thuộc connection: một giá trị `WebSocket`, một
+message buffer và một bộ frame node nằm trên `TcpConnection`. Tunnel thứ hai sẽ
+cần bộ state connection-owned thứ hai, nên session nhận một và báo capacity thay
+vì làm hỏng tunnel đang chạy.
+
+Nâng giới hạn cần specialize connection type. Đây không phải runtime option. Xem
+[HTTP/2 limits](/docs/http2/limits).
+
+## Nén bị tắt
+
+Per-message deflate được thương lượng trong upgrade HTTP/1.1. Extended CONNECT
+không có bước thương lượng `Sec-WebSocket-Extensions` trong implementation này, và
+tunnel không đọc header đó. Frame được gửi nguyên trạng với RSV1 clear.
+
+Nếu băng thông quan trọng, nén ở application layer hoặc gửi message nhỏ hơn. Đừng
+kỳ vọng HTTP/2 connection nén WebSocket frame; HPACK chỉ nén header.
+
+## Backpressure và reset
+
+Tunnel ghi DATA frame trực tiếp và bỏ qua TCP write ring. Session không có pending
+queue theo stream cho WebSocket frame, nên flow-control stall không thể giữ một
+frame dở dang. Khi không có DATA capacity, tunnel reset với `CANCEL` thay vì
+buffer.
+
+Coi `error.WouldBlock` từ tunnel send là terminal cho tunnel đó. Client reconnect
+và mở lại stream.
+
+## Close và shutdown
+
+Một close frame kết thúc HTTP/2 stream bằng END_STREAM. Gọi `terminate` reset
+stream với `CANCEL`. Các stream khác trên connection vẫn chạy; một tunnel không
+bao giờ đóng cả connection.
+
+Idle deadline cấp connection vẫn áp dụng. Giữ heartbeat trên tunnel route để phát
+hiện peer im lặng trước khi idle deadline bỏ cả HTTP/2 connection, kể cả các
+stream không liên quan.
+
+## Kiểm tra
+
+Dùng client hỗ trợ RFC 8441. `curl` không mở WebSocket tunnel. Gửi extended
+CONNECT request từ bảng trên trên một connection `h2`.
+
+Kỳ vọng `200 OK`. Sau đó gửi masked text frame dưới dạng DATA và đọc frame echo
+trên cùng stream. Gửi CONNECT thứ hai trên cùng connection và xác nhận `503`
+trong khi tunnel đầu vẫn echo.
+
+## Tiếp theo
+
+- [HTTP/2 WebSocket tunnel](/docs/http2/websocket-tunnels) cho góc nhìn transport.
+- [WebSocket handshake](/docs/websocket/handshake) cho đường HTTP/1.1.

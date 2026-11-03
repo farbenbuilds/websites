@@ -132,11 +132,7 @@ buffer user space và không bị giới hạn bởi file buffer của mount; `H
 transfer length và không gửi body.
 
 TLS, HTTP/2 và HTTP/3 trả `error.ZeroCopyUnavailable` từ `send_file`, nên mount
-fallback sang buffered read có giới hạn. Buffer được tính kích thước lúc compile:
-
-```text
-static_file_capacity = write_queue_size - 4096
-```
+fallback sang buffered read có giới hạn. Buffer được tính kích thước lúc compile là `write_queue_size - 4096`.
 
 Capacity là toàn bộ write queue khi queue từ 4096 byte trở xuống; với queue mặc
 định 64 KiB, buffer giữ 60 KiB. File lớn hơn trả `FileTooLarge`, được ánh xạ

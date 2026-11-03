@@ -1,0 +1,105 @@
+---
+title: HTTP/3 and QUIC
+description: Serve the shared handler API over QUIC, read the bounded request path, and separate live HTTP/3 from helper-only WebTransport.
+search:
+  tags: [http3, quic, concept]
+---
+
+`init_http3` creates two TLS contexts: TCP advertises `h2` and `http/1.1`, and
+QUIC advertises `h3`. The same routes serve all three. This section documents the
+live HTTP/3 request path, its QUIC policy, and the boundaries that keep
+WebTransport out of the supported surface.
+
+The live path is a bounded request/response server. It is not a general-purpose
+QUIC platform, and it does not share every HTTP/1.1 operational feature.
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="HTTP/3 quickstart" href="/docs/http3/getting-started" icon="play">
+    Bind a QUIC endpoint, verify it with curl --http3, and read the negotiated protocol.
+  </Card>
+  <Card title="Configuration" href="/docs/http3/configuration" icon="sliders">
+    Set request, body, and response-header capacities for the QUIC engine.
+  </Card>
+  <Card title="QUIC transport" href="/docs/http3/quic-transport" icon="network">
+    Understand BBRv1, pacing, GSO, the missing GRO path, and packet bounds.
+  </Card>
+  <Card title="HTTP/3 request path" href="/docs/http3/request-path" icon="arrow-right-left">
+    Follow pseudo-headers from QPACK into Request and structured response writes.
+  </Card>
+</CardGroup>
+
+## Protocol detail
+
+<CardGroup cols={2}>
+  <Card title="QPACK" href="/docs/http3/qpack" icon="archive">
+    Read the bounded header-compression settings and why dynamic-table input is not accepted.
+  </Card>
+  <Card title="Early data policy" href="/docs/http3/early-data" icon="clock">
+    See why 0-RTT is rejected on the live listener and where the policy helpers apply.
+  </Card>
+  <Card title="QUERY over HTTP/3" href="/docs/http3/query-method" icon="search">
+    Handle RFC 10008 QUERY with the content-type rule the transport enforces.
+  </Card>
+  <Card title="WebTransport status" href="/docs/http3/webtransport" icon="radio">
+    Separate the draft-16 helper models from the live CONNECT response.
+  </Card>
+</CardGroup>
+
+## Operate it
+
+<CardGroup cols={2}>
+  <Card title="HTTP/3 limits" href="/docs/http3/limits" icon="ruler">
+    Read every engine, stream, header, body, and datagram bound.
+  </Card>
+  <Card title="Observability" href="/docs/http3/observability" icon="activity">
+    Read the development-log record and the metrics gap.
+  </Card>
+  <Card title="Interoperability testing" href="/docs/http3/testing" icon="flask-conical">
+    Run the curl/ngtcp2 and aioquic gate, including malformed-header rejection.
+  </Card>
+</CardGroup>
+
+## Startup
+
+```zig
+var server = try uz.App(128).init_http3_ephemeral(init.io);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen_udp("0.0.0.0", 8443);
+try server.catch_shutdown_signals();
+try server.run();
+```
+
+The `App` value must stay at a stable address after `listen_udp`; the QUIC engine
+holds a pointer to it. Do not move it into a container that reallocates.
+
+| Listener     | Protocol                                |
+| ------------ | --------------------------------------- |
+| `listen`     | TCP with TLS, ALPN `h2` then `http/1.1` |
+| `listen_udp` | QUIC, ALPN `h3` only                    |
+
+## Boundaries
+
+| Feature                    | Status                                       |
+| -------------------------- | -------------------------------------------- |
+| HTTP/3 request routing     | Supported                                    |
+| 0-RTT                      | Not supported; rejected on the live listener |
+| HTTP/3 clustering          | Not supported                                |
+| Metrics registry           | Not advanced; development log only           |
+| WebTransport live path     | Not supported; CONNECT answered with `501`   |
+| WebTransport helper models | Helper-only, draft-16                        |
+| QUIC client                | Not shipped                                  |
+
+:::warning[WebTransport is not live]
+`uz.webtransport` and `uz.http3_extensions` exist, but the live lsquic listener
+is not connected to them. A CONNECT request receives `501 Not Implemented`. Do not
+describe WebTransport as a supported transport on this version.
+:::
+
+## Next
+
+Read [HTTP/3 quickstart](/docs/http3/getting-started), then
+[request path](/docs/http3/request-path) before debugging a rejected header set.

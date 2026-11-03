@@ -1,0 +1,142 @@
+---
+title: Backpressure and draining
+description: Handle error.WouldBlock with a bounded per-connection retry queue and resume sending from the drain callback instead of growing memory.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, websocket, capacity]
+---
+
+A WebSocket write queue is bounded by `ServerConfig.write_queue_size`, which
+defaults to 64 KiB per connection. `send` copies bytes into that queue and
+returns `error.WouldBlock` when the peer is slower than the producer. The drain
+callback is the only place a paused producer may resume.
+
+## The contract
+
+| Signal              | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `send` returns      | The whole message is queued                                     |
+| `error.WouldBlock`  | Nothing was queued; retry the same message later                |
+| `buffered_amount()` | Pending bytes for this connection, including the frame header   |
+| `drain` callback    | Fired once after a `WouldBlock` when the queue falls below half |
+| `terminate()`       | Closes now and discards pending bytes                           |
+
+`drain` is not a periodic tick. The transport sets a backpressure flag when a
+send is refused, clears it when the queue drops below `write_queue_size / 2`,
+and calls the callback once. If the callback fills the queue again, the next
+drain arrives after the next successful write batch.
+
+:::warning[Do not loop on WouldBlock]
+Retrying in a tight loop cannot make room: the write completion that frees space
+runs on the same worker thread. Store the remaining bytes and return.
+:::
+
+## Keep one retry slot per connection
+
+The socket has no user-data pointer, so keep application state in a fixed table
+keyed by the socket pointer. This excerpt shows the table, the enqueue path, and
+the drain path. It omits `main`, the route registration, and the handlers from
+the [quickstart](/docs/websocket/quickstart):
+
+```zig
+const Pending = struct {
+    ws: *uz.WebSocket,
+    len: usize = 0,
+    buf: [4 * 1024]u8 = undefined,
+    is_text: bool = true,
+};
+
+const max_pending = 4 * 1024;
+
+// One slot per configured connection keeps the table bounded.
+var pending: [128]?Pending = .{null} ** 128;
+
+fn store(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    if (message.len > max_pending) {
+        // Too large to retry: drop the peer rather than grow memory.
+        ws.terminate();
+        return;
+    }
+    for (&pending) |*slot| {
+        if (slot.*) |*entry| {
+            if (entry.ws == ws) return; // One queued message per peer.
+            continue;
+        }
+        var entry = Pending{ .ws = ws, .len = message.len, .is_text = opcode == .text };
+        @memcpy(entry.buf[0..message.len], message);
+        slot.* = entry;
+        return;
+    }
+    ws.terminate();
+}
+
+fn flush(ws: *uz.WebSocket) void {
+    for (&pending) |*slot| {
+        if (slot.*) |*entry| {
+            if (entry.ws != ws or entry.len == 0) continue;
+
+            const opcode: uz.Opcode = if (entry.is_text) .text else .binary;
+            ws.send(entry.buf[0..entry.len], opcode) catch |err| switch (err) {
+                error.WouldBlock => return, // Keep the slot; drain runs again.
+                else => {
+                    slot.* = null;
+                    ws.terminate();
+                    return;
+                },
+            };
+            slot.* = null;
+            return;
+        }
+    }
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| switch (err) {
+        error.WouldBlock => store(ws, message, opcode),
+        else => ws.terminate(),
+    };
+}
+```
+
+Register `flush` as the route `drain` callback and clear the peer's slot in
+`close`. With `App(128)`, the table cap matches the connection cap, so a slot
+always exists for a live peer.
+
+The tradeoff is deliberate: one queued message per peer, a fixed 4 KiB retry
+buffer, and a hard close when either bound is exceeded. Queue more depth only by
+raising the bound and explaining the memory cost.
+
+## Size the queue
+
+| Workload                                 | Starting point                        |
+| ---------------------------------------- | ------------------------------------- |
+| Small JSON events, many peers            | Default 64 KiB                        |
+| Binary telemetry with bursty consumers   | 128 to 256 KiB plus a drop policy     |
+| Fan-out chat where slow peers are common | Keep 64 KiB and disconnect slow peers |
+
+The queue is per connection, so `max_connections * write_queue_size` is the
+worst-case pending-output memory before any framing overhead. See the
+[capacity model](/docs/concepts/capacity-model) for the full slab layout.
+
+## HTTP/2 tunnel behavior
+
+An RFC 8441 tunnel sends through the HTTP/2 stream instead of the TCP ring. The
+session has no per-stream pending queue for WebSocket frames, so a flow-control
+stall cannot park a partial frame. When no DATA capacity is available, the
+tunnel resets instead of buffering. Treat `WouldBlock` on a tunnel as terminal
+for that tunnel and reconnect.
+
+## Verify it
+
+1. Send a large burst from a client that reads slowly, for example by pausing
+   the reader in a browser debugger.
+2. Watch `buffered_amount()` rise and the first `WouldBlock` log line appear.
+3. Resume the reader.
+4. Confirm the drain callback logs once and the queued message arrives before
+   later messages.
+
+## Next
+
+- [Pub/sub](/docs/websocket/pub-sub) for fan-out that drops slow subscribers.
+- [WebSocket limits](/docs/websocket/limits) for the exact defaults.

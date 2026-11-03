@@ -13,13 +13,15 @@ thư mục bạn muốn phục vụ.
 
 ## Dự án tối thiểu
 
-```text
-hello-uwz/
-├── build.zig
-├── build.zig.zon
-└── src/
-    └── main.zig
-```
+<FileTree>
+
+- hello-uwz/
+  - build.zig
+  - build.zig.zon
+  - src/
+    - main.zig
+
+</FileTree>
 
 | Đường dẫn       | Mục đích                                                   |
 | --------------- | ---------------------------------------------------------- |
@@ -35,13 +37,15 @@ hello-uwz/
 Server nhỏ có thể ở trong `src/main.zig`. Khi lớn hơn, tách theo trách nhiệm
 thay vì theo số dòng:
 
-```text
-src/
-├── main.zig       # khởi động, listener, shutdown
-├── routes.zig     # đăng ký route
-├── handlers/      # handler HTTP và WebSocket
-└── domain/        # kiểu và hàm thuần
-```
+<FileTree>
+
+- src/
+  - main.zig
+  - routes.zig
+  - handlers/
+  - domain/
+
+</FileTree>
 
 | Code                           | Vị trí đề xuất                                 |
 | ------------------------------ | ---------------------------------------------- |

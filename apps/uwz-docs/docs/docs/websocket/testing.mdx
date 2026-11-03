@@ -1,0 +1,168 @@
+---
+title: Testing a WebSocket route
+description: Test your WebSocket route with wscat, browser close events, handler tests, and a load client that measures backpressure.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, websocket, operations]
+---
+
+Test the route you shipped, not the framework. Three layers cover a WebSocket
+endpoint: a manual client session for behavior, an automated check for the
+failure paths, and a load client for capacity. All of them run against your
+application.
+
+## Prerequisites
+
+- A running application with a WebSocket route. Start from
+  [WebSocket quickstart](/docs/websocket/quickstart).
+- `npx` for `wscat`, or a browser with a JavaScript console.
+- Zig 0.16.0 for handler tests.
+
+## Manual session
+
+Start your server:
+
+```sh
+zig build run
+```
+
+Connect a client:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< welcome
+< hello
+```
+
+Check the behaviors that are easy to break:
+
+- The welcome message arrives after `open`, before the first echo.
+- A binary frame round-trips. In `wscat`, prefix input with `\x` escapes or send
+  from a browser `ArrayBuffer`.
+- Closing the client logs one close on the server.
+- Restarting the server closes the client instead of leaving it half-open.
+
+## Failure paths
+
+Test the handshake before the happy path is trusted:
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 12" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  http://127.0.0.1:3000/echo
+```
+
+Expect `426 Upgrade Required` and `Sec-WebSocket-Version: 13`. A request with no
+`Sec-WebSocket-Key` expects `400 Bad Request`. A refused `upgrade` callback
+expects `403 Forbidden`.
+
+Then test a message above your route limit. Set `max_message_size` low in a test
+build and send a larger message. The server closes with `1009` and your `message`
+callback does not run.
+
+## Browser check
+
+```js
+const ws = new WebSocket("ws://127.0.0.1:3000/echo");
+ws.onopen = () => ws.send("browser");
+ws.onmessage = (event) => console.log(event.data);
+ws.onclose = (event) => console.log(event.code, event.reason);
+```
+
+Browsers enforce masking and expose the close code. Confirm the code and reason
+your server sends, and confirm a rejected upgrade produces an error event rather
+than a misleading `open`.
+
+## Handler tests
+
+Keep message parsing and authorization in pure functions and test them with
+`zig test` in your project:
+
+```zig
+const std = @import("std");
+
+const Command = enum { ping, status };
+
+fn parseCommand(message: []const u8) ?Command {
+    if (std.mem.eql(u8, message, "ping")) return .ping;
+    if (std.mem.eql(u8, message, "status")) return .status;
+    return null;
+}
+
+test "unknown commands are rejected" {
+    try std.testing.expect(parseCommand("shutdown") == null);
+    try std.testing.expectEqual(Command.ping, parseCommand("ping").?);
+}
+```
+
+```sh
+zig test src/ws/commands.zig
+```
+
+A handler test cannot prove the upgrade handshake. Pair it with the manual
+session above; together they cover logic and wire behavior.
+
+## Load test
+
+Use an external client that can hold many connections. A `k6` scenario keeps the
+shape small:
+
+```js
+import ws from "k6/ws";
+
+export const options = { vus: 200, duration: "30s" };
+
+export default function () {
+  ws.connect("ws://127.0.0.1:3000/echo", {}, (socket) => {
+    socket.on("open", () => socket.send("hello"));
+    socket.on("message", () => socket.close());
+  });
+}
+```
+
+Report:
+
+- Connections established per second.
+- Messages per second and round-trip latency.
+- Server log lines for `WouldBlock` and drain.
+- Pending bytes at the peak, from `buffered_amount()` in your drain log.
+- Close code distribution.
+
+Run the client on a separate host for throughput numbers. A single-host run
+measures the client as much as the server.
+
+## Upstream evidence
+
+The framework maintainers publish the protocol compliance result for each
+release. The v2.1.6 baseline accepts all 517 selected Autobahn server cases, with
+514 `OK` and 3 `INFORMATIONAL`, including compression groups 12 and 13. That
+result describes the framework build, not your route or your deployment. Cite it
+when you need to show protocol coverage. It is not a step in your application
+test plan.
+
+## Capacity assumptions
+
+| Assumption       | Value                                  |
+| ---------------- | -------------------------------------- |
+| Message capacity | `max_ws_message_size`, default 16 KiB  |
+| Frame capacity   | Route `max_frame_size`, default 16 KiB |
+| Write queue      | `write_queue_size`, default 64 KiB     |
+| Connection count | `App(N)` or `with_max_clients`         |
+
+A protocol pass does not prove your capacity choices. Size the slab separately
+and load test at the connection count you intend to run.
+
+## Next
+
+- [WebSocket limits](/docs/websocket/limits) for every bound under test.
+- [Backpressure and draining](/docs/websocket/backpressure) for the queue
+  behavior behind the load numbers.

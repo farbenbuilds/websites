@@ -190,6 +190,30 @@ new primitive.
 - Agent-facing documents describe observable behavior, ownership, and
   verification. They do not duplicate the full codebase.
 
+### Consumer-facing scope
+
+µWebZockets documentation serves developers who add the framework to their own
+application. The framework repository is a dependency source, not a workspace the
+reader is expected to clone, build, test, or modify.
+
+- Show dependency setup with `zig fetch --save` and the reader's own
+  `build.zig.zon`, `build.zig`, and `src/` tree. Never start from a clone of the
+  framework repository.
+- Show behavior with application code that imports `uWebZockets`, not with
+  framework-internal programs, test harnesses, or build steps.
+- Consumer commands are the reader's own `zig build`, `zig build run`,
+  `zig build test` when their `build.zig` defines it, and client tools such as
+  `curl`, `wscat`, `h2load`, or a service test.
+- Framework compliance and release evidence is a published fact, not an
+  instruction. Do not tell a reader to run Autobahn, h1spec, the HTTP/3
+  compliance script, sanitizer jobs, or Nix shells. Do not tell a reader to
+  install a framework development shell.
+- Refer to a framework source file only to source a claim, never as a required
+  reading step. Use `src/root.zig` style citations in reference detail, not in a
+  tutorial.
+- Code snippets come from `examples/*.zig` and the public API, adapted to a
+  consumer `main` and build graph.
+
 ### Internationalization ownership
 
 - x18n owns component UI copy only. Component strings live in

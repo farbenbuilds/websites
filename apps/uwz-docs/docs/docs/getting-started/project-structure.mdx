@@ -13,13 +13,15 @@ files wherever you want to serve them from.
 
 ## Minimal project
 
-```text
-hello-uwz/
-├── build.zig
-├── build.zig.zon
-└── src/
-    └── main.zig
-```
+<FileTree>
+
+- hello-uwz/
+  - build.zig
+  - build.zig.zon
+  - src/
+    - main.zig
+
+</FileTree>
 
 | Path            | Purpose                                                          |
 | --------------- | ---------------------------------------------------------------- |
@@ -35,13 +37,15 @@ the generated hash by hand.
 A small server can stay in `src/main.zig`. When it grows, split by
 responsibility rather than by line count:
 
-```text
-src/
-├── main.zig       # startup, listener, shutdown
-├── routes.zig     # route registration
-├── handlers/      # HTTP and WebSocket handlers
-└── domain/        # pure types and functions
-```
+<FileTree>
+
+- src/
+  - main.zig
+  - routes.zig
+  - handlers/
+  - domain/
+
+</FileTree>
 
 | Code                        | Suggested location                                    |
 | --------------------------- | ----------------------------------------------------- |

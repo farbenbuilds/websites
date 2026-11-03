@@ -1,0 +1,118 @@
+---
+title: WebSocket limits
+description: Read every frame, message, control, queue, subscription, topic, and cluster inbox bound that applies to a WebSocket route.
+sidebar:
+  order: 14
+search:
+  tags: [reference, websocket, capacity]
+---
+
+Every WebSocket bound is fixed before the listener starts. Route limits may lower
+a bound and cannot raise it above the configured message capacity. This page
+lists the defaults, the source of each value, and the failure when it is
+exceeded.
+
+## Route limits
+
+| Field              | Default | Constraint                                         | On violation                                |
+| ------------------ | ------- | -------------------------------------------------- | ------------------------------------------- |
+| `max_frame_size`   | 16 KiB  | Greater than zero, not above `max_message_size`    | `500 Internal Server Error` at registration |
+| `max_message_size` | 16 KiB  | Greater than zero, not above `max_ws_message_size` | `500 Internal Server Error` at registration |
+| `ping_interval_ms` | `0`     | Zero or paired with `pong_timeout_ms`              | `500 Internal Server Error` at registration |
+| `pong_timeout_ms`  | `0`     | Zero or paired with `ping_interval_ms`             | `500 Internal Server Error` at registration |
+
+A registered route that fails these checks rejects the upgrade instead of
+accepting a peer it cannot serve. The error appears at the client as a `500`
+response to the upgrade request.
+
+## Application capacities
+
+| Field                    | Default | Builder override              | Effect                            |
+| ------------------------ | ------- | ----------------------------- | --------------------------------- |
+| `max_connections`        | 1024    | `with_max_clients`            | Connection slots in the pool      |
+| `max_ws_message_size`    | 16 KiB  | `with_max_ws_message_size`    | One message buffer per connection |
+| `write_queue_size`       | 64 KiB  | `with_write_queue_size`       | Pending output per connection     |
+| `idle_timeout_ms`        | 120000  | `with_idle_timeout_ms`        | Idle TCP close                    |
+| `header_read_timeout_ms` | 30000   | `with_header_read_timeout_ms` | Incomplete HTTP/1 request head    |
+| `compression`            | `false` | `with_compression`            | Slab-reserved deflate scratch     |
+
+Presets change the message and queue sizes:
+
+| Preset           | Connections | Message | Write queue |
+| ---------------- | ----------- | ------- | ----------- |
+| `microservice`   | 256         | 8 KiB   | 16 KiB      |
+| `websocket_chat` | 512         | 32 KiB  | 32 KiB      |
+| `file_server`    | 128         | 4 KiB   | 512 KiB     |
+
+## Protocol limits
+
+| Limit                 | Value                           | Result when exceeded                                                 |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| Control-frame payload | 125 B                           | `error.ControlFrameTooLarge`                                         |
+| Close reason          | 123 B                           | `error.ControlFrameTooLarge`                                         |
+| Close code range      | 1000-1003, 1007-1014, 3000-4999 | `1002` on receive, `error.InvalidCloseCode` on send                  |
+| Text message          | Valid UTF-8                     | `1007 Invalid payload`                                               |
+| Assembled message     | `max_message_size`              | `1009 Message too big`                                               |
+| Encoded frame         | `max_frame_size`                | `1009` on receive; `error.PayloadTooLarge` on send after compression |
+| Outgoing message      | One complete frame              | `.continuation` is rejected as `error.InvalidOpcode`                 |
+
+Control frames are limited by the seven-bit length field in RFC 6455, not by an
+application setting. A close reason of 123 bytes plus the two-byte code fills the
+125-byte payload.
+
+## Pub/sub limits
+
+| Bound                 | Value | Error                                  |
+| --------------------- | ----- | -------------------------------------- |
+| Active topic names    | 1024  | `error.TopicCapacityReached`           |
+| Socket subscriptions  | 8192  | `error.SubscriptionCapacityReached`    |
+| Subscribers per topic | 65535 | `error.TopicSubscriberCapacityReached` |
+| Topic name            | 127 B | `error.TopicTooLong`                   |
+
+The registry is per worker. A cluster of four workers has four independent
+registries with these capacities.
+
+## Cluster limits
+
+| Bound                  | Value                         | Result                         |
+| ---------------------- | ----------------------------- | ------------------------------ |
+| Inbox depth per worker | 64 messages                   | `PublishReport.dropped`        |
+| Message payload        | `max_ws_message_size`         | `error.ClusterMessageTooLarge` |
+| Topic name             | 127 B                         | `error.TopicTooLong`           |
+| Workers                | Compile-time cluster capacity | `error.InvalidWorkerCount`     |
+
+Inbox payload storage is 64 times the message capacity per worker. See
+[cluster pub/sub](/docs/websocket/cluster-pub-sub) for the report fields.
+
+## HTTP/2 tunnels
+
+| Bound                             | Value | Result                      |
+| --------------------------------- | ----- | --------------------------- |
+| Active tunnels per connection     | 1     | `503 Service Unavailable`   |
+| Concurrent streams per connection | 8     | `RST_STREAM` when exhausted |
+| Compression                       | none  | Frames are uncompressed     |
+
+One tunnel shares the connection's eight-stream budget with HTTP requests, so a
+busy connection can refuse a tunnel before the tunnel limit is reached.
+
+## Slab math
+
+The message region is `max_ws_message_size` per connection. The write queue is
+`write_queue_size` per connection. Compression adds paired receive and send
+scratch per connection when the route enables it and the slab does not already
+reserve it.
+
+| Region          | Bytes                                                      |
+| --------------- | ---------------------------------------------------------- |
+| Message buffers | `max_connections * max_ws_message_size`                    |
+| Write queues    | `max_connections * write_queue_size`                       |
+| Compression     | `max_connections * 2 * scratch_bound(max_ws_message_size)` |
+
+Use `Server.builder(...).slab_bytes()` for the exact total instead of adding
+these by hand. See [capacity model](/docs/concepts/capacity-model) for the other
+slab regions.
+
+## Next
+
+- [Capacity sizing](/docs/concepts/capacity-model) for the full allocation.
+- [Autobahn and testing](/docs/websocket/testing) for the compliance bounds.

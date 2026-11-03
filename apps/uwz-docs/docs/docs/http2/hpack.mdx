@@ -1,0 +1,164 @@
+---
+title: HPACK
+description: Read the bounded HPACK decoder and encoder, its dynamic-table storage rules, and the pseudo-header validation it enforces.
+sidebar:
+  order: 5
+search:
+  tags: [concept, http2, reference]
+---
+
+HPACK compresses HTTP/2 header fields against a static table and a per-connection
+dynamic table. µWebZockets exposes the codec as `uz.http2_hpack` with
+caller-owned storage: no allocation, no hidden globals, and one table per
+connection.
+
+## When to use the module
+
+| Goal                                    | API                               |
+| --------------------------------------- | --------------------------------- |
+| Serve requests from an application      | `App`, `Server.builder`, `listen` |
+| Embed an HTTP/2 server session          | `uz.http2_server.server_session`  |
+| Work with frames and connection state   | `uz.http2`                        |
+| Encode or decode header blocks directly | `uz.http2_hpack`                  |
+
+Most applications use the first row. The lower modules exist for proxies,
+gateways, protocol tests, and embedders that own the transport.
+
+## Public surface
+
+| Name                | Purpose                                         |
+| ------------------- | ----------------------------------------------- |
+| `Header`            | One `name` and `value` pair                     |
+| `DynamicEntry`      | Metadata for one dynamic-table row              |
+| `DynamicTable`      | Bounded table over caller byte and slot storage |
+| `Decoder`           | Stateful request or field-section decoder       |
+| `Request`           | Decoded pseudo-fields plus ordered header list  |
+| `validate_trailers` | Trailer-section rules                           |
+| `encode_response`   | Minimal response field-section encoder          |
+| `Error`             | Every named decode and encode failure           |
+
+## Dynamic table
+
+```zig
+var table = try uz.http2_hpack.DynamicTable.init(
+    entry_slots,
+    byte_storage,
+    4096, // Requested size; also the ceiling for peer updates.
+);
+```
+
+The byte buffer must hold at least the maximum size. The metadata buffer must
+hold `ceil(maximum_size / 32)` entries because RFC 7541 charges 32 bytes of
+overhead per entry. Passing zero disables dynamic indexing and permits empty
+buffers.
+
+The table borrows both buffers for its lifetime. Do not move, resize, or free
+them while a decoder or encoder is using the table. One table belongs to one
+connection and is not thread-safe.
+
+The integration uses 4096 bytes, the RFC 7541 default, and advertises exactly
+that value in `SETTINGS_HEADER_TABLE_SIZE`.
+
+## Decode a request
+
+```zig
+var decoder = uz.http2_hpack.Decoder.init(&table, max_header_list_size);
+const request = try decoder.decode_request(block, header_slots, header_storage);
+```
+
+`decode_request` returns:
+
+| Field       | Meaning                                                    |
+| ----------- | ---------------------------------------------------------- |
+| `headers`   | Every decoded field in wire order, including pseudo-fields |
+| `fields`    | Regular fields after the pseudo-field prefix               |
+| `method`    | Required `:method`                                         |
+| `scheme`    | Absent only for a regular CONNECT                          |
+| `authority` | Optional for a request, required for CONNECT               |
+| `path`      | Absent only for a regular CONNECT                          |
+| `protocol`  | `:protocol` token for an extended CONNECT                  |
+
+Decoded slices are copied into `header_storage`. They stay valid until you reuse
+that storage, and later table mutations cannot invalidate them. On error, both
+output buffers are unspecified, but dynamic-table updates that decoded before the
+error remain applied. A connection that hits a decode error cannot resynchronize
+its table; the session closes it.
+
+## Validation rules
+
+| Rule                                                                              | Error                                                                    |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Field name lowercase and token-valid                                              | `UppercaseHeaderName`, `InvalidHeaderName`                               |
+| No control bytes or surrounding whitespace in a value                             | `InvalidHeaderValue`                                                     |
+| One `:method`, `:scheme`, `:path`                                                 | `DuplicatePseudoHeader`, `MissingMethod`, `MissingScheme`, `MissingPath` |
+| Pseudo-fields before regular fields                                               | `PseudoHeaderAfterRegular`                                               |
+| At most one `host`, matching `:authority`                                         | `DuplicateHost`, `AuthorityHostMismatch`                                 |
+| `te` is `trailers` or absent                                                      | `InvalidTe`                                                              |
+| No `connection`, `keep-alive`, `proxy-connection`, `transfer-encoding`, `upgrade` | `ConnectionSpecificHeader`                                               |
+| Huffman padding and EOS rejected                                                  | `InvalidHuffman`                                                         |
+| Table-size update before any header                                               | `DynamicTableUpdateAfterHeader`                                          |
+
+A regular CONNECT omits `:scheme` and `:path`. An extended CONNECT adds
+`:protocol` and keeps `:authority`.
+
+## Encode a response
+
+```zig
+const block = try uz.http2_hpack.encode_response(200, headers, output);
+```
+
+The encoder writes a minimal field section:
+
+- Exact static-table fields use the indexed representation.
+- Other fields use a raw literal without indexing.
+- `set-cookie` uses the never-indexed representation.
+- `status` is mandatory and validated in the range 100 to 599.
+- Application pseudo-fields are rejected with `ResponsePseudoHeader`.
+
+The output slice borrows `output`; its contents are unspecified on error. The
+encoder fails closed when the block exceeds the caller's buffer, which the session
+maps to `max_h2_response_header_size`.
+
+## Trailers
+
+A trailer section may carry regular fields only. `validate_trailers` rejects
+pseudo-fields, `content-length`, and connection-specific fields, and the session
+requires `END_STREAM` on the trailer section.
+
+## Storage sizing
+
+The decoder borrows four caller-owned regions: the dynamic-table bytes, its entry
+slots, the header slot array, and the header byte storage. Size them from the
+same values the session uses:
+
+```zig
+const std = @import("std");
+const hpack = @import("uWebZockets").http2_hpack;
+
+const table_capacity = 4096;
+const max_fields = 64;
+const max_field_bytes = 16 * 1024;
+
+fn decodeOne(block: []const u8) !void {
+    var table_bytes: [table_capacity]u8 = undefined;
+    var entries: [(table_capacity + 31) / 32]hpack.DynamicEntry = undefined;
+    var fields: [max_fields]hpack.Header = undefined;
+    var field_bytes: [max_field_bytes]u8 = undefined;
+
+    var table = try hpack.DynamicTable.init(&entries, &table_bytes, table_capacity);
+    var decoder = hpack.Decoder.init(&table, max_field_bytes);
+    const request = try decoder.decode_request(block, &fields, &field_bytes);
+
+    std.debug.print("{s} {s}\n", .{ request.method, request.path orelse "/" });
+}
+```
+
+Entry slots are `ceil(table_capacity / 32)` because RFC 7541 charges 32 bytes of
+overhead per entry. `max_field_bytes` is the request header limit shared with
+HTTP/1.1. See [HTTP/2 configuration](/docs/http2/configuration).
+
+## Next
+
+- [Flow control](/docs/http2/flow-control) for DATA windows.
+- [Frames and streams](/docs/http2/frames-and-streams) for the surrounding state
+  machine.

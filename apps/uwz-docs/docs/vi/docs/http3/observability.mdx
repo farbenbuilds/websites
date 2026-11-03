@@ -1,0 +1,102 @@
+---
+title: HTTP/3 observability
+description: Đọc request record mà QUIC path phát và hiểu vì sao metrics registry không tăng cho HTTP/3 trong release framework này.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, http3, observability]
+---
+
+HTTP/3 path phát một development-log record cho mỗi request hoàn tất. Nó không tăng
+Prometheus counter registry. Trang này chỉ ra những gì được ghi, không được ghi và
+cách kiểm tra khác biệt.
+
+## Development log
+
+Stream log sau khi response body được flush và stream shutdown, ví dụ
+`14:32:18.412 | GET[/items] : 200`.
+
+| Field     | Nguồn                         |
+| --------- | ----------------------------- |
+| Timestamp | Clock mỗi worker lúc hoàn tất |
+| Method    | `:method` đã decode           |
+| Path      | `:path` đã decode             |
+| Status    | Status code response đã lưu   |
+
+Record mượn method và path từ stream header set, vốn sống đến khi stream đóng.
+Recording là best effort:
+
+- Sink tắt trả về trước khi đọc clock.
+- Sink đầy tính dòng đó là dropped.
+- Write fail vẫn hoàn tất response; logging không đổi kết quả.
+
+## Khoảng trống metrics
+
+| Tín hiệu                  | HTTP/1.1 | HTTP/2 | HTTP/3     |
+| ------------------------- | -------- | ------ | ---------- |
+| Record log `http_request` | Có       | Có     | Có         |
+| Counter `http_requests`   | Có       | Có     | Không      |
+| Endpoint `/metrics`       | Có       | Có     | Không tăng |
+
+QUIC engine không có registry handle. Threading một cái qua lsquic stream callback
+cần plumbing mới trong transport, và release hiện tại không gồm nó. Dashboard dựng
+trên `uwz_http_requests_total` hiện zero cho QUIC traffic dù request thành công.
+
+Plan điều này rõ ràng:
+
+- Đếm request HTTP/3 từ development log, reverse proxy hoặc client.
+- Không trộn request rate HTTP/2 và HTTP/3 vào một counter rồi gọi là total.
+- Ghi khoảng trống trong mọi tài liệu capacity hoặc SLO có QUIC.
+
+## Bật log
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_dev_log(true);
+```
+
+Sink mặc định ghi stderr và im lặng khi stderr không phải terminal. Dùng
+`set_dev_log_file` cho file sink, hoặc `flush_dev_log` trước khi đọc file trong
+test.
+
+## Những gì khác không được báo
+
+| Tín hiệu                   | Trạng thái                    |
+| -------------------------- | ----------------------------- |
+| Counter theo packet        | Không phát                    |
+| Duration theo stream       | Không phát                    |
+| Trạng thái QPACK table     | Không công bố                 |
+| Trạng thái congestion      | Không công bố                 |
+| Counter datagram           | Khai báo, không tới live path |
+| Connection migration event | Không phát                    |
+
+Cho visibility cấp QUIC, dùng packet capture với qlog từ client hoặc network
+monitor ngoài. Server không export qlog qua public API.
+
+## Kiểm tra
+
+1. Start server với development log và metrics endpoint: `with_dev_log(true)` và
+   `with_observability(true)`.
+2. Gửi một request qua QUIC:
+
+   ```sh
+   curl --http3-only -k https://127.0.0.1:8443/items
+   ```
+
+3. Xác nhận một dòng `GET[/items] : 200` xuất hiện.
+4. Đọc metrics endpoint và xác nhận `uwz_http_requests_total` không đổi:
+
+   ```sh
+   curl -s --http2 -k https://127.0.0.1:3443/metrics | grep uwz_http_requests
+   ```
+
+5. Gửi cùng request qua TCP và xác nhận counter tăng.
+
+Thí nghiệm là bằng chứng cho khoảng trống. Nếu counter tăng sau request QUIC, build
+không phải bản được mô tả ở đây.
+
+## Tiếp theo
+
+- [Kiểm thử interoperability](/docs/http3/testing) cho gate exercise các path này.
+- [HTTP/2 observability](/docs/http2/observability) cho transport có tăng counter.

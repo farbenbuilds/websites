@@ -50,11 +50,8 @@ Parser chấp nhận `0`, `1`, `0.` theo sau bởi một đến ba chữ số, v
 từ chối parameter `q` bị lặp, `q` trần không có value, và weight bắt đầu bằng 0
 có hơn ba chữ số thập phân, đồng thời bỏ toàn bộ entry.
 
-```text
-Accept: text/html, application/json;q=0.9, image/avif;q=0
-```
-
-Chuỗi này cho `text/html` quality `1000`, `application/json` quality `900` và
+Ví dụ, `Accept: text/html, application/json;q=0.9, image/avif;q=0` cho
+`text/html` quality `1000`, `application/json` quality `900` và
 `image/avif` quality `0`.
 
 Vì độ cụ thể được giải quyết trước quality, `text/*;q=1, text/html;q=0.5` cho

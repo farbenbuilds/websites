@@ -1,0 +1,102 @@
+---
+title: Early data policy
+description: Hiểu vì sao live HTTP/3 listener từ chối 0-RTT, policy model quyết định request thế nào và TCP xử lý khác ở đâu.
+sidebar:
+  order: 7
+search:
+  tags: [concept, http3, tls, security]
+---
+
+TLS 1.3 early data cho client gửi request byte trước khi handshake confirmed. Byte
+đó có thể replay, nên mọi thiết kế early-data là quyết định policy. Live QUIC
+listener chọn cách chặt nhất: từ chối toàn bộ 0-RTT.
+
+## Hành vi HTTP/3 live
+
+| Thành phần                  | Setting           |
+| --------------------------- | ----------------- |
+| QUIC TLS context            | Early data tắt    |
+| lsquic delayed 0-RTT packet | `0`               |
+| Request application thấy    | Chỉ sau handshake |
+
+`init_http3` và `init_http3_ephemeral` đều truyền `early_data = false` cho QUIC
+context. lsquic được bảo không giữ delayed 0-RTT packet. Client đề nghị early data
+hoàn tất handshake bình thường trước khi request được dispatch.
+
+Lý do là phạm vi, không phải nghi ngờ protocol. Một 0-RTT path đúng cần state
+early-data theo request từ backend, phân loại replay-safe cho mọi method và response
+rõ ràng cho request bị từ chối. Live listener không công bố state đó, nên nó không
+nhận early data.
+
+## Policy model
+
+`uz.http3_extensions` cung cấp model không cấp phát cho backend tương lai:
+
+```zig
+pub const EarlyDataPolicy = enum {
+    reject,
+    defer_until_confirmed,
+    allow_replay_safe,
+};
+
+pub fn decide_early_data(
+    policy: EarlyDataPolicy,
+    context: EarlyDataContext,
+) EarlyDataDecision;
+```
+
+`EarlyDataContext` mang handshake state, request có đến trước confirmation không,
+upstream tin cậy có đánh dấu forwarded early data không, và application có phân loại
+operation là replay-safe không.
+
+| Điều kiện                               | Quyết định         |
+| --------------------------------------- | ------------------ |
+| Handshake fail                          | `close_connection` |
+| Forwarded early data, không replay-safe | `reject_too_early` |
+| Đến sau confirmation                    | `process`          |
+| Policy `reject`                         | `reject_too_early` |
+| `defer_until_confirmed`, chưa confirmed | `deferred`         |
+| `allow_replay_safe`, replay-safe        | `process`          |
+| `allow_replay_safe`, không replay-safe  | `reject_too_early` |
+
+`method_is_replay_safe` trả true cho `GET`, `HEAD`, `OPTIONS`, `QUERY` và `TRACE`.
+Nó là input phân loại, không phải authorization. `GET` có side effect vẫn replay
+được.
+
+## TCP khác
+
+TCP TLS context bật 0-RTT cho cấu hình không mTLS. HTTP dispatcher chỉ nhận safe
+method trước khi handshake confirmed và trả `425 Too Early` cho method khác.
+
+| Transport     | 0-RTT | Method không an toàn trước confirmation |
+| ------------- | ----- | --------------------------------------- |
+| TCP với TLS   | Bật   | `425 Too Early`                         |
+| TCP với mTLS  | Tắt   | Handshake bình thường                   |
+| QUIC (HTTP/3) | Tắt   | Handshake bình thường                   |
+
+mTLS tắt early data vì client certificate được verify ở flight thứ hai; nhận early
+data sẽ để request chưa authenticate tới parser.
+
+## Quy tắc thiết kế
+
+- Không coi safe method là idempotent. Phân loại operation, không chỉ verb.
+- Không nhận forwarded early data từ proxy không tin cậy. Header giả mạo sẽ bỏ qua
+  tín hiệu duy nhất server có.
+- Không tự thêm 0-RTT path cục bộ. Live QUIC listener không giao byte, và workaround
+  TCP bỏ qua method check của dispatcher.
+- Giữ replay protection ở application boundary khi mutation không tránh được:
+  idempotency key, single-use token hoặc nonce phía server.
+
+## Kiểm tra
+
+Client hỗ trợ 0-RTT đề nghị early data cho QUIC listener sẽ hoàn tất handshake
+trước. Không có marker application vì request không bao giờ đến sớm.
+
+Trên TCP, gửi `POST` trong early data và xác nhận `425 Too Early`; gửi `GET` và xác
+nhận nó được phục vụ. Dùng client công bố session resumption ticket cho test này,
+như `openssl s_client -early_data`.
+
+## Tiếp theo
+
+- [QUIC transport](/docs/http3/quic-transport) cho transport policy.
+- [WebTransport status](/docs/http3/webtransport) cho surface bị gate còn lại.

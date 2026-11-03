@@ -1,0 +1,127 @@
+---
+title: Kiểm thử HTTP/3 route
+description: Chứng minh QUIC handshake bằng curl --http3-only, kiểm tra body và content-type limit, và đọc bằng chứng interoperability upstream.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, http3, quic, operations]
+---
+
+Kiểm thử HTTP/3 phải chứng minh request dùng QUIC. Client fallback âm thầm sang
+HTTP/2 sẽ pass sai test. Dùng `--http3-only` và kiểm tra dòng protocol trước khi
+tin kết quả.
+
+## Điều kiện trước
+
+- Application đang chạy với `listen_udp`. Bắt đầu từ
+  [HTTP/3 quickstart](/docs/http3/getting-started).
+- `curl` build có HTTP/3. `curl --version` liệt kê `HTTP3`.
+- UDP port mở trên host và mọi firewall trên đường đi.
+
+## Chứng minh protocol
+
+```sh
+curl --http3-only -k -v https://127.0.0.1:8443/ 2>&1 | grep -E "ALPN|HTTP/3"
+```
+
+```console
+* ALPN: server accepted h3
+< HTTP/3 200
+```
+
+`--http3` đơn thuần fallback sang HTTP/2 khi QUIC handshake fail, nên nó có thể pass
+trên sai transport. Giữ `--http3-only` trong mọi check.
+
+Nếu handshake fail, xác nhận listener đã bind và port reachable:
+
+```sh
+ss -lunp | grep 8443
+```
+
+Socket đã bind mà client fail thường nghĩa firewall bỏ UDP, không phải application
+từ chối request.
+
+## So với TCP listener
+
+Khi app mở cả hai listener, so sánh:
+
+```sh
+curl --http3-only -k -s -o h3.body -w '%{http_code}\n' https://127.0.0.1:8443/items
+curl --http2 -k -s -o h2.body -w '%{http_code}\n' https://127.0.0.1:3443/items
+cmp h2.body h3.body
+```
+
+Cả hai status và body phải khớp. Cùng router và handler trả lời cả hai request;
+khác biệt chỉ ra response path riêng theo transport.
+
+## Body limit
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > large.bin
+curl --http3-only -k -i --data-binary @large.bin https://127.0.0.1:8443/echo
+```
+
+Với `max_h3_body_size` mặc định 16 KiB, kỳ vọng `413 Payload Too Large`. Tăng
+capacity trong builder, rebuild và lặp lại. Sau đó gửi request thứ hai trên
+connection mới và xác nhận vẫn thành công; body rejection ở phạm vi stream.
+
+## Content-type rule
+
+```sh
+curl --http3-only -k -X QUERY --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+Kỳ vọng `400 Bad Request` trước khi handler chạy. Thêm `Content-Type` hợp lệ và kỳ
+vọng response của handler. Xem
+[QUERY qua HTTP/3](/docs/http3/query-method).
+
+## Route test
+
+Test request parsing và response shaping như hàm thuần trong project của bạn:
+
+```zig
+const std = @import("std");
+
+fn acceptsJson(content_type: []const u8) bool {
+    return std.mem.startsWith(u8, content_type, "application/json");
+}
+
+test "query media type" {
+    try std.testing.expect(acceptsJson("application/json; charset=utf-8"));
+    try std.testing.expect(!acceptsJson("text/plain"));
+}
+```
+
+```sh
+zig test src/http/media.zig
+```
+
+Transport thực thi content-type syntax; test này bao policy media-type của bạn.
+
+## Load và capacity
+
+Load generator HTTP/3 ít phổ biến hơn tool HTTP/1.1. Dùng client hỗ trợ HTTP/3 hoặc
+một service test nhỏ mở nhiều connection, và báo cáo:
+
+- Handshake hoàn tất và handshake fail.
+- Request mỗi giây và latency percentile.
+- Stream reset theo code.
+- RSS process so với engine và slab memory kỳ vọng.
+
+Chạy client trên host riêng. Loopback run đo client.
+
+## Bằng chứng upstream
+
+Maintainer framework chạy gate interoperability trước release với client
+curl/ngtcp2 và aioquic được pin. Gate bao normal request path, trailing field
+section hợp lệ, pseudo-header trùng, thứ tự pseudo-header, connection-specific
+header, sibling stream khỏe trên cùng connection, header-pool soak và shutdown sạch.
+
+Gate đó mô tả framework build, không mô tả application của bạn. Nó là lý do một
+protocol-level claim có thể đưa ra; nó không phải lệnh bạn chạy trong project.
+
+## Tiếp theo
+
+- [HTTP/3 limits](/docs/http3/limits) cho bound dưới test.
+- [WebTransport status](/docs/http3/webtransport) cho surface gate chưa bao phủ.

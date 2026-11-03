@@ -1,0 +1,96 @@
+---
+title: HTTP/2
+description: Phục vụ cùng handler qua HTTP/2 session có giới hạn, với tám stream đồng thời, HPACK, flow control và ranh giới rõ ràng.
+search:
+  tags: [http2, concept]
+---
+
+Mỗi TCP connection mang một HTTP/2 server session tùy chọn. Request decode từ
+HTTP/2 đi qua cùng router, middleware, handler và response helper như HTTP/1.1,
+nên route viết cho transport này chạy được trên transport kia. Khác biệt nằm ở
+wire: stream, HPACK header block và flow-control window.
+
+Session được giới hạn có chủ đích. Nó xử lý request/response routing tốt và không
+nhắm tới full RFC 9113 feature parity.
+
+## Bắt đầu
+
+<CardGroup cols={2}>
+  <Card title="HTTP/2 quickstart" href="/docs/http2/getting-started" icon="play">
+    Bật HTTP/2 qua ALPN, kiểm tra protocol bằng curl và đọc session summary.
+  </Card>
+  <Card title="Configuration" href="/docs/http2/configuration" icon="sliders">
+    Đặt header-block, body và response-header capacity qua builder.
+  </Card>
+  <Card title="Frame và stream" href="/docs/http2/frames-and-streams" icon="layers">
+    Theo preface, SETTINGS, HEADERS, DATA, trailer và budget tám stream.
+  </Card>
+  <Card title="HPACK" href="/docs/http2/hpack" icon="archive">
+    Đọc dynamic table có giới hạn, Huffman decoding và pseudo-header validation.
+  </Card>
+</CardGroup>
+
+## Vận hành
+
+<CardGroup cols={2}>
+  <Card title="Flow control" href="/docs/http2/flow-control" icon="gauge">
+    Theo connection và stream window, và biết producer bị block resume thế nào.
+  </Card>
+  <Card title="WebSocket qua HTTP/2" href="/docs/http2/websocket-tunnels" icon="git-branch">
+    Nhận một tunnel RFC 8441 mỗi connection và hiểu `503` cho tunnel thứ hai.
+  </Card>
+  <Card title="HTTP/2 limits" href="/docs/http2/limits" icon="ruler">
+    Đọc mọi default, builder override và rejection code.
+  </Card>
+  <Card title="Observability" href="/docs/http2/observability" icon="activity">
+    Tìm request record và counter mà HTTP/2 cập nhật.
+  </Card>
+  <Card title="Kiểm thử HTTP/2" href="/docs/http2/testing" icon="flask-conical">
+    Kiểm tra route bằng curl và h2load, và đọc bằng chứng upstream.
+  </Card>
+</CardGroup>
+
+## Đường khởi động
+
+| Đường     | Cơ chế                                                                               |
+| --------- | ------------------------------------------------------------------------------------ |
+| TLS       | ALPN chọn `h2` trước `http/1.1` trên `init_https` và `init_https_ephemeral`          |
+| Plaintext | Prior knowledge: client mở bằng HTTP/2 preface được phát hiện trước HTTP/1.1 parsing |
+| Upgrade   | Không hỗ trợ; h2c Upgrade không có                                                   |
+
+Cleartext prior knowledge nghĩa là client gửi
+`PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n` như byte đầu tiên. HTTP/1.1 request bình
+thường trên cùng listener được parse như HTTP/1.1.
+
+## Session triển khai gì
+
+- Validation nghiêm cho preface, frame size và frame sequence.
+- SETTINGS negotiation, PING, GOAWAY và RST_STREAM.
+- Stream identifier, gồm quy tắc closed-stream của RFC 9113.
+- HEADERS với CONTINUATION, DATA, trailer và padding.
+- HPACK với dynamic table có giới hạn.
+- Flow control cấp connection và cấp stream.
+- Async response token và producer điều khiển bởi drain.
+- RFC 8441 extended CONNECT cho WebSocket.
+
+## Ranh giới
+
+| Tính năng                   | Trạng thái                        |
+| --------------------------- | --------------------------------- |
+| Stream đồng thời            | 8 mỗi connection                  |
+| Server push                 | Không hỗ trợ                      |
+| h2c Upgrade                 | Không hỗ trợ; chỉ prior knowledge |
+| Nhiều hơn 8 stream          | Cần specialize connection type    |
+| WebSocket tunnel            | 1 mỗi connection, không nén       |
+| HTTP/2 cleartext có Upgrade | Không triển khai                  |
+
+:::warning[Routing, không phải full parity]
+"HTTP/2 chạy" trên site này nghĩa là request route, stream và response qua
+application boundary dùng chung. Nó không có nghĩa mọi extension, prioritization
+hay push mechanism của RFC 9113 đều được triển khai.
+:::
+
+## Tiếp theo
+
+Đọc [HTTP/2 quickstart](/docs/http2/getting-started) để bật session, rồi
+[frame và stream](/docs/http2/frames-and-streams) trước khi debug protocol error.

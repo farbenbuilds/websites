@@ -1,0 +1,114 @@
+---
+title: QUERY over HTTP/3
+description: Route RFC 10008 QUERY requests, satisfy the transport content-type rule, and treat replay safety as an application decision.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, http3, http, routing]
+---
+
+RFC 10008 defines `QUERY` as a safe, idempotent method that carries a query in the
+request body instead of the URL. µWebZockets treats it as a first-class method on
+every transport, including HTTP/3. The transport enforces one rule; the handler
+owns the rest.
+
+## Register a route
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const body = req.bytes();
+    run_query(body, res) catch |err| {
+        std.log.err("query failed: {}", .{err});
+    };
+}
+
+_ = try app.query("/search", search);
+```
+
+`App.query` maps to `HttpMethod.query`, the same way `get` maps to
+`HttpMethod.get`. The method parser accepts the uppercase token `QUERY` on
+HTTP/1.1, HTTP/2, and HTTP/3.
+
+## Content-type rule
+
+The transport requires a syntactically valid `Content-Type` on every `QUERY`
+request:
+
+| Header state                        | Result                                   |
+| ----------------------------------- | ---------------------------------------- |
+| Missing                             | `400 Bad Request`                        |
+| Duplicated                          | `400 Bad Request`                        |
+| Empty or malformed media type       | `400 Bad Request`                        |
+| `application/json`                  | Accepted; the handler decides the schema |
+| `application/x-www-form-urlencoded` | Accepted; the handler decides the schema |
+
+The check is syntax only. It accepts `type/subtype` with optional parameters and
+rejects a missing type, subtype, or malformed parameter. It does not compare the
+media type against a list.
+
+The transport answers before the handler runs, with the fixed body
+`QUERY requires a valid Content-Type`. A handler cannot override this check.
+
+## Handler policy
+
+The transport cannot know which media types your endpoint supports. Decide in the
+handler:
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_unique_header("Content-Type") orelse {
+        res.end("415 Unsupported Media Type", "Content-Type required") catch {};
+        return;
+    };
+    if (!std.mem.startsWith(u8, content_type, "application/json")) {
+        res.end("415 Unsupported Media Type", "Use application/json") catch {};
+        return;
+    }
+    run_json_query(req.bytes(), res);
+}
+```
+
+Return `415 Unsupported Media Type` when the syntax is valid but the media type is
+not supported. That distinction matters to clients: `400` means the request is
+malformed, `415` means the server does not accept this representation.
+
+## Replay safety
+
+`method_is_replay_safe` classifies `QUERY` as safe, so the TCP 0-RTT policy admits
+it before the handshake is confirmed. The classification says the method is safe
+by definition; it does not prove your handler is idempotent.
+
+If a query endpoint mutates state, treat it as unsafe anyway:
+
+- Do not rely on 0-RTT admission.
+- Add an idempotency key or a single-use token.
+- Keep the mutation out of a `QUERY` route and use `POST`.
+
+## Response notes
+
+`QUERY` responses follow the normal response rules for the transport. A body is
+allowed, `HEAD` semantics do not apply, and streaming works the same way. A
+`Content-Location` header is useful when the query identifies a resource that can
+also be fetched with `GET`.
+
+## Verify it
+
+```sh
+curl --http3-only -k -X QUERY \
+  -H "Content-Type: application/json" \
+  --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+```sh
+curl --http3-only -k -X QUERY --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+The first request reaches the handler. The second has no `Content-Type` and is
+answered with `400 Bad Request` before the handler runs.
+
+## Next
+
+- [HTTP/3 request path](/docs/http3/request-path) for the decode sequence.
+- [HTTP errors](/docs/http/errors) for the status helpers used above.

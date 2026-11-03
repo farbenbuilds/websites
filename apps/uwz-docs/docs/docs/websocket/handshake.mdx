@@ -1,0 +1,143 @@
+---
+title: Handshake and upgrade
+description: Follow the RFC 6455 upgrade checks, the accept token, and the rejection statuses µWebZockets returns before a route goes live.
+sidebar:
+  order: 3
+search:
+  tags: [websocket, http1, security]
+---
+
+A WebSocket route starts as an HTTP/1.1 `GET` request. The framework validates
+the upgrade fields, computes `Sec-WebSocket-Accept`, writes the `101` response,
+and then switches the connection to frame parsing. Everything that decides
+whether the peer is allowed is application policy and runs before that response.
+
+## Required request fields
+
+| Field                   | Accepted value                                    |
+| ----------------------- | ------------------------------------------------- |
+| Method                  | `GET`                                             |
+| `Connection`            | Contains the `upgrade` token, case-insensitive    |
+| `Upgrade`               | `websocket`, case-insensitive                     |
+| `Sec-WebSocket-Version` | `13`                                              |
+| `Sec-WebSocket-Key`     | Base64 of exactly 16 bytes, 24 characters encoded |
+
+The key is borrowed from the parsed request. It is not stored or copied; the
+framework hashes it with the RFC 6455 GUID and returns a 28-byte accept token.
+
+| Step           | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| Hash input     | `Sec-WebSocket-Key` followed by `258EAFA5-E914-47DA-95CA-C5AB0DC85B11` |
+| Hash           | SHA-1 of the input, 20 bytes                                           |
+| Response token | Base64 of the hash, 28 bytes                                           |
+
+## Validation order
+
+The route checks run in this order. The first failure ends the upgrade.
+
+| Check                       | Failure status              | Additional header           |
+| --------------------------- | --------------------------- | --------------------------- |
+| Route limits                | `500 Internal Server Error` | none                        |
+| Compression scratch         | `500 Internal Server Error` | none                        |
+| RFC 6455 request fields     | `400 Bad Request`           | none                        |
+| Version missing or not `13` | `426 Upgrade Required`      | `Sec-WebSocket-Version: 13` |
+| `upgrade` callback          | `403 Forbidden`             | none                        |
+| Frame limit construction    | `500 Internal Server Error` | none                        |
+
+`426` is the one status a client can act on: it names the version the server
+accepts. A `400` means the request is not a WebSocket upgrade at all. A `403`
+means your callback refused an otherwise valid request.
+
+## Authorize before the upgrade
+
+The `upgrade` callback receives the parsed request and returns a boolean:
+
+```zig
+fn allow_only_known_origins(req: *const uz.Request) bool {
+    const origin = req.get_unique_header("Origin") orelse return false;
+    return std.mem.eql(u8, origin, "https://app.example.com");
+}
+
+_ = try app.ws("/chat", .{
+    .upgrade = allow_only_known_origins,
+    .open = on_open,
+    .message = on_message,
+});
+```
+
+Use the callback for authentication, origin checks, tenant lookup, and rate
+limits that must run before the switch. It runs synchronously on the worker
+thread, so it must not block. The callback cannot write a custom body; a refused
+peer receives `403 Forbidden` with the fixed rejection message.
+
+Read cookies or bearer tokens from the request headers and validate them here,
+not in `open`. By `open`, the response has already switched protocols and the
+only remaining signal is a close frame.
+
+## Origin and subprotocol policy
+
+The framework does not compare `Origin` against an allow list and does not
+choose a subprotocol. Both are application decisions:
+
+- **Origin:** browsers send the page origin. Non-browser clients may omit it or
+  forge it. Treat it as a cross-site request signal, never as authentication.
+- **Subprotocol:** if the client offers `Sec-WebSocket-Protocol`, inspect the
+  header in the `upgrade` callback. To accept one, the server must echo the
+  chosen token in the `101` response. µWebZockets never writes
+  `Sec-WebSocket-Protocol`, so a route that requires a subprotocol must reject
+  peers that cannot proceed without one, or close the connection after the
+  switch.
+
+## The response
+
+On success the route writes this response head:
+
+| Line                   | Value                                  |
+| ---------------------- | -------------------------------------- |
+| Status                 | `HTTP/1.1 101 Switching Protocols`     |
+| `Upgrade`              | `websocket`                            |
+| `Connection`           | `Upgrade`                              |
+| `Sec-WebSocket-Accept` | The 28-byte token derived from the key |
+
+An extension header appears only when the route enables per-message deflate and
+the client offered a compatible window. See
+[per-message deflate](/docs/websocket/compression).
+
+## HTTP/2 extended CONNECT
+
+RFC 8441 replaces the HTTP/1.1 handshake with an extended `CONNECT` request. The
+`:protocol` pseudo-header selects `websocket`, and `Sec-WebSocket-Key` is neither
+required nor inspected. A tunnel requires exactly one
+`Sec-WebSocket-Version: 13`; a missing, duplicated, or unsupported value is
+answered with `426` and `Sec-WebSocket-Version: 13`.
+
+The same `upgrade` callback authorizes a tunnel and returns `403` when it
+refuses. A connection that already carries an active tunnel answers a second
+CONNECT with `503 Service Unavailable`; the first tunnel keeps running. See
+[RFC 8441 tunnels](/docs/websocket/http2-tunnels).
+
+## Verify the handshake
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  http://127.0.0.1:3000/echo
+```
+
+```console
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+```
+
+The accept token above is the RFC 6455 example value for that key.
+
+## Next
+
+- [Messages and framing](/docs/websocket/messages) for what happens after the
+  switch.
+- [WebSocket security](/docs/websocket/security) for the full trust boundary.

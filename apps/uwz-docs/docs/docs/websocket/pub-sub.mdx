@@ -1,0 +1,129 @@
+---
+title: Pub/sub
+description: Subscribe sockets to bounded topics, publish to live subscribers without allocation, and read the delivery count.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, websocket, capacity]
+---
+
+The pub/sub registry lives inside the application value. Subscriptions use fixed
+capacity, publish never allocates, and the sender receives the number of
+subscribers the message reached. One registry belongs to one worker; cross-worker
+delivery is a separate step.
+
+## Subscribe and publish
+
+```zig
+const rooms = [_][]const u8{ "news", "sports" };
+
+fn on_open(ws: *uz.WebSocket) void {
+    for (rooms) |room| {
+        ws.subscribe(room) catch |err| {
+            std.log.warn("subscribe {s} failed: {}", .{ room, err });
+        };
+    }
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    const is_text = opcode == .text;
+    const delivered = ws.publish("news", message, is_text);
+    if (delivered == 0) {
+        std.log.info("no subscriber accepted the message", .{});
+    }
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    _ = ws.unsubscribe("news");
+}
+```
+
+`publish` takes a boolean rather than an opcode because only text and binary
+frames fan out. The call frames one message per subscriber into that
+connection's write queue. A subscriber whose queue is full is skipped, and the
+return value counts only successful sends.
+
+The socket also unsubscribes from everything when it is deinitialized, so the
+explicit `unsubscribe` above is optional. Keep it when you want the topic to be
+released before the transport closes.
+
+## Publish outside a socket
+
+`App.publish` publishes from a timer or another application callback:
+
+```zig
+const delivered = app.publish("system", "maintenance in 60 seconds", true);
+```
+
+Both entry points reach the same registry and the same subscriptions. Neither
+retains the message bytes after the call returns, so a message delivered to ten
+subscribers is framed ten times into ten queues.
+
+## Capacity
+
+| Bound                         | Value | Error when exceeded                    |
+| ----------------------------- | ----- | -------------------------------------- |
+| Active topics                 | 1024  | `error.TopicCapacityReached`           |
+| Socket-to-topic subscriptions | 8192  | `error.SubscriptionCapacityReached`    |
+| Subscribers per topic         | 65535 | `error.TopicSubscriberCapacityReached` |
+| Topic name length             | 127 B | `error.TopicTooLong`                   |
+| Empty topic name              | none  | `error.EmptyTopic`                     |
+
+These are per worker, not per cluster. Four workers can each hold 8192
+subscriptions. A cluster-wide broadcast consumes one inbox slot per worker, not
+one slot per connection.
+
+## Lookup and publish cost
+
+Topic ids and subscription rows are stable for their lifetime. Each topic owns an
+intrusive subscriber list, and open-addressed indexes make subscribe,
+unsubscribe, and lookup O(1) expected. Publish cost is proportional to the live
+subscribers of that topic, not to the total subscription count.
+
+An `unsubscribe` that runs inside an active publish retires the row as a
+tombstone and compacts when the outermost publish returns. A `subscribe` during
+that window can transiently return `SubscriptionCapacityReached` even though the
+rows are reclaimed when the frame ends. Retry from the next application event
+rather than treating it as fatal.
+
+## Delivery is queue delivery
+
+`publish` reports frames accepted by the connection write queue. It does not
+report that the peer read them. Three failure modes remain after a successful
+count:
+
+- The peer disconnects before the queue drains.
+- The peer reads the frame but closes before the application processes it.
+- A clustered publish is accepted by a worker inbox and dropped during
+  dispatch.
+
+Design for at-least-once delivery at the application layer when messages matter,
+for example with sequence numbers and client acknowledgements.
+
+## Slow subscribers
+
+Skipping a full queue is the correct default for fan-out: one slow peer must not
+delay every other subscriber. If a peer must not miss messages, give that peer a
+dedicated route and a retry queue. Do not raise the write queue for the whole
+application to serve one slow client.
+
+## Cluster behavior
+
+`Cluster.publish` broadcasts a topic to every worker. The receiving worker then
+publishes to its local subscribers. See
+[cluster pub/sub](/docs/websocket/cluster-pub-sub) for the inbox bounds and the
+delivery report.
+
+## Verify it
+
+1. Open two `wscat` clients against `/chat`.
+2. Send from the first. Both clients print the message.
+3. Close the second and send again. The first still prints it, and the return
+   value drops from two to one.
+4. Fill one client's write queue by pausing its process, then publish. Confirm
+   the healthy client still receives the message.
+
+## Next
+
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub) for multiple workers.
+- [WebSocket limits](/docs/websocket/limits) for the registry bounds in context.

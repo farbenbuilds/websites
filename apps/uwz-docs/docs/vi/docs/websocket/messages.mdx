@@ -1,0 +1,137 @@
+---
+title: Message và framing
+description: Gửi text, binary và control frame, đọc slice message được mượn, đồng thời hiểu fragmentation, masking và UTF-8 validation.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, websocket]
+---
+
+`send` đóng khung một message hoàn chỉnh. Receive path ghép các frame bị fragment
+thành một message trước khi gọi callback, nên application không bao giờ thấy
+payload dở dang. Trang này trình bày opcode, vòng đời slice và các frame framework
+tự trả lời.
+
+## Receive path
+
+| Frame                           | Hành vi của framework                            |
+| ------------------------------- | ------------------------------------------------ |
+| Text hoặc binary, final bit bật | Một callback `message` với payload hoàn chỉnh    |
+| Text hoặc binary, final bit tắt | Buffer đến khi continuation frame bật final bit  |
+| Continuation                    | Nối vào message hiện tại                         |
+| Ping                            | Trả lời bằng pong cùng payload                   |
+| Pong                            | Xóa heartbeat ping đang chờ                      |
+| Close                           | Validate, echo nếu cần, rồi `close` chạy một lần |
+| Opcode lạ hoặc sai state        | Close `1002 Protocol error`                      |
+
+Ba terminal code đến từ parser chứ không phải code của bạn:
+
+| Code   | Điều kiện                                               |
+| ------ | ------------------------------------------------------- |
+| `1002` | Protocol error, kể cả close frame không hợp lệ          |
+| `1007` | UTF-8 không hợp lệ trong text message hoặc close reason |
+| `1009` | Message vượt `max_message_size`                         |
+
+Sau parser failure, socket gửi close frame, chạy `close` một lần và dừng dispatch
+byte. Parser failure là terminal cho connection đó.
+
+## Vòng đời slice
+
+```zig
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    // Borrowed for this callback only.
+    std.log.info("{s} message: {d} bytes", .{ @tagName(opcode), message.len });
+}
+```
+
+Payload trỏ vào message buffer thuộc connection. Nó hợp lệ đến khi callback trả
+về và bị message kế tiếp dùng lại. Hãy copy thứ bạn cần giữ:
+
+```zig
+const pending = struct {
+    var last: [256]u8 = undefined;
+    var last_len: usize = 0;
+};
+
+fn remember(_: *uz.WebSocket, message: []const u8, _: uz.Opcode) void {
+    pending.last_len = @min(message.len, pending.last.len);
+    @memcpy(pending.last[0..pending.last_len], message[0..pending.last_len]);
+}
+```
+
+Với payload phải sống lâu hơn connection, copy vào storage của application với
+giới hạn bạn sở hữu. Không giữ slice được mượn.
+
+## Gửi một message hoàn chỉnh
+
+```zig
+ws.send("hello", .text) catch |err| switch (err) {
+    error.WouldBlock => {}, // retry from drain
+    error.ConnectionClosed => {},
+    else => std.log.err("send failed: {}", .{err}),
+};
+
+try ws.send(payload_bytes, .binary);
+```
+
+`send` nhận `.text`, `.binary`, `.ping`, `.pong` và `.close`. Nó từ chối
+`.continuation`: message gửi đi không bao giờ bị fragment. Connection write queue
+copy byte trước khi `send` trả về, nên stack buffer là an toàn.
+
+Validation chạy trước khi đóng khung:
+
+| Error                  | Nguyên nhân                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `InvalidOpcode`        | `.continuation` hoặc opcode server không gửi           |
+| `InvalidUtf8`          | Text payload hoặc close reason không phải UTF-8 hợp lệ |
+| `ControlFrameTooLarge` | Ping hoặc pong payload dài hơn 125 byte                |
+| `InvalidCloseFrame`    | Close payload một byte, hoặc code không được phép      |
+| `PayloadTooLarge`      | Message nén không vừa `max_frame_size`                 |
+| `WouldBlock`           | Write queue có giới hạn không còn chỗ                  |
+| `ConnectionClosed`     | Peer đã close hoặc transport đang shutdown             |
+
+Control frame tối đa 125 byte vì RFC 6455 giới hạn payload trong bảy bit length.
+Không đặt application data vào ping và pong.
+
+## Masking
+
+RFC 6455 yêu cầu frame từ client phải được mask và frame từ server không mask.
+Parser unmask payload đến tại chỗ bằng vector rộng nhất mà target biên dịch, rồi
+xử lý phần đuôi bằng scalar. Application không bao giờ mask hay unmask frame.
+
+Các helper công khai dành cho embedder và test, không dùng trong handler thường:
+
+- `uz.websocket_mask` cung cấp masking theo vị trí.
+- `uz.websocket_backpressure` mô hình hóa backpressure transition thuần.
+
+## Quy tắc fragmentation
+
+- Một callback cho mỗi message hoàn chỉnh, không phải mỗi frame.
+- Message đã ghép bị giới hạn bởi `max_message_size`.
+- Một frame đã encode bị giới hạn bởi `max_frame_size`, và giá trị này không được
+  vượt `max_message_size`.
+- Chuỗi fragment kết thúc mà không có final bit là protocol error.
+- Control frame có thể xen giữa các fragment và không bao giờ nhập vào message.
+
+Client gửi nhiều fragment nhỏ vẫn tốn một write cho mỗi message hoàn chỉnh. Client
+gửi một message quá lớn bị close với `1009` trước khi callback chạy.
+
+## Kiểm tra frame behavior
+
+Dùng `wscat` cho text và binary, rồi gửi ping từ client library và xác nhận echo
+đến mà không có callback `message`.
+
+```console
+$ npx wscat -c ws://127.0.0.1:3000/echo
+Connected (press CTRL+C to quit)
+> hello
+< hello
+```
+
+Compliance suite kiểm tra fragmentation, ranh giới UTF-8, thứ tự close và
+masking. Xem [Autobahn và kiểm thử](/docs/websocket/testing).
+
+## Tiếp theo
+
+- [Backpressure và drain](/docs/websocket/backpressure) cho `WouldBlock`.
+- [Close code và shutdown](/docs/websocket/close-codes) cho closing handshake.

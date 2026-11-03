@@ -1,0 +1,107 @@
+---
+title: Early data policy
+description: See why the live HTTP/3 listener rejects 0-RTT, how the policy model decides a request, and where TCP behavior differs.
+sidebar:
+  order: 7
+search:
+  tags: [concept, http3, tls, security]
+---
+
+TLS 1.3 early data lets a client send request bytes before the handshake is
+confirmed. The bytes are replayable, so every early-data design is a policy
+decision. The live QUIC listener takes the strictest one: it rejects 0-RTT
+entirely.
+
+## Live HTTP/3 behavior
+
+| Component                    | Setting             |
+| ---------------------------- | ------------------- |
+| QUIC TLS context             | Early data disabled |
+| lsquic delayed 0-RTT packets | `0`                 |
+| Application requests seen    | Post-handshake only |
+
+`init_http3` and `init_http3_ephemeral` both pass `early_data = false` to the QUIC
+context. lsquic is told not to retain delayed 0-RTT packets. A client that offers
+early data completes a normal handshake before its request is dispatched.
+
+The reason is scope, not doubt about the protocol. A correct 0-RTT path needs
+per-request early-data state from the backend, a replay-safe classification for
+every method, and a clear response for a rejected request. The live listener does
+not expose that state, so it does not admit early data.
+
+## Policy model
+
+`uz.http3_extensions` provides an allocation-free model for a future backend:
+
+```zig
+pub const EarlyDataPolicy = enum {
+    reject,
+    defer_until_confirmed,
+    allow_replay_safe,
+};
+
+pub fn decide_early_data(
+    policy: EarlyDataPolicy,
+    context: EarlyDataContext,
+) EarlyDataDecision;
+```
+
+`EarlyDataContext` carries the handshake state, whether the request arrived before
+confirmation, whether a trusted upstream marked it as forwarded early data, and
+whether the application classified the operation as replay-safe.
+
+| Condition                                  | Decision           |
+| ------------------------------------------ | ------------------ |
+| Handshake failed                           | `close_connection` |
+| Forwarded early data, not replay-safe      | `reject_too_early` |
+| Arrived after confirmation                 | `process`          |
+| `reject` policy                            | `reject_too_early` |
+| `defer_until_confirmed`, not confirmed yet | `deferred`         |
+| `allow_replay_safe`, replay-safe           | `process`          |
+| `allow_replay_safe`, not replay-safe       | `reject_too_early` |
+
+`method_is_replay_safe` returns true for `GET`, `HEAD`, `OPTIONS`, `QUERY`, and
+`TRACE`. It is a classification input, not an authorization. A `GET` with side
+effects is still replayable.
+
+## TCP is different
+
+The TCP TLS context enables 0-RTT for non-mTLS configurations. The HTTP dispatcher
+admits only safe methods before the handshake is confirmed and answers any other
+method with `425 Too Early`.
+
+| Transport     | 0-RTT    | Unsafe method before confirmation |
+| ------------- | -------- | --------------------------------- |
+| TCP with TLS  | Enabled  | `425 Too Early`                   |
+| TCP with mTLS | Disabled | Normal handshake                  |
+| QUIC (HTTP/3) | Disabled | Normal handshake                  |
+
+mTLS disables early data because the client certificate is verified in the second
+flight; admitting early data would let an unauthenticated request reach the
+parser.
+
+## Design rules
+
+- Do not treat a safe method as idempotent. Classify the operation, not only the
+  verb.
+- Do not accept forwarded early data from an untrusted proxy. A forged header
+  would bypass the only signal the server has.
+- Do not add a local 0-RTT path by hand. The live QUIC listener will not deliver
+  the bytes, and a TCP workaround bypasses the dispatcher's method check.
+- Keep replay protection at the application boundary when a mutation is
+  unavoidable: idempotency keys, single-use tokens, or a server-side nonce.
+
+## Verify it
+
+A 0-RTT-capable client that offers early data to the QUIC listener completes the
+handshake first. There is no application-visible marker because the request never
+arrives early.
+
+On TCP, send a `POST` in early data and confirm `425 Too Early`; send a `GET` and
+confirm it is served. Use a client that exposes session resumption tickets for
+this test, such as `openssl s_client -early_data`.
+
+## Next
+
+- [QUIC transport](/docs/http3/quic-transport) for the transport policy.
+- [WebTransport status](/docs/http3/webtransport) for the other gated surface.

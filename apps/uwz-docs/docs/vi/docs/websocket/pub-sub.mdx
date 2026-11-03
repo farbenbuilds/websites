@@ -1,0 +1,123 @@
+---
+title: Pub/sub
+description: Subscribe socket vào topic có giới hạn, publish tới subscriber đang sống mà không cấp phát và đọc số delivery trả về.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, websocket, capacity]
+---
+
+Pub/sub registry nằm trong application value. Subscription dùng capacity cố định,
+publish không bao giờ cấp phát và sender nhận số subscriber mà message đến được.
+Mỗi registry thuộc một worker; delivery xuyên worker là bước riêng.
+
+## Subscribe và publish
+
+```zig
+const rooms = [_][]const u8{ "news", "sports" };
+
+fn on_open(ws: *uz.WebSocket) void {
+    for (rooms) |room| {
+        ws.subscribe(room) catch |err| {
+            std.log.warn("subscribe {s} failed: {}", .{ room, err });
+        };
+    }
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    const is_text = opcode == .text;
+    const delivered = ws.publish("news", message, is_text);
+    if (delivered == 0) {
+        std.log.info("no subscriber accepted the message", .{});
+    }
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    _ = ws.unsubscribe("news");
+}
+```
+
+`publish` nhận boolean thay vì opcode vì chỉ text và binary frame được fan-out.
+Lệnh này đóng khung một message cho mỗi subscriber vào write queue của connection
+đó. Subscriber có queue đầy bị bỏ qua, và giá trị trả về chỉ đếm send thành công.
+
+Socket cũng unsubscribe khỏi mọi topic khi deinit, nên `unsubscribe` tường minh ở
+trên là tùy chọn. Giữ nó khi bạn muốn trả topic trước khi transport close.
+
+## Publish ngoài socket
+
+`App.publish` publish từ timer hoặc application callback khác:
+
+```zig
+const delivered = app.publish("system", "maintenance in 60 seconds", true);
+```
+
+Cả hai entry point đi vào cùng registry và cùng subscription. Không bên nào giữ
+byte message sau khi lệnh trả về, nên một message gửi cho mười subscriber được đóng
+khung mười lần vào mười queue.
+
+## Capacity
+
+| Giới hạn                  | Giá trị | Error khi vượt                         |
+| ------------------------- | ------- | -------------------------------------- |
+| Topic active              | 1024    | `error.TopicCapacityReached`           |
+| Subscription socket-topic | 8192    | `error.SubscriptionCapacityReached`    |
+| Subscriber cho mỗi topic  | 65535   | `error.TopicSubscriberCapacityReached` |
+| Độ dài topic name         | 127 B   | `error.TopicTooLong`                   |
+| Topic name rỗng           | không   | `error.EmptyTopic`                     |
+
+Các giới hạn này tính theo worker, không theo cluster. Bốn worker có thể giữ 8192
+subscription mỗi worker. Một broadcast toàn cluster tốn một inbox slot cho mỗi
+worker, không phải một slot cho mỗi connection.
+
+## Chi phí lookup và publish
+
+Topic id và subscription row ổn định trong suốt vòng đời. Mỗi topic sở hữu một
+intrusive subscriber list, và open-addressed index làm subscribe, unsubscribe,
+lookup có chi phí O(1) kỳ vọng. Chi phí publish tỉ lệ với subscriber đang sống của
+topic đó, không phải tổng subscription.
+
+`unsubscribe` chạy trong một publish đang active sẽ retire row thành tombstone và
+compact khi publish ngoài cùng trả về. Một `subscribe` trong cửa sổ đó có thể tạm
+thời trả `SubscriptionCapacityReached` dù row được thu hồi khi frame kết thúc.
+Retry từ application event kế tiếp thay vì coi đó là lỗi fatal.
+
+## Delivery là queue delivery
+
+`publish` báo số frame được write queue của connection nhận. Nó không báo peer đã
+đọc. Ba failure mode còn lại sau một count thành công:
+
+- Peer disconnect trước khi queue drain.
+- Peer đọc frame nhưng close trước khi application xử lý.
+- Publish trong cluster được worker inbox nhận và bị bỏ trong dispatch.
+
+Thiết kế at-least-once ở application layer khi message quan trọng, ví dụ bằng
+sequence number và client acknowledgement.
+
+## Subscriber chậm
+
+Bỏ qua queue đầy là default đúng cho fan-out: một peer chậm không được trì hoãn
+mọi subscriber khác. Nếu một peer không được phép mất message, cho peer đó route
+riêng và retry queue. Không tăng write queue của cả application để phục vụ một
+client chậm.
+
+## Hành vi cluster
+
+`Cluster.publish` broadcast một topic tới mọi worker. Worker nhận publish tới
+subscriber cục bộ của nó. Xem
+[cluster pub/sub](/docs/websocket/cluster-pub-sub) cho inbox bound và delivery
+report.
+
+## Kiểm tra
+
+1. Mở hai client `wscat` vào `/chat`.
+2. Gửi từ client đầu. Cả hai in message.
+3. Đóng client thứ hai và gửi lại. Client đầu vẫn in, và giá trị trả về giảm từ
+   hai xuống một.
+4. Làm đầy write queue của một client bằng cách tạm dừng process của nó, rồi
+   publish. Xác nhận client khỏe vẫn nhận message.
+
+## Tiếp theo
+
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub) cho nhiều worker.
+- [WebSocket limits](/docs/websocket/limits) cho registry bound trong ngữ cảnh.

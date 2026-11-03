@@ -1,0 +1,106 @@
+---
+title: WebSocket
+description: Register RFC 6455 upgrade routes, send and drain messages, compress, heartbeat, publish, and test a bounded WebSocket server.
+search:
+  tags: [websocket, concept]
+---
+
+A WebSocket route is an HTTP route with an upgrade handshake and a different
+message path. µWebZockets implements RFC 6455, RFC 7692 per-message deflate, a
+bounded pub/sub registry, and RFC 8441 tunneling over HTTP/2. The application
+owns authentication, origin policy, and subprotocol selection.
+
+The section starts with a working echo route, then explains the handshake,
+framing, backpressure, and the operational limits that decide how many peers one
+worker can hold.
+
+## Start a route
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/docs/websocket/quickstart" icon="play">
+    Add an echo route, run it, and verify a full message round trip with wscat.
+  </Card>
+  <Card title="Handshake and upgrade" href="/docs/websocket/handshake" icon="handshake">
+    Follow the RFC 6455 validation order and see which request fields produce which rejection.
+  </Card>
+  <Card title="Messages and framing" href="/docs/websocket/messages" icon="message-square">
+    Send text, binary, ping, and close frames and keep the borrowed message slice inside its
+    callback.
+  </Card>
+  <Card title="Backpressure and draining" href="/docs/websocket/backpressure" icon="gauge">
+    Handle error.WouldBlock, read buffered_amount, and resume a producer from the drain callback.
+  </Card>
+</CardGroup>
+
+## Operate the connection
+
+<CardGroup cols={2}>
+  <Card title="Per-message deflate" href="/docs/websocket/compression" icon="archive">
+    Opt into RFC 7692 on one route and understand scratch reservation and expansion limits.
+  </Card>
+  <Card title="Heartbeats and idle peers" href="/docs/websocket/heartbeats" icon="heart-pulse">
+    Combine the worker heartbeat timer with the idle deadline and close silent peers.
+  </Card>
+  <Card title="Close codes and shutdown" href="/docs/websocket/close-codes" icon="x-circle">
+    Choose a valid close code, end the handshake, and distinguish a graceful close from terminate.
+  </Card>
+  <Card title="WebSocket security" href="/docs/websocket/security" icon="shield">
+    Authorize before the upgrade and treat origin, subprotocol, size, and rate policy as application
+    work.
+  </Card>
+</CardGroup>
+
+## Publish and scale
+
+<CardGroup cols={2}>
+  <Card title="Pub/sub" href="/docs/websocket/pub-sub" icon="radio">
+    Subscribe sockets to topics and publish to the live subscribers of one worker.
+  </Card>
+  <Card title="Cluster pub/sub" href="/docs/websocket/cluster-pub-sub" icon="network">
+    Broadcast across workers and read the queued, dropped, and notify-failed report.
+  </Card>
+  <Card title="RFC 8441 tunnels" href="/docs/websocket/http2-tunnels" icon="git-branch">
+    Run one WebSocket tunnel per HTTP/2 connection and know why it carries uncompressed frames.
+  </Card>
+  <Card title="Autobahn and testing" href="/docs/websocket/testing" icon="flask-conical">
+    Run the 517-case compliance gate and add deterministic unit and browser smoke tests.
+  </Card>
+</CardGroup>
+
+## Reference
+
+<CardGroup cols={1}>
+  <Card title="WebSocket limits" href="/docs/websocket/limits" icon="ruler">
+    Read every frame, message, control, queue, subscription, topic, and cluster inbox bound.
+  </Card>
+</CardGroup>
+
+## What the server implements
+
+| Capability         | Status             | Detail                                                                   |
+| ------------------ | ------------------ | ------------------------------------------------------------------------ |
+| RFC 6455 server    | Supported          | HTTP/1.1 upgrade on a `GET` route registered with `App.ws`               |
+| RFC 7692 deflate   | Supported, opt-in  | Per route; `server_no_context_takeover` and `client_no_context_takeover` |
+| Pub/sub            | Supported          | Fixed topic and subscription capacity inside one application             |
+| RFC 8441 tunnel    | Supported, bounded | One active tunnel per HTTP/2 connection, no deflate                      |
+| WebSocket client   | Not supported      | The bundled client speaks HTTP/1.1 only                                  |
+| Origin negotiation | Application-owned  | Read the request headers in the `upgrade` callback                       |
+| Subprotocol choice | Application-owned  | Write `Sec-WebSocket-Protocol` on an approved upgrade                    |
+
+The defaults are small on purpose. `App(N)` reserves one 16 KiB message buffer
+per connection and a 64 KiB write queue per connection; a route may lower its
+frame and message limits but may not raise them above the configured message
+capacity.
+
+## Boundaries
+
+:::warning[No built-in client or policy layer]
+µWebZockets does not ship a WebSocket client, an origin allow list, or
+subprotocol negotiation. The `upgrade` callback decides whether to accept a
+peer, and the default HTTP response helpers are available before the switch.
+:::
+
+## Next
+
+Read [WebSocket quickstart](/docs/websocket/quickstart) to add an echo route,
+then [WebSocket limits](/docs/websocket/limits) before you size a deployment.

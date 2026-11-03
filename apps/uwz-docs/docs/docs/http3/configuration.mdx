@@ -1,0 +1,114 @@
+---
+title: HTTP/3 configuration
+description: Size the QUIC engine's body and response-header capacities and see which config values HTTP/3 validates or ignores.
+sidebar:
+  order: 3
+search:
+  tags: [reference, http3, quic, capacity]
+---
+
+HTTP/3 capacity is a mix of shared `ServerConfig` fields and three `h3`-specific
+fields. `init_http3` validates them before it allocates, and an invalid value
+fails startup with `error.InvalidHttp3Capacity` rather than a dropped packet
+later.
+
+## Fields
+
+| Field                          | Default | Builder override                    | Notes                                                      |
+| ------------------------------ | ------- | ----------------------------------- | ---------------------------------------------------------- |
+| `max_h3_body_size`             | 16 KiB  | `with_max_h3_body_size`             | Must be non-zero and fit in a `u32` with `max_header_size` |
+| `max_h3_response_header_size`  | 4 KiB   | `with_max_h3_response_header_size`  | Must be 1 to 65535; offsets are `u16`                      |
+| `max_h3_response_header_count` | 64      | `with_max_h3_response_header_count` | Must be 1 to 4096                                          |
+
+Three shared fields also shape HTTP/3:
+
+| Field              | Default | Effect on HTTP/3                                              |
+| ------------------ | ------- | ------------------------------------------------------------- |
+| `max_connections`  | 1024    | Engine capacity for connections and concurrent streams        |
+| `max_header_size`  | 16 KiB  | Request header bytes; must fit the lsxpack `u16` field length |
+| `max_header_count` | 64      | Decoded request fields per request                            |
+| `write_queue_size` | 64 KiB  | Per-stream response body buffer for one-shot responses        |
+
+## Build a configured app
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_h3_body_size(32 * 1024)
+    .with_max_h3_response_header_size(8 * 1024)
+    .with_max_h3_response_header_count(48);
+```
+
+The builder produces a plain `ServerConfig`; the HTTP/3 entry points consume it
+when you call `init_http3` or `init_http3_ephemeral`. There is no separate QUIC
+config type.
+
+## What the engine reserves
+
+| Region                   | Sized by                      | Allocation          |
+| ------------------------ | ----------------------------- | ------------------- |
+| Request header bytes     | `max_header_size`             | Engine pool at init |
+| Request body per stream  | `max_h3_body_size`            | Engine pool at init |
+| Response header bytes    | `max_h3_response_header_size` | Engine pool at init |
+| Response body per stream | `write_queue_size`            | Engine pool at init |
+| UDP packet buffers       | 2 KiB each                    | Engine pool at init |
+| Stream state             | Engine capacity               | Engine pool at init |
+
+Every QUIC region is allocated once when the engine starts and lives outside the
+application slab. `slab_bytes()` does not include it, so add the HTTP/3 engine
+cost separately when you plan memory. Request body storage is multiplied by the
+configured client capacity, which makes `max_h3_body_size` the dominant term.
+
+## Validation rules
+
+`init_http3` rejects:
+
+- `max_h3_body_size` of zero.
+- `max_h3_response_header_size` of zero or above 65535.
+- `max_h3_response_header_count` of zero or above 4096.
+- `max_header_size` above `u32`, or a header plus body size that overflows the
+  QUIC receive credit.
+- A request header size above the lsxpack `u16` field length when the engine
+  starts.
+
+These fail with `error.InvalidHttp3Capacity` or `error.SlabTooSmall` before the
+UDP socket binds, so a bad configuration is visible at startup.
+
+## Concurrency
+
+The engine capacity, derived from `max_connections`, sizes the connection pool and
+the stream pool that serves HTTP/3 requests. HTTP/2 fixes eight streams per
+connection; HTTP/3 admits request streams from the engine pool, so the configured
+capacity is the number to plan for.
+
+## What is not configurable
+
+| Setting               | Value                   |
+| --------------------- | ----------------------- |
+| Congestion control    | BBRv1 with pacing       |
+| 0-RTT                 | Disabled                |
+| QPACK request table   | Disabled                |
+| Blocked QPACK streams | Not allowed             |
+| Packet payload        | 2 KiB buffers           |
+| PLPMTU                | 1200 to 1472            |
+| Transmit batching     | Linux `UDP_SEGMENT` GSO |
+| Receive GRO           | Disabled                |
+| HTTP/3 clustering     | Not supported           |
+
+There is no public knob for congestion control, pacing, or the packet size.
+Changing them requires a source change and a new compliance run.
+
+## Verify it
+
+```sh
+curl --http3-only -k -H "X-Test: value" https://127.0.0.1:8443/
+```
+
+Then send a body larger than `max_h3_body_size` and confirm the stream resets
+while a second request on a new connection still succeeds. A capacity failure is
+stream-scoped, not process-wide.
+
+## Next
+
+- [HTTP/3 limits](/docs/http3/limits) for the full table.
+- [QUIC transport](/docs/http3/quic-transport) for the fixed policy.

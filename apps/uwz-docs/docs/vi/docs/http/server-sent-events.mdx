@@ -49,11 +49,11 @@ mà không hoàn tất sẽ không giữ response mở cho lần ghi sau.
 
 `sse()` gọi `begin_chunked` với head sau:
 
-```text
-Content-Type: text/event-stream
-Cache-Control: no-cache
-X-Accel-Buffering: no
-```
+| Header              | Value               |
+| ------------------- | ------------------- |
+| `Content-Type`      | `text/event-stream` |
+| `Cache-Control`     | `no-cache`          |
+| `X-Accel-Buffering` | `no`                |
 
 `no-cache` cho phép lưu nhưng buộc revalidate, nên proxy không phục vụ event
 stream cũ. `X-Accel-Buffering: no` yêu cầu proxy kiểu nginx không buffer
@@ -74,7 +74,7 @@ Input được split theo `\n`. `\r` ở cuối mỗi dòng được bỏ trư�
 input CRLF cho ra cùng field như input LF. `data` rỗng vẫn tạo một field `data:`
 rỗng.
 
-```text
+```console
 event: tick
 data: one
 data: two

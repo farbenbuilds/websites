@@ -1,0 +1,117 @@
+---
+title: HTTP/2 configuration
+description: Đặt header-block, request-body, response-header và field-count capacity cho HTTP/2 session, và biết rejection code của từng field.
+sidebar:
+  order: 3
+search:
+  tags: [reference, http2, capacity]
+---
+
+HTTP/2 capacity là field của `ServerConfig`, nên chúng là compile-time value trên
+application type. Các builder method dưới đây tạo config mới và slab tương ứng.
+Mỗi field cũng size per-stream storage mà session carve từ slab đó.
+
+## Field
+
+| Field                          | Default | Builder override                    | Size gì                                        |
+| ------------------------------ | ------- | ----------------------------------- | ---------------------------------------------- |
+| `max_h2_header_block_size`     | 16 KiB  | `with_max_h2_header_block_size`     | HEADERS và CONTINUATION cộng dồn mỗi request   |
+| `max_h2_body_size`             | 16 KiB  | `with_max_h2_body_size`             | Request body storage mỗi stream                |
+| `max_h2_response_header_size`  | 4 KiB   | `with_max_h2_response_header_size`  | Encoded response header block mỗi response     |
+| `max_h2_response_header_count` | 32      | `with_max_h2_response_header_count` | Response field, gồm status và `content-length` |
+
+Hai config value khác áp dụng cho HTTP/2 dù không có tiền tố `h2`:
+
+| Field              | Default | Tác dụng trên HTTP/2                                   |
+| ------------------ | ------- | ------------------------------------------------------ |
+| `max_header_size`  | 16 KiB  | Request header byte mỗi stream cho decoded field block |
+| `max_header_count` | 64      | Số request field decode tối đa mỗi header block        |
+
+`h2_capacities()` chiếu các giá trị này vào session planner.
+`h2_session_bytes()` trả chi phí storage mỗi connection.
+
+## Build application đã cấu hình
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_h2_header_block_size(32 * 1024)
+    .with_max_h2_body_size(64 * 1024)
+    .with_max_h2_response_header_size(8 * 1024)
+    .with_max_h2_response_header_count(48);
+
+var app = try builder.build(std.heap.page_allocator);
+defer app.deinit();
+```
+
+In `try builder.slab_bytes()` khi phát triển để thấy chi phí trước khi cấp phát.
+Header storage tính theo stream, nên header block lớn hơn nhân với connection
+count, không phải budget tám stream lúc runtime.
+
+## Hành vi rejection
+
+Mỗi limit fail khác nhau. Protocol error trên một stream không đóng connection;
+connection error gửi GOAWAY.
+
+| Điều kiện                                    | Kết quả                            |
+| -------------------------------------------- | ---------------------------------- |
+| Frame payload trên 16 KiB                    | GOAWAY `FRAME_SIZE_ERROR`          |
+| Header block vượt `max_h2_header_block_size` | GOAWAY `COMPRESSION_ERROR`         |
+| Decoded field vượt `max_header_count`        | GOAWAY `ENHANCE_YOUR_CALM`         |
+| Decoded header byte vượt `max_header_size`   | GOAWAY `ENHANCE_YOUR_CALM`         |
+| Pseudo-header sai thứ tự hoặc trùng          | RST_STREAM `PROTOCOL_ERROR`        |
+| Connection-specific header xuất hiện         | RST_STREAM `PROTOCOL_ERROR`        |
+| Request body vượt `max_h2_body_size`         | RST_STREAM `ENHANCE_YOUR_CALM`     |
+| `content-length` trên body limit             | RST_STREAM `PROTOCOL_ERROR`        |
+| Response block vượt response limit           | Response fail closed; stream reset |
+
+Frame-size ceiling cố định ở mức tối thiểu 16 KiB của RFC 9113. Session không nâng
+nó cho peer quảng bá giá trị lớn hơn.
+
+## Quan hệ với HTTP/1.1 limit
+
+`max_header_size` và `max_header_count` được chia sẻ. Tăng chúng tăng HTTP/1.1
+request parsing và HTTP/2 decoded-field storage cùng lúc, để một connection không
+nhận field list lớn hơn trên một transport.
+
+`max_body_size` quản HTTP/1.1 request body. HTTP/2 stream dùng `max_h2_body_size`
+thay thế, nên hai giá trị có thể khác nhau. Giữ chúng khớp trừ khi có lý do đo
+được; hai body ceiling khác nhau gây bất ngờ cho code validate length.
+
+## Dynamic table size
+
+HPACK dynamic table cố định 4096 byte mỗi connection, khớp default RFC 7541.
+Session quảng bá giá trị đó trong `SETTINGS_HEADER_TABLE_SIZE` và cho phép peer
+đúng số byte đó. Không có builder override; table nhỏ hơn tiết kiệm memory
+per-connection với chi phí nhiều header byte hơn trên wire.
+
+## Size từ slab
+
+| Thành phần              | Byte                                     |
+| ----------------------- | ---------------------------------------- |
+| Shared header block     | `max_h2_header_block_size`               |
+| Request header          | `8 * max_header_size`                    |
+| Request body            | `8 * max_h2_body_size`                   |
+| Response body           | `8 * max_h2_body_size`                   |
+| Response header         | `8 * max_h2_response_header_size`        |
+| Response field metadata | `8 * max_h2_response_header_count` entry |
+
+Dùng `h2_session_bytes()` cho giá trị chính xác. Cho góc nhìn toàn server, xem
+[capacity model](/docs/concepts/capacity-model) và
+[HTTP/2 limits](/docs/http2/limits).
+
+## Kiểm tra
+
+```sh
+curl --http2 -k -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  https://127.0.0.1:3443/
+```
+
+Với `max_h2_header_block_size` mặc định, request vượt header block limit và
+connection đóng bằng GOAWAY. Tăng limit, rebuild và lặp lại để xác nhận request
+thành công.
+
+## Tiếp theo
+
+- [HTTP/2 limits](/docs/http2/limits) cho bảng reference đầy đủ.
+- [Flow control](/docs/http2/flow-control) cho body backpressure.

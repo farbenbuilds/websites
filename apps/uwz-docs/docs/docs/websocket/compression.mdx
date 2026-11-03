@@ -1,0 +1,139 @@
+---
+title: Per-message deflate
+description: Enable RFC 7692 compression on one route, reserve its scratch in the startup slab, and handle expansion and fallback rules.
+sidebar:
+  order: 6
+search:
+  tags: [how-to, websocket, capacity, security]
+---
+
+RFC 7692 compression is off by default and enabled per route. µWebZockets
+negotiates `server_no_context_takeover` and `client_no_context_takeover` in both
+directions, so every message is compressed against a fresh context. That costs
+ratio and removes cross-message state that a shared context would otherwise keep.
+
+## Enable one route
+
+```zig
+_ = try app.ws("/telemetry", .{
+    .open = on_open,
+    .message = on_message,
+    .compression = .permessage_deflate,
+});
+```
+
+The client must offer `permessage-deflate` in `Sec-WebSocket-Extensions`. An
+offer with an unknown parameter, a duplicate parameter, or a server window of 8
+is skipped. If no offer parses, the upgrade succeeds without compression; it
+does not fail.
+
+The accepted response repeats the negotiated windows:
+
+| Header                     | Value                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `Sec-WebSocket-Extensions` | `permessage-deflate; server_no_context_takeover; client_no_context_takeover` |
+
+`server_max_window_bits` and `client_max_window_bits` appear when the client
+requested them.
+
+## Window ranges
+
+| Direction     | Accepted windows | Default when absent |
+| ------------- | ---------------- | ------------------- |
+| Server output | 9 through 15     | 15                  |
+| Client input  | 8 through 15     | 15                  |
+
+An 8-bit server window is rejected because the compression backend cannot encode
+it reliably. An 8-bit client window remains valid because it only affects
+decompression, which is exact.
+
+## Scratch reservation
+
+Compression needs paired receive and send scratch per connection and one codec
+context per application value. By default the first route that enables
+compression allocates the per-connection scratch in one page-allocator block
+sized for the configured connection count. That allocation happens during route
+registration, before the listener starts, not on the message path.
+
+To keep every compression byte inside the startup slab instead, set the config
+flag and build through the builder:
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(512)
+    .with_max_ws_message_size(32 * 1024)
+    .with_compression(true);
+
+var app = try builder.build(std.heap.page_allocator);
+defer app.deinit();
+```
+
+`with_compression(true)` matches `ServerConfig.compression = true`. The preset
+`ServerConfig.Preset.websocket_chat` already enables it with a 32 KiB message
+capacity.
+
+Sizing rule: the slab reserves the worst-case paired scratch for
+`max_ws_message_size`, not for the traffic you expect. Raising the message
+capacity raises the compression footprint for every connection.
+
+## Expansion and fallback
+
+Compression can make small or incompressible payloads larger. Two bounds apply:
+
+1. A decompressed message larger than `max_message_size` is rejected with close
+   code `1009`.
+2. A compressed frame larger than `max_frame_size` is sent uncompressed when the
+   raw payload fits. When neither form fits, `send` fails with
+   `error.PayloadTooLarge`.
+
+That fallback is allowed by RFC 7692: any message may be sent uncompressed. It
+also means a peer must accept mixed compressed and uncompressed messages on one
+connection.
+
+## Side channel warning
+
+:::warning[Compression leaks length information]
+Compressing attacker-influenced data next to secrets creates a compression
+oracle. Do not compress responses or messages that mix a secret with untrusted
+input in the same compression context. Disable compression on routes that carry
+session tokens, and keep secrets out of frames you echo.
+:::
+
+No-context-takeover reduces the window for this attack because each message
+starts a new context. It does not remove the per-message length signal.
+
+## HTTP/2 tunnels
+
+Per-message deflate is negotiated on HTTP/1.1 upgrades only. An RFC 8441 tunnel
+carries uncompressed frames, and the tunnel handshake does not read
+`Sec-WebSocket-Extensions`. See
+[RFC 8441 tunnels](/docs/websocket/http2-tunnels).
+
+## Verify it
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits" \
+  http://127.0.0.1:3000/telemetry
+```
+
+The `101` response includes the extension header with both no-context-takeover
+tokens. Sending the same request without the extension header upgrades without
+compression.
+
+## Measure before enabling
+
+Compression trades CPU and per-connection memory for bytes on the wire. Enable
+it when a route carries repetitive text above a few hundred bytes. For small
+JSON events, framing overhead dominates and compression often loses. Compare
+`buffered_amount()` and the `ws_compressed_messages` counter after a realistic
+load test rather than enabling it for every route.
+
+## Next
+
+- [WebSocket limits](/docs/websocket/limits) for message and frame defaults.
+- [WebSocket security](/docs/websocket/security) for the wider trust boundary.

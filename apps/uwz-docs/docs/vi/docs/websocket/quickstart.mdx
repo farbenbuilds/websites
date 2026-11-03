@@ -1,0 +1,140 @@
+---
+title: WebSocket quickstart
+description: Thêm echo route với open, message, drain và close callback, rồi kiểm tra một vòng message bằng wscat hoặc browser console.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, websocket]
+---
+
+Tutorial này biến một HTTP application thành application nhận WebSocket upgrade
+tại `/echo`. Server chào mỗi peer, echo mọi text hoặc binary message hoàn chỉnh,
+ghi log khi write queue đầy và ghi log lúc close.
+
+## Điều kiện trước
+
+- Một project µWebZockets đã có HTTP route chạy được. Bắt đầu từ
+  [Your first HTTP server](/docs/examples/first-http-server) nếu chưa có.
+- Zig 0.16.0.
+- `npx` cho `wscat`, hoặc browser có JavaScript console.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.send("welcome", .text) catch |err| {
+        std.log.err("welcome failed: {}", .{err});
+    };
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| switch (err) {
+        error.WouldBlock => {
+            std.log.warn("peer is behind: {} bytes queued", .{ws.buffered_amount()});
+        },
+        else => std.log.err("echo failed: {}", .{err}),
+    };
+}
+
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("write queue drained: {} bytes queued", .{ws.buffered_amount()});
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    std.log.info("peer closed: {} bytes still queued", .{ws.buffered_amount()});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/echo", .{
+        .open = on_open,
+        .message = on_message,
+        .drain = on_drain,
+        .close = on_close,
+    });
+
+    _ = try app.get("/", root);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+
+fn root(_: *uz.Request, res: *uz.Response) void {
+    res.text("WebSocket endpoint: ws://127.0.0.1:3000/echo") catch {};
+}
+```
+
+Callback echo bỏ message khi write queue đầy, và điều đó hiện trong log. Trang
+[backpressure](/docs/websocket/backpressure) cho thấy producer retry từ `drain`
+callback thay vì bỏ message.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+Server listen trên TCP port 3000 và vẫn giữ HTTP route cho readiness check.
+
+## Kiểm tra bằng wscat
+
+Ở terminal khác:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< welcome
+< hello
+```
+
+`wscat` gửi một text frame cho mỗi dòng. `send` copy payload vào connection write
+queue trước khi trả về, nên echo slice `message` được mượn bên trong callback là
+an toàn.
+
+## Kiểm tra bằng browser
+
+Mở một page cùng origin và chạy:
+
+```js
+const ws = new WebSocket("ws://127.0.0.1:3000/echo");
+ws.onmessage = (event) => console.log(event.data);
+ws.onopen = () => ws.send("from the browser");
+```
+
+Console in `welcome` rồi `from the browser`.
+
+## Chuyện gì vừa xảy ra
+
+1. `app.ws` đăng ký một upgrade route. Route dùng chung router, slab và worker với
+   các HTTP route.
+2. Framework kiểm tra các field RFC 6455, ghi `101 Switching Protocols` rồi gọi
+   `open`.
+3. Mỗi message hoàn chỉnh được dispatch một lần. Frame bị fragment được ghép lại
+   trước callback, và slice `message` chỉ được mượn đến khi callback trả về.
+4. `send` đóng khung một message hoàn chỉnh vào write queue có giới hạn. Queue đầy
+   trả `error.WouldBlock` thay vì tăng memory.
+5. Peer close hoàn tất closing handshake, sau đó `close` chạy một lần.
+
+## Kiểm tra failure path
+
+Dừng server, giữ `wscat` mở rồi start lại. Peer thấy socket đóng và `wscat`
+thoát, xác nhận rằng `terminate` và process exit đều đóng connection thay vì để
+nó half-open.
+
+## Tiếp theo
+
+- [Backpressure và drain](/docs/websocket/backpressure) để retry thay vì bỏ
+  message.
+- [Message và framing](/docs/websocket/messages) cho text, binary, ping và close.

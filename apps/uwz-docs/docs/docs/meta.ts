@@ -12,5 +12,8 @@ export default defineMeta({
     "examples",
     "concepts",
     "http",
+    "websocket",
+    "http2",
+    "http3",
   ],
 });

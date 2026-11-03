@@ -1,0 +1,120 @@
+---
+title: Flow control
+description: Theo connection và stream window của HTTP/2, hiểu receive replenishment và resume producer khi send credit trở lại.
+sidebar:
+  order: 6
+search:
+  tags: [concept, http2, capacity]
+---
+
+Flow control HTTP/2 dựa trên credit ở cả hai chiều. Receiver cấp credit bằng
+WINDOW_UPDATE và sender không được vượt. µWebZockets dùng cơ chế này theo hai
+cách: receive credit giữ protocol chạy, send credit giới hạn response mà peer
+không đọc.
+
+## Window ban đầu
+
+| Window             | Giá trị ban đầu | Tăng bởi                              |
+| ------------------ | --------------- | ------------------------------------- |
+| Connection receive | 65.535 byte     | `WINDOW_UPDATE` trên stream zero      |
+| Connection send    | 65.535 byte     | Peer `WINDOW_UPDATE` trên stream zero |
+| Stream receive     | 65.535 byte     | `WINDOW_UPDATE` trên stream           |
+| Stream send        | 65.535 byte     | Peer `WINDOW_UPDATE` trên stream      |
+
+Peer có thể đổi initial stream window cho stream mới qua
+`SETTINGS_INITIAL_WINDOW_SIZE`. Session áp delta cho mọi stream đang mở, đúng theo
+RFC 9113, và từ chối giá trị làm overflow window.
+
+## Receive: credit được bù mỗi DATA frame
+
+Khi DATA frame đến, session trả số byte đã nhận vào cả connection và stream
+window, rồi gửi hai WINDOW_UPDATE frame. Điều này giữ client không bị kẹt khi
+application bận.
+
+Receive flow control vì thế không phải memory bound. Request body được giới hạn
+riêng:
+
+1. `max_h2_body_size` size vùng body mỗi stream.
+2. Body vượt giới hạn reset stream với `ENHANCE_YOUR_CALM`.
+3. `content-length` trên limit reset với `PROTOCOL_ERROR` trước khi buffer byte
+   nào.
+
+Client bỏ qua reset và tiếp tục gửi vẫn tiêu credit nhưng không ghi quá stream
+buffer. Stream đã đóng.
+
+## Send: credit là tín hiệu backpressure
+
+Response body được ghi thành DATA frame. Mỗi frame reserve connection và stream
+credit trước khi ghi và hoàn credit nếu transport từ chối write.
+
+```mermaid
+flowchart TD
+    A[Response body còn lại] --> B{Có credit?}
+    B -- "connection và stream window trên zero" --> C[Gửi một DATA frame]
+    C --> D[Reserve credit, hoàn lại khi write fail]
+    D --> A
+    B -- "credit bằng zero" --> E[Park response tại offset đã lưu]
+    E --> F[WINDOW_UPDATE trên stream hoặc connection]
+    F --> B
+```
+
+Mỗi frame là giá trị nhỏ nhất trong bốn giới hạn:
+
+| Giới hạn                 | Nguồn                                         |
+| ------------------------ | --------------------------------------------- |
+| Response body còn lại    | Producer hoặc body one-shot                   |
+| Peer maximum frame size  | `SETTINGS_MAX_FRAME_SIZE`                     |
+| Transport frame capacity | Payload tối đa của write path                 |
+| Credit khả dụng          | Nhỏ nhất của connection và stream send window |
+
+Khi `available` về zero, response park. `WINDOW_UPDATE` cho stream hoặc connection
+gọi lại pending path và tiếp tục từ offset đã lưu. Handler không bị gọi lại và body
+không bị copy hai lần.
+
+## Producer streaming
+
+`StreamProducer` resume trên cùng tín hiệu. Producer chạy một lần khi được arm,
+rồi chạy lại sau mỗi drain hoặc WINDOW_UPDATE. Trả `.pending` vì cạn credit là
+đúng; trả vì dữ liệu chưa sẵn sàng là sai, vì không có gì gọi producer lần nữa.
+
+Giữ producer cursor trong application storage. Response object thuộc connection và
+có thể đổi giữa các callback. Xem
+[streaming responses](/docs/http/streaming).
+
+## WebSocket tunnel
+
+Tunnel RFC 8441 gửi WebSocket frame dưới dạng DATA. Session không có pending queue
+theo stream cho tunnel frame, nên không thể park frame dở dang. Khi không có
+credit, tunnel reset thay vì buffer.
+
+`data_frame_capacity` báo DATA payload lớn nhất mà peer và transport nhận. Tunnel
+send chia payload qua các frame đến capacity đó, và terminate khi capacity về zero.
+
+## Error
+
+| Điều kiện                                    | Kết quả                         |
+| -------------------------------------------- | ------------------------------- |
+| WINDOW_UPDATE increment zero trên connection | GOAWAY `PROTOCOL_ERROR`         |
+| WINDOW_UPDATE increment zero trên stream     | RST_STREAM `PROTOCOL_ERROR`     |
+| Window trên 2^31-1                           | GOAWAY `FLOW_CONTROL_ERROR`     |
+| DATA vượt stream window                      | RST_STREAM `FLOW_CONTROL_ERROR` |
+| DATA vượt connection window                  | GOAWAY `FLOW_CONTROL_ERROR`     |
+| DATA trên stream idle                        | GOAWAY `PROTOCOL_ERROR`         |
+
+Flow-control error không retry được trên cùng connection khi lỗi ở cấp connection.
+Client phải reconnect.
+
+## Tuning
+
+Window được ship không cấu hình được. Benchmark sweep của repository cho thấy
+worker-count scaling đủ mà không cần window tuning, nên 65.535 vẫn là initial value
+và `SETTINGS_INITIAL_WINDOW_SIZE` nhận giá trị từ peer.
+
+Nếu peer quảng bá initial window nhỏ, response lớn thành nhiều DATA frame nhỏ. Đó
+là hành vi đúng, không phải bug. Đo frame count và tần suất `WINDOW_UPDATE` trước
+khi yêu cầu window lớn hơn.
+
+## Tiếp theo
+
+- [Frame và stream](/docs/http2/frames-and-streams) cho frame state machine.
+- [HTTP/2 limits](/docs/http2/limits) cho bảng bound đầy đủ.

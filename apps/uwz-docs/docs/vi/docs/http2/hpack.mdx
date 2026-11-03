@@ -1,0 +1,160 @@
+---
+title: HPACK
+description: Đọc HPACK decoder và encoder có giới hạn, quy tắc dynamic-table storage và pseudo-header validation mà nó thực thi.
+sidebar:
+  order: 5
+search:
+  tags: [concept, http2, reference]
+---
+
+HPACK nén HTTP/2 header field dựa trên static table và dynamic table của từng
+connection. µWebZockets công bố codec dưới `uz.http2_hpack` với storage do caller
+sở hữu: không cấp phát, không global ẩn và một table cho mỗi connection.
+
+## Khi nào dùng module
+
+| Mục tiêu                                  | API                               |
+| ----------------------------------------- | --------------------------------- |
+| Phục vụ request từ application            | `App`, `Server.builder`, `listen` |
+| Nhúng HTTP/2 server session               | `uz.http2_server.server_session`  |
+| Làm việc với frame và connection state    | `uz.http2`                        |
+| Encode hoặc decode header block trực tiếp | `uz.http2_hpack`                  |
+
+Hầu hết application dùng dòng đầu. Các module thấp hơn dành cho proxy, gateway,
+protocol test và embedder sở hữu transport.
+
+## Public surface
+
+| Tên                 | Mục đích                                         |
+| ------------------- | ------------------------------------------------ |
+| `Header`            | Một cặp `name` và `value`                        |
+| `DynamicEntry`      | Metadata cho một dynamic-table row               |
+| `DynamicTable`      | Table có giới hạn trên storage caller sở hữu     |
+| `Decoder`           | Decoder request hoặc field-section có state      |
+| `Request`           | Pseudo-field decode cộng header list theo thứ tự |
+| `validate_trailers` | Quy tắc trailer section                          |
+| `encode_response`   | Encoder response field-section tối thiểu         |
+| `Error`             | Mọi decode và encode failure có tên              |
+
+## Dynamic table
+
+```zig
+var table = try uz.http2_hpack.DynamicTable.init(
+    entry_slots,
+    byte_storage,
+    4096, // Requested size; also the ceiling for peer updates.
+);
+```
+
+Byte buffer phải chứa ít nhất maximum size. Metadata buffer phải chứa
+`ceil(maximum_size / 32)` entry vì RFC 7541 tính 32 byte overhead mỗi entry.
+Truyền zero tắt dynamic indexing và cho phép buffer rỗng.
+
+Table mượn cả hai buffer trong suốt vòng đời. Không move, resize hay free chúng khi
+decoder hoặc encoder đang dùng table. Một table thuộc một connection và không
+thread-safe.
+
+Integration dùng 4096 byte, default của RFC 7541, và quảng bá đúng giá trị đó
+trong `SETTINGS_HEADER_TABLE_SIZE`.
+
+## Decode request
+
+```zig
+var decoder = uz.http2_hpack.Decoder.init(&table, max_header_list_size);
+const request = try decoder.decode_request(block, header_slots, header_storage);
+```
+
+`decode_request` trả về:
+
+| Field       | Ý nghĩa                                            |
+| ----------- | -------------------------------------------------- |
+| `headers`   | Mọi field decode theo wire order, gồm pseudo-field |
+| `fields`    | Regular field sau pseudo-field prefix              |
+| `method`    | `:method` bắt buộc                                 |
+| `scheme`    | Vắng chỉ với CONNECT thường                        |
+| `authority` | Tùy chọn với request, bắt buộc với CONNECT         |
+| `path`      | Vắng chỉ với CONNECT thường                        |
+| `protocol`  | Token `:protocol` cho extended CONNECT             |
+
+Slice decode được copy vào `header_storage`. Chúng hợp lệ đến khi bạn dùng lại
+storage đó, và table mutation sau đó không làm invalid. Khi lỗi, cả hai output
+buffer không xác định, nhưng dynamic-table update decode trước lỗi vẫn được áp
+dụng. Connection gặp decode error không thể đồng bộ lại table; session đóng nó.
+
+## Quy tắc validation
+
+| Quy tắc                                                                              | Error                                                                    |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Field name lowercase và token hợp lệ                                                 | `UppercaseHeaderName`, `InvalidHeaderName`                               |
+| Không control byte hoặc whitespace bao quanh trong value                             | `InvalidHeaderValue`                                                     |
+| Một `:method`, `:scheme`, `:path`                                                    | `DuplicatePseudoHeader`, `MissingMethod`, `MissingScheme`, `MissingPath` |
+| Pseudo-field trước regular field                                                     | `PseudoHeaderAfterRegular`                                               |
+| Tối đa một `host`, khớp `:authority`                                                 | `DuplicateHost`, `AuthorityHostMismatch`                                 |
+| `te` là `trailers` hoặc vắng                                                         | `InvalidTe`                                                              |
+| Không `connection`, `keep-alive`, `proxy-connection`, `transfer-encoding`, `upgrade` | `ConnectionSpecificHeader`                                               |
+| Huffman padding và EOS bị từ chối                                                    | `InvalidHuffman`                                                         |
+| Table-size update trước mọi header                                                   | `DynamicTableUpdateAfterHeader`                                          |
+
+CONNECT thường bỏ `:scheme` và `:path`. Extended CONNECT thêm `:protocol` và giữ
+`:authority`.
+
+## Encode response
+
+```zig
+const block = try uz.http2_hpack.encode_response(200, headers, output);
+```
+
+Encoder ghi field section tối thiểu:
+
+- Field khớp static table dùng indexed representation.
+- Field khác dùng raw literal không index.
+- `set-cookie` dùng never-indexed representation.
+- `status` bắt buộc và validate trong khoảng 100 đến 599.
+- Application pseudo-field bị từ chối với `ResponsePseudoHeader`.
+
+Output slice mượn `output`; nội dung không xác định khi lỗi. Encoder fail closed
+khi block vượt buffer của caller, và session map lỗi đó thành
+`max_h2_response_header_size`.
+
+## Trailer
+
+Trailer section chỉ mang regular field. `validate_trailers` từ chối pseudo-field,
+`content-length` và connection-specific field, và session yêu cầu `END_STREAM` trên
+trailer section.
+
+## Size storage
+
+Decoder mượn bốn vùng do caller sở hữu: byte của dynamic table, entry slot của
+nó, mảng header slot và header byte storage. Size chúng từ cùng các giá trị mà
+session dùng:
+
+```zig
+const std = @import("std");
+const hpack = @import("uWebZockets").http2_hpack;
+
+const table_capacity = 4096;
+const max_fields = 64;
+const max_field_bytes = 16 * 1024;
+
+fn decodeOne(block: []const u8) !void {
+    var table_bytes: [table_capacity]u8 = undefined;
+    var entries: [(table_capacity + 31) / 32]hpack.DynamicEntry = undefined;
+    var fields: [max_fields]hpack.Header = undefined;
+    var field_bytes: [max_field_bytes]u8 = undefined;
+
+    var table = try hpack.DynamicTable.init(&entries, &table_bytes, table_capacity);
+    var decoder = hpack.Decoder.init(&table, max_field_bytes);
+    const request = try decoder.decode_request(block, &fields, &field_bytes);
+
+    std.debug.print("{s} {s}\n", .{ request.method, request.path orelse "/" });
+}
+```
+
+Entry slot là `ceil(table_capacity / 32)` vì RFC 7541 tính 32 byte overhead mỗi
+entry. `max_field_bytes` là request header limit dùng chung với HTTP/1.1. Xem
+[HTTP/2 configuration](/docs/http2/configuration).
+
+## Tiếp theo
+
+- [Flow control](/docs/http2/flow-control) cho DATA window.
+- [Frame và stream](/docs/http2/frames-and-streams) cho state machine xung quanh.

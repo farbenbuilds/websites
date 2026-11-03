@@ -53,6 +53,21 @@ nội dung. Tìm kiếm chạy trong trình duyệt, không cần dịch vụ b�
 tài khoản. Trình duyệt tải search index từ site này trong lần dùng đầu.
 :::
 
+## Hướng dẫn protocol
+
+<CardGroup cols={3}>
+  <Card title="WebSocket" href="/docs/websocket" icon="plug-2">
+    Upgrade route, framing, backpressure, nén, heartbeat, pub/sub và đường một tunnel HTTP/2.
+  </Card>
+  <Card title="HTTP/2" href="/docs/http2" icon="git-fork">
+    ALPN hoặc cleartext prior knowledge, tám stream, HPACK, flow control và rejection code chính
+    xác.
+  </Card>
+  <Card title="HTTP/3 và QUIC" href="/docs/http3" icon="signal">
+    QUIC policy, request path, QPACK, QUERY, early data và ranh giới WebTransport.
+  </Card>
+</CardGroup>
+
 ## Helpers
 
 <CardGroup cols={1}>
@@ -70,15 +85,15 @@ các module helper-only và experimental, nằm trong roadmap của repository.
 | Surface                 | Trạng thái               | Bắt đầu tại                                                        |
 | ----------------------- | ------------------------ | ------------------------------------------------------------------ |
 | Định tuyến HTTP/1.1     | Được hỗ trợ              | [HTTP server đầu tiên](/docs/examples/first-http-server)           |
-| Định tuyến HTTP/2       | Được hỗ trợ, có giới hạn | [µWebZockets là gì](/docs/what-is-uwebsockets)                     |
-| WebSocket server        | Được hỗ trợ              | [WebSocket đầu tiên](/docs/examples/first-websocket)               |
+| Định tuyến HTTP/2       | Được hỗ trợ, có giới hạn | [HTTP/2](/docs/http2)                                              |
+| WebSocket server        | Được hỗ trợ              | [WebSocket](/docs/websocket)                                       |
 | JSON-RPC 2.0            | Được hỗ trợ              | [JSON-RPC service đầu tiên](/docs/examples/first-json-rpc-service) |
 | Kết thúc TLS 1.3        | Được hỗ trợ              | [TLS server đầu tiên](/docs/examples/first-tls-server)             |
 | Cluster thread-per-core | Được hỗ trợ trên TCP     | [Cluster đầu tiên](/docs/examples/first-cluster)                   |
-| Định tuyến HTTP/3       | Được hỗ trợ              | [HTTP/3 server đầu tiên](/docs/examples/first-http3-server)        |
-| Cluster HTTP/3          | Chưa được hỗ trợ         | [Ranh giới HTTP/3](/docs/examples/first-http3-server#boundaries)   |
-| WebTransport live       | Chưa được hỗ trợ         | [Ranh giới HTTP/3](/docs/examples/first-http3-server#boundaries)   |
-| WebSocket client        | Chưa được hỗ trợ         | [FAQ](/docs/getting-started/faq#client-scope)                      |
+| Định tuyến HTTP/3       | Được hỗ trợ              | [HTTP/3 và QUIC](/docs/http3)                                      |
+| Cluster HTTP/3          | Chưa được hỗ trợ         | [HTTP/3 limits](/docs/http3/limits)                                |
+| WebTransport live       | Chưa được hỗ trợ         | [WebTransport status](/docs/http3/webtransport)                    |
+| WebSocket client        | Chưa được hỗ trợ         | [WebSocket](/docs/websocket)                                       |
 
 [Đọc roadmap và ranh giới đầy đủ](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
 

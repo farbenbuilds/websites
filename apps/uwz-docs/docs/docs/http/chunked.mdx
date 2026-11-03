@@ -59,10 +59,11 @@ connection, HTTP/2 ends the stream, and HTTP/3 closes only the stream.
 On HTTP/1.1, `begin_chunked` sends a status line and
 `Transfer-Encoding: chunked`. Each `write_chunk` adds one chunk:
 
-```text
-<hex length>\r\n
-<body bytes>\r\n
-```
+| Part         | Bytes                 |
+| ------------ | --------------------- |
+| Chunk header | Hex length, then CRLF |
+| Chunk data   | Body bytes, then CRLF |
+| Terminator   | `0`, then CRLF twice  |
 
 The terminator is `0\r\n\r\n`. The hex length counts body bytes only; the
 framing is not included. A five-byte chunk is `5\r\nhello\r\n`.

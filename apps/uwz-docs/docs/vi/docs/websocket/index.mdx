@@ -1,0 +1,103 @@
+---
+title: WebSocket
+description: Đăng ký route RFC 6455, gửi và drain message, nén, heartbeat, publish và kiểm thử một WebSocket server có giới hạn.
+search:
+  tags: [websocket, concept]
+---
+
+Một WebSocket route là HTTP route có thêm upgrade handshake và một message path
+khác. µWebZockets triển khai RFC 6455, RFC 7692 per-message deflate, pub/sub có
+giới hạn và RFC 8441 tunnel qua HTTP/2. Application sở hữu authentication,
+origin policy và subprotocol.
+
+Phần này bắt đầu bằng một echo route chạy được, rồi giải thích handshake, framing,
+backpressure và các giới hạn vận hành quyết định một worker giữ được bao nhiêu
+peer.
+
+## Bắt đầu một route
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" href="/docs/websocket/quickstart" icon="play">
+    Thêm echo route, chạy nó và kiểm tra một vòng message đầy đủ bằng wscat.
+  </Card>
+  <Card title="Handshake và upgrade" href="/docs/websocket/handshake" icon="handshake">
+    Theo thứ tự kiểm tra RFC 6455 và xem request field nào trả về rejection nào.
+  </Card>
+  <Card title="Message và framing" href="/docs/websocket/messages" icon="message-square">
+    Gửi text, binary, ping và close, đồng thời giữ slice message được mượn trong callback.
+  </Card>
+  <Card title="Backpressure và drain" href="/docs/websocket/backpressure" icon="gauge">
+    Xử lý error.WouldBlock, đọc buffered_amount và resume producer từ drain callback.
+  </Card>
+</CardGroup>
+
+## Vận hành connection
+
+<CardGroup cols={2}>
+  <Card title="Per-message deflate" href="/docs/websocket/compression" icon="archive">
+    Bật RFC 7692 cho một route và hiểu scratch reservation cùng giới hạn expansion.
+  </Card>
+  <Card title="Heartbeat và peer im lặng" href="/docs/websocket/heartbeats" icon="heart-pulse">
+    Kết hợp heartbeat timer của worker với idle deadline để đóng peer không phản hồi.
+  </Card>
+  <Card title="Close code và shutdown" href="/docs/websocket/close-codes" icon="x-circle">
+    Chọn close code hợp lệ, kết thúc handshake và phân biệt close êm với terminate.
+  </Card>
+  <Card title="WebSocket security" href="/docs/websocket/security" icon="shield">
+    Authorize trước upgrade và coi origin, subprotocol, size, rate policy là việc của application.
+  </Card>
+</CardGroup>
+
+## Publish và scale
+
+<CardGroup cols={2}>
+  <Card title="Pub/sub" href="/docs/websocket/pub-sub" icon="radio">
+    Subscribe socket vào topic và publish tới subscriber đang sống trong một worker.
+  </Card>
+  <Card title="Cluster pub/sub" href="/docs/websocket/cluster-pub-sub" icon="network">
+    Broadcast qua nhiều worker và đọc báo cáo queued, dropped, notify_failed.
+  </Card>
+  <Card title="RFC 8441 tunnel" href="/docs/websocket/http2-tunnels" icon="git-branch">
+    Chạy một tunnel cho mỗi HTTP/2 connection và biết vì sao frame không được nén.
+  </Card>
+  <Card title="Autobahn và kiểm thử" href="/docs/websocket/testing" icon="flask-conical">
+    Kiểm thử route của bạn và đọc bằng chứng compliance do maintainer công bố.
+  </Card>
+</CardGroup>
+
+## Reference
+
+<CardGroup cols={1}>
+  <Card title="WebSocket limits" href="/docs/websocket/limits" icon="ruler">
+    Đọc mọi giới hạn frame, message, control, queue, subscription, topic và cluster inbox.
+  </Card>
+</CardGroup>
+
+## Server triển khai gì
+
+| Capability         | Status             | Chi tiết                                                                 |
+| ------------------ | ------------------ | ------------------------------------------------------------------------ |
+| RFC 6455 server    | Supported          | HTTP/1.1 upgrade trên `GET` route đăng ký bằng `App.ws`                  |
+| RFC 7692 deflate   | Supported, opt-in  | Theo route; `server_no_context_takeover` và `client_no_context_takeover` |
+| Pub/sub            | Supported          | Topic và subscription capacity cố định trong một application             |
+| RFC 8441 tunnel    | Supported, bounded | Một tunnel active cho mỗi HTTP/2 connection, không deflate               |
+| WebSocket client   | Not supported      | Client đi kèm chỉ nói HTTP/1.1                                           |
+| Origin negotiation | Application-owned  | Đọc request header trong `upgrade` callback                              |
+| Subprotocol choice | Application-owned  | Ghi `Sec-WebSocket-Protocol` khi approve upgrade                         |
+
+Default cố ý nhỏ. `App(N)` giữ một message buffer 16 KiB cho mỗi connection và
+một write queue 64 KiB cho mỗi connection; route có thể hạ frame và message limit
+nhưng không được nâng quá message capacity đã cấu hình.
+
+## Ranh giới
+
+:::warning[Không có client hay policy layer]
+µWebZockets không gửi kèm WebSocket client, origin allow list hay subprotocol
+negotiation. `upgrade` callback quyết định có nhận peer hay không, và các response
+helper HTTP mặc định vẫn dùng được trước khi switch.
+:::
+
+## Tiếp theo
+
+Đọc [WebSocket quickstart](/docs/websocket/quickstart) để thêm echo route, rồi
+[WebSocket limits](/docs/websocket/limits) trước khi size deployment.

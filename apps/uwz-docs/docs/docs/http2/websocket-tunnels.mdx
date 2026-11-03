@@ -1,0 +1,120 @@
+---
+title: WebSocket over HTTP/2
+description: Route an RFC 8441 extended CONNECT through the HTTP/2 session and handle the one-tunnel and eight-stream limits.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, http2, websocket]
+---
+
+An HTTP/2 connection can carry a WebSocket tunnel as an extended CONNECT stream.
+The route is registered with `App.ws` like any other WebSocket route, and the
+same callbacks run. This page covers the HTTP/2 side: how the request is matched,
+what it consumes, and how it fails.
+
+## Enable it
+
+No flag enables tunneling. The session advertises extended CONNECT in SETTINGS
+and accepts a CONNECT request when:
+
+- The connection negotiated `h2` through ALPN, or opened with the cleartext
+  preface.
+- The route is registered with `App.ws`.
+- The request carries `:protocol: websocket` and exactly one
+  `Sec-WebSocket-Version: 13`.
+
+```zig
+_ = try app.ws("/chat", .{
+    .upgrade = admit,
+    .open = on_open,
+    .message = on_message,
+    .close = on_close,
+});
+```
+
+## What the tunnel consumes
+
+| Resource                   | Cost per tunnel           |
+| -------------------------- | ------------------------- |
+| HTTP/2 stream slot         | 1 of 8 concurrent streams |
+| Connection WebSocket state | 1 per connection          |
+| Message buffer             | `max_ws_message_size`     |
+| Write path                 | DATA frames, no TCP ring  |
+| Compression scratch        | none                      |
+
+A connection with eight active HTTP requests cannot open a tunnel until one
+completes. In that case the HEADERS frame is answered with
+`RST_STREAM REFUSED_STREAM`. When a stream slot is free but the connection
+already carries a tunnel, the request is answered with `503 Service
+Unavailable`. The tunnel limit (one) and the stream limit (eight) are separate
+checks.
+
+## Response codes
+
+| Situation                       | Response                    |
+| ------------------------------- | --------------------------- |
+| Accepted                        | `200 OK`, then DATA frames  |
+| Second tunnel on the connection | `503 Service Unavailable`   |
+| `upgrade` callback refused      | `403 Forbidden`             |
+| Bad or missing version          | `426 Upgrade Required`      |
+| Invalid route limits            | `500 Internal Server Error` |
+| CONNECT without `:protocol`     | `501 Not Implemented`       |
+
+The first tunnel keeps running when a second request receives `503`.
+
+## Frames on the stream
+
+After the `200`, each WebSocket frame is sent as one or more DATA frames. A large
+message is split at the DATA capacity and never truncated silently: if capacity
+reaches zero, the tunnel resets.
+
+Client frames arrive as DATA and are unmasked in place before the message
+callback. A DATA frame with the end-stream flag terminates the tunnel and runs
+the close callback once; a WebSocket close frame inside DATA follows the normal
+closing handshake. See [messages and framing](/docs/websocket/messages) for
+opcode and UTF-8 rules.
+
+## What is different from HTTP/1.1
+
+- The handshake is a `CONNECT` request with a `200` response, not a `101`.
+- `Sec-WebSocket-Key` is neither required nor inspected.
+- Per-message deflate is not negotiated.
+- One tunnel per connection instead of one per connection slot.
+- Pending output is not parked in the TCP write ring.
+
+## Verify it
+
+Use a client that implements RFC 8441. The repository compliance work drives the
+HTTP/2 session through its unit suite and the shared-handler gates, not through a
+separate tunnel client.
+
+For a manual check, connect with an HTTP/2 client that supports extended CONNECT,
+send the request below, and confirm `200`:
+
+| Pseudo-field / field    | Value            |
+| ----------------------- | ---------------- |
+| `:method`               | `CONNECT`        |
+| `:protocol`             | `websocket`      |
+| `:scheme`               | `https`          |
+| `:path`                 | `/chat`          |
+| `:authority`            | `127.0.0.1:3443` |
+| `sec-websocket-version` | `13`             |
+
+Then send a masked text frame as DATA and read the echo. Repeat the CONNECT on
+the same connection to confirm `503` while the first tunnel still echoes.
+
+## Debug checklist
+
+| Symptom                    | Check                                           |
+| -------------------------- | ----------------------------------------------- |
+| `501`                      | Request lacks `:protocol: websocket`            |
+| `404`                      | No `App.ws` route matches the path              |
+| `426`                      | Version header missing, duplicated, or not `13` |
+| `503`                      | A tunnel is already active on the connection    |
+| Frames reset the tunnel    | Peer flow-control window is exhausted           |
+| Echo stops without a close | The tunnel was reset; check for `CANCEL`        |
+
+## Next
+
+- [RFC 8441 tunnels](/docs/websocket/http2-tunnels) for the protocol view.
+- [HTTP/2 limits](/docs/http2/limits) for stream and tunnel budgets.

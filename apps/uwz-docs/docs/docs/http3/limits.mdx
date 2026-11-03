@@ -1,0 +1,104 @@
+---
+title: HTTP/3 limits
+description: Read every HTTP/3 engine, stream, header, body, datagram, and response bound, plus the memory each one reserves.
+sidebar:
+  order: 10
+search:
+  tags: [reference, http3, quic, capacity]
+---
+
+HTTP/3 limits come from three places: fixed lsquic policy, `ServerConfig` fields
+that size engine storage, and HTTP-level rules in the adapter. This page lists all
+three with the result when each is exceeded.
+
+## Engine limits
+
+| Limit                   | Value             | Source                             |
+| ----------------------- | ----------------- | ---------------------------------- |
+| Connection capacity     | `max_connections` | Engine stream and connection pools |
+| Header list size        | `max_header_size` | `es_max_header_list_size`          |
+| Header sets outstanding | 1                 | `es_max_header_sets`               |
+| QPACK decoder table     | 0 bytes           | `es_qpack_dec_max_size`            |
+| Blocked QPACK streams   | 0                 | `es_qpack_dec_max_blocked`         |
+| UDP receive payload     | 2048 bytes        | Packet slot                        |
+| Base PLPMTU             | 1200 bytes        | QUIC minimum                       |
+| Max PLPMTU              | 1472 bytes        | Ethernet-safe                      |
+| Send batch              | 16 packets        | Coalesced transmit                 |
+| Delayed 0-RTT packets   | 0                 | TLS rejects 0-RTT                  |
+| Processing threshold    | 10 ms             | One lsquic pass                    |
+
+## HTTP limits
+
+| Limit                          | Default | Builder override                    | On excess                           |
+| ------------------------------ | ------- | ----------------------------------- | ----------------------------------- |
+| `max_h3_body_size`             | 16 KiB  | `with_max_h3_body_size`             | `413 Payload Too Large`             |
+| `max_h3_response_header_size`  | 4 KiB   | `with_max_h3_response_header_size`  | `error.BufferOverflow`              |
+| `max_h3_response_header_count` | 64      | `with_max_h3_response_header_count` | `error.BufferOverflow`              |
+| `max_header_count`             | 64      | `with_max_header_count`             | Request rejected                    |
+| `max_header_size`              | 16 KiB  | `with_max_header_size`              | Request rejected                    |
+| Response body per stream       | 64 KiB  | `with_write_queue_size`             | One-shot `end` returns `WouldBlock` |
+
+`max_h3_response_header_size` above 65535 and `max_h3_response_header_count` above
+4096 are rejected at startup with `error.InvalidHttp3Capacity`.
+
+## Validation results
+
+| Condition                              | Result                        |
+| -------------------------------------- | ----------------------------- |
+| Duplicate pseudo-field                 | Stream `H3_MESSAGE_ERROR`     |
+| Pseudo-field after a regular field     | Stream `H3_MESSAGE_ERROR`     |
+| Uppercase or invalid field name        | Stream `H3_MESSAGE_ERROR`     |
+| Connection-specific field              | Stream `H3_MESSAGE_ERROR`     |
+| Body exceeds `max_h3_body_size`        | `413 Payload Too Large`       |
+| Body disagrees with `content-length`   | `400 Bad Request`             |
+| `QUERY` without a valid `Content-Type` | `400 Bad Request`             |
+| `CONNECT` request                      | `501 Not Implemented`         |
+| WebTransport session request           | Not advertised; not reachable |
+
+## Memory
+
+The engine allocates these regions at startup, outside the application slab:
+
+| Region                  | Formula                                  |
+| ----------------------- | ---------------------------------------- |
+| Header storage          | `2 * capacity * max_header_size`         |
+| Request body storage    | `capacity * max_h3_body_size`            |
+| Response header storage | `capacity * max_h3_response_header_size` |
+| Response body storage   | `capacity * write_queue_size`            |
+| Packet storage          | `max(16, capacity * 4) * 2048`           |
+
+With the defaults and `max_connections = 1024`:
+
+| Region           | Bytes  |
+| ---------------- | ------ |
+| Headers          | 32 MiB |
+| Request bodies   | 16 MiB |
+| Response headers | 4 MiB  |
+| Response bodies  | 64 MiB |
+| Packets          | 8 MiB  |
+
+That is roughly 124 MiB of engine storage before the application slab, which is
+why HTTP/3 deployments choose a smaller connection count than TCP-only services.
+The default `max_connections = 1024` is tuned for TCP; set it explicitly for a
+QUIC listener.
+
+## Datagrams
+
+| Field               | Default | Effect                 |
+| ------------------- | ------- | ---------------------- |
+| `max_datagram_size` | 0       | Datagrams disabled     |
+| `datagram_slots`    | 0       | No ring slots reserved |
+
+Enabling both does not enable a live WebTransport path. The listener does not
+advertise datagram support. See
+[WebTransport status](/docs/http3/webtransport).
+
+## Clustering
+
+There is no HTTP/3 cluster mode. One process owns one QUIC engine and one UDP
+socket. `listen_udp` is not available on a cluster worker group.
+
+## Next
+
+- [Configuration](/docs/http3/configuration) for the builder calls.
+- [QUIC transport](/docs/http3/quic-transport) for the fixed policy.

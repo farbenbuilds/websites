@@ -1,0 +1,109 @@
+---
+title: QUERY qua HTTP/3
+description: Route request QUERY theo RFC 10008, thỏa content-type rule của transport và coi replay safety là quyết định của application.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, http3, http, routing]
+---
+
+RFC 10008 định nghĩa `QUERY` là method an toàn, idempotent, mang query trong request
+body thay vì URL. µWebZockets coi nó là method hạng nhất trên mọi transport, gồm
+HTTP/3. Transport thực thi một rule; handler sở hữu phần còn lại.
+
+## Đăng ký route
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const body = req.bytes();
+    run_query(body, res) catch |err| {
+        std.log.err("query failed: {}", .{err});
+    };
+}
+
+_ = try app.query("/search", search);
+```
+
+`App.query` map tới `HttpMethod.query`, giống `get` map tới `HttpMethod.get`. Method
+parser nhận token viết hoa `QUERY` trên HTTP/1.1, HTTP/2 và HTTP/3.
+
+## Content-type rule
+
+Transport yêu cầu `Content-Type` hợp lệ về syntax trên mọi `QUERY` request:
+
+| Trạng thái header                   | Kết quả                         |
+| ----------------------------------- | ------------------------------- |
+| Thiếu                               | `400 Bad Request`               |
+| Trùng                               | `400 Bad Request`               |
+| Media type rỗng hoặc sai            | `400 Bad Request`               |
+| `application/json`                  | Nhận; handler quyết định schema |
+| `application/x-www-form-urlencoded` | Nhận; handler quyết định schema |
+
+Check chỉ kiểm tra syntax. Nó nhận `type/subtype` với parameter tùy chọn và từ chối
+type, subtype hoặc parameter sai. Nó không so media type với danh sách.
+
+Transport trả lời trước khi handler chạy, với body cố định
+`QUERY requires a valid Content-Type`. Handler không override được check này.
+
+## Policy của handler
+
+Transport không biết endpoint của bạn hỗ trợ media type nào. Quyết định trong
+handler:
+
+```zig
+fn search(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_unique_header("Content-Type") orelse {
+        res.end("415 Unsupported Media Type", "Content-Type required") catch {};
+        return;
+    };
+    if (!std.mem.startsWith(u8, content_type, "application/json")) {
+        res.end("415 Unsupported Media Type", "Use application/json") catch {};
+        return;
+    }
+    run_json_query(req.bytes(), res);
+}
+```
+
+Trả `415 Unsupported Media Type` khi syntax hợp lệ nhưng media type không hỗ trợ.
+Khác biệt này quan trọng với client: `400` nghĩa request sai, `415` nghĩa server
+không nhận representation này.
+
+## Replay safety
+
+`method_is_replay_safe` phân loại `QUERY` là an toàn, nên policy TCP 0-RTT nhận nó
+trước khi handshake confirmed. Phân loại nói method an toàn theo định nghĩa; nó
+không chứng minh handler của bạn idempotent.
+
+Nếu endpoint query có mutate state, vẫn coi nó không an toàn:
+
+- Không dựa vào 0-RTT admission.
+- Thêm idempotency key hoặc single-use token.
+- Giữ mutation ra khỏi `QUERY` route và dùng `POST`.
+
+## Ghi chú response
+
+Response `QUERY` theo quy tắc response thường của transport. Body được phép, ngữ
+nghĩa `HEAD` không áp dụng, và streaming hoạt động như cũ. Header `Content-Location`
+hữu ích khi query xác định resource cũng fetch được bằng `GET`.
+
+## Kiểm tra
+
+```sh
+curl --http3-only -k -X QUERY \
+  -H "Content-Type: application/json" \
+  --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+```sh
+curl --http3-only -k -X QUERY --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+Request đầu tới handler. Request thứ hai không có `Content-Type` và nhận
+`400 Bad Request` trước khi handler chạy.
+
+## Tiếp theo
+
+- [HTTP/3 request path](/docs/http3/request-path) cho chuỗi decode.
+- [HTTP errors](/docs/http/errors) cho status helper dùng ở trên.

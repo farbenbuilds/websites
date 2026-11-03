@@ -1,0 +1,111 @@
+---
+title: WebTransport status
+description: Separate the draft-16 WebTransport helper models from the live listener, which answers CONNECT with 501 and advertises no datagrams.
+sidebar:
+  order: 9
+search:
+  tags: [concept, http3, quic, security]
+---
+
+WebTransport is modeled in source but not connected to the live QUIC listener.
+This page states the exact status so an integration decision does not rest on a
+helper module that never receives traffic.
+
+:::danger[WebTransport is not live]
+The live listener rejects a plain `CONNECT` with `501 Not Implemented`. It does
+not advertise extended CONNECT, HTTP/3 datagrams, or WebTransport settings. Do
+not describe this version as supporting WebTransport.
+:::
+
+## What exists
+
+`uz.webtransport` is a bounded draft-16 model set:
+
+| Module area       | Surface                                                                      |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Settings          | `Settings`, `apply_setting`, `encode_server_settings`                        |
+| Capability checks | `server_requirements_met`, `client_requirements_met`, `flow_control_enabled` |
+| Sessions          | `session_slab`, `SessionHandle`, `SessionState`                              |
+| Stream headers    | Unidirectional and bidirectional header codecs                               |
+| Datagrams         | `Datagram`, `encode_datagram`, `decode_datagram`                             |
+| Capsules          | Close, drain, max-data, max-streams capsules                                 |
+| Varints           | `Varint`, `encode_varint`, `decode_varint`                                   |
+
+`uz.http3_extensions` adds RFC 9220 extended CONNECT validation, push
+bookkeeping, and early-data policy. These modules are useful for tests, protocol
+modeling, and a future listener. They do not route live traffic.
+
+## What blocks the live path
+
+The pinned lsquic build does not define `LSQUIC_WEBTRANSPORT_SERVER_SUPPORT`, so
+these server interfaces compile out:
+
+- `SETTINGS_ENABLE_CONNECT_PROTOCOL` advertisement.
+- `SETTINGS_H3_DATAGRAM_ENABLED` advertisement.
+- The WebTransport session API and its draft settings.
+- Server-initiated unidirectional streams.
+- `RESET_STREAM_AT`.
+
+The engine's `es_datagrams` setting also stays at its zero default, so the live
+listener advertises no RFC 9221 datagram transport parameter.
+
+Even with raw datagrams enabled, the engine receives an lsquic connection and raw
+bytes. It does not hold the `App` or its datagram tables, so it cannot resolve a
+session id, path, and sequence number into `App.dispatch_datagram`.
+
+## What the listener does
+
+| Request                           | Response                 |
+| --------------------------------- | ------------------------ |
+| Plain CONNECT                     | `501 Not Implemented`    |
+| Extended CONNECT with `:protocol` | Not advertised; rejected |
+| HTTP/3 DATAGRAM frame             | Not negotiated           |
+| WebTransport session capsule      | Not reached              |
+
+`App.datagram`, `App.datagram_context`, `dispatch_datagram`, and
+`next_datagram` exist in the public API but are unreachable from QUIC input in
+this release.
+
+## Datagram configuration
+
+`max_datagram_size` and `datagram_slots` default to zero, which disables the
+datagram ring. The preset `ServerConfig.Preset.webtransport_realtime` sets
+`max_datagram_size = 1200` and `datagram_slots = 64`, but enabling the preset does
+not enable the QUIC data path. Treat those fields as reserved for the
+implementation in ADR 0001.
+
+## Migration path
+
+The accepted plan is in
+[ADR 0001](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/adr/0001-http3-datagram-and-webtransport.md).
+It requires the maintained lsquic fork to:
+
+1. Advertise extended CONNECT and HTTP/3 datagrams.
+2. Create a WebTransport session bound to an engine connection slot.
+3. Bind the existing session slab, datagram ring, and datagram router to slots.
+4. Route decoded datagrams through `App.dispatch_datagram`.
+5. Pass a WebTransport client in the HTTP/3 compliance gate.
+
+Until all five hold, the live listener stays capability-gated. v2.2.0 owns the
+implementation and the capability change.
+
+## Verify the current status
+
+```sh
+curl --http3-only -k -X CONNECT https://127.0.0.1:8443/
+```
+
+```console
+HTTP/3 501
+HTTP/3 CONNECT is not supported
+```
+
+Any page, guide, or agent instruction that says WebTransport works is wrong for
+this version. Use HTTP request/response or an RFC 8441 WebSocket tunnel over
+HTTP/2 instead.
+
+## Next
+
+- [HTTP/3 limits](/docs/http3/limits) for the live bounds.
+- [Interoperability testing](/docs/http3/testing) for the gate that must pass
+  before this page changes.
