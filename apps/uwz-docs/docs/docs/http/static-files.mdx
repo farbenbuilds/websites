@@ -133,11 +133,7 @@ copied into a user-space buffer and is not capped by the per-mount file buffer;
 
 TLS, HTTP/2, and HTTP/3 return `error.ZeroCopyUnavailable` from `send_file`, so
 the mount falls back to a bounded buffered read. The buffer is sized at compile
-time as:
-
-```text
-static_file_capacity = write_queue_size - 4096
-```
+time as `write_queue_size - 4096`.
 
 The capacity is the full write queue at 4096 bytes or smaller; at the default
 64 KiB queue it holds 60 KiB. A larger file returns `FileTooLarge`, mapped to `413 Content Too Large`.

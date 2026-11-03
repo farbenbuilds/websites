@@ -90,12 +90,14 @@ cost of more header bytes on the wire.
 
 ## Size it from the slab
 
-```text
-h2 bytes per connection =
-    header_block_size
-  + 8 * (header_size + body_size + response_header_size)
-  + response_header_count * field metadata
-```
+| Component               | Bytes                                      |
+| ----------------------- | ------------------------------------------ |
+| Shared header block     | `max_h2_header_block_size`                 |
+| Request headers         | `8 * max_header_size`                      |
+| Request bodies          | `8 * max_h2_body_size`                     |
+| Response bodies         | `8 * max_h2_body_size`                     |
+| Response headers        | `8 * max_h2_response_header_size`          |
+| Response field metadata | `8 * max_h2_response_header_count` entries |
 
 Use `h2_session_bytes()` for the exact value. For a whole-server view, see
 [capacity model](/docs/concepts/capacity-model) and

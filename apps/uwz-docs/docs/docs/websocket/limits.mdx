@@ -102,11 +102,11 @@ The message region is `max_ws_message_size` per connection. The write queue is
 scratch per connection when the route enables it and the slab does not already
 reserve it.
 
-```text
-message bytes  = max_connections * max_ws_message_size
-queue bytes    = max_connections * write_queue_size
-compression    = max_connections * 2 * scratch_bound(max_ws_message_size)
-```
+| Region          | Bytes                                                      |
+| --------------- | ---------------------------------------------------------- |
+| Message buffers | `max_connections * max_ws_message_size`                    |
+| Write queues    | `max_connections * write_queue_size`                       |
+| Compression     | `max_connections * 2 * scratch_bound(max_ws_message_size)` |
 
 Use `Server.builder(...).slab_bytes()` for the exact total instead of adding
 these by hand. See [capacity model](/docs/concepts/capacity-model) for the other

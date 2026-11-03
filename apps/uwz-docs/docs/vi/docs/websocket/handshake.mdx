@@ -25,9 +25,11 @@ application policy và chạy trước response đó.
 Key được mượn từ request đã parse. Nó không bị lưu hay copy; framework hash key
 với GUID của RFC 6455 và trả về accept token 28 byte.
 
-```text
-Sec-WebSocket-Accept = base64(SHA-1(Sec-WebSocket-Key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-```
+| Step           | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| Hash input     | `Sec-WebSocket-Key` followed by `258EAFA5-E914-47DA-95CA-C5AB0DC85B11` |
+| Hash           | SHA-1 of the input, 20 bytes                                           |
+| Response token | Base64 of the hash, 28 bytes                                           |
 
 ## Thứ tự kiểm tra
 
@@ -88,15 +90,14 @@ quyết định của application:
 
 ## Response
 
-Khi thành công, route ghi:
+Khi thành công, route ghi response head này:
 
-```text
-HTTP/1.1 101 Switching Protocols
-Upgrade: websocket
-Connection: Upgrade
-Sec-WebSocket-Accept: <token>
-
-```
+| Dòng                   | Giá trị                            |
+| ---------------------- | ---------------------------------- |
+| Status                 | `HTTP/1.1 101 Switching Protocols` |
+| `Upgrade`              | `websocket`                        |
+| `Connection`           | `Upgrade`                          |
+| `Sec-WebSocket-Accept` | Token 28 byte tính từ key          |
 
 Extension header chỉ xuất hiện khi route bật per-message deflate và client đề
 nghị window tương thích. Xem

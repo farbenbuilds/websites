@@ -99,11 +99,11 @@ Message region là `max_ws_message_size` mỗi connection. Write queue là
 `write_queue_size` mỗi connection. Nén thêm paired receive và send scratch mỗi
 connection khi route bật nó và slab chưa reserve sẵn.
 
-```text
-message bytes  = max_connections * max_ws_message_size
-queue bytes    = max_connections * write_queue_size
-compression    = max_connections * 2 * scratch_bound(max_ws_message_size)
-```
+| Region         | Byte                                                       |
+| -------------- | ---------------------------------------------------------- |
+| Message buffer | `max_connections * max_ws_message_size`                    |
+| Write queue    | `max_connections * write_queue_size`                       |
+| Compression    | `max_connections * 2 * scratch_bound(max_ws_message_size)` |
 
 Dùng `Server.builder(...).slab_bytes()` để lấy tổng chính xác thay vì tự cộng. Xem
 [capacity model](/docs/concepts/capacity-model) cho các slab region khác.

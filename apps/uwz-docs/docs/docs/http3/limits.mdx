@@ -59,13 +59,13 @@ three with the result when each is exceeded.
 
 The engine allocates these regions at startup, outside the application slab:
 
-```text
-header storage        = 2 * capacity * max_header_size
-request body storage  = capacity * max_h3_body_size
-response header       = capacity * max_h3_response_header_size
-response body         = capacity * write_queue_size
-packet storage        = max(16, capacity * 4) * 2048
-```
+| Region                  | Formula                                  |
+| ----------------------- | ---------------------------------------- |
+| Header storage          | `2 * capacity * max_header_size`         |
+| Request body storage    | `capacity * max_h3_body_size`            |
+| Response header storage | `capacity * max_h3_response_header_size` |
+| Response body storage   | `capacity * write_queue_size`            |
+| Packet storage          | `max(16, capacity * 4) * 2048`           |
 
 With the defaults and `max_connections = 1024`:
 

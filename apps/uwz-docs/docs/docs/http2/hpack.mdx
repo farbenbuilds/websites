@@ -127,15 +127,35 @@ requires `END_STREAM` on the trailer section.
 
 ## Storage sizing
 
-```text
-byte storage    = dynamic_table_size
-entry storage   = ceil(dynamic_table_size / 32)
-header slots    = max_header_count
-header storage  = max_header_size
+The decoder borrows four caller-owned regions: the dynamic-table bytes, its entry
+slots, the header slot array, and the header byte storage. Size them from the
+same values the session uses:
+
+```zig
+const std = @import("std");
+const hpack = @import("uWebZockets").http2_hpack;
+
+const table_capacity = 4096;
+const max_fields = 64;
+const max_field_bytes = 16 * 1024;
+
+fn decodeOne(block: []const u8) !void {
+    var table_bytes: [table_capacity]u8 = undefined;
+    var entries: [(table_capacity + 31) / 32]hpack.DynamicEntry = undefined;
+    var fields: [max_fields]hpack.Header = undefined;
+    var field_bytes: [max_field_bytes]u8 = undefined;
+
+    var table = try hpack.DynamicTable.init(&entries, &table_bytes, table_capacity);
+    var decoder = hpack.Decoder.init(&table, max_field_bytes);
+    const request = try decoder.decode_request(block, &fields, &field_bytes);
+
+    std.debug.print("{s} {s}\n", .{ request.method, request.path orelse "/" });
+}
 ```
 
-`max_header_size` and `max_header_count` are shared with HTTP/1.1. See
-[HTTP/2 configuration](/docs/http2/configuration).
+Entry slots are `ceil(table_capacity / 32)` because RFC 7541 charges 32 bytes of
+overhead per entry. `max_field_bytes` is the request header limit shared with
+HTTP/1.1. See [HTTP/2 configuration](/docs/http2/configuration).
 
 ## Next
 

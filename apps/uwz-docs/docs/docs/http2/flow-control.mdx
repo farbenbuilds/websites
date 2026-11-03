@@ -48,10 +48,25 @@ A response body is written in DATA frames. Each frame reserves connection and
 stream credit before it is written and refunds it if the transport refuses the
 write.
 
-```text
-available = min(connection_send_window, stream_send_window)
-frame     = min(remaining_body, peer_max_frame_size, transport_frame_capacity, available)
+```mermaid
+flowchart TD
+    A[Response body remains] --> B{Credit available?}
+    B -- "connection and stream window above zero" --> C[Send one DATA frame]
+    C --> D[Reserve credit, refund on write failure]
+    D --> A
+    B -- "credit is zero" --> E[Park the response at the saved offset]
+    E --> F[WINDOW_UPDATE on stream or connection]
+    F --> B
 ```
+
+Each frame is the smallest of four values:
+
+| Limit                    | Source                                       |
+| ------------------------ | -------------------------------------------- |
+| Remaining response body  | The producer or the one-shot body            |
+| Peer maximum frame size  | `SETTINGS_MAX_FRAME_SIZE`                    |
+| Transport frame capacity | The write path's maximum payload             |
+| Available credit         | Minimum of connection and stream send window |
 
 When `available` reaches zero, the response parks. `WINDOW_UPDATE` for either the
 stream or the connection calls the pending path again and continues from the

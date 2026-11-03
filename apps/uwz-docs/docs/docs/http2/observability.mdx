@@ -14,11 +14,8 @@ from and how to read them.
 
 ## Development log
 
-HTTP/2 dispatch emits one `http_request` record when the response completes:
-
-```text
-14:32:18.412 | GET[/items] : 200
-```
+HTTP/2 dispatch emits one `http_request` record when the response completes, for
+example `14:32:18.412 | GET[/items] : 200`.
 
 | Field     | Source                                  |
 | --------- | --------------------------------------- |
@@ -42,12 +39,7 @@ runs are not slowed. Use `set_dev_log_file` for a file sink.
 ## Request counter
 
 Each completed HTTP/2 exchange advances the `http_requests` counter. The
-Prometheus rendering exposes it as:
-
-```text
-# TYPE uwz_http_requests_total counter
-uwz_http_requests_total 42
-```
+Prometheus rendering exposes it as the `uwz_http_requests_total` counter.
 
 The registry is per worker. A four-worker cluster has four registries, each with
 its own count, and no shared aggregation step.

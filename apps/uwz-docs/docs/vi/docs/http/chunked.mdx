@@ -58,10 +58,11 @@ stream, và HTTP/3 chỉ đóng stream.
 Trên HTTP/1.1, `begin_chunked` gửi status line và
 `Transfer-Encoding: chunked`. Mỗi `write_chunk` thêm một chunk:
 
-```text
-<hex length>\r\n
-<body bytes>\r\n
-```
+| Part         | Bytes                 |
+| ------------ | --------------------- |
+| Chunk header | Hex length, then CRLF |
+| Chunk data   | Body bytes, then CRLF |
+| Terminator   | `0`, then CRLF twice  |
 
 Terminator là `0\r\n\r\n`. Độ dài hex chỉ tính byte body; framing không được
 tính. Chunk năm byte là `5\r\nhello\r\n`.

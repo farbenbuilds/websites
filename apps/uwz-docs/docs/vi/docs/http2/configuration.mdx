@@ -87,12 +87,14 @@ per-connection với chi phí nhiều header byte hơn trên wire.
 
 ## Size từ slab
 
-```text
-h2 bytes per connection =
-    header_block_size
-  + 8 * (header_size + body_size + response_header_size)
-  + response_header_count * field metadata
-```
+| Thành phần              | Byte                                     |
+| ----------------------- | ---------------------------------------- |
+| Shared header block     | `max_h2_header_block_size`               |
+| Request header          | `8 * max_header_size`                    |
+| Request body            | `8 * max_h2_body_size`                   |
+| Response body           | `8 * max_h2_body_size`                   |
+| Response header         | `8 * max_h2_response_header_size`        |
+| Response field metadata | `8 * max_h2_response_header_count` entry |
 
 Dùng `h2_session_bytes()` cho giá trị chính xác. Cho góc nhìn toàn server, xem
 [capacity model](/docs/concepts/capacity-model) và

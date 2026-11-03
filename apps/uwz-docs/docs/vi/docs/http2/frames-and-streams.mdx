@@ -32,14 +32,21 @@ không bao giờ kết thúc request sẽ giữ stream slot cho đến khi conne
 
 ## Preface
 
-Byte đầu tiên trên cleartext connection được so với:
+Byte đầu tiên trên cleartext connection được so với hằng `client_preface` công
+khai:
 
-```text
-PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+test "cleartext preface is 24 bytes" {
+    try std.testing.expectEqual(@as(usize, 24), uz.http2.client_preface.len);
+}
 ```
 
-Sai khớp thì fallback sang HTTP/1.1 parsing. Sau khi preface được nhận, frame đầu
-tiên phải là SETTINGS không có ACK; bất kỳ frame khác gửi GOAWAY `PROTOCOL_ERROR`.
+Các byte là `PRI * HTTP/2.0`, CRLF hai lần, `SM`, rồi CRLF hai lần. Sai khớp thì
+fallback sang HTTP/1.1 parsing. Sau khi preface được nhận, frame đầu tiên phải là
+SETTINGS không có ACK; bất kỳ frame khác gửi GOAWAY `PROTOCOL_ERROR`.
 
 ## Frame header
 

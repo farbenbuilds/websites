@@ -50,11 +50,11 @@ open for later writes.
 
 `sse()` calls `begin_chunked` with this head:
 
-```text
-Content-Type: text/event-stream
-Cache-Control: no-cache
-X-Accel-Buffering: no
-```
+| Header              | Value               |
+| ------------------- | ------------------- |
+| `Content-Type`      | `text/event-stream` |
+| `Cache-Control`     | `no-cache`          |
+| `X-Accel-Buffering` | `no`                |
 
 `no-cache` allows storage but requires revalidation, so a proxy does not serve a
 stale event stream. `X-Accel-Buffering: no` asks nginx-style proxies not to
@@ -75,7 +75,7 @@ Input is split on `\n`. A trailing `\r` on each line is removed before framing,
 so CRLF input produces the same fields as LF input. An empty `data` value still
 produces one empty `data:` field.
 
-```text
+```console
 event: tick
 data: one
 data: two

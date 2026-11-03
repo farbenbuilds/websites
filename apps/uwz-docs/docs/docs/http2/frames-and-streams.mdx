@@ -33,15 +33,22 @@ keeps its stream slot reserved until the connection closes.
 
 ## Preface
 
-The first bytes on a cleartext connection are compared against:
+The first bytes on a cleartext connection are compared against the public
+`client_preface` constant:
 
-```text
-PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+test "cleartext preface is 24 bytes" {
+    try std.testing.expectEqual(@as(usize, 24), uz.http2.client_preface.len);
+}
 ```
 
-A mismatch falls back to HTTP/1.1 parsing. Once the preface is accepted, the
-first frame must be a non-acknowledged SETTINGS frame; anything else sends GOAWAY
-with `PROTOCOL_ERROR`.
+The bytes are `PRI * HTTP/2.0`, CRLF twice, `SM`, then CRLF twice. A mismatch
+falls back to HTTP/1.1 parsing. Once the preface is accepted, the first frame
+must be a non-acknowledged SETTINGS frame; anything else sends GOAWAY with
+`PROTOCOL_ERROR`.
 
 ## Frame header
 

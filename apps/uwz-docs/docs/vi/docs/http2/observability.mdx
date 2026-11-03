@@ -13,11 +13,8 @@ một record mỗi frame. Trang này chỉ ra nguồn của các tín hiệu đ�
 
 ## Development log
 
-HTTP/2 dispatch phát một record `http_request` khi response hoàn tất:
-
-```text
-14:32:18.412 | GET[/items] : 200
-```
+HTTP/2 dispatch phát một record `http_request` khi response hoàn tất, ví dụ
+`14:32:18.412 | GET[/items] : 200`.
 
 | Field     | Nguồn                                       |
 | --------- | ------------------------------------------- |
@@ -39,12 +36,7 @@ và im lặng khi stderr không phải terminal, nên run redirect không bị c
 ## Request counter
 
 Mỗi HTTP/2 exchange hoàn tất tăng counter `http_requests`. Prometheus rendering
-công bố nó như:
-
-```text
-# TYPE uwz_http_requests_total counter
-uwz_http_requests_total 42
-```
+công bố nó dưới dạng counter `uwz_http_requests_total`.
 
 Registry tính theo worker. Cluster bốn worker có bốn registry, mỗi cái có count
 riêng, và không có bước aggregate dùng chung.

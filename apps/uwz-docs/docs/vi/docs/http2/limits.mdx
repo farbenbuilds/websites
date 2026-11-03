@@ -45,12 +45,12 @@ count gồm field `:status` và field `content-length` được tạo.
 
 Mỗi slot trong tám slot reserve:
 
-```text
-request header bytes   = max_header_size
-request body bytes     = max_h2_body_size
-response body bytes    = max_h2_body_size
-response header block  = max_h2_response_header_size
-```
+| Region                | Byte mỗi stream               |
+| --------------------- | ----------------------------- |
+| Request header        | `max_header_size`             |
+| Request body          | `max_h2_body_size`            |
+| Response body         | `max_h2_body_size`            |
+| Response header block | `max_h2_response_header_size` |
 
 Cộng một header block `max_h2_header_block_size` dùng chung mỗi connection và HPACK
 table storage. Dùng `h2_session_bytes()` cho giá trị chính xác mỗi connection.

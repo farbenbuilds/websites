@@ -28,9 +28,9 @@ không offer nào parse được, upgrade thành công mà không nén; nó khô
 
 Response được chấp nhận lặp lại window đã thương lượng:
 
-```text
-Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover
-```
+| Header                     | Giá trị                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `Sec-WebSocket-Extensions` | `permessage-deflate; server_no_context_takeover; client_no_context_takeover` |
 
 `server_max_window_bits` và `client_max_window_bits` xuất hiện khi client yêu cầu.
 

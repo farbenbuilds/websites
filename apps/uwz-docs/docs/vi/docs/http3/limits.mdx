@@ -58,13 +58,13 @@ storage, và rule HTTP trong adapter. Trang này liệt kê cả ba cùng kết 
 
 Engine cấp phát các region này lúc startup, ngoài application slab:
 
-```text
-header storage        = 2 * capacity * max_header_size
-request body storage  = capacity * max_h3_body_size
-response header       = capacity * max_h3_response_header_size
-response body         = capacity * write_queue_size
-packet storage        = max(16, capacity * 4) * 2048
-```
+| Region                  | Công thức                                |
+| ----------------------- | ---------------------------------------- |
+| Header storage          | `2 * capacity * max_header_size`         |
+| Request body storage    | `capacity * max_h3_body_size`            |
+| Response header storage | `capacity * max_h3_response_header_size` |
+| Response body storage   | `capacity * write_queue_size`            |
+| Packet storage          | `max(16, capacity * 4) * 2048`           |
 
 Với default và `max_connections = 1024`:
 

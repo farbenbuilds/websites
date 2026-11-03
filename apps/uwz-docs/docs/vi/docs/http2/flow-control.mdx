@@ -47,10 +47,25 @@ buffer. Stream đã đóng.
 Response body được ghi thành DATA frame. Mỗi frame reserve connection và stream
 credit trước khi ghi và hoàn credit nếu transport từ chối write.
 
-```text
-available = min(connection_send_window, stream_send_window)
-frame     = min(remaining_body, peer_max_frame_size, transport_frame_capacity, available)
+```mermaid
+flowchart TD
+    A[Response body còn lại] --> B{Có credit?}
+    B -- "connection và stream window trên zero" --> C[Gửi một DATA frame]
+    C --> D[Reserve credit, hoàn lại khi write fail]
+    D --> A
+    B -- "credit bằng zero" --> E[Park response tại offset đã lưu]
+    E --> F[WINDOW_UPDATE trên stream hoặc connection]
+    F --> B
 ```
+
+Mỗi frame là giá trị nhỏ nhất trong bốn giới hạn:
+
+| Giới hạn                 | Nguồn                                         |
+| ------------------------ | --------------------------------------------- |
+| Response body còn lại    | Producer hoặc body one-shot                   |
+| Peer maximum frame size  | `SETTINGS_MAX_FRAME_SIZE`                     |
+| Transport frame capacity | Payload tối đa của write path                 |
+| Credit khả dụng          | Nhỏ nhất của connection và stream send window |
 
 Khi `available` về zero, response park. `WINDOW_UPDATE` cho stream hoặc connection
 gọi lại pending path và tiếp tục từ offset đã lưu. Handler không bị gọi lại và body

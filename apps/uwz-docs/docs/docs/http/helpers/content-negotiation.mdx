@@ -51,11 +51,8 @@ The parser accepts `0`, `1`, `0.` followed by one to three digits, and
 zero-prefixed weight with more than three fractional digits, and drops the whole
 entry.
 
-```text
-Accept: text/html, application/json;q=0.9, image/avif;q=0
-```
-
-This scores `text/html` at `1000`, `application/json` at `900`, and
+For example, `Accept: text/html, application/json;q=0.9, image/avif;q=0`
+scores `text/html` at `1000`, `application/json` at `900`, and
 `image/avif` at `0`.
 
 Because specificity is resolved before quality, `text/*;q=1, text/html;q=0.5`
