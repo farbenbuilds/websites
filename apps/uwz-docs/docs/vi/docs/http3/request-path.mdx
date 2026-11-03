@@ -12,14 +12,13 @@ và HTTP/2 dùng. Nó không dựng request text HTTP/1.1 rồi parse lại. Tra
 một request từ QUIC stream tới handler và quay lại.
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[QUIC stream] --> B[QPACK decode]
-    B --> C[Header validation]
+    B --> C[Kiểm tra header]
     C --> D[Request]
-    D --> E[Router and handler]
-    E --> F[Status and header block]
-    F --> G[QPACK field section]
-    G --> H[DATA frames]
+    D --> E[Router và handler]
+    E --> F[QPACK response head]
+    F --> G[DATA frame]
 ```
 
 Luồng đi một chiều: decode, validate, dispatch, encode. Validation failure dừng ở

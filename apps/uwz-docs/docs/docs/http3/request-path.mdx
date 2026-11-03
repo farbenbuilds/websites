@@ -13,14 +13,13 @@ re-parse it. This page follows one request from the QUIC stream to the handler a
 back.
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[QUIC stream] --> B[QPACK decode]
-    B --> C[Header validation]
+    B --> C[Validate headers]
     C --> D[Request]
     D --> E[Router and handler]
-    E --> F[Status and header block]
-    F --> G[QPACK field section]
-    G --> H[DATA frames]
+    E --> F[QPACK response head]
+    F --> G[DATA frames]
 ```
 
 The flow is one direction: decode, validate, dispatch, encode. A validation failure
