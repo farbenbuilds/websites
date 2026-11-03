@@ -1,0 +1,117 @@
+---
+title: Cluster pub/sub
+description: Broadcast một topic WebSocket tới mọi worker, đọc báo cáo queued và dropped, và giữ inbox của từng worker trong giới hạn.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, websocket, cluster, capacity]
+---
+
+Mỗi worker sở hữu pub/sub registry riêng. `Cluster.publish` copy một message vào
+inbox có giới hạn của từng worker, đánh thức worker, rồi worker đó publish tới
+subscriber cục bộ. Không subscription table nào được chia sẻ và không connection
+state nào đi qua thread.
+
+## Broadcast
+
+```zig
+const report = try group.publish_report("news", message, true);
+if (report.dropped != 0) {
+    std.log.warn(
+        "dropped on {d} of {d} workers; first full inbox: {?d}",
+        .{ report.dropped, report.attempted(), report.first_dropped_worker },
+    );
+}
+```
+
+`publish_report` trả về `PublishReport`:
+
+| Field                  | Ý nghĩa                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `queued`               | Worker có inbox nhận message                              |
+| `dropped`              | Worker có inbox đầy                                       |
+| `notify_failed`        | Message được nhận nhưng wakeup loop fail hoặc bị suppress |
+| `first_dropped_worker` | Worker index thấp nhất từ chối message, nếu có            |
+
+Hai helper tóm tắt: `attempted()` trả `queued + dropped`, và `all_delivered()`
+chỉ true khi mọi worker active nhận message và mọi wakeup được post.
+
+`publish` là dạng ngắn. Nó trả `report.queued` và bỏ phần còn lại:
+
+```zig
+const queued = try group.publish("news", message, true);
+```
+
+## Giới hạn message
+
+| Giới hạn                | Giá trị                               | Error                                                |
+| ----------------------- | ------------------------------------- | ---------------------------------------------------- |
+| Topic name              | 127 byte, không rỗng                  | `error.TopicTooLong`, `error.EmptyTopic`             |
+| Payload                 | `max_ws_message_size` của application | `error.ClusterMessageTooLarge`                       |
+| Độ sâu inbox mỗi worker | 64 message                            | Báo qua `dropped`, không phải error                  |
+| Lifecycle               | Configured hoặc running               | `error.ClusterStopped`, `error.ClusterDeinitialized` |
+
+Payload capacity của inbox theo `max_ws_message_size` của worker. Tăng message
+capacity làm tăng memory inbox cho mọi worker: 64 slot nhân message size mỗi
+worker trước queue overhead. Message capacity 32 KiB reserve 2 MiB payload storage
+cho mỗi worker inbox.
+
+Inbox đầy không làm fail toàn bộ publish. Đó là field báo cáo theo worker để một
+worker bị kẹt không thể từ chối delivery tới worker khỏe.
+
+## Delivery guarantee
+
+`queued` nghĩa là inbox nhận một bản copy và wakeup được yêu cầu. Nó không có
+nghĩa subscriber cục bộ đã nhận message. Sau khi nhận, delivery vẫn có thể fail vì:
+
+- Worker dừng trước khi drain inbox.
+- Write queue của subscriber cục bộ đầy khi worker publish.
+- Process thoát trong shutdown.
+
+Coi cluster pub/sub là fan-out best-effort có báo cáo. Thêm sequence number và
+client acknowledgement khi message không được phép mất.
+
+## Thứ tự lifecycle
+
+Chỉ publish khi cluster ở trạng thái configured hoặc running. Sau khi `run` trả
+về, `request_shutdown` hoặc `deinit` đưa group qua `stopped` và `releasing`, và
+`publish_report` trả `error.ClusterStopped` hoặc `error.ClusterDeinitialized`.
+
+Worker đã dừng không thể drain inbox. Gửi notification trước khi request shutdown,
+rồi ngừng nhận connection mới. Xem
+[shared-nothing workers](/docs/concepts/shared-nothing) cho các lifecycle state.
+
+## Hình dạng route
+
+```zig
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.ws("/feed", .{
+            .open = on_open,
+            .message = on_message,
+        });
+    }
+}.routes);
+```
+
+Mọi worker đăng ký cùng route trên slab riêng. Socket subscribe `news` ở worker 2
+không thấy được từ worker 3 ngoại trừ qua `Cluster.publish`.
+
+Để broadcast từ bên trong socket, gọi `group.publish_report` thay vì
+`ws.publish`. `ws.publish` chỉ tới subscription thuộc worker hiện tại.
+
+## Kiểm tra
+
+1. Build cluster bốn worker với route `/feed`.
+2. Kết nối tám client; `SO_REUSEPORT` phân bổ chúng qua các worker.
+3. Publish từ bất kỳ client. Mọi client nhận đúng một bản.
+4. Suspend thread của một worker process, rồi publish đủ message để làm đầy inbox
+   64 slot của nó.
+5. Xác nhận `dropped` thành một và ba worker còn lại vẫn nhận mọi message.
+
+## Tiếp theo
+
+- [Pub/sub](/docs/websocket/pub-sub) cho registry một worker.
+- [WebSocket limits](/docs/websocket/limits) cho input sizing của inbox.

@@ -1,0 +1,129 @@
+---
+title: HTTP/2 quickstart
+description: Bật HTTP/2 qua TLS ALPN hoặc cleartext prior knowledge, rồi kiểm tra protocol và stream limit đã thương lượng bằng curl.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, http2, tls]
+---
+
+Không có application type HTTP/2 riêng. Application TLS quảng bá `h2` qua ALPN,
+và application plaintext phát hiện HTTP/2 preface. Cả hai chạy các route bạn đã
+đăng ký.
+
+## Điều kiện trước
+
+- Project µWebZockets có HTTP route. Bắt đầu từ
+  [Your first HTTP server](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `curl` build có HTTP/2. `curl --version` liệt kê `HTTP2` trong features.
+
+## Phục vụ HTTP/2 qua TLS
+
+Thay `src/main.zig` bằng:
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("Hello over HTTP/2") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+fn echo(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.bytes()) catch |err| {
+        std.log.err("echo failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    _ = try server.post("/echo", echo);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+`init_https_ephemeral` tạo certificate ECDSA trong memory cho công việc cục bộ. Nó
+quảng bá `h2` và `http/1.1` theo thứ tự đó. Với production certificate, dùng
+`init_https` với PEM path; xem
+[Your first TLS server](/docs/examples/first-tls-server).
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra protocol
+
+```sh
+curl --http2 -k -v https://127.0.0.1:3443/ 2>&1 | grep -E "ALPN|HTTP/2"
+```
+
+```console
+* ALPN: server accepted h2
+< HTTP/2 200
+Hello over HTTP/2
+```
+
+Dòng `ALPN: server accepted h2` chứng minh connection thương lượng HTTP/2. Nếu nó
+ghi `http/1.1`, hoặc client không có HTTP/2, hoặc application build không có TLS
+context.
+
+Gửi body và kiểm tra framing:
+
+```sh
+curl --http2 -k -d "hello" https://127.0.0.1:3443/echo
+```
+
+```text
+hello
+```
+
+## Cleartext prior knowledge
+
+Listener plaintext nhận HTTP/2 khi byte đầu tiên là client preface:
+
+```sh
+curl --http2-prior-knowledge http://127.0.0.1:3000/
+```
+
+Cùng `App` phục vụ client HTTP/1.1 trên port đó. Request bắt đầu bằng request line
+bình thường được parse như HTTP/1.1. `curl --http2` không có `--prior-knowledge`
+gửi request `Upgrade: h2c`, mà server này không triển khai; dùng flag
+prior-knowledge hoặc TLS.
+
+## Chuyện gì vừa xảy ra
+
+1. TLS context quảng bá `h2` và `http/1.1` qua ALPN.
+2. Client chọn `h2` và gửi connection preface tiếp theo là SETTINGS.
+3. Session decode HEADERS block bằng HPACK và tạo `Request`.
+4. Router dùng chung match `/` và gọi `index`.
+5. Response thành HEADERS block cộng DATA frame trên một stream.
+
+Connection giữ session state cho đến khi một bên gửi GOAWAY hoặc TCP connection
+đóng.
+
+## Kiểm tra stream budget
+
+Mở một connection và gửi tám request đồng thời. Request thứ chín chờ đến khi một
+stream khác hoàn tất; session quảng bá tối đa tám stream đồng thời.
+
+```sh
+h2load -n 32 -c 1 -m 8 https://127.0.0.1:3443/
+```
+
+`h2load` báo protocol đã thương lượng và stream concurrency. Nó cần build có HTTP/2.
+
+## Tiếp theo
+
+- [Configuration](/docs/http2/configuration) để tăng body hoặc header capacity.
+- [Frame và stream](/docs/http2/frames-and-streams) để đọc protocol error.

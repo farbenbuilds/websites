@@ -1,0 +1,99 @@
+---
+title: QUIC transport
+description: Đọc policy QUIC cố định phía sau HTTP/3, gồm BBRv1 có pacing, GSO trên Linux, không receive GRO, từ chối 0-RTT và packet bound.
+sidebar:
+  order: 4
+search:
+  tags: [concept, http3, quic, operations]
+---
+
+QUIC transport là lsquic engine phía sau `listen_udp`. Policy của nó cố định:
+application chọn capacity, không chọn congestion control hay packet handling. Trang
+này ghi lại những gì engine đặt và vì sao, để một packet capture hay kết quả
+latency đọc được.
+
+## Engine policy
+
+| Setting                | Giá trị           | Lý do                                          |
+| ---------------------- | ----------------- | ---------------------------------------------- |
+| Congestion control     | BBRv1             | Pace theo bandwidth estimate                   |
+| Pacing                 | Bật               | BBR phụ thuộc nó; pin để default không làm yếu |
+| Max incoming stream    | Capacity          | Giới hạn stream pool                           |
+| Inchoate stream        | Capacity          | Giới hạn state stream half-open                |
+| Max header list size   | `max_header_size` | Từ chối field list quá lớn sớm                 |
+| Header set             | 1                 | Một header set outstanding mỗi event           |
+| QPACK dynamic table    | 0                 | Không dynamic request compression              |
+| Blocked QPACK stream   | 0                 | Không stream nào chờ table update              |
+| UDP receive payload    | 2048 byte         | Khớp packet buffer                             |
+| Base PLPMTU            | 1200 byte         | Tối thiểu IPv6                                 |
+| Max PLPMTU             | 1472 byte         | Vừa MTU 1500 với header                        |
+| Send batch size        | 16 packet         | Coalesced transmit                             |
+| Delayed 0-RTT packet   | 0                 | TLS từ chối 0-RTT                              |
+| Process time threshold | 10 ms             | Giới hạn một lượt xử lý lsquic                 |
+
+`es_rw_once` được bật, nên một engine pass thực hiện một chu kỳ read và một chu kỳ
+write. Điều đó giữ listener bận không bỏ đói timer trên cùng worker.
+
+## Transmit batching
+
+Trên Linux, packet cùng kích thước cho một destination được gộp vào một `sendmsg`
+với `UDP_SEGMENT` (GSO). Kích thước hỗn hợp và platform khác dùng per-packet path.
+Engine gửi tối đa 16 packet mỗi batch.
+
+Batching đổi số syscall, không đổi wire format. Capture thấy cùng QUIC datagram,
+được kernel segment. Nó cũng nghĩa một send call có thể báo lỗi cho nhiều datagram;
+engine tính cho cả batch.
+
+## Receive path
+
+Receive-side `UDP_GRO` bị tắt. Event loop không công bố ranh giới segment phụ, nên
+buffer receive đã coalesce sẽ bị đọc như một QUIC datagram và parse fail. Đây là
+ràng buộc transport, không phải tính năng application còn thiếu.
+
+Mỗi read copy vào packet slot 2 KiB từ engine packet pool. Datagram lớn hơn slot bị
+từ chối trước parsing.
+
+## 0-RTT
+
+Live listener từ chối TLS 0-RTT. Request application có thể replay không bao giờ
+tới handler, và delayed 0-RTT packet không được giữ. Helper `EarlyDataPolicy` trong
+`uz.http3_extensions` mô hình backend tương lai nhưng live listener không dùng.
+
+Xem [early data policy](/docs/http3/early-data) cho quy tắc TCP 0-RTT, vốn khác.
+
+## Datagram và WebTransport
+
+`uz.datagram` và `uz.datagram_ring` cung cấp datagram plumbing điều khiển bởi
+completion cho model WebTransport. Live lsquic listener công bố raw datagram nhưng
+không có extended CONNECT, server-initiated unidirectional stream hay reset-at mà
+các model đó cần.
+
+Datagram capacity theo `max_datagram_size` và `datagram_slots`. Cả hai mặc định
+zero, tức datagram bị tắt. Bật chúng không bật WebTransport; live CONNECT path vẫn
+trả `501`.
+
+## Lifecycle
+
+| Bước         | Hành vi                                         |
+| ------------ | ----------------------------------------------- |
+| `init_http3` | Tạo TCP và QUIC context, validate capacity      |
+| Engine start | Cấp phát pool stream, header, packet và payload |
+| `listen_udp` | Bind UDP endpoint; địa chỉ App phải ổn định     |
+| `run`        | Drive event loop và engine timer                |
+| Shutdown     | Dừng read, đóng socket, giải phóng pool         |
+
+`deinit` assert mọi pool đã drain. Stream hoặc packet slot rò rỉ làm assertion fail
+trong safe build thay vì tăng memory.
+
+## Ràng buộc deployment
+
+- Mở UDP port trên mọi firewall và security group trên đường đi.
+- Không đặt TCP-only proxy trước QUIC listener.
+- Không giả định HTTP/3 clustering. Mỗi process có một engine và một UDP socket;
+  nhiều process cần load balancing ngoài.
+- Giữ cùng certificate trên TCP và QUIC để client có thể race cả hai.
+
+## Tiếp theo
+
+- [HTTP/3 request path](/docs/http3/request-path) cho lớp HTTP phía trên transport.
+- [HTTP/3 limits](/docs/http3/limits) cho mọi bound trong một bảng.

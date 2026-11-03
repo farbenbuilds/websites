@@ -1,0 +1,114 @@
+---
+title: WebSocket limits
+description: Đọc mọi giới hạn frame, message, control, queue, subscription, topic và cluster inbox áp dụng cho một WebSocket route.
+sidebar:
+  order: 14
+search:
+  tags: [reference, websocket, capacity]
+---
+
+Mọi WebSocket bound được cố định trước khi listener start. Route limit có thể hạ
+một bound và không được nâng quá message capacity đã cấu hình. Trang này liệt kê
+default, nguồn của từng giá trị và failure khi vượt.
+
+## Route limit
+
+| Field              | Default | Ràng buộc                                      | Khi vi phạm                             |
+| ------------------ | ------- | ---------------------------------------------- | --------------------------------------- |
+| `max_frame_size`   | 16 KiB  | Lớn hơn zero, không vượt `max_message_size`    | `500 Internal Server Error` lúc đăng ký |
+| `max_message_size` | 16 KiB  | Lớn hơn zero, không vượt `max_ws_message_size` | `500 Internal Server Error` lúc đăng ký |
+| `ping_interval_ms` | `0`     | Zero hoặc đi cặp với `pong_timeout_ms`         | `500 Internal Server Error` lúc đăng ký |
+| `pong_timeout_ms`  | `0`     | Zero hoặc đi cặp với `ping_interval_ms`        | `500 Internal Server Error` lúc đăng ký |
+
+Route đã đăng ký mà fail các check này sẽ từ chối upgrade thay vì nhận peer không
+phục vụ được. Lỗi hiện ở client dưới dạng response `500` cho upgrade request.
+
+## Application capacity
+
+| Field                    | Default | Builder override              | Tác dụng                          |
+| ------------------------ | ------- | ----------------------------- | --------------------------------- |
+| `max_connections`        | 1024    | `with_max_clients`            | Connection slot trong pool        |
+| `max_ws_message_size`    | 16 KiB  | `with_max_ws_message_size`    | Một message buffer mỗi connection |
+| `write_queue_size`       | 64 KiB  | `with_write_queue_size`       | Output đang chờ mỗi connection    |
+| `idle_timeout_ms`        | 120000  | `with_idle_timeout_ms`        | Đóng TCP khi im lặng              |
+| `header_read_timeout_ms` | 30000   | `with_header_read_timeout_ms` | HTTP/1 request head dở dang       |
+| `compression`            | `false` | `with_compression`            | Deflate scratch trong slab        |
+
+Preset thay đổi message và queue size:
+
+| Preset           | Connection | Message | Write queue |
+| ---------------- | ---------- | ------- | ----------- |
+| `microservice`   | 256        | 8 KiB   | 16 KiB      |
+| `websocket_chat` | 512        | 32 KiB  | 32 KiB      |
+| `file_server`    | 128        | 4 KiB   | 512 KiB     |
+
+## Protocol limit
+
+| Giới hạn              | Giá trị                         | Kết quả khi vượt                                         |
+| --------------------- | ------------------------------- | -------------------------------------------------------- |
+| Control-frame payload | 125 B                           | `error.ControlFrameTooLarge`                             |
+| Close reason          | 123 B                           | `error.ControlFrameTooLarge`                             |
+| Close code range      | 1000-1003, 1007-1014, 3000-4999 | `1002` khi nhận, `error.InvalidCloseCode` khi gửi        |
+| Text message          | UTF-8 hợp lệ                    | `1007 Invalid payload`                                   |
+| Message đã ghép       | `max_message_size`              | `1009 Message too big`                                   |
+| Frame đã encode       | `max_frame_size`                | `1009` khi nhận; `error.PayloadTooLarge` khi gửi sau nén |
+| Message gửi đi        | Một frame hoàn chỉnh            | `.continuation` bị từ chối với `error.InvalidOpcode`     |
+
+Control frame bị giới hạn bởi length field bảy bit trong RFC 6455, không bởi
+setting application. Close reason 123 byte cộng code hai byte lấp đầy payload 125
+byte.
+
+## Pub/sub limit
+
+| Giới hạn                | Giá trị | Error                                  |
+| ----------------------- | ------- | -------------------------------------- |
+| Topic name active       | 1024    | `error.TopicCapacityReached`           |
+| Subscription của socket | 8192    | `error.SubscriptionCapacityReached`    |
+| Subscriber mỗi topic    | 65535   | `error.TopicSubscriberCapacityReached` |
+| Topic name              | 127 B   | `error.TopicTooLong`                   |
+
+Registry tính theo worker. Cluster bốn worker có bốn registry độc lập với các
+capacity này.
+
+## Cluster limit
+
+| Giới hạn                | Giá trị                       | Kết quả                        |
+| ----------------------- | ----------------------------- | ------------------------------ |
+| Độ sâu inbox mỗi worker | 64 message                    | `PublishReport.dropped`        |
+| Message payload         | `max_ws_message_size`         | `error.ClusterMessageTooLarge` |
+| Topic name              | 127 B                         | `error.TopicTooLong`           |
+| Worker                  | Cluster capacity compile-time | `error.InvalidWorkerCount`     |
+
+Inbox payload storage là 64 nhân message capacity mỗi worker. Xem
+[cluster pub/sub](/docs/websocket/cluster-pub-sub) cho các field báo cáo.
+
+## HTTP/2 tunnel
+
+| Giới hạn                        | Giá trị | Kết quả                   |
+| ------------------------------- | ------- | ------------------------- |
+| Tunnel active mỗi connection    | 1       | `503 Service Unavailable` |
+| Stream đồng thời mỗi connection | 8       | `RST_STREAM` khi cạn      |
+| Compression                     | không   | Frame không nén           |
+
+Một tunnel chia sẻ budget tám stream của connection với HTTP request, nên
+connection bận có thể từ chối tunnel trước khi chạm tunnel limit.
+
+## Slab math
+
+Message region là `max_ws_message_size` mỗi connection. Write queue là
+`write_queue_size` mỗi connection. Nén thêm paired receive và send scratch mỗi
+connection khi route bật nó và slab chưa reserve sẵn.
+
+```text
+message bytes  = max_connections * max_ws_message_size
+queue bytes    = max_connections * write_queue_size
+compression    = max_connections * 2 * scratch_bound(max_ws_message_size)
+```
+
+Dùng `Server.builder(...).slab_bytes()` để lấy tổng chính xác thay vì tự cộng. Xem
+[capacity model](/docs/concepts/capacity-model) cho các slab region khác.
+
+## Tiếp theo
+
+- [Capacity model](/docs/concepts/capacity-model) cho toàn bộ allocation.
+- [Autobahn và kiểm thử](/docs/websocket/testing) cho compliance bound.

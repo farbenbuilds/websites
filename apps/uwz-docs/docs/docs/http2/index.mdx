@@ -1,0 +1,97 @@
+---
+title: HTTP/2
+description: Serve the same handlers over a bounded HTTP/2 session, with eight concurrent streams, HPACK, and explicit flow-control limits.
+search:
+  tags: [http2, concept]
+---
+
+Every TCP connection carries an optional HTTP/2 server session. Requests decoded
+from HTTP/2 run through the same router, middleware, handlers, and response
+helpers as HTTP/1.1, so a route written for one transport works on the other. The
+difference is the wire: streams, HPACK header blocks, and flow-control windows.
+
+The session is deliberately bounded. It handles request/response routing well and
+does not aim for full RFC 9113 feature parity.
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="HTTP/2 quickstart" href="/docs/http2/getting-started" icon="play">
+    Enable HTTP/2 through ALPN, verify the protocol with curl, and read the session summary.
+  </Card>
+  <Card title="Configuration" href="/docs/http2/configuration" icon="sliders">
+    Set header-block, body, and response-header capacities through the builder.
+  </Card>
+  <Card title="Frames and streams" href="/docs/http2/frames-and-streams" icon="layers">
+    Follow the preface, SETTINGS, HEADERS, DATA, trailers, and the eight-stream budget.
+  </Card>
+  <Card title="HPACK" href="/docs/http2/hpack" icon="archive">
+    Read the bounded dynamic table, Huffman decoding, and pseudo-header validation.
+  </Card>
+</CardGroup>
+
+## Operate it
+
+<CardGroup cols={2}>
+  <Card title="Flow control" href="/docs/http2/flow-control" icon="gauge">
+    Track connection and stream windows and know how a blocked producer resumes.
+  </Card>
+  <Card title="WebSocket over HTTP/2" href="/docs/http2/websocket-tunnels" icon="git-branch">
+    Accept one RFC 8441 tunnel per connection and understand the 503 on a second.
+  </Card>
+  <Card title="HTTP/2 limits" href="/docs/http2/limits" icon="ruler">
+    Read every default, builder override, and rejection code.
+  </Card>
+  <Card title="Observability" href="/docs/http2/observability" icon="activity">
+    Find the request record and counter that HTTP/2 advances.
+  </Card>
+  <Card title="HTTP/2 testing" href="/docs/http2/testing" icon="flask-conical">
+    Run the unit suite and the shared-handler compliance gates.
+  </Card>
+</CardGroup>
+
+## Startup paths
+
+| Path      | Mechanism                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| TLS       | ALPN selects `h2` ahead of `http/1.1` on `init_https` and `init_https_ephemeral`                 |
+| Plaintext | Prior knowledge: a client that opens with the HTTP/2 preface is detected before HTTP/1.1 parsing |
+| Upgrade   | Not supported; h2c Upgrade is absent                                                             |
+
+Cleartext prior knowledge means the client sends
+`PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n` as the first bytes. A normal HTTP/1.1 request
+on the same listener is parsed as HTTP/1.1.
+
+## What the session implements
+
+- Strict preface, frame-size, and frame-sequencing validation.
+- SETTINGS negotiation, PING, GOAWAY, and RST_STREAM.
+- Stream identifiers, including the closed-stream rules from RFC 9113.
+- HEADERS with CONTINUATION, DATA, trailers, and padding.
+- HPACK with a bounded dynamic table.
+- Connection-level and stream-level flow control.
+- Async response tokens and drain-driven producers.
+- RFC 8441 extended CONNECT for WebSocket.
+
+## Boundaries
+
+| Feature                            | Status                                  |
+| ---------------------------------- | --------------------------------------- |
+| Concurrent streams                 | 8 per connection                        |
+| Server push                        | Not supported                           |
+| h2c Upgrade                        | Not supported; prior knowledge only     |
+| More than 8 streams                | Requires connection-type specialization |
+| WebSocket tunnels                  | 1 per connection, no compression        |
+| HTTP/2 over cleartext with Upgrade | Not implemented                         |
+
+:::warning[Routing, not full parity]
+"HTTP/2 works" on this site means requests route, stream, and respond through the
+shared application boundary. It does not mean every RFC 9113 extension,
+prioritization scheme, or push mechanism is implemented.
+:::
+
+## Next
+
+Read [HTTP/2 quickstart](/docs/http2/getting-started) to enable the session, then
+[frames and streams](/docs/http2/frames-and-streams) before you debug a protocol
+error.

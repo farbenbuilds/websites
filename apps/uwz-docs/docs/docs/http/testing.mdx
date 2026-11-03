@@ -8,7 +8,7 @@ search:
 ---
 
 Test the decision in process and the wire on loopback. This page shows both
-layers, then the repository-level compliance gates that stay outside an
+layers, then the maintainer-run compliance evidence that stays outside an
 application project.
 
 ## Choose the layer
@@ -122,27 +122,19 @@ The `Allow` field must list `GET, HEAD`. To prove the GET handler did not run,
 assert its counter, log line, or side effect stays unchanged. The router answers
 before dispatch when the path matches and the method has no handler.
 
-## Keep compliance gates in the repository
+## Keep compliance gates out of the application
 
-h1spec and Autobahn are repository-level gates, not application dependencies.
-Do not add h1spec, Autobahn, Deno, or their fixtures to an application project.
-The framework repository runs them against its own compliance servers:
+h1spec and Autobahn are framework-maintainer gates, not application dependencies.
+Do not add h1spec, Autobahn, Deno, their containers, or their fixtures to your
+project. Your project tests the routes and failure documents it owns, as the
+sections above show.
 
-```sh
-zig build
-./zig-out/bin/h1spec &
-server_pid=$!
-
-cd vendor/h1spec
-deno run --allow-net=127.0.0.1:8000 http_test.ts 127.0.0.1 8000
-
-kill "$server_pid"
-```
-
-The Autobahn gate reports 517/517 server cases accepted: 514 `OK` and 3
-`INFORMATIONAL`, including compression groups 12 and 13. `zig build test` runs
-the ordinary unit suite from `src/tests/main.zig`; it is separate from both
-compliance gates.
+The framework maintainers run h1spec against `src/http/parser.zig` and the
+517-case Autobahn server suite against the WebSocket implementation before a
+release. The v2.1.6 result accepts all 517 cases: 514 `OK` and 3
+`INFORMATIONAL`, including compression groups 12 and 13. Treat those results as
+protocol evidence for the framework version you depend on. They do not describe
+your routes, your capacities, or your proxy.
 
 ## Verify
 

@@ -1,0 +1,115 @@
+---
+title: HTTP/2 observability
+description: Find the development-log record and request counter that HTTP/2 advances, and know what the session does not report per frame.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, http2, observability]
+---
+
+HTTP/2 reports at the exchange boundary. One request that spans a HEADERS frame,
+several DATA frames, and a response produces one log record and one counter
+increment, not one record per frame. This page shows where those signals come
+from and how to read them.
+
+## Development log
+
+HTTP/2 dispatch emits one `http_request` record when the response completes:
+
+```text
+14:32:18.412 | GET[/items] : 200
+```
+
+| Field     | Source                                  |
+| --------- | --------------------------------------- |
+| Timestamp | Per-worker monotonic-derived wall clock |
+| Method    | Decoded `:method`                       |
+| Path      | Decoded `:path`                         |
+| Status    | Committed response status               |
+
+The record is emitted at completion, so a streamed response logs once after the
+last DATA frame. It is not emitted per frame, per DATA chunk, or per header
+block.
+
+A WebSocket tunnel logs the upgrade response when the tunnel is established. It
+does not log each tunnel message as an HTTP exchange; message events are separate
+records.
+
+Enable the log with the default config or `with_dev_log(true)`. The default sink
+writes to stderr and stays quiet when stderr is not a terminal, so redirected
+runs are not slowed. Use `set_dev_log_file` for a file sink.
+
+## Request counter
+
+Each completed HTTP/2 exchange advances the `http_requests` counter. The
+Prometheus rendering exposes it as:
+
+```text
+# TYPE uwz_http_requests_total counter
+uwz_http_requests_total 42
+```
+
+The registry is per worker. A four-worker cluster has four registries, each with
+its own count, and no shared aggregation step.
+
+## Enable the metrics endpoint
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_observability(true)
+    .with_metrics_path("/metrics");
+```
+
+The endpoint is registered as a normal `GET` route with a context pointer, before
+routes are locked. It is not listed in the route registry and does not appear in
+OpenAPI output. Protect it at the network layer; the framework does not add
+authentication.
+
+## What HTTP/2 does not report
+
+| Signal                     | Status                 |
+| -------------------------- | ---------------------- |
+| Per-frame counters         | Not emitted            |
+| Per-stream durations       | Not emitted            |
+| HPACK table size or hits   | Not exposed            |
+| Flow-control stalls        | Not counted separately |
+| Reset counts by error code | Not counted            |
+| Stream reuse               | Not counted            |
+
+For those, use the development log, a proxy in front of the server, or an
+external profiler. Do not infer stream behavior from the request counter; it
+counts completed exchanges only.
+
+## HTTP/3 difference
+
+The QUIC path emits the same `http_request` development-log record but does not
+advance the metrics registry in this release. An HTTP/3 request is invisible to
+`uwz_http_requests_total`. See
+[HTTP/3 observability](/docs/http3/observability).
+
+## Verify it
+
+1. Start the server with `with_observability(true)`.
+2. Send ten HTTP/2 requests over one connection:
+
+   ```sh
+   for i in $(seq 1 10); do curl --http2 -s -k https://127.0.0.1:3443/ > /dev/null; done
+   ```
+
+3. Read the counter:
+
+   ```sh
+   curl -s --http2 -k https://127.0.0.1:3443/metrics | grep uwz_http_requests
+   ```
+
+4. Confirm the value increased by ten, and that the development log shows ten
+   `GET` lines rather than one per frame.
+
+If you send all ten requests on one connection with a client that reuses it, the
+counter still shows ten. The counter is per exchange, not per connection.
+
+## Next
+
+- [HTTP/2 testing](/docs/http2/testing) for the gates that exercise these paths.
+- [HTTP/2 limits](/docs/http2/limits) for the capacities behind the counters.

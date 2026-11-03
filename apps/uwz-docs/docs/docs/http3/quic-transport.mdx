@@ -1,0 +1,104 @@
+---
+title: QUIC transport
+description: Read the fixed QUIC policy behind HTTP/3, including BBRv1 with pacing, Linux GSO, no receive GRO, 0-RTT rejection, and packet bounds.
+sidebar:
+  order: 4
+search:
+  tags: [concept, http3, quic, operations]
+---
+
+The QUIC transport is an lsquic engine behind `listen_udp`. Its policy is fixed:
+applications choose capacities, not congestion control or packet handling. This
+page documents what the engine sets and why, so a packet capture or latency
+result is interpretable.
+
+## Engine policy
+
+| Setting                | Value             | Reason                                                  |
+| ---------------------- | ----------------- | ------------------------------------------------------- |
+| Congestion control     | BBRv1             | Paces against a bandwidth estimate                      |
+| Pacing                 | Enabled           | BBR depends on it; pinned so a default cannot weaken it |
+| Max incoming streams   | Capacity          | Bounds the stream pool                                  |
+| Inchoate streams       | Capacity          | Bounds half-open stream state                           |
+| Max header list size   | `max_header_size` | Rejects oversized field lists early                     |
+| Header sets            | 1                 | One header set outstanding per event                    |
+| QPACK dynamic table    | 0                 | No dynamic request compression                          |
+| Blocked QPACK streams  | 0                 | No stream waits on a table update                       |
+| UDP receive payload    | 2048 bytes        | Matches the packet buffer                               |
+| Base PLPMTU            | 1200 bytes        | IPv6 minimum                                            |
+| Max PLPMTU             | 1472 bytes        | Fits a 1500-byte MTU with headers                       |
+| Send batch size        | 16 packets        | Coalesced transmit                                      |
+| Delayed 0-RTT packets  | 0                 | TLS rejects 0-RTT                                       |
+| Process time threshold | 10 ms             | Bounds one lsquic processing pass                       |
+
+`es_rw_once` is enabled, so one engine pass performs one read and one write cycle.
+That keeps a busy listener from starving timers on the same worker.
+
+## Transmit batching
+
+On Linux, equal-sized packets for one destination are coalesced into one
+`sendmsg` with `UDP_SEGMENT` (GSO). Mixed sizes and other platforms use the
+per-packet path. The engine sends at most 16 packets per batch.
+
+Batching changes the syscall count, not the wire format. A capture sees the same
+QUIC datagrams, segmented by the kernel. It also means a single send call can
+report an error for more than one datagram; the engine accounts for the whole
+batch.
+
+## Receive path
+
+Receive-side `UDP_GRO` is disabled. The event loop does not expose ancillary
+segment boundaries, so a coalesced receive buffer would be misread as one QUIC
+datagram and fail parsing. This is a transport constraint, not a missing
+application feature.
+
+Each read copies into a 2 KiB packet slot from the engine packet pool. A datagram
+larger than the slot is rejected before parsing.
+
+## 0-RTT
+
+The live listener rejects TLS 0-RTT. Replayable application requests never reach
+a handler, and delayed 0-RTT packets are not retained. The `EarlyDataPolicy`
+helpers in `uz.http3_extensions` model a future backend but are not consulted by
+the live listener.
+
+See [early data policy](/docs/http3/early-data) for the TCP 0-RTT rules, which
+are different.
+
+## Datagrams and WebTransport
+
+`uz.datagram` and `uz.datagram_ring` provide completion-driven datagram plumbing
+for the WebTransport models. The live lsquic listener exposes raw datagrams but
+not the extended CONNECT, server-initiated unidirectional stream, or reset-at
+interfaces those models need.
+
+Datagram capacity follows `max_datagram_size` and `datagram_slots`. Both default
+to zero, which disables datagrams. Enabling them does not enable WebTransport;
+the live CONNECT path still answers `501`.
+
+## Lifecycle
+
+| Step         | Behavior                                               |
+| ------------ | ------------------------------------------------------ |
+| `init_http3` | Builds TCP and QUIC contexts, validates capacities     |
+| Engine start | Allocates stream, header, packet, and payload pools    |
+| `listen_udp` | Binds the UDP endpoint; the App address must be stable |
+| `run`        | Drives the event loop and engine timers                |
+| Shutdown     | Stops reads, closes the socket, releases pools         |
+
+`deinit` asserts that every pool was drained. A leaked stream or packet slot
+fails the assertion in a safe build rather than growing memory.
+
+## Deployment constraints
+
+- Open the UDP port on every firewall and security group in the path.
+- Do not front the QUIC listener with a TCP-only proxy.
+- Do not assume HTTP/3 clustering. Each process has one engine and one UDP
+  socket; multiple processes need external load balancing.
+- Keep the same certificate on TCP and QUIC so a client can race both.
+
+## Next
+
+- [HTTP/3 request path](/docs/http3/request-path) for the HTTP layer above the
+  transport.
+- [HTTP/3 limits](/docs/http3/limits) for every bound in one table.

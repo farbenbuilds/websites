@@ -1,0 +1,109 @@
+---
+title: Heartbeats and idle peers
+description: Configure ping and pong timeouts on a route and combine them with the idle deadline to close peers that stop reading.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, websocket, operations]
+---
+
+A WebSocket connection has no request boundary, so nothing tells the server that
+a peer is gone until a write fails or a TCP keepalive expires. Heartbeats make
+that detection explicit: the route pings an idle peer and closes it when the pong
+does not arrive.
+
+## Configure a route
+
+```zig
+_ = try app.ws("/feed", .{
+    .open = on_open,
+    .message = on_message,
+    .ping_interval_ms = 30_000,
+    .pong_timeout_ms = 10_000,
+});
+```
+
+Both values must be set together. A route with one value and a zero in the other
+fails registration with `500 Internal Server Error` before the listener starts.
+
+| Setting            | Default  | Behavior                                                 |
+| ------------------ | -------- | -------------------------------------------------------- |
+| `ping_interval_ms` | `0`      | Send a ping after this long without inbound activity     |
+| `pong_timeout_ms`  | `0`      | Close when no pong arrives within this window            |
+| `idle_timeout_ms`  | `120000` | Close the TCP connection after this long without traffic |
+
+## Timer behavior
+
+The heartbeat timer is a per-worker timer that runs every five seconds and is
+scheduled only when at least one registered route enables heartbeats. Each tick
+visits the connection pool and advances each socket's heartbeat state:
+
+1. If a ping is pending and `pong_timeout_ms` has elapsed, close the connection.
+2. If the peer has been quiet for `ping_interval_ms`, send an empty ping and mark
+   it pending.
+3. Any pong clears the pending state.
+
+`last_active_ms` is refreshed by successful reads and writes, so a peer that
+keeps sending data is never pinged. A peer that only reads still receives pings
+and must answer them.
+
+The interval is checked in five-second steps. A `ping_interval_ms` below 5000 is
+valid but still evaluated on the five-second tick.
+
+## Heartbeats versus the idle deadline
+
+| Mechanism      | Scope            | Action on expiry                         |
+| -------------- | ---------------- | ---------------------------------------- |
+| Heartbeat pong | WebSocket route  | Terminate the peer without a close frame |
+| Idle deadline  | Every connection | Close the TCP connection                 |
+
+Both paths are hard closes: the peer sees the connection drop rather than a
+`1001 Going Away` close frame. Call `send_close` yourself when your application
+needs an observable close code, for example before a rolling restart.
+
+The idle deadline covers HTTP keep-alive and upgraded connections alike. Keep
+`pong_timeout_ms` shorter than `idle_timeout_ms` so the heartbeat owns the
+decision and your logs show the heartbeat path rather than an idle timeout.
+
+Set `idle_timeout_ms` to zero to disable the idle deadline, for example when a
+load balancer owns liveness. Do not disable both mechanisms on a public endpoint.
+
+## Close what a ping cannot save
+
+A ping only proves the TCP path works. It does not prove the application is
+healthy or that the peer processes messages. Combine it with:
+
+- A bounded write queue and a drop policy. See
+  [backpressure](/docs/websocket/backpressure).
+- Message size limits on the route. See
+  [WebSocket limits](/docs/websocket/limits).
+- Application-level deadlines for slow work, using async responses instead of
+  blocking the worker.
+
+## Choose values
+
+| Deployment                                 | Interval | Pong timeout |
+| ------------------------------------------ | -------- | ------------ |
+| Browser app over the public internet       | 30 s     | 10 s         |
+| Internal service on a low-latency LAN      | 10 s     | 5 s          |
+| Mobile clients with long background pauses | 60 s     | 20 s         |
+
+A shorter interval detects a dead peer sooner and costs one small frame per idle
+peer per interval. At 10,000 idle peers and a 30-second interval, the worker
+writes about 333 pings per second in addition to application traffic.
+
+## Verify it
+
+1. Connect with `wscat` and stop sending messages.
+2. Watch the server log for the ping at the configured interval.
+3. Confirm the connection stays open while `wscat` answers pings.
+4. Suspend the client process instead of closing it.
+5. Confirm the server closes the peer after `pong_timeout_ms`.
+
+`wscat` answers pings automatically, so suspending the process with `SIGSTOP` is
+the reliable way to simulate a silent peer.
+
+## Next
+
+- [Close codes and shutdown](/docs/websocket/close-codes) for what the peer sees.
+- [WebSocket security](/docs/websocket/security) for denial-of-service limits.

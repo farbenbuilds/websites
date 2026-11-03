@@ -1,0 +1,108 @@
+---
+title: WebTransport status
+description: Tách model WebTransport draft-16 helper khỏi live listener, nơi CONNECT nhận 501 và không quảng bá datagram hay session.
+sidebar:
+  order: 9
+search:
+  tags: [concept, http3, quic, security]
+---
+
+WebTransport được mô hình trong source nhưng không kết nối tới live QUIC listener.
+Trang này nêu trạng thái chính xác để quyết định integration không dựa trên helper
+module không bao giờ nhận traffic.
+
+:::danger[WebTransport chưa live]
+Live listener từ chối `CONNECT` thường với `501 Not Implemented`. Nó không quảng bá
+extended CONNECT, HTTP/3 datagram hay WebTransport setting. Không mô tả version này
+là hỗ trợ WebTransport.
+:::
+
+## Những gì tồn tại
+
+`uz.webtransport` là bộ model draft-16 có giới hạn:
+
+| Module area      | Surface                                                                      |
+| ---------------- | ---------------------------------------------------------------------------- |
+| Settings         | `Settings`, `apply_setting`, `encode_server_settings`                        |
+| Capability check | `server_requirements_met`, `client_requirements_met`, `flow_control_enabled` |
+| Session          | `session_slab`, `SessionHandle`, `SessionState`                              |
+| Stream header    | Codec header unidirectional và bidirectional                                 |
+| Datagram         | `Datagram`, `encode_datagram`, `decode_datagram`                             |
+| Capsule          | Capsule close, drain, max-data, max-streams                                  |
+| Varint           | `Varint`, `encode_varint`, `decode_varint`                                   |
+
+`uz.http3_extensions` thêm validation extended CONNECT RFC 9220, push bookkeeping
+và early-data policy. Các module này hữu ích cho test, protocol modeling và
+listener tương lai. Chúng không route traffic live.
+
+## Gì chặn live path
+
+Build lsquic được pin không định nghĩa `LSQUIC_WEBTRANSPORT_SERVER_SUPPORT`, nên
+các server interface sau bị compile out:
+
+- Quảng bá `SETTINGS_ENABLE_CONNECT_PROTOCOL`.
+- Quảng bá `SETTINGS_H3_DATAGRAM_ENABLED`.
+- WebTransport session API và setting draft của nó.
+- Server-initiated unidirectional stream.
+- `RESET_STREAM_AT`.
+
+Setting `es_datagrams` của engine cũng ở default zero, nên live listener không
+quảng bá transport parameter datagram RFC 9221.
+
+Kể cả khi raw datagram được bật, engine nhận lsquic connection và raw byte. Nó
+không giữ `App` hay datagram table, nên không resolve được session id, path và
+sequence number thành `App.dispatch_datagram`.
+
+## Listener làm gì
+
+| Request                          | Response                   |
+| -------------------------------- | -------------------------- |
+| CONNECT thường                   | `501 Not Implemented`      |
+| Extended CONNECT với `:protocol` | Không quảng bá; bị từ chối |
+| HTTP/3 DATAGRAM frame            | Không thương lượng         |
+| Capsule WebTransport session     | Không tới được             |
+
+`App.datagram`, `App.datagram_context`, `dispatch_datagram` và `next_datagram` có
+trong public API nhưng không tới được từ QUIC input trong release này.
+
+## Cấu hình datagram
+
+`max_datagram_size` và `datagram_slots` mặc định zero, tức datagram ring bị tắt.
+Preset `ServerConfig.Preset.webtransport_realtime` đặt `max_datagram_size = 1200`
+và `datagram_slots = 64`, nhưng bật preset không bật QUIC data path. Coi các field
+đó là chỗ dành cho implementation trong ADR 0001.
+
+## Đường migration
+
+Kế hoạch được chấp nhận nằm trong
+[ADR 0001](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/adr/0001-http3-datagram-and-webtransport.md).
+Nó yêu cầu lsquic fork được maintain phải:
+
+1. Quảng bá extended CONNECT và HTTP/3 datagram.
+2. Tạo WebTransport session gắn với engine connection slot.
+3. Gắn session slab, datagram ring và datagram router hiện có vào slot.
+4. Route datagram đã decode qua `App.dispatch_datagram`.
+5. Pass một WebTransport client trong gate compliance HTTP/3.
+
+Đến khi cả năm điều kiện đúng, live listener vẫn bị capability-gate. v2.2.0 sở hữu
+implementation và thay đổi capability.
+
+## Kiểm tra trạng thái hiện tại
+
+```sh
+curl --http3-only -k -X CONNECT https://127.0.0.1:8443/
+```
+
+```text
+HTTP/3 501
+HTTP/3 CONNECT is not supported
+```
+
+Bất kỳ page, guide hay agent instruction nào nói WebTransport chạy đều sai với
+version này. Dùng HTTP request/response hoặc tunnel WebSocket RFC 8441 qua HTTP/2.
+
+## Tiếp theo
+
+- [HTTP/3 limits](/docs/http3/limits) cho bound live.
+- [Kiểm thử interoperability](/docs/http3/testing) cho gate phải pass trước khi
+  trang này thay đổi.

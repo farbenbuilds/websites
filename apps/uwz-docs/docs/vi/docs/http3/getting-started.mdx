@@ -1,0 +1,137 @@
+---
+title: HTTP/3 quickstart
+description: Bind QUIC endpoint, bật HTTP/3 qua TLS và chứng minh protocol bằng curl --http3-only trên application của bạn.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, http3, quic, tls]
+---
+
+HTTP/3 chạy cùng handler qua QUIC trên UDP. Tutorial này phục vụ một route trên cả
+TCP và UDP để bạn so sánh hai protocol trên cùng application value, rồi kiểm tra
+đường QUIC bằng client HTTP/3.
+
+## Điều kiện trước
+
+- Project µWebZockets có HTTP route. Bắt đầu từ
+  [Your first HTTP server](/docs/examples/first-http-server).
+- Zig 0.16.0.
+- `curl` build có HTTP/3. `curl --version` liệt kê `HTTP3`.
+
+## Viết chương trình
+
+Thay `src/main.zig` bằng:
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("Hello over HTTP/3") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_http3_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.listen_udp("0.0.0.0", 8443);
+    try server.run();
+}
+```
+
+`init_http3_ephemeral` tạo certificate trong memory cho công việc cục bộ. Nó tạo
+hai context: TCP quảng bá `h2` và `http/1.1`, QUIC chỉ quảng bá `h3`. `App` không
+được move sau `listen_udp`.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra HTTP/3
+
+```sh
+curl --http3-only -k https://127.0.0.1:8443/
+```
+
+```text
+Hello over HTTP/3
+```
+
+`--http3` đơn thuần cho phép fallback sang HTTP/2 nếu QUIC handshake fail, nên nó
+có thể pass trên sai protocol. `--http3-only` fail rõ ràng thay thế.
+
+So với TCP listener:
+
+```sh
+curl --http2 -k https://127.0.0.1:3443/
+```
+
+Cùng handler trả lời cả hai request. Chỉ transport thay đổi.
+
+## Dùng production certificate
+
+```zig
+var server = try uz.App(128).init_http3(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen("0.0.0.0", 3443);
+try server.listen_udp("0.0.0.0", 8443);
+try server.run();
+```
+
+`init_http3` load cùng cặp PEM vào TCP và QUIC context. QUIC context vẫn chỉ quảng
+bá `h3`. Thứ tự certificate chain và key matching theo quy tắc TLS của TCP, nên
+dùng ví dụ PEM đang chạy từ
+[Your first TLS server](/docs/examples/first-tls-server).
+
+## QUIC path dùng gì
+
+| Tài nguyên               | Giới hạn                                                      |
+| ------------------------ | ------------------------------------------------------------- |
+| Connection đồng thời     | Connection capacity đã cấu hình                               |
+| Request stream active    | Engine stream pool, size từ capacity                          |
+| Decoded request field    | `max_header_count`, `max_header_size`                         |
+| Request body             | `max_h3_body_size`, default 16 KiB                            |
+| Response header          | `max_h3_response_header_size`, `max_h3_response_header_count` |
+| UDP payload              | 2 KiB mỗi packet buffer                                       |
+| QUIC transport parameter | PLPMTU 1200 đến 1472                                          |
+
+Engine cấp phát stream, header, packet và payload slab một lần trong `init`. Không
+có gì trên datagram path cấp phát.
+
+## Yêu cầu network
+
+- Mở UDP port trên mọi firewall giữa client và server. HTTP/3 fail ngay handshake
+  khi UDP bị chặn, trong khi TCP vẫn chạy.
+- Không đặt TCP-only load balancer trước QUIC listener.
+- Không bật clustering. `init_http3` và `listen_udp` là API single-application;
+  HTTP/3 clustering không được triển khai.
+
+## Kiểm tra ranh giới
+
+```sh
+curl --http3-only -k -X CONNECT https://127.0.0.1:8443/
+```
+
+Live listener trả CONNECT thường với `501 Not Implemented`. WebTransport cần
+extended CONNECT và chưa được nối vào listener. Xem
+[WebTransport status](/docs/http3/webtransport).
+
+## Tiếp theo
+
+- [Configuration](/docs/http3/configuration) để size engine.
+- [QUIC transport](/docs/http3/quic-transport) cho congestion control và packet
+  handling.

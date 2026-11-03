@@ -1,0 +1,109 @@
+---
+title: HTTP/3 observability
+description: Read the request record the QUIC path emits and understand why the metrics registry does not advance for HTTP/3.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, http3, observability]
+---
+
+The HTTP/3 path emits one development-log record per completed request. It does
+not advance the Prometheus counter registry. This page shows what is recorded,
+what is not, and how to verify the difference.
+
+## Development log
+
+The stream logs after the response body is flushed and the stream shuts down:
+
+```text
+14:32:18.412 | GET[/items] : 200
+```
+
+| Field     | Source                         |
+| --------- | ------------------------------ |
+| Timestamp | Per-worker clock at completion |
+| Method    | Decoded `:method`              |
+| Path      | Decoded `:path`                |
+| Status    | Stored response status code    |
+
+The record borrows the request method and path from the stream header set, which
+stays alive until the stream closes. Recording is best effort:
+
+- A disabled sink returns before reading the clock.
+- A full sink counts the line as dropped.
+- A failed write still finishes the response; logging never changes the result.
+
+## Metrics gap
+
+| Signal                    | HTTP/1.1 | HTTP/2 | HTTP/3       |
+| ------------------------- | -------- | ------ | ------------ |
+| `http_request` log record | Yes      | Yes    | Yes          |
+| `http_requests` counter   | Yes      | Yes    | No           |
+| `/metrics` endpoint       | Yes      | Yes    | Not advanced |
+
+The QUIC engine has no registry handle. Threading one through the lsquic stream
+callbacks would require new plumbing in the transport, and the current release
+does not include it. A dashboard built on `uwz_http_requests_total` shows zero for
+QUIC traffic even when requests succeed.
+
+Plan for this explicitly:
+
+- Count HTTP/3 requests from the development log, a reverse proxy, or the client.
+- Do not mix HTTP/2 and HTTP/3 request rates in one counter and call it total.
+- Report the gap in any capacity or SLO document that covers QUIC.
+
+## Enable the log
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_dev_log(true);
+```
+
+The default sink writes to stderr and stays quiet when stderr is not a terminal.
+Use `set_dev_log_file` for a file sink, or `flush_dev_log` before reading the file
+in a test.
+
+## What else is not reported
+
+| Signal                      | Status                               |
+| --------------------------- | ------------------------------------ |
+| Per-packet counters         | Not emitted                          |
+| Per-stream durations        | Not emitted                          |
+| QPACK table state           | Not exposed                          |
+| Congestion-controller state | Not exposed                          |
+| Datagram counters           | Declared, not reachable on live path |
+| Connection migration events | Not emitted                          |
+
+For QUIC-level visibility, use packet capture with qlog output from the client,
+or an external network monitor. The server does not export qlogs through a public
+API.
+
+## Verify it
+
+1. Start the server with the development log and the metrics endpoint enabled:
+   `with_dev_log(true)` and `with_observability(true)`.
+2. Send one request over QUIC:
+
+   ```sh
+   curl --http3-only -k https://127.0.0.1:8443/items
+   ```
+
+3. Confirm one `GET[/items] : 200` line appears.
+4. Read the metrics endpoint and confirm `uwz_http_requests_total` did not change:
+
+   ```sh
+   curl -s --http2 -k https://127.0.0.1:3443/metrics | grep uwz_http_requests
+   ```
+
+5. Send the same request over TCP and confirm the counter increases.
+
+The experiment is the evidence for the gap. If the counter moves after a QUIC
+request, the build is not the one documented here.
+
+## Next
+
+- [Interoperability testing](/docs/http3/testing) for the gate that exercises
+  these paths.
+- [HTTP/2 observability](/docs/http2/observability) for the transport that does
+  advance the counter.

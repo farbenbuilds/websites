@@ -1,0 +1,144 @@
+---
+title: WebSocket quickstart
+description: Add an echo route with open, message, drain, and close callbacks, then verify a message round trip with wscat or a browser.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, websocket]
+---
+
+This tutorial turns an HTTP application into one that accepts WebSocket upgrades
+on `/echo`. The server greets each peer, echoes every complete text or binary
+message, reports a full write queue, and logs the close.
+
+## Prerequisites
+
+- A µWebZockets project with a working HTTP route. Start from
+  [Your first HTTP server](/docs/examples/first-http-server) if you do not have
+  one.
+- Zig 0.16.0.
+- `npx` for `wscat`, or a browser with a JavaScript console.
+
+## Write the program
+
+Replace `src/main.zig` with:
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.send("welcome", .text) catch |err| {
+        std.log.err("welcome failed: {}", .{err});
+    };
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| switch (err) {
+        error.WouldBlock => {
+            std.log.warn("peer is behind: {} bytes queued", .{ws.buffered_amount()});
+        },
+        else => std.log.err("echo failed: {}", .{err}),
+    };
+}
+
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("write queue drained: {} bytes queued", .{ws.buffered_amount()});
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    std.log.info("peer closed: {} bytes still queued", .{ws.buffered_amount()});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/echo", .{
+        .open = on_open,
+        .message = on_message,
+        .drain = on_drain,
+        .close = on_close,
+    });
+
+    _ = try app.get("/", root);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+
+fn root(_: *uz.Request, res: *uz.Response) void {
+    res.text("WebSocket endpoint: ws://127.0.0.1:3000/echo") catch {};
+}
+```
+
+The echo callback drops the message when the write queue is full, which is
+visible in the log. The [backpressure page](/docs/websocket/backpressure) shows
+a producer that retries from the `drain` callback instead.
+
+## Run it
+
+```sh
+zig build run
+```
+
+The server listens on TCP port 3000 and keeps the plain HTTP route available for
+readiness checks.
+
+## Verify with wscat
+
+In another terminal:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/echo
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< welcome
+< hello
+```
+
+`wscat` sends a text frame per line. `send` copies the payload into the
+connection write queue before it returns, so echoing the borrowed `message`
+slice inside the callback is safe.
+
+## Verify with a browser
+
+Open a page on the same origin and run:
+
+```js
+const ws = new WebSocket("ws://127.0.0.1:3000/echo");
+ws.onmessage = (event) => console.log(event.data);
+ws.onopen = () => ws.send("from the browser");
+```
+
+The console prints `welcome` and then `from the browser`.
+
+## What just happened
+
+1. `app.ws` registers an upgrade route. The route shares the router, slab, and
+   worker with the HTTP routes.
+2. The framework validates the RFC 6455 request fields, writes
+   `101 Switching Protocols`, and calls `open`.
+3. Each complete message is dispatched once. Fragmented frames are reassembled
+   before the callback, and the `message` slice is borrowed until the callback
+   returns.
+4. `send` frames one complete message into the bounded write queue. A full queue
+   returns `error.WouldBlock` instead of growing memory.
+5. A peer close completes the closing handshake, then `close` runs once.
+
+## Verify the failure path
+
+Stop the server, keep `wscat` open, and restart. The peer sees a closed socket
+and `wscat` exits, which confirms that `terminate` and process exit both close
+the connection instead of leaving it half-open.
+
+## Next
+
+- [Backpressure and draining](/docs/websocket/backpressure) to retry instead of
+  dropping.
+- [Messages and framing](/docs/websocket/messages) for text, binary, ping, and
+  close behavior.

@@ -1,0 +1,109 @@
+---
+title: HTTP/3 configuration
+description: Size body và response-header capacity của QUIC engine, và biết config value nào HTTP/3 validate, field nào bị bỏ qua.
+sidebar:
+  order: 3
+search:
+  tags: [reference, http3, quic, capacity]
+---
+
+HTTP/3 capacity là hỗn hợp field `ServerConfig` dùng chung và ba field riêng `h3`.
+`init_http3` validate chúng trước khi cấp phát, và giá trị sai làm startup fail
+với `error.InvalidHttp3Capacity` thay vì packet bị bỏ sau này.
+
+## Field
+
+| Field                          | Default | Builder override                    | Ghi chú                                            |
+| ------------------------------ | ------- | ----------------------------------- | -------------------------------------------------- |
+| `max_h3_body_size`             | 16 KiB  | `with_max_h3_body_size`             | Phải khác zero và vừa `u32` cùng `max_header_size` |
+| `max_h3_response_header_size`  | 4 KiB   | `with_max_h3_response_header_size`  | Từ 1 đến 65535; offset là `u16`                    |
+| `max_h3_response_header_count` | 64      | `with_max_h3_response_header_count` | Từ 1 đến 4096                                      |
+
+Ba field dùng chung cũng định hình HTTP/3:
+
+| Field              | Default | Tác dụng trên HTTP/3                                         |
+| ------------------ | ------- | ------------------------------------------------------------ |
+| `max_connections`  | 1024    | Engine capacity cho connection và stream đồng thời           |
+| `max_header_size`  | 16 KiB  | Request header byte; phải vừa field length `u16` của lsxpack |
+| `max_header_count` | 64      | Request field decode mỗi request                             |
+| `write_queue_size` | 64 KiB  | Response body buffer mỗi stream cho response one-shot        |
+
+## Build application đã cấu hình
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_h3_body_size(32 * 1024)
+    .with_max_h3_response_header_size(8 * 1024)
+    .with_max_h3_response_header_count(48);
+```
+
+Builder tạo `ServerConfig` thường; entry point HTTP/3 dùng nó khi bạn gọi
+`init_http3` hoặc `init_http3_ephemeral`. Không có QUIC config type riêng.
+
+## Engine reserve gì
+
+| Region                   | Size bởi                      | Cấp phát             |
+| ------------------------ | ----------------------------- | -------------------- |
+| Request header byte      | `max_header_size`             | Engine pool lúc init |
+| Request body mỗi stream  | `max_h3_body_size`            | Engine pool lúc init |
+| Response header byte     | `max_h3_response_header_size` | Engine pool lúc init |
+| Response body mỗi stream | `write_queue_size`            | Engine pool lúc init |
+| UDP packet buffer        | 2 KiB mỗi cái                 | Engine pool lúc init |
+| Stream state             | Engine capacity               | Engine pool lúc init |
+
+Mọi QUIC region được cấp phát một lần khi engine start và nằm ngoài application
+slab. `slab_bytes()` không gồm nó, nên cộng chi phí HTTP/3 engine riêng khi plan
+memory. Request body storage nhân với client capacity đã cấu hình, khiến
+`max_h3_body_size` thành số hạng chi phối.
+
+## Quy tắc validation
+
+`init_http3` từ chối:
+
+- `max_h3_body_size` bằng zero.
+- `max_h3_response_header_size` bằng zero hoặc trên 65535.
+- `max_h3_response_header_count` bằng zero hoặc trên 4096.
+- `max_header_size` trên `u32`, hoặc header cộng body overflow QUIC receive credit.
+- Request header size trên field length `u16` của lsxpack khi engine start.
+
+Các lỗi này fail với `error.InvalidHttp3Capacity` hoặc `error.SlabTooSmall` trước
+khi UDP socket bind, nên config sai hiện ngay lúc startup.
+
+## Concurrency
+
+Engine capacity, dẫn xuất từ `max_connections`, size connection pool và stream pool
+phục vụ HTTP/3 request. HTTP/2 cố định tám stream mỗi connection; HTTP/3 nhận
+request stream từ engine pool, nên capacity đã cấu hình là con số cần plan.
+
+## Không cấu hình được
+
+| Setting              | Giá trị                 |
+| -------------------- | ----------------------- |
+| Congestion control   | BBRv1 với pacing        |
+| 0-RTT                | Tắt                     |
+| QPACK request table  | Tắt                     |
+| Blocked QPACK stream | Không cho phép          |
+| Packet payload       | Buffer 2 KiB            |
+| PLPMTU               | 1200 đến 1472           |
+| Transmit batching    | Linux `UDP_SEGMENT` GSO |
+| Receive GRO          | Tắt                     |
+| HTTP/3 clustering    | Không hỗ trợ            |
+
+Không có knob công khai cho congestion control, pacing hay packet size. Đổi chúng
+cần sửa source và một compliance run mới.
+
+## Kiểm tra
+
+```sh
+curl --http3-only -k -H "X-Test: value" https://127.0.0.1:8443/
+```
+
+Sau đó gửi body lớn hơn `max_h3_body_size` và xác nhận stream reset trong khi
+request thứ hai trên connection mới vẫn thành công. Capacity failure ở phạm vi
+stream, không phải toàn process.
+
+## Tiếp theo
+
+- [HTTP/3 limits](/docs/http3/limits) cho bảng đầy đủ.
+- [QUIC transport](/docs/http3/quic-transport) cho policy cố định.

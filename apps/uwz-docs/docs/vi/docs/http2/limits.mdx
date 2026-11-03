@@ -1,0 +1,99 @@
+---
+title: HTTP/2 limits
+description: Đọc mọi default HTTP/2, budget stream và tunnel cố định, cùng rejection mà từng bound bị vượt tạo ra cho connection.
+sidebar:
+  order: 8
+search:
+  tags: [reference, http2, capacity]
+---
+
+HTTP/2 có hai loại limit: giá trị protocol cố định mà session thực thi cho mọi
+connection, và capacity `ServerConfig` size storage mỗi stream. Trang này liệt kê
+cả hai và kết quả khi vượt.
+
+## Protocol limit cố định
+
+| Giới hạn                  | Giá trị     | Thực thi                                                               |
+| ------------------------- | ----------- | ---------------------------------------------------------------------- |
+| Stream đồng thời          | 8           | Quảng bá trong SETTINGS; HEADERS vượt nhận `RST_STREAM REFUSED_STREAM` |
+| Frame payload             | 16.384 byte | GOAWAY `FRAME_SIZE_ERROR`                                              |
+| Initial stream window     | 65.535 byte | Peer có thể tăng qua SETTINGS                                          |
+| Initial connection window | 65.535 byte | WINDOW_UPDATE trên stream zero                                         |
+| WebSocket tunnel          | 1           | `503 Service Unavailable` cho tunnel thứ hai                           |
+| HPACK dynamic table       | 4.096 byte  | Quảng bá trong SETTINGS; update từ peer bị cap                         |
+| Server push               | không       | `SETTINGS_ENABLE_PUSH: 0`; không PUSH_PROMISE                          |
+| h2c Upgrade               | không       | `Upgrade: h2c` được xử lý như HTTP/1.1                                 |
+
+Stream count là compile-time. Đổi nó cần specialize connection type; không có
+builder method.
+
+## Capacity cấu hình được
+
+| Field                          | Default | Builder override                    | Khi vượt                       |
+| ------------------------------ | ------- | ----------------------------------- | ------------------------------ |
+| `max_h2_header_block_size`     | 16 KiB  | `with_max_h2_header_block_size`     | GOAWAY `COMPRESSION_ERROR`     |
+| `max_h2_body_size`             | 16 KiB  | `with_max_h2_body_size`             | RST_STREAM `ENHANCE_YOUR_CALM` |
+| `max_h2_response_header_size`  | 4 KiB   | `with_max_h2_response_header_size`  | Response fail; stream reset    |
+| `max_h2_response_header_count` | 32      | `with_max_h2_response_header_count` | Response fail; stream reset    |
+| `max_header_size`              | 16 KiB  | `with_max_header_size`              | GOAWAY `ENHANCE_YOUR_CALM`     |
+| `max_header_count`             | 64      | `with_max_header_count`             | GOAWAY `ENHANCE_YOUR_CALM`     |
+
+`max_header_size` và `max_header_count` được chia sẻ với HTTP/1.1. Response header
+count gồm field `:status` và field `content-length` được tạo.
+
+## Storage mỗi stream
+
+Mỗi slot trong tám slot reserve:
+
+```text
+request header bytes   = max_header_size
+request body bytes     = max_h2_body_size
+response body bytes    = max_h2_body_size
+response header block  = max_h2_response_header_size
+```
+
+Cộng một header block `max_h2_header_block_size` dùng chung mỗi connection và HPACK
+table storage. Dùng `h2_session_bytes()` cho giá trị chính xác mỗi connection.
+
+Body capacity 16 KiB vì thế tốn 256 KiB body storage mỗi connection ở tám stream,
+trước header. Đây là lý do `max_h2_body_size` chi phối footprint per-connection và
+các preset chọn connection count thận trọng.
+
+## Ma trận rejection
+
+| Input                                 | Phạm vi    | Kết quả                        |
+| ------------------------------------- | ---------- | ------------------------------ |
+| Frame lớn hơn 16 KiB                  | Connection | GOAWAY `FRAME_SIZE_ERROR`      |
+| Header block lớn hơn limit            | Connection | GOAWAY `COMPRESSION_ERROR`     |
+| HPACK syntax hoặc Huffman error       | Connection | GOAWAY `COMPRESSION_ERROR`     |
+| Quá nhiều field decode                | Connection | GOAWAY `ENHANCE_YOUR_CALM`     |
+| Pseudo-header sau regular field       | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Pseudo-field trùng hoặc thiếu         | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Connection-specific header            | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Body hoặc `content-length` trên limit | Stream     | RST_STREAM `ENHANCE_YOUR_CALM` |
+| DATA trên stream idle                 | Connection | GOAWAY `PROTOCOL_ERROR`        |
+| Stream đồng thời thứ chín             | Stream     | RST_STREAM `REFUSED_STREAM`    |
+
+## Không bị giới hạn
+
+- Số request mỗi connection. Stream được dùng lại đến khi connection đóng.
+- Tổng byte truyền. Flow control theo window, không theo vòng đời connection.
+- Response size. Response stream có thể vượt write queue vì producer resume khi
+  drain.
+- Độ dài header field ngoài policy `max_header_size` dùng chung.
+
+## Chọn giá trị
+
+| Workload                        | Header block | Body   | Response header |
+| ------------------------------- | ------------ | ------ | --------------- |
+| JSON API, payload nhỏ           | 16 KiB       | 16 KiB | 4 KiB / 32      |
+| Endpoint upload                 | 16 KiB       | 64 KiB | 4 KiB / 32      |
+| Nhiều response header, body nhỏ | 16 KiB       | 8 KiB  | 8 KiB / 48      |
+
+Giữ header block ít nhất bằng `max_header_size`; nếu không, header block cỡ
+HTTP/1.1 hợp lệ không đến được qua HTTP/2.
+
+## Tiếp theo
+
+- [Configuration](/docs/http2/configuration) cho builder call.
+- [Flow control](/docs/http2/flow-control) cho hành vi window.

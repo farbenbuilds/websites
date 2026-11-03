@@ -84,6 +84,11 @@ unexpectedly.
 - Declare a language on every code fence.
 - Verify with the app's `check` and `build` tasks.
 - Do not edit generated files under `dist/` or `.blume/`.
+- Write µWebZockets pages for application developers. They install the package
+  with `zig fetch --save`; they do not clone, build, test, or enter a development
+  shell for the framework repository. Use their `build.zig` commands and client
+  tools, and cite framework compliance results as dated evidence rather than
+  asking the reader to reproduce them. See `uWZ-TODO.md` section 8.12.
 
 A documentation change that adds a new interaction also needs a Svelte island
 contract, an accessibility review, and both docs builds when shared UI changes.

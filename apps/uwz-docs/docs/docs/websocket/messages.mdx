@@ -1,0 +1,140 @@
+---
+title: Messages and framing
+description: Send text, binary, and control frames, read the borrowed message slice, and understand fragmentation, masking, and UTF-8 validation.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, websocket]
+---
+
+`send` frames one complete message. The receive path assembles fragmented frames
+into one message before it calls your callback, so application code never sees a
+partial payload. This page covers the opcode rules, slice lifetime, and the
+frames the framework answers for you.
+
+## Receive path
+
+| Frame                           | Framework behavior                                       |
+| ------------------------------- | -------------------------------------------------------- |
+| Text or binary, final bit set   | One `message` callback with the complete payload         |
+| Text or binary, final bit clear | Buffered until the continuation frame sets the final bit |
+| Continuation                    | Appended to the current message                          |
+| Ping                            | Answered with a pong carrying the same payload           |
+| Pong                            | Clears the pending heartbeat ping                        |
+| Close                           | Validated, echoed if needed, then `close` runs once      |
+| Unknown opcode or bad state     | Close `1002 Protocol error`                              |
+
+Three terminal codes come from the parser rather than your code:
+
+| Code   | Condition                                        |
+| ------ | ------------------------------------------------ |
+| `1002` | Protocol error, including an invalid close frame |
+| `1007` | Invalid UTF-8 in a text message or close reason  |
+| `1009` | A message exceeds `max_message_size`             |
+
+After a parser failure the socket sends the close frame, runs `close` once, and
+stops dispatching bytes. A failed parser is terminal for that connection.
+
+## Slice lifetime
+
+```zig
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    // Borrowed for this callback only.
+    std.log.info("{s} message: {d} bytes", .{ @tagName(opcode), message.len });
+}
+```
+
+The payload points into the connection-owned message buffer. It is valid until
+the callback returns and is reused by the next message. Copy what you keep:
+
+```zig
+const pending = struct {
+    var last: [256]u8 = undefined;
+    var last_len: usize = 0;
+};
+
+fn remember(_: *uz.WebSocket, message: []const u8, _: uz.Opcode) void {
+    pending.last_len = @min(message.len, pending.last.len);
+    @memcpy(pending.last[0..pending.last_len], message[0..pending.last_len]);
+}
+```
+
+For payloads that must outlive the connection, copy into application storage
+with a bound you own. Do not retain the borrowed slice.
+
+## Send one complete message
+
+```zig
+ws.send("hello", .text) catch |err| switch (err) {
+    error.WouldBlock => {}, // retry from drain
+    error.ConnectionClosed => {},
+    else => std.log.err("send failed: {}", .{err}),
+};
+
+try ws.send(payload_bytes, .binary);
+```
+
+`send` accepts `.text`, `.binary`, `.ping`, `.pong`, and `.close`. It rejects
+`.continuation`: outgoing messages are never fragmented. The connection write
+queue copies the bytes before `send` returns, so a stack buffer is safe.
+
+Validation runs before framing:
+
+| Error                  | Cause                                                     |
+| ---------------------- | --------------------------------------------------------- |
+| `InvalidOpcode`        | `.continuation` or an opcode the server does not send     |
+| `InvalidUtf8`          | Text payload or close reason is not valid UTF-8           |
+| `ControlFrameTooLarge` | A ping or pong payload is longer than 125 bytes           |
+| `InvalidCloseFrame`    | A close payload is one byte, or the code is not permitted |
+| `PayloadTooLarge`      | A compressed message cannot fit `max_frame_size`          |
+| `WouldBlock`           | The bounded write queue has no room                       |
+| `ConnectionClosed`     | The peer closed, or the transport is shutting down        |
+
+Control frames carry at most 125 bytes because RFC 6455 limits the payload to
+seven bits of length. Keep application data out of ping and pong.
+
+## Masking
+
+RFC 6455 requires client frames to be masked and server frames to be unmasked.
+The parser unmasks inbound payloads in place with the widest vector the target
+compiles, then falls back to a scalar tail. Application code never masks or
+unmasks a frame.
+
+The public helpers exist for embedders and tests, not for normal handlers:
+
+- `uz.websocket_mask` provides position-aware masking.
+- `uz.websocket_backpressure` models a pure backpressure transition.
+
+## Fragmentation rules
+
+- One callback per complete message, never per frame.
+- The assembled message is bounded by `max_message_size`.
+- One encoded frame is bounded by `max_frame_size`, which must not exceed
+  `max_message_size`.
+- A fragment sequence that ends without a final bit is a protocol error.
+- Control frames may appear between fragments and never join a message.
+
+A client that sends many small fragments still costs one write per complete
+message. A client that sends one oversized message is closed with `1009` before
+the callback runs.
+
+## Verify frame behavior
+
+Use `wscat` for text and binary round trips, then send a ping from a client
+library and confirm the echo arrives without a `message` callback.
+
+```console
+$ npx wscat -c ws://127.0.0.1:3000/echo
+Connected (press CTRL+C to quit)
+> hello
+< hello
+```
+
+The compliance suite exercises fragmentation, UTF-8 boundaries, close ordering,
+and masking. See [Autobahn and testing](/docs/websocket/testing).
+
+## Next
+
+- [Backpressure and draining](/docs/websocket/backpressure) for `WouldBlock`.
+- [Close codes and shutdown](/docs/websocket/close-codes) for the closing
+  handshake.

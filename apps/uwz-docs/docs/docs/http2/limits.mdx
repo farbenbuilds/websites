@@ -1,0 +1,102 @@
+---
+title: HTTP/2 limits
+description: Read every HTTP/2 default, the fixed stream and tunnel budget, and the rejection each exceeded bound produces.
+sidebar:
+  order: 8
+search:
+  tags: [reference, http2, capacity]
+---
+
+HTTP/2 has two kinds of limits: fixed protocol values that the session enforces
+for every connection, and `ServerConfig` capacities that size per-stream storage.
+This page lists both and the result when each is exceeded.
+
+## Fixed protocol limits
+
+| Limit                     | Value        | Enforcement                                                             |
+| ------------------------- | ------------ | ----------------------------------------------------------------------- |
+| Concurrent streams        | 8            | Advertised in SETTINGS; excess HEADERS gets `RST_STREAM REFUSED_STREAM` |
+| Frame payload             | 16,384 bytes | GOAWAY `FRAME_SIZE_ERROR`                                               |
+| Initial stream window     | 65,535 bytes | Peer may raise through SETTINGS                                         |
+| Initial connection window | 65,535 bytes | WINDOW_UPDATE on stream zero                                            |
+| WebSocket tunnels         | 1            | `503 Service Unavailable` for a second                                  |
+| HPACK dynamic table       | 4,096 bytes  | Advertised in SETTINGS; peer updates capped                             |
+| Server push               | none         | `SETTINGS_ENABLE_PUSH: 0`; no PUSH_PROMISE                              |
+| h2c Upgrade               | none         | `Upgrade: h2c` is treated as HTTP/1.1                                   |
+
+The stream count is compile-time. Changing it requires specializing the
+connection type; there is no builder method.
+
+## Configurable capacities
+
+| Field                          | Default | Builder override                    | On excess                      |
+| ------------------------------ | ------- | ----------------------------------- | ------------------------------ |
+| `max_h2_header_block_size`     | 16 KiB  | `with_max_h2_header_block_size`     | GOAWAY `COMPRESSION_ERROR`     |
+| `max_h2_body_size`             | 16 KiB  | `with_max_h2_body_size`             | RST_STREAM `ENHANCE_YOUR_CALM` |
+| `max_h2_response_header_size`  | 4 KiB   | `with_max_h2_response_header_size`  | Response fails; stream resets  |
+| `max_h2_response_header_count` | 32      | `with_max_h2_response_header_count` | Response fails; stream resets  |
+| `max_header_size`              | 16 KiB  | `with_max_header_size`              | GOAWAY `ENHANCE_YOUR_CALM`     |
+| `max_header_count`             | 64      | `with_max_header_count`             | GOAWAY `ENHANCE_YOUR_CALM`     |
+
+`max_header_size` and `max_header_count` are shared with HTTP/1.1. The response
+header count includes the `:status` field and the generated `content-length`
+field.
+
+## Per-stream storage
+
+Each of the eight slots reserves:
+
+```text
+request header bytes   = max_header_size
+request body bytes     = max_h2_body_size
+response body bytes    = max_h2_body_size
+response header block  = max_h2_response_header_size
+```
+
+Plus one shared header block of `max_h2_header_block_size` per connection and the
+HPACK table storage. Use `h2_session_bytes()` for the exact per-connection value.
+
+A 16 KiB body capacity therefore costs 256 KiB of body storage per connection at
+eight streams, before headers. This is why `max_h2_body_size` dominates the
+per-connection footprint and why the presets choose conservative connection
+counts.
+
+## Rejection matrix
+
+| Input                                         | Scope      | Result                         |
+| --------------------------------------------- | ---------- | ------------------------------ |
+| Frame larger than 16 KiB                      | Connection | GOAWAY `FRAME_SIZE_ERROR`      |
+| Header block larger than the limit            | Connection | GOAWAY `COMPRESSION_ERROR`     |
+| HPACK syntax or Huffman error                 | Connection | GOAWAY `COMPRESSION_ERROR`     |
+| Too many decoded fields                       | Connection | GOAWAY `ENHANCE_YOUR_CALM`     |
+| Pseudo-header after a regular field           | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Duplicate or missing pseudo-field             | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Connection-specific header                    | Stream     | RST_STREAM `PROTOCOL_ERROR`    |
+| Body or `content-length` above the body limit | Stream     | RST_STREAM `ENHANCE_YOUR_CALM` |
+| DATA on an idle stream                        | Connection | GOAWAY `PROTOCOL_ERROR`        |
+| Ninth concurrent stream                       | Stream     | RST_STREAM `REFUSED_STREAM`    |
+
+## What is not limited
+
+- Request count per connection. Streams are reused until the connection closes.
+- Total bytes transferred. Flow control is per window, not per connection
+  lifetime.
+- Response size. A streamed response can exceed the write queue because the
+  producer resumes on drain.
+- Header field length beyond the shared `max_header_size` policy.
+
+## Choosing values
+
+| Workload                            | Header block | Body   | Response headers |
+| ----------------------------------- | ------------ | ------ | ---------------- |
+| JSON API, small payloads            | 16 KiB       | 16 KiB | 4 KiB / 32       |
+| Upload endpoints                    | 16 KiB       | 64 KiB | 4 KiB / 32       |
+| Many response headers, small bodies | 16 KiB       | 8 KiB  | 8 KiB / 48       |
+
+Keep the header block at least as large as `max_header_size`; otherwise a valid
+HTTP/1.1-sized header block cannot arrive over HTTP/2.
+
+## Next
+
+- [Configuration](/docs/http2/configuration) for the builder calls.
+- [Flow control](/docs/http2/flow-control) for window behavior.

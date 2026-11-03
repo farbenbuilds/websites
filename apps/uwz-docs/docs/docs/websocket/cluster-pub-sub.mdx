@@ -1,0 +1,124 @@
+---
+title: Cluster pub/sub
+description: Broadcast a WebSocket topic across workers, read the queued and dropped report, and keep every worker inbox bounded.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, websocket, cluster, capacity]
+---
+
+A worker owns its own pub/sub registry. `Cluster.publish` copies one message into
+each worker's bounded inbox, wakes the worker, and lets that worker publish to
+its local subscribers. No subscription table is shared and no connection state
+crosses a thread.
+
+## Broadcast
+
+```zig
+const report = try group.publish_report("news", message, true);
+if (report.dropped != 0) {
+    std.log.warn(
+        "dropped on {d} of {d} workers; first full inbox: {?d}",
+        .{ report.dropped, report.attempted(), report.first_dropped_worker },
+    );
+}
+```
+
+`publish_report` returns a `PublishReport`:
+
+| Field                  | Meaning                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| `queued`               | Workers whose inbox accepted the message                     |
+| `dropped`              | Workers whose inbox was full                                 |
+| `notify_failed`        | Accepted messages whose loop wakeup failed or was suppressed |
+| `first_dropped_worker` | Lowest worker index that rejected the message, when any      |
+
+Two helpers summarize it: `attempted()` returns `queued + dropped`, and
+`all_delivered()` is true only when every active worker accepted the message and
+every wakeup was posted.
+
+`publish` is the shorter form. It returns `report.queued` and discards the rest:
+
+```zig
+const queued = try group.publish("news", message, true);
+```
+
+## Message bounds
+
+| Bound                  | Value                                    | Error                                                |
+| ---------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| Topic name             | 127 bytes, non-empty                     | `error.TopicTooLong`, `error.EmptyTopic`             |
+| Payload                | `max_ws_message_size` of the application | `error.ClusterMessageTooLarge`                       |
+| Inbox depth per worker | 64 messages                              | Reported as `dropped`, not an error                  |
+| Lifecycle              | Configured or running                    | `error.ClusterStopped`, `error.ClusterDeinitialized` |
+
+The inbox payload capacity follows the worker's `max_ws_message_size`. Raising the
+message capacity raises inbox memory for every worker: 64 slots times the message
+size per worker before any queue overhead. A 32 KiB message capacity reserves
+2 MiB of payload storage per worker inbox.
+
+A full inbox does not fail the whole publish. It is a per-worker report field so
+one stalled worker cannot reject delivery to healthy workers.
+
+## Delivery guarantees
+
+`queued` means the inbox accepted a copy and a wakeup was requested. It does not
+mean a local subscriber received the message. After acceptance, delivery can
+still fail because:
+
+- The worker stops before it drains the inbox.
+- A local subscriber's write queue is full when the worker publishes.
+- The process exits during shutdown.
+
+Treat cluster pub/sub as best-effort fan-out with a report. Add application
+sequence numbers and client acknowledgements when a message must not be lost.
+
+## Lifecycle order
+
+Publish only while the cluster is configured or running. After `run` returns,
+`request_shutdown` or `deinit` moves the group through `stopped` and `releasing`,
+and `publish_report` returns `error.ClusterStopped` or
+`error.ClusterDeinitialized`.
+
+A worker that stops cannot drain its inbox. Send the notification before you
+request shutdown, then stop accepting new connections. See
+[shared-nothing workers](/docs/concepts/shared-nothing) for the lifecycle
+states.
+
+## Route shape
+
+```zig
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.ws("/feed", .{
+            .open = on_open,
+            .message = on_message,
+        });
+    }
+}.routes);
+```
+
+Every worker registers the same routes against its own slab. A socket that
+subscribes to `news` on worker 2 is invisible to worker 3 except through
+`Cluster.publish`.
+
+To broadcast from inside a socket, call `group.publish_report` rather than
+`ws.publish`. `ws.publish` reaches only the subscriptions owned by the current
+worker.
+
+## Verify it
+
+1. Build a four-worker cluster with the `/feed` route.
+2. Connect eight clients; `SO_REUSEPORT` distributes them across workers.
+3. Publish from any client. Every client receives one copy.
+4. Suspend one worker process thread, then publish enough messages to fill its
+   64-slot inbox.
+5. Confirm `dropped` becomes one and the other three workers still receive every
+   message.
+
+## Next
+
+- [Pub/sub](/docs/websocket/pub-sub) for the single-worker registry.
+- [WebSocket limits](/docs/websocket/limits) for the inbox sizing inputs.

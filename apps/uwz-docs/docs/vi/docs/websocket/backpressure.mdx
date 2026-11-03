@@ -1,0 +1,140 @@
+---
+title: Backpressure và drain
+description: Xử lý error.WouldBlock bằng retry queue có giới hạn cho từng connection và resume gửi từ drain callback thay vì tăng memory.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, websocket, capacity]
+---
+
+WebSocket write queue bị giới hạn bởi `ServerConfig.write_queue_size`, mặc định
+64 KiB cho mỗi connection. `send` copy byte vào queue đó và trả
+`error.WouldBlock` khi peer chậm hơn producer. Drain callback là nơi duy nhất một
+producer bị tạm dừng được phép resume.
+
+## Contract
+
+| Tín hiệu            | Ý nghĩa                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| `send` trả về       | Toàn bộ message đã vào queue                               |
+| `error.WouldBlock`  | Không byte nào được xếp; retry đúng message đó sau         |
+| `buffered_amount()` | Byte đang chờ của connection, gồm cả frame header          |
+| `drain` callback    | Chạy một lần sau `WouldBlock` khi queue xuống dưới một nửa |
+| `terminate()`       | Đóng ngay và bỏ các byte đang chờ                          |
+
+`drain` không phải tick định kỳ. Transport bật cờ backpressure khi một send bị
+từ chối, xóa cờ khi queue xuống dưới `write_queue_size / 2`, rồi gọi callback một
+lần. Nếu callback lại làm đầy queue, drain kế tiếp đến sau batch write thành
+công tiếp theo.
+
+:::warning[Không loop trên WouldBlock]
+Retry trong vòng lặp chặt không thể tạo chỗ: write completion giải phóng chỗ chạy
+trên cùng worker thread. Hãy lưu phần còn lại và return.
+:::
+
+## Giữ một retry slot cho mỗi connection
+
+Socket không có user-data pointer, nên giữ state của application trong một table
+cố định khóa theo con trỏ socket. Đoạn trích này cho thấy table, enqueue path và
+drain path. Nó bỏ qua `main`, đăng ký route và handler từ
+[quickstart](/docs/websocket/quickstart):
+
+```zig
+const Pending = struct {
+    ws: *uz.WebSocket,
+    len: usize = 0,
+    buf: [4 * 1024]u8 = undefined,
+    is_text: bool = true,
+};
+
+const max_pending = 4 * 1024;
+
+// One slot per configured connection keeps the table bounded.
+var pending: [128]?Pending = .{null} ** 128;
+
+fn store(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    if (message.len > max_pending) {
+        // Too large to retry: drop the peer rather than grow memory.
+        ws.terminate();
+        return;
+    }
+    for (&pending) |*slot| {
+        if (slot.*) |*entry| {
+            if (entry.ws == ws) return; // One queued message per peer.
+            continue;
+        }
+        var entry = Pending{ .ws = ws, .len = message.len, .is_text = opcode == .text };
+        @memcpy(entry.buf[0..message.len], message);
+        slot.* = entry;
+        return;
+    }
+    ws.terminate();
+}
+
+fn flush(ws: *uz.WebSocket) void {
+    for (&pending) |*slot| {
+        if (slot.*) |*entry| {
+            if (entry.ws != ws or entry.len == 0) continue;
+
+            const opcode: uz.Opcode = if (entry.is_text) .text else .binary;
+            ws.send(entry.buf[0..entry.len], opcode) catch |err| switch (err) {
+                error.WouldBlock => return, // Keep the slot; drain runs again.
+                else => {
+                    slot.* = null;
+                    ws.terminate();
+                    return;
+                },
+            };
+            slot.* = null;
+            return;
+        }
+    }
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    ws.send(message, opcode) catch |err| switch (err) {
+        error.WouldBlock => store(ws, message, opcode),
+        else => ws.terminate(),
+    };
+}
+```
+
+Đăng ký `flush` làm `drain` callback của route và xóa slot của peer trong `close`.
+Với `App(128)`, table cap khớp connection cap nên một peer đang sống luôn có slot.
+
+Tradeoff có chủ đích: một message chờ cho mỗi peer, retry buffer cố định 4 KiB và
+hard close khi vượt một trong hai giới hạn. Chỉ tăng queue depth khi tăng bound và
+giải thích chi phí memory.
+
+## Size queue
+
+| Workload                             | Điểm bắt đầu                       |
+| ------------------------------------ | ---------------------------------- |
+| JSON event nhỏ, nhiều peer           | Default 64 KiB                     |
+| Telemetry binary với consumer bursty | 128 đến 256 KiB kèm drop policy    |
+| Fan-out chat có nhiều peer chậm      | Giữ 64 KiB và disconnect peer chậm |
+
+Queue tính theo connection, nên `max_connections * write_queue_size` là memory
+pending-output xấu nhất trước framing overhead. Xem
+[capacity model](/docs/concepts/capacity-model) cho toàn bộ slab layout.
+
+## Hành vi HTTP/2 tunnel
+
+Tunnel RFC 8441 gửi qua HTTP/2 stream thay vì TCP ring. Session không có pending
+queue riêng cho từng stream đối với WebSocket frame, nên flow-control stall không
+thể giữ một frame dở dang. Khi không có DATA capacity, tunnel reset thay vì
+buffer. Coi `WouldBlock` trên tunnel là terminal cho tunnel đó và reconnect.
+
+## Kiểm tra
+
+1. Gửi một burst lớn từ client đọc chậm, ví dụ tạm dừng reader trong browser
+   debugger.
+2. Theo dõi `buffered_amount()` tăng và dòng log `WouldBlock` đầu tiên xuất hiện.
+3. Resume reader.
+4. Xác nhận drain callback log một lần và message trong queue đến trước các
+   message sau.
+
+## Tiếp theo
+
+- [Pub/sub](/docs/websocket/pub-sub) cho fan-out bỏ qua subscriber chậm.
+- [WebSocket limits](/docs/websocket/limits) cho các default chính xác.

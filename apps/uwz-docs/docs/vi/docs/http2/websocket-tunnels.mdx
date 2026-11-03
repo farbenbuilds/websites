@@ -1,0 +1,115 @@
+---
+title: WebSocket qua HTTP/2
+description: Route extended CONNECT RFC 8441 qua HTTP/2 session và xử lý giới hạn một tunnel cùng tám stream của connection.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, http2, websocket]
+---
+
+HTTP/2 connection có thể mang một WebSocket tunnel dưới dạng extended CONNECT
+stream. Route được đăng ký bằng `App.ws` như mọi WebSocket route và cùng callback
+chạy. Trang này nói về phía HTTP/2: request được match thế nào, nó tiêu tài nguyên
+gì và fail ra sao.
+
+## Bật nó
+
+Không có flag bật tunnel. Session quảng bá extended CONNECT trong SETTINGS và nhận
+CONNECT request khi:
+
+- Connection thương lượng `h2` qua ALPN, hoặc mở bằng cleartext preface.
+- Route được đăng ký bằng `App.ws`.
+- Request mang `:protocol: websocket` và đúng một
+  `Sec-WebSocket-Version: 13`.
+
+```zig
+_ = try app.ws("/chat", .{
+    .upgrade = admit,
+    .open = on_open,
+    .message = on_message,
+    .close = on_close,
+});
+```
+
+## Tunnel tiêu gì
+
+| Tài nguyên                 | Chi phí mỗi tunnel         |
+| -------------------------- | -------------------------- |
+| HTTP/2 stream slot         | 1 trong 8 stream đồng thời |
+| WebSocket state connection | 1 mỗi connection           |
+| Message buffer             | `max_ws_message_size`      |
+| Write path                 | DATA frame, không TCP ring |
+| Compression scratch        | không                      |
+
+Connection có tám HTTP request active không mở được tunnel cho đến khi một request
+hoàn tất. Khi đó HEADERS frame nhận `RST_STREAM REFUSED_STREAM`. Khi còn stream slot
+nhưng connection đã có tunnel, request nhận `503 Service Unavailable`. Giới hạn
+tunnel (một) và giới hạn stream (tám) là hai check riêng.
+
+## Response code
+
+| Tình huống                     | Response                    |
+| ------------------------------ | --------------------------- |
+| Được nhận                      | `200 OK`, sau đó DATA frame |
+| Tunnel thứ hai trên connection | `503 Service Unavailable`   |
+| `upgrade` callback từ chối     | `403 Forbidden`             |
+| Version sai hoặc thiếu         | `426 Upgrade Required`      |
+| Route limit không hợp lệ       | `500 Internal Server Error` |
+| CONNECT không có `:protocol`   | `501 Not Implemented`       |
+
+Tunnel đầu vẫn chạy khi request thứ hai nhận `503`.
+
+## Frame trên stream
+
+Sau `200`, mỗi WebSocket frame được gửi thành một hoặc nhiều DATA frame. Message
+lớn được chia tại DATA capacity và không bao giờ bị cắt âm thầm: nếu capacity về
+zero, tunnel reset.
+
+Frame client đến dưới dạng DATA và được unmask tại chỗ trước message callback.
+DATA frame có end-stream kết thúc tunnel và chạy close callback một lần; close frame
+WebSocket bên trong DATA theo closing handshake bình thường. Xem
+[message và framing](/docs/websocket/messages) cho opcode và UTF-8.
+
+## Khác gì HTTP/1.1
+
+- Handshake là `CONNECT` với response `200`, không phải `101`.
+- `Sec-WebSocket-Key` không bắt buộc và không được kiểm tra.
+- Per-message deflate không được thương lượng.
+- Một tunnel mỗi connection thay vì một mỗi connection slot.
+- Output đang chờ không nằm trong TCP write ring.
+
+## Kiểm tra
+
+Dùng client triển khai RFC 8441. Công việc compliance của repository chạy HTTP/2
+session qua unit suite và gate shared-handler, không qua tunnel client riêng.
+
+Để kiểm tra thủ công, kết nối bằng HTTP/2 client hỗ trợ extended CONNECT, gửi
+request dưới đây và xác nhận `200`:
+
+| Pseudo-field / field    | Giá trị          |
+| ----------------------- | ---------------- |
+| `:method`               | `CONNECT`        |
+| `:protocol`             | `websocket`      |
+| `:scheme`               | `https`          |
+| `:path`                 | `/chat`          |
+| `:authority`            | `127.0.0.1:3443` |
+| `sec-websocket-version` | `13`             |
+
+Sau đó gửi masked text frame dưới dạng DATA và đọc echo. Lặp CONNECT trên cùng
+connection để xác nhận `503` trong khi tunnel đầu vẫn echo.
+
+## Checklist debug
+
+| Triệu chứng              | Kiểm tra                                   |
+| ------------------------ | ------------------------------------------ |
+| `501`                    | Request thiếu `:protocol: websocket`       |
+| `404`                    | Không có route `App.ws` khớp path          |
+| `426`                    | Version header thiếu, trùng hoặc khác `13` |
+| `503`                    | Connection đã có tunnel active             |
+| Frame làm reset tunnel   | Flow-control window của peer cạn           |
+| Echo dừng không có close | Tunnel bị reset; tìm `CANCEL`              |
+
+## Tiếp theo
+
+- [RFC 8441 tunnel](/docs/websocket/http2-tunnels) cho góc nhìn protocol.
+- [HTTP/2 limits](/docs/http2/limits) cho budget stream và tunnel.

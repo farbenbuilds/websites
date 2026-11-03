@@ -84,6 +84,11 @@ bindings on musl systems.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See [tests/README.md](tests/README.md).
 - `lefthook` runs the pre-commit gate. Do not bypass it.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
+- µWebZockets documentation is consumer-facing. Readers install the package with
+  `zig fetch --save` and work in their own `build.zig` and `src/`. Never tell them
+  to clone, build, test, or enter a development shell for the framework
+  repository, and never present a maintainer compliance command as an
+  application step. See `uWZ-TODO.md` section 8.12.
 
 The full document is [CODING_CONVENTION.md](CODING_CONVENTION.md).
 

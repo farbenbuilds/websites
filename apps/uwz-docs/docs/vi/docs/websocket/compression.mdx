@@ -1,0 +1,128 @@
+---
+title: Per-message deflate
+description: Bật nén RFC 7692 cho một route, reserve scratch trong startup slab và hiểu quy tắc expansion cùng fallback khi nén.
+sidebar:
+  order: 6
+search:
+  tags: [how-to, websocket, capacity, security]
+---
+
+Nén RFC 7692 mặc định tắt và bật theo từng route. µWebZockets thương lượng
+`server_no_context_takeover` và `client_no_context_takeover` ở cả hai chiều, nên
+mỗi message được nén với context mới. Cách này tốn tỉ lệ nén và loại bỏ state
+xuyên message mà context dùng chung sẽ giữ lại.
+
+## Bật cho một route
+
+```zig
+_ = try app.ws("/telemetry", .{
+    .open = on_open,
+    .message = on_message,
+    .compression = .permessage_deflate,
+});
+```
+
+Client phải đề nghị `permessage-deflate` trong `Sec-WebSocket-Extensions`. Offer
+có parameter lạ, parameter trùng hoặc server window bằng 8 sẽ bị bỏ qua. Nếu
+không offer nào parse được, upgrade thành công mà không nén; nó không fail.
+
+Response được chấp nhận lặp lại window đã thương lượng:
+
+```text
+Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover
+```
+
+`server_max_window_bits` và `client_max_window_bits` xuất hiện khi client yêu cầu.
+
+## Khoảng window
+
+| Chiều         | Window chấp nhận | Default khi vắng mặt |
+| ------------- | ---------------- | -------------------- |
+| Server output | 9 đến 15         | 15                   |
+| Client input  | 8 đến 15         | 15                   |
+
+Window server 8 bit bị từ chối vì compression backend không encode ổn định. Window
+client 8 bit vẫn hợp lệ vì nó chỉ ảnh hưởng decompression, vốn chính xác.
+
+## Reserve scratch
+
+Nén cần paired receive và send scratch cho mỗi connection và một codec context cho
+mỗi application value. Mặc định, route đầu tiên bật nén cấp phát scratch
+per-connection trong một block page-allocator theo connection count đã cấu hình.
+Allocation xảy ra lúc đăng ký route, trước khi listener start, không phải trên
+message path.
+
+Để giữ mọi byte nén trong startup slab, bật cờ config và build qua builder:
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(512)
+    .with_max_ws_message_size(32 * 1024)
+    .with_compression(true);
+
+var app = try builder.build(std.heap.page_allocator);
+defer app.deinit();
+```
+
+`with_compression(true)` tương ứng `ServerConfig.compression = true`. Preset
+`ServerConfig.Preset.websocket_chat` đã bật cờ này với message capacity 32 KiB.
+
+Quy tắc size: slab reserve worst-case paired scratch cho `max_ws_message_size`,
+không phải cho traffic bạn kỳ vọng. Tăng message capacity làm tăng footprint nén
+cho mọi connection.
+
+## Expansion và fallback
+
+Nén có thể làm payload nhỏ hoặc khó nén lớn hơn. Hai giới hạn áp dụng:
+
+1. Message sau giải nén lớn hơn `max_message_size` bị từ chối với close code
+   `1009`.
+2. Frame nén lớn hơn `max_frame_size` được gửi không nén nếu raw payload vừa. Khi
+   cả hai dạng đều không vừa, `send` fail với `error.PayloadTooLarge`.
+
+Fallback được RFC 7692 cho phép: bất kỳ message nào cũng có thể gửi không nén. Điều
+đó cũng có nghĩa peer phải nhận cả message nén và không nén trên cùng connection.
+
+## Cảnh báo side channel
+
+:::warning[Nén rò rỉ thông tin độ dài]
+Nén dữ liệu do kẻ tấn công ảnh hưởng cạnh secret tạo ra compression oracle. Không
+nén response hoặc message trộn secret với input không tin cậy trong cùng context.
+Tắt nén trên route mang session token và giữ secret ngoài frame bạn echo.
+:::
+
+No-context-takeover giảm cửa sổ của tấn công này vì mỗi message bắt đầu context
+mới. Nó không loại bỏ tín hiệu độ dài theo từng message.
+
+## HTTP/2 tunnel
+
+Per-message deflate chỉ được thương lượng trên HTTP/1.1 upgrade. Tunnel RFC 8441
+mang frame không nén và handshake tunnel không đọc `Sec-WebSocket-Extensions`. Xem
+[RFC 8441 tunnel](/docs/websocket/http2-tunnels).
+
+## Kiểm tra
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits" \
+  http://127.0.0.1:3000/telemetry
+```
+
+Response `101` chứa extension header với cả hai token no-context-takeover. Gửi
+cùng request mà không có extension header sẽ upgrade không nén.
+
+## Đo trước khi bật
+
+Nén đổi CPU và memory per-connection lấy byte trên wire. Bật khi route mang text
+lặp lại trên vài trăm byte. Với JSON event nhỏ, framing overhead chiếm ưu thế và
+nén thường thua. So sánh `buffered_amount()` và counter `ws_compressed_messages`
+sau load test thực tế thay vì bật cho mọi route.
+
+## Tiếp theo
+
+- [WebSocket limits](/docs/websocket/limits) cho default message và frame.
+- [WebSocket security](/docs/websocket/security) cho trust boundary rộng hơn.

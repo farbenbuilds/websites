@@ -3,7 +3,7 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-02
+> Last updated: 2026-11-03
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
@@ -64,7 +64,9 @@ Every agent assigned a documentation task must follow this sequence:
 5. Write the English page first. Add the Vietnamese mirror only when the
    translation can be reviewed; never publish machine translation unchecked.
 6. Keep code samples complete enough to compile or run. If a sample is an
-   excerpt, name the full source file it comes from.
+   excerpt, name the consumer file it belongs in and the full source it adapts
+   from. Follow section 8.12: never require a clone, build, test, or Nix shell of
+   the framework repository.
 7. Run the page gate and the site gate. Paste the commands and outcomes into the
    task report.
 8. Update the page row status, the milestone dashboard, and any source map entry
@@ -609,54 +611,54 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.5 WebSocket
 
-| ID      | Route                             | Page                      | Type        | Priority | Milestone | Source                             | Status  |
-| ------- | --------------------------------- | ------------------------- | ----------- | -------- | --------- | ---------------------------------- | ------- |
-| UWZ-100 | `/docs/websocket`                 | WebSocket                 | Index       | P0       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-101 | `/docs/websocket/quickstart`      | WebSocket quickstart      | Tutorial    | P0       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-102 | `/docs/websocket/handshake`       | Handshake and upgrade     | Explanation | P1       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-103 | `/docs/websocket/messages`        | Messages and framing      | How-to      | P1       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-104 | `/docs/websocket/backpressure`    | Backpressure and draining | How-to      | P0       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-105 | `/docs/websocket/compression`     | Per-message deflate       | How-to      | P1       | M3        | `docs/websocket.md`                | Planned |
-| UWZ-106 | `/docs/websocket/heartbeats`      | Heartbeats and idle peers | How-to      | P1       | M2        | `docs/websocket.md`                | Planned |
-| UWZ-107 | `/docs/websocket/close-codes`     | Close codes and shutdown  | Reference   | P1       | M3        | `docs/websocket.md`                | Planned |
-| UWZ-108 | `/docs/websocket/pub-sub`         | Pub/sub                   | How-to      | P1       | M3        | `docs/websocket.md`                | Planned |
-| UWZ-109 | `/docs/websocket/cluster-pub-sub` | Cluster pub/sub           | How-to      | P1       | M4        | `docs/architecture.md`             | Planned |
-| UWZ-110 | `/docs/websocket/http2-tunnels`   | RFC 8441 tunnels          | Explanation | P1       | M3        | `docs/http2.md`                    | Planned |
-| UWZ-111 | `/docs/websocket/security`        | WebSocket security        | How-to      | P0       | M2        | `SECURITY.md`, `docs/websocket.md` | Planned |
-| UWZ-112 | `/docs/websocket/testing`         | Autobahn and testing      | How-to      | P1       | M4        | `tests/autobahn`                   | Planned |
-| UWZ-113 | `/docs/websocket/limits`          | WebSocket limits          | Reference   | P1       | M2        | `docs/memory_model.md`             | Planned |
+| ID      | Route                             | Page                      | Type        | Priority | Milestone | Source                             | Status |
+| ------- | --------------------------------- | ------------------------- | ----------- | -------- | --------- | ---------------------------------- | ------ |
+| UWZ-100 | `/docs/websocket`                 | WebSocket                 | Index       | P0       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-101 | `/docs/websocket/quickstart`      | WebSocket quickstart      | Tutorial    | P0       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-102 | `/docs/websocket/handshake`       | Handshake and upgrade     | Explanation | P1       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-103 | `/docs/websocket/messages`        | Messages and framing      | How-to      | P1       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-104 | `/docs/websocket/backpressure`    | Backpressure and draining | How-to      | P0       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-105 | `/docs/websocket/compression`     | Per-message deflate       | How-to      | P1       | M3        | `docs/websocket.md`                | Live   |
+| UWZ-106 | `/docs/websocket/heartbeats`      | Heartbeats and idle peers | How-to      | P1       | M2        | `docs/websocket.md`                | Live   |
+| UWZ-107 | `/docs/websocket/close-codes`     | Close codes and shutdown  | Reference   | P1       | M3        | `docs/websocket.md`                | Live   |
+| UWZ-108 | `/docs/websocket/pub-sub`         | Pub/sub                   | How-to      | P1       | M3        | `docs/websocket.md`                | Live   |
+| UWZ-109 | `/docs/websocket/cluster-pub-sub` | Cluster pub/sub           | How-to      | P1       | M4        | `docs/architecture.md`             | Live   |
+| UWZ-110 | `/docs/websocket/http2-tunnels`   | RFC 8441 tunnels          | Explanation | P1       | M3        | `docs/http2.md`                    | Live   |
+| UWZ-111 | `/docs/websocket/security`        | WebSocket security        | How-to      | P0       | M2        | `SECURITY.md`, `docs/websocket.md` | Live   |
+| UWZ-112 | `/docs/websocket/testing`         | Testing a WebSocket route | How-to      | P1       | M4        | `tests/autobahn`                   | Live   |
+| UWZ-113 | `/docs/websocket/limits`          | WebSocket limits          | Reference   | P1       | M2        | `docs/memory_model.md`             | Live   |
 
 ### 5.6 HTTP/2
 
-| ID      | Route                            | Page                  | Type        | Priority | Milestone | Source                | Status  |
-| ------- | -------------------------------- | --------------------- | ----------- | -------- | --------- | --------------------- | ------- |
-| UWZ-120 | `/docs/http2`                    | HTTP/2                | Index       | P0       | M3        | `docs/http2.md`       | Planned |
-| UWZ-121 | `/docs/http2/getting-started`    | HTTP/2 quickstart     | Tutorial    | P0       | M3        | `docs/http2.md`       | Planned |
-| UWZ-122 | `/docs/http2/configuration`      | HTTP/2 configuration  | Reference   | P1       | M3        | `docs/http2.md`       | Planned |
-| UWZ-123 | `/docs/http2/frames-and-streams` | Frames and streams    | Explanation | P1       | M3        | `docs/http2.md`       | Planned |
-| UWZ-124 | `/docs/http2/hpack`              | HPACK                 | Explanation | P2       | M5        | `src/http2/hpack.zig` | Planned |
-| UWZ-125 | `/docs/http2/flow-control`       | Flow control          | Explanation | P2       | M5        | `docs/http2.md`       | Planned |
-| UWZ-126 | `/docs/http2/websocket-tunnels`  | WebSocket over HTTP/2 | How-to      | P1       | M3        | `docs/http2.md`       | Planned |
-| UWZ-127 | `/docs/http2/limits`             | HTTP/2 limits         | Reference   | P1       | M3        | `docs/http2.md`       | Planned |
-| UWZ-128 | `/docs/http2/observability`      | HTTP/2 observability  | How-to      | P2       | M5        | `docs/http2.md`       | Planned |
-| UWZ-129 | `/docs/http2/testing`            | HTTP/2 testing        | How-to      | P2       | M5        | `tests/`              | Planned |
+| ID      | Route                            | Page                    | Type        | Priority | Milestone | Source                | Status |
+| ------- | -------------------------------- | ----------------------- | ----------- | -------- | --------- | --------------------- | ------ |
+| UWZ-120 | `/docs/http2`                    | HTTP/2                  | Index       | P0       | M3        | `docs/http2.md`       | Live   |
+| UWZ-121 | `/docs/http2/getting-started`    | HTTP/2 quickstart       | Tutorial    | P0       | M3        | `docs/http2.md`       | Live   |
+| UWZ-122 | `/docs/http2/configuration`      | HTTP/2 configuration    | Reference   | P1       | M3        | `docs/http2.md`       | Live   |
+| UWZ-123 | `/docs/http2/frames-and-streams` | Frames and streams      | Explanation | P1       | M3        | `docs/http2.md`       | Live   |
+| UWZ-124 | `/docs/http2/hpack`              | HPACK                   | Explanation | P2       | M5        | `src/http2/hpack.zig` | Live   |
+| UWZ-125 | `/docs/http2/flow-control`       | Flow control            | Explanation | P2       | M5        | `docs/http2.md`       | Live   |
+| UWZ-126 | `/docs/http2/websocket-tunnels`  | WebSocket over HTTP/2   | How-to      | P1       | M3        | `docs/http2.md`       | Live   |
+| UWZ-127 | `/docs/http2/limits`             | HTTP/2 limits           | Reference   | P1       | M3        | `docs/http2.md`       | Live   |
+| UWZ-128 | `/docs/http2/observability`      | HTTP/2 observability    | How-to      | P2       | M5        | `docs/http2.md`       | Live   |
+| UWZ-129 | `/docs/http2/testing`            | Testing an HTTP/2 route | How-to      | P2       | M5        | `tests/`              | Live   |
 
 ### 5.7 HTTP/3 and QUIC
 
-| ID      | Route                         | Page                    | Type        | Priority | Milestone | Source                        | Status  |
-| ------- | ----------------------------- | ----------------------- | ----------- | -------- | --------- | ----------------------------- | ------- |
-| UWZ-130 | `/docs/http3`                 | HTTP/3 and QUIC         | Index       | P0       | M3        | `docs/quic.md`                | Planned |
-| UWZ-131 | `/docs/http3/getting-started` | HTTP/3 quickstart       | Tutorial    | P0       | M3        | `docs/quic.md`                | Planned |
-| UWZ-132 | `/docs/http3/configuration`   | HTTP/3 configuration    | Reference   | P1       | M3        | `docs/quic.md`                | Planned |
-| UWZ-133 | `/docs/http3/quic-transport`  | QUIC transport          | Explanation | P1       | M3        | `docs/architecture.md`        | Planned |
-| UWZ-134 | `/docs/http3/qpack`           | QPACK                   | Explanation | P2       | M5        | `src/quic/stream.zig`         | Planned |
-| UWZ-135 | `/docs/http3/request-path`    | HTTP/3 request path     | Explanation | P1       | M3        | `docs/quic.md`                | Planned |
-| UWZ-136 | `/docs/http3/early-data`      | Early data policy       | Explanation | P2       | M5        | `docs/tls.md`, `docs/quic.md` | Planned |
-| UWZ-137 | `/docs/http3/query-method`    | QUERY over HTTP/3       | How-to      | P2       | M5        | `docs/quic.md`                | Planned |
-| UWZ-138 | `/docs/http3/webtransport`    | WebTransport status     | Explanation | P1       | M4        | `docs/quic.md`, ADR 0001      | Planned |
-| UWZ-139 | `/docs/http3/limits`          | HTTP/3 limits           | Reference   | P1       | M3        | `docs/memory_model.md`        | Planned |
-| UWZ-140 | `/docs/http3/observability`   | HTTP/3 observability    | How-to      | P2       | M5        | `docs/quic.md`                | Planned |
-| UWZ-141 | `/docs/http3/testing`         | HTTP/3 interoperability | How-to      | P1       | M4        | `CI_CD_PIPELINE.md`           | Planned |
+| ID      | Route                         | Page                    | Type        | Priority | Milestone | Source                        | Status |
+| ------- | ----------------------------- | ----------------------- | ----------- | -------- | --------- | ----------------------------- | ------ |
+| UWZ-130 | `/docs/http3`                 | HTTP/3 and QUIC         | Index       | P0       | M3        | `docs/quic.md`                | Live   |
+| UWZ-131 | `/docs/http3/getting-started` | HTTP/3 quickstart       | Tutorial    | P0       | M3        | `docs/quic.md`                | Live   |
+| UWZ-132 | `/docs/http3/configuration`   | HTTP/3 configuration    | Reference   | P1       | M3        | `docs/quic.md`                | Live   |
+| UWZ-133 | `/docs/http3/quic-transport`  | QUIC transport          | Explanation | P1       | M3        | `docs/architecture.md`        | Live   |
+| UWZ-134 | `/docs/http3/qpack`           | QPACK                   | Explanation | P2       | M5        | `src/quic/stream.zig`         | Live   |
+| UWZ-135 | `/docs/http3/request-path`    | HTTP/3 request path     | Explanation | P1       | M3        | `docs/quic.md`                | Live   |
+| UWZ-136 | `/docs/http3/early-data`      | Early data policy       | Explanation | P2       | M5        | `docs/tls.md`, `docs/quic.md` | Live   |
+| UWZ-137 | `/docs/http3/query-method`    | QUERY over HTTP/3       | How-to      | P2       | M5        | `docs/quic.md`                | Live   |
+| UWZ-138 | `/docs/http3/webtransport`    | WebTransport status     | Explanation | P1       | M4        | `docs/quic.md`, ADR 0001      | Live   |
+| UWZ-139 | `/docs/http3/limits`          | HTTP/3 limits           | Reference   | P1       | M3        | `docs/memory_model.md`        | Live   |
+| UWZ-140 | `/docs/http3/observability`   | HTTP/3 observability    | How-to      | P2       | M5        | `docs/quic.md`                | Live   |
+| UWZ-141 | `/docs/http3/testing`         | Testing an HTTP/3 route | How-to      | P1       | M4        | `CI_CD_PIPELINE.md`           | Live   |
 
 ### 5.8 JSON-RPC
 
@@ -888,37 +890,37 @@ section. The decision and boundary rules are in Section 4.7.
 
 This dashboard is the at-a-glance scope. Update it when a page changes status.
 
-| Section               |   Pages |     P0 |      P1 |     P2 |   Live |
-| --------------------- | ------: | -----: | ------: | -----: | -----: |
-| Landing and docs home |       4 |      3 |       1 |      0 |      4 |
-| Getting Started       |      15 |     10 |       5 |      0 |     15 |
-| Concepts              |      19 |     15 |       3 |      1 |     19 |
-| HTTP                  |      24 |     15 |       7 |      2 |     24 |
-| Helpers               |       9 |      0 |       7 |      2 |      9 |
-| WebSocket             |      14 |      4 |      10 |      0 |      0 |
-| HTTP/2                |      10 |      2 |       4 |      4 |      0 |
-| HTTP/3                |      12 |      2 |       6 |      4 |      0 |
-| JSON-RPC              |      10 |      3 |       5 |      2 |      0 |
-| Type safety           |       9 |      5 |       3 |      1 |      0 |
-| Client                |       7 |      2 |       4 |      1 |      0 |
-| TLS and security      |      16 |      6 |       9 |      1 |      0 |
-| Architecture          |      14 |      4 |       4 |      6 |      0 |
-| Performance           |       8 |      1 |       3 |      4 |      0 |
-| Operations            |      20 |      8 |       7 |      5 |      0 |
-| Deployment            |      15 |      7 |       7 |      1 |      0 |
-| Guides                |      23 |      0 |      17 |      6 |      0 |
-| Migration             |       8 |      0 |       6 |      2 |      0 |
-| Reference             |      11 |      7 |       4 |      0 |      0 |
-| Examples              |      11 |      1 |       8 |      2 |      0 |
-| Project               |       9 |      1 |       5 |      3 |      0 |
-| **Total**             | **268** | **96** | **125** | **47** | **71** |
+| Section               |   Pages |     P0 |      P1 |     P2 |    Live |
+| --------------------- | ------: | -----: | ------: | -----: | ------: |
+| Landing and docs home |       4 |      3 |       1 |      0 |       4 |
+| Getting Started       |      15 |     10 |       5 |      0 |      15 |
+| Concepts              |      19 |     15 |       3 |      1 |      19 |
+| HTTP                  |      24 |     15 |       7 |      2 |      24 |
+| Helpers               |       9 |      0 |       7 |      2 |       9 |
+| WebSocket             |      14 |      4 |      10 |      0 |      14 |
+| HTTP/2                |      10 |      2 |       4 |      4 |      10 |
+| HTTP/3                |      12 |      2 |       6 |      4 |      12 |
+| JSON-RPC              |      10 |      3 |       5 |      2 |       0 |
+| Type safety           |       9 |      5 |       3 |      1 |       0 |
+| Client                |       7 |      2 |       4 |      1 |       0 |
+| TLS and security      |      16 |      6 |       9 |      1 |       0 |
+| Architecture          |      14 |      4 |       4 |      6 |       0 |
+| Performance           |       8 |      1 |       3 |      4 |       0 |
+| Operations            |      20 |      8 |       7 |      5 |       0 |
+| Deployment            |      15 |      7 |       7 |      1 |       0 |
+| Guides                |      23 |      0 |      17 |      6 |       0 |
+| Migration             |       8 |      0 |       6 |      2 |       0 |
+| Reference             |      11 |      7 |       4 |      0 |       0 |
+| Examples              |      11 |      1 |       8 |      2 |       0 |
+| Project               |       9 |      1 |       5 |      3 |       0 |
+| **Total**             | **268** | **96** | **125** | **47** | **107** |
 
-The Concepts, HTTP, and Helpers rows are `Live`. On 2026-11-02 the built site
-passed 320 px, 768 px, and 1280 px layout checks across all 140 English and
-Vietnamese docs pages, a keyboard and reduced-motion pass, page-content axe
-checks, and the search QA queries for this scope. The native Blume sidebar
-summary has one known upstream `nested-interactive` axe finding; it is tracked
-as framework chrome, not page content.
+The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
+2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
+all 212 English and Vietnamese docs pages, a keyboard and reduced-motion pass,
+page-content axe checks, and the search QA queries for this scope. The native
+Blume sidebar summary has one known upstream `nested-interactive` axe finding; it
+is tracked as framework chrome, not page content.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -1236,8 +1238,9 @@ Required content:
   `Sec-WebSocket-Version` rules, key not required, no compression.
 - Security: origin checks, auth before upgrade, message size limits, rate
   limiting, compression side channels, close handling.
-- Testing: Autobahn 517/517 accepted with 514 `OK` and 3 `INFORMATIONAL`,
-  unit coverage, browser/`wscat` smoke, load test.
+- Testing: application smoke with `wscat` or a browser console, handler tests in
+  the consumer project, a load client, and upstream Autobahn evidence (517
+  cases, 514 `OK`, 3 `INFORMATIONAL`) cited without a maintainer command.
 - Limits: frame, message, control, queue, subscriptions, topics, cluster inbox.
 
 Acceptance:
@@ -1245,7 +1248,8 @@ Acceptance:
 - The page states that no WebSocket client is shipped yet.
 - The page never implies built-in origin or subprotocol negotiation.
 - Every send/backpressure example handles `error.WouldBlock`.
-- The Autobahn claim is dated and linked to evidence.
+- The Autobahn claim is dated, versioned, and presented as upstream evidence, not
+  as a command the reader runs.
 
 ### 6.6 HTTP/2
 
@@ -1269,7 +1273,8 @@ Required content:
 - Capacities: `with_max_h2_*` fields and the failure mode when exceeded.
 - Observability: one `http_request` record per completed exchange,
   `uwz_http_requests` counter, tunnel upgrade record.
-- Testing: unit suite plus shared-handler h1spec/HTTP/3 coverage.
+- Testing: application verification with `curl --http2` or `h2load`, plus
+  upstream unit and shared-handler h1spec/HTTP/3 coverage cited as evidence.
 - Boundaries: no server push, no h2c Upgrade, no >8 streams without connection
   specialization.
 
@@ -1280,6 +1285,7 @@ Acceptance:
 - Every capacity name matches `ServerConfig`.
 - The WebSocket tunnel section links to the WebSocket page and states the
   compression limitation.
+- No testing step requires a framework repository checkout.
 
 ### 6.7 HTTP/3 and QUIC
 
@@ -1301,8 +1307,10 @@ Required content:
   with `501`; exact backend blockers and ADR 0001 link. Never say "supported".
 - Observability: one `http_request` record per exchange; metrics registry is
   not advanced on the QUIC path.
-- Testing: curl/ngtcp2 and aioquic gate, trailing field section, malformed
-  header rejection, sibling-stream health, header-pool soak, clean shutdown.
+- Testing: application verification with `curl --http3-only` and an HTTP/3
+  client, plus upstream curl/ngtcp2 and aioquic gate evidence covering trailers,
+  malformed header rejection, sibling-stream health, header-pool soak, and clean
+  shutdown.
 - Deployment: UDP firewall, port binding, certificate context, no HTTP/3
   clustering.
 
@@ -1312,6 +1320,7 @@ Acceptance:
 - The page never claims HTTP/3 metrics parity with HTTP/1.1/HTTP/2.
 - The page explains why receive GRO is disabled without pretending it is a
   missing application feature.
+- No testing step requires a framework repository checkout.
 
 ### 6.8 JSON-RPC
 
@@ -2128,6 +2137,51 @@ invent a number to make the page feel complete.
 - [ ] Accessibility, responsive behavior, and reduced motion checked.
 - [ ] Search finds the page by title and a body phrase.
 - [ ] The page has a next step.
+
+### 8.12 Consumer documentation boundary
+
+The website serves teams that install µWebZockets into their own Zig project. It
+does not onboard them into the framework repository. This boundary is mandatory:
+
+- The reader's starting point is `zig fetch --save`, their `build.zig.zon`, and
+  their `src/`. A page that begins with `git clone` or a repository checkout is
+  wrong.
+- Commands are application commands: `zig build`, `zig build run`, `zig build
+  test` when the consumer `build.zig` defines that step, and client tools such as
+  `curl`, `wscat`, `h2load`, `openssl s_client`, or a service test.
+- Never instruct a reader to run `zig build test`, `zig build autobahn`,
+  `zig build h1spec`, `zig build http3_server`, `scripts/http3_compliance/`,
+  `zig build lib`, sanitizer jobs, or any Nix shell in the framework repository.
+  Those are maintainer workflows. Their results are evidence to cite with a date
+  and version, not steps to perform.
+- Never require a reader to read or edit framework source. A `src/...` citation
+  is allowed when it proves a signature, default, or boundary; it is not a
+  prerequisite.
+- Demonstrate behavior with the public API and with code adapted from
+  `examples/*.zig` into the reader's own project. An excerpt must say what the
+  consumer file adds.
+- A testing page teaches application testing: loopback requests, client smoke
+  tests, handler tests in the reader's project, and load tests with an external
+  client. Framework compliance numbers may appear as published evidence in a
+  short "upstream evidence" block, without a maintainer command.
+- Troubleshooting content starts from the application's build output, listener,
+  or client error. Do not send the reader into framework internals to diagnose an
+  application problem.
+
+A reviewer rejects a page that violates this boundary even when the command is
+accurate for a framework contributor.
+
+#### Consumer verification map
+
+| Page goal                 | Correct evidence                                        |
+| ------------------------- | ------------------------------------------------------- |
+| Install the package       | `zig fetch --save` and a consumer `build.zig.zon` entry |
+| First server              | `zig build run` plus one `curl` request                 |
+| WebSocket route           | `wscat` or a browser console session                    |
+| HTTP/2 route              | `curl --http2`, `h2load`, or another HTTP/2 client      |
+| HTTP/3 route              | `curl --http3-only` with a QUIC-enabled client          |
+| Capacity behavior         | A load client and the application's own counters/logs   |
+| Protocol compliance claim | Published upstream evidence with version and date       |
 
 ## 9. Internationalization
 
@@ -3329,6 +3383,7 @@ source at the time it is written.
 | 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                 | Docs writing pass  |
 | 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
 | 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
+| 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                      | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

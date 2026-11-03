@@ -1,0 +1,130 @@
+---
+title: Testing an HTTP/2 route
+description: Verify ALPN, stream concurrency, header limits, and body resets with curl and h2load against your own HTTP/2 application.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, http2, operations]
+---
+
+HTTP/2 testing has three questions: did the connection negotiate `h2`, does the
+route behave the same as over HTTP/1.1, and does it stay inside its capacities.
+All three are answerable with client tools against your running application.
+
+## Prerequisites
+
+- A running TLS application with at least one route. Start from
+  [HTTP/2 quickstart](/docs/http2/getting-started).
+- A `curl` build with HTTP/2. `curl --version` lists `HTTP2`.
+- `h2load` from nghttp2 for the concurrency check.
+
+## Verify negotiation
+
+```sh
+curl --http2 -k -v https://127.0.0.1:3443/ 2>&1 | grep -E "ALPN|HTTP/2"
+```
+
+```console
+* ALPN: server accepted h2
+< HTTP/2 200
+```
+
+If the client reports `http/1.1`, the connection did not negotiate HTTP/2. Check
+the client build first, then the TLS initializer used by your app. `init_https`
+and `init_https_ephemeral` both advertise `h2`.
+
+For a cleartext listener, use prior knowledge:
+
+```sh
+curl --http2-prior-knowledge -v http://127.0.0.1:3000/ 2>&1 | grep HTTP/2
+```
+
+## Compare with HTTP/1.1
+
+Send the same request over both protocols and compare the status, headers, and
+body:
+
+```sh
+curl --http2 -k -s -o h2.body -w '%{http_code}\n' https://127.0.0.1:3443/items
+curl --http1.1 -k -s -o h1.body -w '%{http_code}\n' https://127.0.0.1:3443/items
+cmp h1.body h2.body
+```
+
+The two status lines must match and `cmp` must report no difference. Framing
+headers differ by protocol; your application headers should not.
+
+## Stream concurrency
+
+```sh
+h2load -n 1000 -c 10 -m 8 https://127.0.0.1:3443/
+```
+
+`-m 8` matches the advertised stream limit. Read:
+
+- Requests per second and latency percentiles.
+- Streams per connection actually used.
+- `REFUSED_STREAM` resets, which mean the stream budget was exhausted.
+- Server RSS against the slab size.
+
+A run that reports more than eight concurrent streams per connection did not
+negotiate with this server. Check the protocol line before trusting the numbers.
+
+## Header and body limits
+
+Send a header list larger than `max_h2_header_block_size`:
+
+```sh
+curl --http2 -k -v \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  https://127.0.0.1:3443/
+```
+
+The connection closes with GOAWAY and `curl` reports an error. Then raise
+`max_h2_header_block_size`, rebuild your application, and confirm the same
+request succeeds.
+
+Do the same for a request body above `max_h2_body_size`. Expect the stream to
+reset, not the whole connection, while a second request on the same connection
+still succeeds.
+
+## Route tests
+
+Keep request validation and response shaping in pure functions and test them in
+your project:
+
+```zig
+const std = @import("std");
+
+fn clampPage(raw: ?[]const u8) u32 {
+    const value = raw orelse return 1;
+    const parsed = std.fmt.parseInt(u32, value, 10) catch return 1;
+    return @min(parsed, 100);
+}
+
+test "page is clamped and defaults to one" {
+    try std.testing.expectEqual(@as(u32, 1), clampPage(null));
+    try std.testing.expectEqual(@as(u32, 100), clampPage("1000"));
+}
+```
+
+```sh
+zig test src/http/pagination.zig
+```
+
+These tests do not exercise HPACK or flow control. The client commands above
+cover the wire; the unit test covers your logic.
+
+## Upstream evidence
+
+The framework maintainers run a unit suite for frame sequencing, SETTINGS, flow
+control, HPACK vectors, stream reuse, and malformed input before a release. The
+HTTP/1.1 h1spec gate and the HTTP/3 interoperability gate drive the same handler
+boundary over different transports. Those results describe the framework, not
+your routes. Treat them as protocol coverage evidence and keep your own
+application checks.
+
+## Next
+
+- [HTTP/2 limits](/docs/http2/limits) for every bound under test.
+- [Flow control](/docs/http2/flow-control) for the reset behavior behind a body
+  test.

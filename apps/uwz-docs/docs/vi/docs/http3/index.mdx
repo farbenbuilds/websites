@@ -1,0 +1,104 @@
+---
+title: HTTP/3 và QUIC
+description: Phục vụ handler API dùng chung qua QUIC, đọc request path có giới hạn và tách HTTP/3 live khỏi WebTransport helper-only.
+search:
+  tags: [http3, quic, concept]
+---
+
+`init_http3` tạo hai TLS context: TCP quảng bá `h2` và `http/1.1`, còn QUIC quảng
+bá `h3`. Cùng các route phục vụ cả ba. Phần này mô tả HTTP/3 request path live,
+QUIC policy và ranh giới giữ WebTransport ngoài supported surface.
+
+Live path là request/response server có giới hạn. Nó không phải QUIC platform đa
+dụng và không chia sẻ mọi tính năng vận hành của HTTP/1.1.
+
+## Bắt đầu
+
+<CardGroup cols={2}>
+  <Card title="HTTP/3 quickstart" href="/docs/http3/getting-started" icon="play">
+    Bind QUIC endpoint, kiểm tra bằng curl --http3-only và đọc protocol đã thương lượng.
+  </Card>
+  <Card title="Configuration" href="/docs/http3/configuration" icon="sliders">
+    Đặt request, body và response-header capacity cho QUIC engine.
+  </Card>
+  <Card title="QUIC transport" href="/docs/http3/quic-transport" icon="network">
+    Hiểu BBRv1, pacing, GSO, đường GRO còn thiếu và packet bound.
+  </Card>
+  <Card title="HTTP/3 request path" href="/docs/http3/request-path" icon="arrow-right-left">
+    Theo pseudo-header từ QPACK vào Request và structured response write.
+  </Card>
+</CardGroup>
+
+## Chi tiết protocol
+
+<CardGroup cols={2}>
+  <Card title="QPACK" href="/docs/http3/qpack" icon="archive">
+    Đọc header compression setting có giới hạn và lý do không nhận dynamic-table input.
+  </Card>
+  <Card title="Early data policy" href="/docs/http3/early-data" icon="clock">
+    Hiểu vì sao 0-RTT bị từ chối trên live listener và policy helper dùng ở đâu.
+  </Card>
+  <Card title="QUERY qua HTTP/3" href="/docs/http3/query-method" icon="search">
+    Xử lý QUERY RFC 10008 với content-type rule mà transport thực thi.
+  </Card>
+  <Card title="WebTransport status" href="/docs/http3/webtransport" icon="radio">
+    Tách model draft-16 helper khỏi response CONNECT của live listener.
+  </Card>
+</CardGroup>
+
+## Vận hành
+
+<CardGroup cols={2}>
+  <Card title="HTTP/3 limits" href="/docs/http3/limits" icon="ruler">
+    Đọc mọi bound engine, stream, header, body và datagram.
+  </Card>
+  <Card title="Observability" href="/docs/http3/observability" icon="activity">
+    Đọc development-log record và khoảng trống metrics.
+  </Card>
+  <Card title="Kiểm thử interoperability" href="/docs/http3/testing" icon="flask-conical">
+    Kiểm tra route bằng curl --http3-only và đọc bằng chứng gate upstream.
+  </Card>
+</CardGroup>
+
+## Khởi động
+
+```zig
+var server = try uz.App(128).init_http3_ephemeral(init.io);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen_udp("0.0.0.0", 8443);
+try server.catch_shutdown_signals();
+try server.run();
+```
+
+`App` phải giữ địa chỉ ổn định sau `listen_udp`; QUIC engine giữ con trỏ tới nó.
+Không move nó vào container có thể reallocate.
+
+| Listener     | Protocol                              |
+| ------------ | ------------------------------------- |
+| `listen`     | TCP với TLS, ALPN `h2` rồi `http/1.1` |
+| `listen_udp` | QUIC, chỉ ALPN `h3`                   |
+
+## Ranh giới
+
+| Tính năng                 | Trạng thái                                  |
+| ------------------------- | ------------------------------------------- |
+| HTTP/3 request routing    | Supported                                   |
+| 0-RTT                     | Không hỗ trợ; bị từ chối trên live listener |
+| HTTP/3 clustering         | Không hỗ trợ                                |
+| Metrics registry          | Không cập nhật; chỉ development log         |
+| WebTransport live path    | Không hỗ trợ; CONNECT nhận `501`            |
+| WebTransport helper model | Helper-only, draft-16                       |
+| QUIC client               | Không ship                                  |
+
+:::warning[WebTransport chưa live]
+`uz.webtransport` và `uz.http3_extensions` tồn tại, nhưng live lsquic listener
+không kết nối tới chúng. CONNECT request nhận `501 Not Implemented`. Không mô tả
+WebTransport là transport được hỗ trợ trên version này.
+:::
+
+## Tiếp theo
+
+Đọc [HTTP/3 quickstart](/docs/http3/getting-started), rồi
+[request path](/docs/http3/request-path) trước khi debug header set bị từ chối.

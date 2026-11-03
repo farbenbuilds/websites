@@ -10,6 +10,8 @@ Localize documentation as mirrored docs/ and docs/vi/ MDX. Do not add page prose
 
 Do not add emoji, exclamation marks, marketing filler, or unverified claims. Do not edit generated output under dist or .blume. Do not change navigation or build configuration without astro-blume. Do not document a command that was not run or a behavior that was not checked.
 
+Write for a consumer, not a framework contributor. Never require a clone, build, test, or Nix shell of the framework repository. Use application build steps, public API code adapted from examples/*.zig, and client tools. Present framework compliance results as dated evidence, not instructions. See uWZ-TODO.md section 8.12.
+
 Code samples follow their source language. Zig samples use snake_case functions, variables, parameters, and fields, PascalCase types, and the exact public spelling; never camel-case a Zig identifier.
 
 Report pages changed, reader goal, commands used to verify, and any link or navigation follow-up.

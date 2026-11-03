@@ -1,0 +1,118 @@
+---
+title: HTTP/2 configuration
+description: Set header-block, request-body, response-header, and field-count capacities for the HTTP/2 session and know each rejection code.
+sidebar:
+  order: 3
+search:
+  tags: [reference, http2, capacity]
+---
+
+HTTP/2 capacities are `ServerConfig` fields, so they are compile-time values on
+the application type. The builder methods below derive a new config and produce
+the matching slab. Every field also sizes the per-stream storage the session
+carves from that slab.
+
+## Fields
+
+| Field                          | Default | Builder override                    | Sizes                                                  |
+| ------------------------------ | ------- | ----------------------------------- | ------------------------------------------------------ |
+| `max_h2_header_block_size`     | 16 KiB  | `with_max_h2_header_block_size`     | Cumulative HEADERS and CONTINUATION bytes per request  |
+| `max_h2_body_size`             | 16 KiB  | `with_max_h2_body_size`             | Request body storage per stream                        |
+| `max_h2_response_header_size`  | 4 KiB   | `with_max_h2_response_header_size`  | Encoded response header block per response             |
+| `max_h2_response_header_count` | 32      | `with_max_h2_response_header_count` | Response fields, including status and `content-length` |
+
+Two other config values apply to HTTP/2 even though they are not `h2`-prefixed:
+
+| Field              | Default | Effect on HTTP/2                                            |
+| ------------------ | ------- | ----------------------------------------------------------- |
+| `max_header_size`  | 16 KiB  | Per-stream request header bytes for the decoded field block |
+| `max_header_count` | 64      | Maximum decoded request fields per header block             |
+
+`h2_capacities()` projects these values into the session planner.
+`h2_session_bytes()` returns the per-connection storage cost.
+
+## Build a configured app
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(256)
+    .with_max_h2_header_block_size(32 * 1024)
+    .with_max_h2_body_size(64 * 1024)
+    .with_max_h2_response_header_size(8 * 1024)
+    .with_max_h2_response_header_count(48);
+
+var app = try builder.build(std.heap.page_allocator);
+defer app.deinit();
+```
+
+Print `try builder.slab_bytes()` during development to see the cost before you
+allocate it. Header storage is per stream, so a larger header block is multiplied
+by the connection count, not by the eight-stream budget at runtime.
+
+## Rejection behavior
+
+Each limit fails differently. A protocol error on one stream does not close the
+connection; a connection error sends GOAWAY.
+
+| Condition                                       | Result                               |
+| ----------------------------------------------- | ------------------------------------ |
+| Frame payload above 16 KiB                      | GOAWAY `FRAME_SIZE_ERROR`            |
+| Header block exceeds `max_h2_header_block_size` | GOAWAY `COMPRESSION_ERROR`           |
+| Decoded fields exceed `max_header_count`        | GOAWAY `ENHANCE_YOUR_CALM`           |
+| Decoded header bytes exceed `max_header_size`   | GOAWAY `ENHANCE_YOUR_CALM`           |
+| Invalid pseudo-header order or duplicate        | RST_STREAM `PROTOCOL_ERROR`          |
+| Connection-specific header present              | RST_STREAM `PROTOCOL_ERROR`          |
+| Request body exceeds `max_h2_body_size`         | RST_STREAM `ENHANCE_YOUR_CALM`       |
+| `content-length` above the body limit           | RST_STREAM `PROTOCOL_ERROR`          |
+| Response block exceeds the response limit       | Response fails closed; stream resets |
+
+The frame-size ceiling is fixed at the RFC 9113 minimum of 16 KiB. The session
+does not raise it for peers that advertise a larger value.
+
+## Relationship to HTTP/1.1 limits
+
+`max_header_size` and `max_header_count` are shared. Raising them raises HTTP/1.1
+request parsing and HTTP/2 decoded-field storage together, which keeps one
+connection from accepting a larger field list on one transport than the other.
+
+`max_body_size` governs HTTP/1.1 request bodies. HTTP/2 streams use
+`max_h2_body_size` instead, so the two can differ. Keep them aligned unless you
+have a measured reason; two different body ceilings surprise application code
+that validates lengths.
+
+## Dynamic table size
+
+The HPACK dynamic table is fixed at 4096 bytes per connection, matching the RFC
+7541 default. The session advertises that value in
+`SETTINGS_HEADER_TABLE_SIZE` and permits exactly that many bytes from the peer.
+There is no builder override; a smaller table saves per-connection memory at the
+cost of more header bytes on the wire.
+
+## Size it from the slab
+
+```text
+h2 bytes per connection =
+    header_block_size
+  + 8 * (header_size + body_size + response_header_size)
+  + response_header_count * field metadata
+```
+
+Use `h2_session_bytes()` for the exact value. For a whole-server view, see
+[capacity model](/docs/concepts/capacity-model) and
+[HTTP/2 limits](/docs/http2/limits).
+
+## Verify it
+
+```sh
+curl --http2 -k -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  https://127.0.0.1:3443/
+```
+
+With the default `max_h2_header_block_size`, the request exceeds the header block
+limit and the connection closes with GOAWAY. Raise the limit, rebuild, and repeat
+to confirm the request succeeds.
+
+## Next
+
+- [HTTP/2 limits](/docs/http2/limits) for the full reference table.
+- [Flow control](/docs/http2/flow-control) for body backpressure.

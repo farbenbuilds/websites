@@ -1,0 +1,139 @@
+---
+title: Handshake và upgrade
+description: Theo các bước kiểm tra RFC 6455, cách tính accept token và từng status mà µWebZockets trả về trước khi route đi vào hoạt động.
+sidebar:
+  order: 3
+search:
+  tags: [websocket, http1, security]
+---
+
+Một WebSocket route bắt đầu như một HTTP/1.1 `GET` request. Framework kiểm tra
+các upgrade field, tính `Sec-WebSocket-Accept`, ghi response `101` rồi chuyển
+connection sang frame parsing. Mọi thứ quyết định peer có được phép hay không là
+application policy và chạy trước response đó.
+
+## Request field bắt buộc
+
+| Field                   | Giá trị được chấp nhận                         |
+| ----------------------- | ---------------------------------------------- |
+| Method                  | `GET`                                          |
+| `Connection`            | Có token `upgrade`, không phân biệt hoa thường |
+| `Upgrade`               | `websocket`, không phân biệt hoa thường        |
+| `Sec-WebSocket-Version` | `13`                                           |
+| `Sec-WebSocket-Key`     | Base64 của đúng 16 byte, 24 ký tự đã encode    |
+
+Key được mượn từ request đã parse. Nó không bị lưu hay copy; framework hash key
+với GUID của RFC 6455 và trả về accept token 28 byte.
+
+```text
+Sec-WebSocket-Accept = base64(SHA-1(Sec-WebSocket-Key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+```
+
+## Thứ tự kiểm tra
+
+Các check của route chạy theo thứ tự này. Lỗi đầu tiên kết thúc upgrade.
+
+| Check                        | Status khi lỗi              | Header thêm                 |
+| ---------------------------- | --------------------------- | --------------------------- |
+| Route limit                  | `500 Internal Server Error` | không                       |
+| Compression scratch          | `500 Internal Server Error` | không                       |
+| Field RFC 6455               | `400 Bad Request`           | không                       |
+| Version thiếu hoặc khác `13` | `426 Upgrade Required`      | `Sec-WebSocket-Version: 13` |
+| `upgrade` callback           | `403 Forbidden`             | không                       |
+| Khởi tạo frame limit         | `500 Internal Server Error` | không                       |
+
+`426` là status duy nhất client có thể xử lý: nó nêu version mà server chấp
+nhận. `400` nghĩa là request không phải WebSocket upgrade. `403` nghĩa là
+callback của bạn từ chối một request hợp lệ.
+
+## Authorize trước upgrade
+
+`upgrade` callback nhận request đã parse và trả về boolean:
+
+```zig
+fn allow_only_known_origins(req: *const uz.Request) bool {
+    const origin = req.get_unique_header("Origin") orelse return false;
+    return std.mem.eql(u8, origin, "https://app.example.com");
+}
+
+_ = try app.ws("/chat", .{
+    .upgrade = allow_only_known_origins,
+    .open = on_open,
+    .message = on_message,
+});
+```
+
+Dùng callback cho authentication, origin check, tenant lookup và rate limit phải
+chạy trước switch. Nó chạy đồng bộ trên worker thread nên không được block.
+Callback không thể ghi body tùy ý; peer bị từ chối nhận `403 Forbidden` với
+message cố định.
+
+Đọc cookie hoặc bearer token từ request header và kiểm tra ở đây, không phải
+trong `open`. Đến `open`, response đã switch protocol và tín hiệu còn lại chỉ là
+close frame.
+
+## Origin và subprotocol policy
+
+Framework không so `Origin` với allow list và không chọn subprotocol. Cả hai là
+quyết định của application:
+
+- **Origin:** browser gửi origin của page. Client ngoài browser có thể bỏ header
+  hoặc giả mạo. Coi đây là tín hiệu cross-site request, không bao giờ là
+  authentication.
+- **Subprotocol:** nếu client đề nghị `Sec-WebSocket-Protocol`, đọc header trong
+  `upgrade` callback. Để chấp nhận một subprotocol, server phải echo token đã chọn
+  trong response `101`. µWebZockets không bao giờ ghi `Sec-WebSocket-Protocol`,
+  nên route yêu cầu subprotocol phải từ chối peer không thể tiếp tục nếu thiếu nó,
+  hoặc đóng connection sau switch.
+
+## Response
+
+Khi thành công, route ghi:
+
+```text
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: <token>
+
+```
+
+Extension header chỉ xuất hiện khi route bật per-message deflate và client đề
+nghị window tương thích. Xem
+[per-message deflate](/docs/websocket/compression).
+
+## HTTP/2 extended CONNECT
+
+RFC 8441 thay handshake HTTP/1.1 bằng extended `CONNECT`. Pseudo-header
+`:protocol` chọn `websocket`, và `Sec-WebSocket-Key` không bắt buộc, không được
+kiểm tra. Tunnel cần đúng một `Sec-WebSocket-Version: 13`; giá trị thiếu, trùng
+hoặc không hỗ trợ nhận `426` kèm `Sec-WebSocket-Version: 13`.
+
+Cùng `upgrade` callback authorize tunnel và trả `403` khi từ chối. Connection đã
+có tunnel active sẽ trả `503 Service Unavailable` cho CONNECT thứ hai; tunnel đầu
+vẫn chạy. Xem [RFC 8441 tunnel](/docs/websocket/http2-tunnels).
+
+## Kiểm tra handshake
+
+```sh
+curl -i --http1.1 \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  http://127.0.0.1:3000/echo
+```
+
+```console
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+```
+
+Accept token trên là giá trị ví dụ của RFC 6455 cho key đó.
+
+## Tiếp theo
+
+- [Message và framing](/docs/websocket/messages) cho những gì xảy ra sau switch.
+- [WebSocket security](/docs/websocket/security) cho toàn bộ trust boundary.

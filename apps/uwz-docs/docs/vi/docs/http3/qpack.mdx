@@ -1,0 +1,108 @@
+---
+title: QPACK
+description: Đọc policy QPACK có giới hạn cho request và response HTTP/3, gồm dynamic table bị tắt, field-count limit và lý do.
+sidebar:
+  order: 6
+search:
+  tags: [concept, http3, reference]
+---
+
+QPACK nén header field HTTP/3 và cho phép stream độc lập tham chiếu dynamic table
+dùng chung mà không block. µWebZockets cấu hình QPACK để request không bao giờ
+block và không phụ thuộc shared state: request decoder không có dynamic table và
+không có blocked stream.
+
+## Setting
+
+| Setting                    | Giá trị                        | Tác dụng                                |
+| -------------------------- | ------------------------------ | --------------------------------------- |
+| Decoder dynamic table size | 0                              | Peer không thể insert vào dynamic table |
+| Max blocked stream         | 0                              | Field section phải decode được ngay     |
+| Header set                 | 1                              | Một header set outstanding mỗi event    |
+| Max header list size       | `max_header_size`              | Field list bị từ chối khi vượt          |
+| Decoded request field      | `max_header_count`             | Regular field mỗi request               |
+| Response header byte       | `max_h3_response_header_size`  | Cap block đã encode                     |
+| Response header count      | `max_h3_response_header_count` | Slot field mỗi response                 |
+
+Với decoder table size zero, client gửi dynamic table insert đang tạo request mà
+server không decode được. Mọi request field section phải tự chứa. Điều đó giữ
+request bị từ chối không làm kẹt stream sibling và loại bỏ một allocation
+per-connection.
+
+## Decode request
+
+Lsquic header decoder tạo `HeaderSet` có giới hạn cho một stream. Adapter sau đó:
+
+1. Validate từng field name lowercase và token hợp lệ.
+2. Từ chối control byte trong value.
+3. Map pseudo-field vào slot `Request` có tên.
+4. Copy regular field vào per-stream header region.
+5. Từ chối pseudo-field trùng, pseudo-field sau regular field và
+   connection-specific header.
+
+Bản copy nghĩa handler thấy slice ổn định cho cả request. Header set gốc được giải
+phóng khi stream đóng.
+
+## Encode response
+
+Response helper lưu name lowercase và value cho mỗi field, rồi dựng lsxpack array
+với `:status` đầu tiên. lsquic encode array đó thành QPACK field section.
+
+Hệ quả:
+
+- Header name được lowercase giúp bạn. Không gửi name viết hoa.
+- `connection`, `keep-alive`, `proxy-connection`, `transfer-encoding`, `upgrade`
+  và `te` bị từ chối trước encode.
+- Field count trên `max_h3_response_header_count` fail với `error.BufferOverflow`.
+- Block trên `max_h3_response_header_size` fail cùng cách.
+
+Response encoding không dùng dynamic table do caller kiểm soát. Output vừa cap byte
+và field đã cấu hình hoặc response fail closed.
+
+## Vì sao không dynamic table
+
+Dynamic table có giá trị cho header lặp lại qua nhiều request, như user agent hay
+trace header. Nó cũng đưa blocking vào: stream tham chiếu entry chờ encoder update
+trên stream khác.
+
+Với server có giới hạn, tradeoff nghiêng về predictability:
+
+| Thuộc tính          | Request static-only | Request có dynamic table     |
+| ------------------- | ------------------- | ---------------------------- |
+| Blocking mỗi stream | không               | có thể                       |
+| Shared state        | không               | encoder state mỗi connection |
+| Header byte         | cao hơn             | thấp hơn khi lặp             |
+| Failure mode        | rejection tự chứa   | stream bị kẹt                |
+
+Request path được thiết kế cho nhiều exchange ngắn không phụ thuộc cross-stream, nên
+static và literal representation là dạng được hỗ trợ.
+
+## Field limit
+
+| Giới hạn              | Giá trị                             |
+| --------------------- | ----------------------------------- |
+| Field name length     | Vừa field length 16-bit của lsxpack |
+| Field value length    | Vừa field length 16-bit của lsxpack |
+| Response field count  | 64 mặc định, tối đa 4096            |
+| Response header byte  | 4096 mặc định, tối đa 65535         |
+| Request decoded field | 64 mặc định, từ `max_header_count`  |
+| Request header byte   | `max_header_size`                   |
+
+Field name hoặc value trên độ dài 16-bit không biểu diễn được trong response header
+array. Giữ name ngắn; cookie hay trace header dài thuộc field value có giới hạn và
+vẫn phải vừa.
+
+## Kiểm tra
+
+1. Gửi request với một header lặp nhỏ từ client hỗ trợ QPACK.
+2. Xác nhận thành công. Client có thể dùng static-table index hoặc literal.
+3. Cấu hình client insert vào dynamic table và tham chiếu entry.
+4. Xác nhận server từ chối request thay vì block stream sibling.
+
+Dùng gate interoperability HTTP/3 cho phiên bản script của check này. Xem
+[kiểm thử interoperability](/docs/http3/testing).
+
+## Tiếp theo
+
+- [Request path](/docs/http3/request-path) cho những gì xảy ra sau decode.
+- [HTTP/3 limits](/docs/http3/limits) cho mọi bound.

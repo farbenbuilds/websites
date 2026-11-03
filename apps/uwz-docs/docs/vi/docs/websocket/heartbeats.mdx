@@ -1,0 +1,107 @@
+---
+title: Heartbeat và peer im lặng
+description: Cấu hình ping và pong timeout cho một route, kết hợp với idle deadline để đóng peer đã ngừng đọc hoặc ngừng phản hồi.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, websocket, operations]
+---
+
+WebSocket connection không có request boundary, nên không có gì báo server rằng
+peer đã biến mất cho đến khi một write fail hoặc TCP keepalive hết hạn. Heartbeat
+làm việc phát hiện đó tường minh: route ping peer im lặng và đóng nó khi pong
+không đến.
+
+## Cấu hình một route
+
+```zig
+_ = try app.ws("/feed", .{
+    .open = on_open,
+    .message = on_message,
+    .ping_interval_ms = 30_000,
+    .pong_timeout_ms = 10_000,
+});
+```
+
+Hai giá trị phải được đặt cùng nhau. Route có một giá trị và giá trị còn lại bằng
+zero sẽ fail đăng ký với `500 Internal Server Error` trước khi listener start.
+
+| Setting            | Default  | Hành vi                                             |
+| ------------------ | -------- | --------------------------------------------------- |
+| `ping_interval_ms` | `0`      | Gửi ping sau khoảng này không có hoạt động đến      |
+| `pong_timeout_ms`  | `0`      | Đóng khi không có pong trong khoảng này             |
+| `idle_timeout_ms`  | `120000` | Đóng TCP connection sau khoảng này không có traffic |
+
+## Hành vi timer
+
+Heartbeat timer là timer per-worker chạy mỗi năm giây và chỉ được schedule khi có
+ít nhất một route đã đăng ký bật heartbeat. Mỗi tick đi qua connection pool và
+tiến trạng thái heartbeat của từng socket:
+
+1. Nếu một ping đang chờ và `pong_timeout_ms` đã qua, đóng connection.
+2. Nếu peer im lặng đủ `ping_interval_ms`, gửi ping rỗng và đánh dấu đang chờ.
+3. Mọi pong xóa trạng thái đang chờ.
+
+`last_active_ms` được cập nhật bởi read và write thành công, nên peer liên tục gửi
+dữ liệu không bao giờ bị ping. Peer chỉ đọc vẫn nhận ping và phải trả lời.
+
+Interval được kiểm tra theo bước năm giây. `ping_interval_ms` dưới 5000 vẫn hợp lệ
+nhưng vẫn được đánh giá ở tick năm giây.
+
+## Heartbeat và idle deadline
+
+| Cơ chế         | Phạm vi         | Hành động khi hết hạn                   |
+| -------------- | --------------- | --------------------------------------- |
+| Heartbeat pong | WebSocket route | Terminate peer mà không gửi close frame |
+| Idle deadline  | Mọi connection  | Đóng TCP connection                     |
+
+Cả hai đều là hard close: peer thấy connection rơi thay vì nhận close frame
+`1001 Going Away`. Gọi `send_close` nếu application cần close code quan sát được,
+ví dụ trước rolling restart.
+
+Idle deadline áp dụng cho cả HTTP keep-alive và connection đã upgrade. Giữ
+`pong_timeout_ms` ngắn hơn `idle_timeout_ms` để heartbeat quyết định và log của
+bạn hiện đường heartbeat thay vì idle timeout.
+
+Đặt `idle_timeout_ms` bằng zero để tắt idle deadline, ví dụ khi load balancer sở
+hữu liveness. Không tắt cả hai cơ chế trên endpoint công khai.
+
+## Thứ ping không cứu được
+
+Ping chỉ chứng minh TCP path hoạt động. Nó không chứng minh application khỏe hay
+peer xử lý message. Kết hợp với:
+
+- Write queue có giới hạn và drop policy. Xem
+  [backpressure](/docs/websocket/backpressure).
+- Message size limit trên route. Xem
+  [WebSocket limits](/docs/websocket/limits).
+- Deadline cấp application cho công việc chậm, dùng async response thay vì block
+  worker.
+
+## Chọn giá trị
+
+| Deployment                              | Interval | Pong timeout |
+| --------------------------------------- | -------- | ------------ |
+| Browser app trên internet công khai     | 30 s     | 10 s         |
+| Service nội bộ trên LAN độ trễ thấp     | 10 s     | 5 s          |
+| Mobile client tạm dừng lâu ở background | 60 s     | 20 s         |
+
+Interval ngắn phát hiện peer chết sớm hơn và tốn một frame nhỏ cho mỗi peer im
+lặng mỗi interval. Với 10.000 peer im lặng và interval 30 giây, worker ghi khoảng
+333 ping mỗi giây cộng traffic ứng dụng.
+
+## Kiểm tra
+
+1. Kết nối bằng `wscat` và ngừng gửi message.
+2. Theo dõi server log thấy ping ở interval đã cấu hình.
+3. Xác nhận connection vẫn mở khi `wscat` trả lời ping.
+4. Suspend client process thay vì close nó.
+5. Xác nhận server đóng peer sau `pong_timeout_ms`.
+
+`wscat` tự trả lời ping, nên suspend process bằng `SIGSTOP` là cách đáng tin để mô
+phỏng peer im lặng.
+
+## Tiếp theo
+
+- [Close code và shutdown](/docs/websocket/close-codes) cho những gì peer thấy.
+- [WebSocket security](/docs/websocket/security) cho giới hạn denial-of-service.

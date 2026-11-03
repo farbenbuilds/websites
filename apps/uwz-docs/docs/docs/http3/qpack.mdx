@@ -1,0 +1,111 @@
+---
+title: QPACK
+description: Read the bounded QPACK policy for HTTP/3 requests and responses, including the disabled dynamic table and field-count limits.
+sidebar:
+  order: 6
+search:
+  tags: [concept, http3, reference]
+---
+
+QPACK compresses HTTP/3 header fields, and it allows independent streams to
+reference a shared dynamic table without blocking. µWebZockets configures QPACK
+so that requests never block and never depend on shared state: the request
+decoder has no dynamic table and no blocked streams.
+
+## Settings
+
+| Setting                    | Value                          | Effect                                        |
+| -------------------------- | ------------------------------ | --------------------------------------------- |
+| Decoder dynamic table size | 0                              | Peer cannot insert into a dynamic table       |
+| Max blocked streams        | 0                              | A field section must be decodable immediately |
+| Header sets                | 1                              | One header set outstanding per event          |
+| Max header list size       | `max_header_size`              | Field list rejected above this                |
+| Decoded request fields     | `max_header_count`             | Regular fields per request                    |
+| Response header bytes      | `max_h3_response_header_size`  | Encoded block cap                             |
+| Response header count      | `max_h3_response_header_count` | Field slots per response                      |
+
+With a zero-size decoder table, a client that sends a dynamic table insert is
+making a request the server cannot decode. Every request field section must be
+self-contained. That keeps a rejected request from stalling a sibling stream and
+removes a per-connection allocation.
+
+## Request decoding
+
+The lsquic header decoder produces a bounded `HeaderSet` for one stream. The
+adapter then:
+
+1. Validates each field name as lowercase and token-valid.
+2. Rejects control bytes in values.
+3. Maps pseudo-fields into named `Request` slots.
+4. Copies regular fields into the per-stream header region.
+5. Rejects duplicate pseudo-fields, pseudo-fields after regular fields, and
+   connection-specific headers.
+
+The copy means the handler sees stable slices for the whole request. The original
+header set is released when the stream closes.
+
+## Response encoding
+
+The response helper stores a lowercase name and a value for each field, then
+builds an lsxpack array with `:status` first. lsquic encodes that array into a
+QPACK field section.
+
+Consequences:
+
+- Header names are lowercased for you. Do not send uppercase names.
+- `connection`, `keep-alive`, `proxy-connection`, `transfer-encoding`, `upgrade`,
+  and `te` are rejected before encoding.
+- A field count above `max_h3_response_header_count` fails with
+  `error.BufferOverflow`.
+- A block above `max_h3_response_header_size` fails the same way.
+
+Response encoding does not use a dynamic table that the caller controls. The
+output fits the configured byte and field caps or the response fails closed.
+
+## Why no dynamic table
+
+A dynamic table is valuable for repeated headers across many requests, such as a
+user agent or a trace header. It also introduces blocking: a stream that
+references an entry waits for an encoder update on another stream.
+
+For a bounded server the tradeoff favors predictability:
+
+| Property            | Static-only requests     | Dynamic table requests       |
+| ------------------- | ------------------------ | ---------------------------- |
+| Per-stream blocking | none                     | possible                     |
+| Shared state        | none                     | per-connection encoder state |
+| Header bytes        | higher                   | lower on repetition          |
+| Failure mode        | self-contained rejection | stalled stream               |
+
+The request path is designed for many short exchanges with no cross-stream
+dependency, so static and literal representations are the supported form.
+
+## Field limits
+
+| Limit                  | Value                                  |
+| ---------------------- | -------------------------------------- |
+| Field name length      | Fits the lsxpack 16-bit field length   |
+| Field value length     | Fits the lsxpack 16-bit field length   |
+| Response field count   | 64 by default, 4096 maximum            |
+| Response header bytes  | 4096 by default, 65535 maximum         |
+| Request decoded fields | 64 by default, from `max_header_count` |
+| Request header bytes   | `max_header_size`                      |
+
+A field name or value above the 16-bit length is not representable in the
+response header array. Keep names short; a long cookie or trace header belongs in
+a bounded field value that still fits.
+
+## Verify it
+
+1. Send a request with a small repeated header from a QPACK-capable client.
+2. Confirm it succeeds. The client may use static-table indices or literals.
+3. Configure a client to insert into the dynamic table and reference the entry.
+4. Confirm the server rejects the request rather than blocking a sibling stream.
+
+Use the HTTP/3 interoperability gate for a scripted version of this check. See
+[interoperability testing](/docs/http3/testing).
+
+## Next
+
+- [Request path](/docs/http3/request-path) for what happens after decoding.
+- [HTTP/3 limits](/docs/http3/limits) for every bound.

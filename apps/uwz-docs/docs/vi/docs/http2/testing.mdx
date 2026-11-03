@@ -1,0 +1,126 @@
+---
+title: Kiểm thử HTTP/2 route
+description: Kiểm tra ALPN, stream concurrency, header limit và body reset bằng curl và h2load trên application HTTP/2 của bạn.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, http2, operations]
+---
+
+Kiểm thử HTTP/2 có ba câu hỏi: connection có thương lượng `h2`, route có hành xử
+như HTTP/1.1, và nó có nằm trong capacity. Cả ba trả lời được bằng client tool
+chạy với application đang hoạt động.
+
+## Điều kiện trước
+
+- Application TLS đang chạy với ít nhất một route. Bắt đầu từ
+  [HTTP/2 quickstart](/docs/http2/getting-started).
+- `curl` build có HTTP/2. `curl --version` liệt kê `HTTP2`.
+- `h2load` từ nghttp2 cho check concurrency.
+
+## Kiểm tra negotiation
+
+```sh
+curl --http2 -k -v https://127.0.0.1:3443/ 2>&1 | grep -E "ALPN|HTTP/2"
+```
+
+```console
+* ALPN: server accepted h2
+< HTTP/2 200
+```
+
+Nếu client báo `http/1.1`, connection không thương lượng HTTP/2. Kiểm tra client
+build trước, rồi TLS initializer mà app dùng. `init_https` và
+`init_https_ephemeral` đều quảng bá `h2`.
+
+Với listener cleartext, dùng prior knowledge:
+
+```sh
+curl --http2-prior-knowledge -v http://127.0.0.1:3000/ 2>&1 | grep HTTP/2
+```
+
+## So với HTTP/1.1
+
+Gửi cùng request qua hai protocol và so status, header, body:
+
+```sh
+curl --http2 -k -s -o h2.body -w '%{http_code}\n' https://127.0.0.1:3443/items
+curl --http1.1 -k -s -o h1.body -w '%{http_code}\n' https://127.0.0.1:3443/items
+cmp h1.body h2.body
+```
+
+Hai dòng status phải khớp và `cmp` phải báo không khác biệt. Framing header khác
+theo protocol; application header thì không.
+
+## Stream concurrency
+
+```sh
+h2load -n 1000 -c 10 -m 8 https://127.0.0.1:3443/
+```
+
+`-m 8` khớp stream limit được quảng bá. Đọc:
+
+- Request mỗi giây và latency percentile.
+- Stream mỗi connection thực tế dùng.
+- Reset `REFUSED_STREAM`, nghĩa là stream budget đã cạn.
+- RSS server so với slab size.
+
+Run báo hơn tám stream đồng thời mỗi connection nghĩa là chưa thương lượng với
+server này. Kiểm tra dòng protocol trước khi tin số liệu.
+
+## Header và body limit
+
+Gửi header list lớn hơn `max_h2_header_block_size`:
+
+```sh
+curl --http2 -k -v \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  https://127.0.0.1:3443/
+```
+
+Connection đóng bằng GOAWAY và `curl` báo lỗi. Sau đó tăng
+`max_h2_header_block_size`, rebuild application và xác nhận cùng request thành
+công.
+
+Làm tương tự với request body trên `max_h2_body_size`. Kỳ vọng stream reset, không
+phải cả connection, trong khi request thứ hai trên cùng connection vẫn thành công.
+
+## Route test
+
+Giữ request validation và response shaping trong hàm thuần và test trong project
+của bạn:
+
+```zig
+const std = @import("std");
+
+fn clampPage(raw: ?[]const u8) u32 {
+    const value = raw orelse return 1;
+    const parsed = std.fmt.parseInt(u32, value, 10) catch return 1;
+    return @min(parsed, 100);
+}
+
+test "page is clamped and defaults to one" {
+    try std.testing.expectEqual(@as(u32, 1), clampPage(null));
+    try std.testing.expectEqual(@as(u32, 100), clampPage("1000"));
+}
+```
+
+```sh
+zig test src/http/pagination.zig
+```
+
+Các test này không exercise HPACK hay flow control. Lệnh client ở trên bao wire;
+unit test bao logic của bạn.
+
+## Bằng chứng upstream
+
+Maintainer framework chạy unit suite cho frame sequencing, SETTINGS, flow control,
+HPACK vector, stream reuse và malformed input trước release. Gate h1spec HTTP/1.1
+và gate interoperability HTTP/3 drive cùng handler boundary qua transport khác.
+Kết quả đó mô tả framework, không mô tả route của bạn. Coi chúng là bằng chứng
+protocol coverage và giữ check application của riêng bạn.
+
+## Tiếp theo
+
+- [HTTP/2 limits](/docs/http2/limits) cho mọi bound dưới test.
+- [Flow control](/docs/http2/flow-control) cho hành vi reset đứng sau body test.

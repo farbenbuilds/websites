@@ -8,7 +8,7 @@ search:
 ---
 
 Kiểm thử quyết định in-process và wire trên loopback. Trang này trình bày cả hai
-lớp, rồi các compliance gate ở cấp repository nằm ngoài application project.
+lớp, rồi bằng chứng compliance do maintainer chạy, nằm ngoài application project.
 
 ## Chọn lớp kiểm thử
 
@@ -119,28 +119,18 @@ Field `Allow` phải liệt kê `GET, HEAD`. Để chứng minh handler GET khô
 assert counter, log line hoặc side effect của nó không đổi. Router trả lời trước
 dispatch khi path khớp và method không có handler.
 
-## Giữ compliance gate trong repository
+## Giữ compliance gate ngoài application
 
-h1spec và Autobahn là gate ở cấp repository, không phải dependency của
-application. Không thêm h1spec, Autobahn, Deno hay fixture của chúng vào
-application project. Repository của framework chạy chúng với compliance server
-của chính nó:
+h1spec và Autobahn là gate của maintainer framework, không phải dependency của
+application. Không thêm h1spec, Autobahn, Deno, container hay fixture của chúng
+vào project. Project của bạn kiểm thử route và failure document mà nó sở hữu, như
+các phần trên.
 
-```sh
-zig build
-./zig-out/bin/h1spec &
-server_pid=$!
-
-cd vendor/h1spec
-deno run --allow-net=127.0.0.1:8000 http_test.ts 127.0.0.1 8000
-
-kill "$server_pid"
-```
-
-Gate Autobahn báo 517/517 server case được chấp nhận: 514 `OK` và 3
-`INFORMATIONAL`, bao gồm compression group 12 và 13. `zig build test` chạy unit
-suite thông thường từ `src/tests/main.zig`; nó tách biệt với cả hai compliance
-gate.
+Maintainer framework chạy h1spec với `src/http/parser.zig` và bộ 517 Autobahn
+server case với WebSocket implementation trước release. Kết quả v2.1.6 chấp nhận
+toàn bộ 517 case: 514 `OK` và 3 `INFORMATIONAL`, gồm compression group 12 và 13.
+Coi các kết quả đó là bằng chứng protocol cho version framework bạn dùng. Chúng
+không mô tả route, capacity hay proxy của bạn.
 
 ## Kiểm tra
 

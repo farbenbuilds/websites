@@ -1,0 +1,124 @@
+---
+title: WebSocket security
+description: Treat the upgrade as an authenticated HTTP request, set message and rate bounds, and understand the compression side channel.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, websocket, security, auth]
+---
+
+A WebSocket connection starts with an HTTP request, so every HTTP threat applies
+before the switch. After the switch, the framework protects the parser and the
+bounds; the application still owns identity, authorization, origin policy, and
+abuse limits.
+
+## Trust boundaries
+
+| Boundary             | Owned by    | Control                                               |
+| -------------------- | ----------- | ----------------------------------------------------- |
+| HTTP upgrade request | Framework   | Request-line, header, and body limits; strict parsing |
+| Upgrade admission    | Application | `upgrade` callback, origin check, credentials         |
+| Frame parsing        | Framework   | Masking, opcode, UTF-8, size, close validation        |
+| Message content      | Application | Decode, validate, authorize per message               |
+| Fan-out              | Framework   | Bounded queues and topic registry                     |
+| Identity lifetime    | Application | Store per connection; there is no session object      |
+
+The framework does not authenticate a peer, compare `Origin`, select a
+subprotocol, or rate limit by connection. Those are application decisions with
+application data.
+
+## Authenticate before the switch
+
+Browser WebSocket clients send cookies with the handshake. That makes cross-site
+WebSocket hijacking possible when the server trusts a cookie and ignores the
+origin. Do both:
+
+1. Validate the credential in the `upgrade` callback.
+2. Validate `Origin` against an allow list, or require a token that a
+   cross-site page cannot read.
+
+```zig
+fn admit(req: *const uz.Request) bool {
+    const origin = req.get_unique_header("Origin") orelse return false;
+    if (!std.mem.eql(u8, origin, "https://app.example.com")) return false;
+
+    const authorization = req.get_unique_header("Authorization") orelse return false;
+    return verify_bearer(authorization);
+}
+```
+
+`get_unique_header` returns null when a header appears twice, which rejects
+ambiguous credentials instead of picking one. Never accept a peer because the
+request "looks internal"; read the actual fields.
+
+The callback is synchronous and runs on the worker thread. A database round trip
+belongs in an HTTP route that issues a short-lived ticket, not in the callback.
+
+## Bound every resource
+
+| Resource                 | Control                               | Default      |
+| ------------------------ | ------------------------------------- | ------------ |
+| Message size             | `max_message_size` on the route       | 16 KiB       |
+| Frame size               | `max_frame_size` on the route         | 16 KiB       |
+| Pending output           | `write_queue_size`                    | 64 KiB       |
+| Idle connections         | `idle_timeout_ms`                     | 120 s        |
+| Heartbeat                | `ping_interval_ms`, `pong_timeout_ms` | off          |
+| Topics and subscriptions | Fixed registry capacity               | 1024 / 8192  |
+| Connections              | `App(N)` or `with_max_clients`        | compile-time |
+
+A route cannot raise `max_message_size` above the configured message capacity. If
+you need larger messages, raise the capacity and accept the slab cost for every
+connection.
+
+## Rate limit per connection and per worker
+
+The built-in rate-limit middleware protects HTTP routes. A WebSocket route needs
+its own counter because it has no request boundary. Keep the counter in
+application storage keyed by the socket, reset it on a fixed window, and close
+the peer with `1008 Policy violation` when it exceeds the budget.
+
+Per-worker counters do not see peers on other workers. When a global budget
+matters, use a shared external store and accept the latency, or shard the budget
+per worker and document the multiplication.
+
+## Compression side channel
+
+Compression leaks message length. If a peer can influence bytes that are
+compressed next to a secret in the same context, it can learn about the secret.
+µWebZockets compresses per message with no context takeover, which removes
+cross-message state but keeps the per-message length signal.
+
+Disable compression on routes that carry tokens, and never echo a secret. See
+[per-message deflate](/docs/websocket/compression).
+
+## TLS and proxies
+
+- Serve `wss://` in production. A plaintext upgrade exposes cookies and message
+  content to any hop.
+- A reverse proxy must forward `Upgrade` and `Connection` and must not buffer the
+  upgraded connection.
+- Set proxy read timeouts longer than your heartbeat interval, or the proxy drops
+  idle peers before the heartbeat can act.
+- Forward the client address in a header you trust only from the proxy. Do not
+  rate limit on a header a client can forge.
+
+ALPN and certificate policy live in the TLS section. Start with
+[ephemeral certificates](/docs/examples/first-tls-server) for local work.
+
+## Logging
+
+Log the route, the close code, and a bounded reason. Do not log message bodies,
+tokens, cookies, or full headers; the development log records an HTTP line per
+exchange and a message length per WebSocket message, not payload bytes.
+
+## Reporting
+
+Report a vulnerability through the process in
+[the repository security policy](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+Do not open a public issue with a working exploit.
+
+## Next
+
+- [Handshake and upgrade](/docs/websocket/handshake) for the exact validation
+  order.
+- [WebSocket limits](/docs/websocket/limits) for the full bound table.

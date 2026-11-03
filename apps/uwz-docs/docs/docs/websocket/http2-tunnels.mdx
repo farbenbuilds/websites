@@ -1,0 +1,114 @@
+---
+title: RFC 8441 tunnels
+description: Accept WebSocket over HTTP/2 with extended CONNECT, understand the one-tunnel limit, and see why tunnels are uncompressed.
+sidebar:
+  order: 11
+search:
+  tags: [websocket, http2, concept]
+---
+
+RFC 8441 carries WebSocket frames over an HTTP/2 stream. A client opens the
+connection with HTTP/2, sends an extended `CONNECT` request for the route, and
+after a `200 OK` the same connection carries WebSocket frames as DATA. The route
+uses the same callbacks as an HTTP/1.1 upgrade.
+
+## Requirements
+
+| Requirement        | Detail                                                |
+| ------------------ | ----------------------------------------------------- |
+| Transport          | TLS with ALPN `h2`, or cleartext with prior knowledge |
+| Method             | `CONNECT` with `:protocol: websocket`                 |
+| Version            | Exactly one `Sec-WebSocket-Version: 13`               |
+| Key                | Not required and not inspected                        |
+| Compression        | Not negotiated; frames are uncompressed               |
+| Concurrent tunnels | One per HTTP/2 connection                             |
+
+The route must be registered with `App.ws`. A `CONNECT` on a WebSocket route
+without `:protocol: websocket` receives `501 Not Implemented`, and a `CONNECT`
+that matches no route receives `404 Not Found`.
+
+## Request shape
+
+| Pseudo-field / field    | Value         |
+| ----------------------- | ------------- |
+| `:method`               | `CONNECT`     |
+| `:protocol`             | `websocket`   |
+| `:scheme`               | `https`       |
+| `:path`                 | `/chat`       |
+| `:authority`            | `example.com` |
+| `sec-websocket-version` | `13`          |
+
+Pseudo-fields must precede regular fields and remain unique. The HPACK decoder
+enforces that ordering before the route is matched, so a malformed request never
+reaches application code.
+
+## Accept and reject
+
+The tunnel path reuses the route's `upgrade` callback:
+
+| Condition                               | Response                                                |
+| --------------------------------------- | ------------------------------------------------------- |
+| Version absent, duplicated, or not `13` | `426 Upgrade Required` with `Sec-WebSocket-Version: 13` |
+| `upgrade` callback returns false        | `403 Forbidden`                                         |
+| Route limits exceed message capacity    | `500 Internal Server Error`                             |
+| A tunnel is already active              | `503 Service Unavailable`                               |
+| Accepted                                | `200 OK`, then frame exchange                           |
+
+The `503` applies to the second request only. The first tunnel stays active and
+unaffected.
+
+## Why one tunnel
+
+Frame parsing and message storage are connection-owned: one `WebSocket` value,
+one message buffer, and one set of frame nodes live on the `TcpConnection`. A
+second tunnel would need a second set of connection-owned state, so the session
+admits one and reports capacity instead of corrupting the active tunnel.
+
+Raising the limit requires specializing the connection type. It is not a runtime
+option. See [HTTP/2 limits](/docs/http2/limits).
+
+## Compression is off
+
+Per-message deflate is negotiated during an HTTP/1.1 upgrade. An extended
+CONNECT request has no `Sec-WebSocket-Extensions` negotiation step in this
+implementation, and the tunnel does not read the header. Frames are sent as they
+are produced, with the RSV1 bit clear.
+
+If bandwidth matters, compress at the application layer or send smaller
+messages. Do not expect the HTTP/2 connection to compress WebSocket frames;
+HPACK covers headers only.
+
+## Backpressure and reset
+
+Tunnel sends write DATA frames directly and bypass the TCP write ring. The
+session has no per-stream pending queue for WebSocket frames, so a flow-control
+stall cannot park a partial frame. When no DATA capacity is available, the tunnel
+resets with `CANCEL` instead of buffering.
+
+Treat `error.WouldBlock` from a tunnel send as terminal for that tunnel. The
+client reconnects and re-establishes the stream.
+
+## Close and shutdown
+
+A close frame finishes the HTTP/2 stream with END_STREAM. A `terminate` call
+resets the stream with `CANCEL`. Other streams on the connection keep running;
+one tunnel never closes the whole connection.
+
+The connection-level idle deadline still applies. Keep heartbeats enabled on a
+tunnel route so a silent peer is detected before the idle deadline drops the
+whole HTTP/2 connection, including unrelated streams.
+
+## Verify it
+
+Use a client with RFC 8441 support. `curl` does not open WebSocket tunnels. Send
+the extended CONNECT request from the table above on an `h2` connection.
+
+Expect `200 OK`. Then send a masked text frame as DATA and read the echoed frame
+from the same stream. Send a second CONNECT on the same connection and confirm
+`503` while the first tunnel still echoes.
+
+## Next
+
+- [WebSocket over HTTP/2](/docs/http2/websocket-tunnels) for the transport
+  view.
+- [WebSocket handshake](/docs/websocket/handshake) for the HTTP/1.1 path.
