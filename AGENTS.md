@@ -92,7 +92,7 @@ hosts.
 
 ```sh
 pnpm install
-pnpm ready                              # lint, format, typecheck, size, tests, builds
+pnpm ready                              # lint, format, typecheck, size, tests, link validation, builds
 pnpm lint                               # Oxlint, anti-slop, project rules
 pnpm lint:fix                           # apply safe lint fixes
 pnpm format                             # Oxfmt with .oxfmtrc.json
@@ -101,23 +101,32 @@ pnpm typecheck                          # every workspace check task
 pnpm i18n:check                         # x18n locale key parity and coverage
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
+pnpm test:all                           # root Vitest plus every workspace test task
+pnpm test:workspace                     # every docs app test task
 pnpm check:size                         # enforce the 400-line source limit
-pnpm exec vp run -r test                # every workspace test task
-pnpm exec vp run -r build               # every workspace build
+pnpm build                              # every workspace build
+pnpm check:uwz                          # type-check the uWebZockets docs app
+pnpm check:vws                          # type-check the ventiws docs app
+pnpm check:ui                           # type-check @farben/ui
+pnpm build:uwz                          # build the uWebZockets docs app
+pnpm build:vws                          # build the ventiws docs app
+pnpm preview:uwz                        # preview the built uWebZockets docs
+pnpm preview:vws                        # preview the built ventiws docs
+pnpm doctor:uwz                         # diagnose the uWebZockets docs app
+pnpm doctor:vws                         # diagnose the ventiws docs app
+pnpm validate:docs                      # strict Blume link validation, both apps
+pnpm audit:uwz                          # build-site audit for the uWebZockets docs
 pnpm dev:uwz                            # uWebZockets docs dev server
 pnpm dev:vws                            # ventiws docs dev server
-pnpm exec vp run uwz-docs#check
-pnpm exec vp run vws-docs#check
-pnpm exec vp run uwz-docs#build
-pnpm exec vp run vws-docs#build
-pnpm exec vp run @farben/ui#check
 ```
 
 Docs apps are Blume/Astro projects. Their dev servers start through their package
-scripts, not `vp dev`. On musl hosts, `pnpm exec vp ...` is the supported path.
+scripts, not `vp dev`. The root scripts resolve the project-local Vite+ CLI
+through pnpm on every host, including musl.
 
-If setup, runtime, or package-manager behavior looks wrong, run
-`pnpm exec vp env doctor` and include the output in the report.
+If setup, runtime, or package-manager behavior looks wrong, run the global
+`vp env doctor` and include the output in the report. The environment command is
+global-only; project tasks stay on the pnpm scripts above.
 
 Vite+ notes:
 

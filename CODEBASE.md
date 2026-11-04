@@ -34,12 +34,13 @@ pnpm format:check
 pnpm typecheck
 pnpm i18n:check
 pnpm test
-pnpm exec vp run -r build
+pnpm build
 ```
 
 The global `vp` binary is intended for environment and scaffolding work. On
 musl hosts it cannot load the musl native bindings that pnpm installs, so
-project commands always go through `pnpm exec vp`.
+project commands run through root `package.json` scripts, which resolve the
+project-local Vite+ CLI through pnpm.
 
 The Nix flake provides the web toolchain for `x86_64-linux`, `aarch64-linux`,
 and `aarch64-darwin`. It exposes a glibc shell and a musl shell; `.envrc`
@@ -215,9 +216,9 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm check:size
-pnpm test
-vp run -r test
-vp run -r build
+pnpm test:all
+pnpm validate:docs
+pnpm build
 ```
 
 `pnpm lint` runs Oxlint with `.oxlintrc.json`, the vendored anti-slop plugin,
@@ -227,10 +228,11 @@ Oxlint has no custom parser support, so Svelte template rules and Astro
 template rules are not available; the adapter enables the Astro frontmatter
 rules, and the Svelte rules apply to the extracted `<script>` block. `pnpm
 format:check` runs Oxfmt with `.oxfmtrc.json`. `pnpm typecheck` runs every
-workspace `check` task, including `svelte-check` and `blume check`. `pnpm test`
-runs the root Vitest suite.
-Workspace `test` tasks run `blume validate`; workspace `build` tasks run
-`blume build`.
+workspace `check` task, including `svelte-check` and `blume check`. `pnpm
+test:all` runs root Vitest and every workspace `test` task; `pnpm
+test:workspace` runs only the docs apps. Workspace `test` tasks run `blume
+validate`; workspace `build` tasks run `blume build`. `pnpm validate:docs` runs
+strict link validation, and `pnpm audit:uwz` audits the built uWebZockets site.
 
 `lefthook` runs lint, format, size, typecheck, and tests on pre-commit. The
 GitHub workflows split the same gate into `lint.yml`, `test.yml`, and `ci.yml`.

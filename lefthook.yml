@@ -12,7 +12,7 @@ pre-commit:
       exclude:
         - ".agents/**"
         - "tools/oxlint/anti-slop/**"
-      run: pnpm exec vp lint -c .oxlintrc.json --fix {staged_files}
+      run: pnpm lint:staged {staged_files}
       stage_fixed: true
 
     - name: format
@@ -20,7 +20,7 @@ pre-commit:
       exclude:
         - ".agents/**"
         - "tools/oxlint/anti-slop/**"
-      run: pnpm exec vp fmt -c .oxfmtrc.json --write --no-error-on-unmatched-pattern {staged_files}
+      run: pnpm format:staged {staged_files}
       stage_fixed: true
 
     - name: size

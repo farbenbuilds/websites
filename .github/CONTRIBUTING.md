@@ -60,19 +60,22 @@ pnpm typecheck                          # every workspace check
 pnpm i18n:check                         # component locale key parity and coverage
 pnpm test                               # root Vitest suite
 pnpm test:watch                         # Vitest watch mode
+pnpm test:all                           # root Vitest plus every workspace test
+pnpm test:workspace                     # every docs app test task
 pnpm check:size                         # enforce the 400-line source limit
-pnpm exec vp run -r test                # every workspace test
-pnpm exec vp run -r build               # every workspace build
-pnpm exec vp run uwz-docs#check
-pnpm exec vp run vws-docs#check
-pnpm exec vp run uwz-docs#build
-pnpm exec vp run vws-docs#build
-pnpm exec vp run @farben/ui#check
+pnpm build                              # every workspace build
+pnpm check:uwz                          # type-check the uWebZockets docs app
+pnpm check:vws                          # type-check the ventiws docs app
+pnpm check:ui                           # type-check @farben/ui
+pnpm build:uwz                          # build the uWebZockets docs app
+pnpm build:vws                          # build the ventiws docs app
+pnpm validate:docs                      # strict Blume link validation, both apps
+pnpm audit:uwz                          # audit the built uWebZockets docs
 ```
 
 Docs apps are Blume/Astro projects. Their dev servers start through their package
-scripts, not `vp dev`. Run `pnpm exec vp env doctor` if the toolchain behaves
-unexpectedly.
+scripts, not `vp dev`. Run the global `vp env doctor` if the toolchain behaves
+unexpectedly; the environment command is global-only.
 
 ## Documentation Changes
 
