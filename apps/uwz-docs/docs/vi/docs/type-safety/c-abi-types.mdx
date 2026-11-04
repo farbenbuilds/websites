@@ -1,0 +1,181 @@
+---
+title: Kiểu C ABI
+description: Đọc opaque handle, slice, enum, frozen struct và capacity cố định của C header, và biết surface Zig nào nó không cung cấp.
+sidebar:
+  order: 8
+search:
+  tags: [reference, c-abi]
+---
+
+C ABI là high-level server surface. Nó cung cấp opaque handle, borrowed slice,
+versioned enum và registration capacity cố định. Nó không phản chiếu Zig type system:
+compile-time capacity, schema validation, JSON-RPC, client và low-level protocol
+module không có C entry point.
+
+## Header và version
+
+```c
+#include <uWebZockets.h>
+```
+
+Header công bố `UWZ_VERSION_MAJOR`, `UWZ_VERSION_MINOR` và `UWZ_VERSION_PATCH`.
+`uwz_version()` trả version string lúc runtime. Dùng header và library cùng một
+release.
+
+## Opaque handle
+
+| Handle               | Đại diện                                |
+| -------------------- | --------------------------------------- |
+| `uwz_app`            | Một application, listener và event loop |
+| `uwz_request`        | Request view trong callback             |
+| `uwz_response`       | Response writer cho một request         |
+| `uwz_websocket`      | Một connection WebSocket đã upgrade     |
+| `uwz_async_response` | Completion token copyable một lần       |
+
+Coi mọi handle là opaque. Layout và size của chúng không thuộc ABI.
+
+## Kiểu value
+
+```c
+typedef struct uwz_slice {
+    const uint8_t *data;
+    size_t length;
+} uwz_slice;
+```
+
+Slice độ dài zero có thể dùng data `NULL`. Slice không rỗng chỉ được mượn trong
+call, trừ khi registration function copy tường minh. `uwz_app_route` copy path;
+`user_data` vẫn do caller sở hữu.
+
+`uwz_ws_behavior` bị freeze cho ABI version 1.x:
+
+| Field              | Type                     | Ý nghĩa                           |
+| ------------------ | ------------------------ | --------------------------------- |
+| `upgrade`          | `uwz_ws_upgrade_handler` | Authorize trước upgrade           |
+| `open`             | `uwz_ws_open_handler`    | Gọi sau upgrade                   |
+| `message`          | `uwz_ws_message_handler` | Gọi mỗi complete message          |
+| `drain`            | `uwz_ws_event_handler`   | Gọi khi backpressure giảm         |
+| `close`            | `uwz_ws_event_handler`   | Gọi tối đa một lần                |
+| `user_data`        | `void *`                 | Pointer do caller sở hữu          |
+| `compression`      | `uwz_ws_compression`     | Disabled hoặc per-message deflate |
+| `max_frame_size`   | `uint64_t`               | Bound frame encode                |
+| `max_message_size` | `uint64_t`               | Bound message decode              |
+
+Field order, field type và size của struct không được đổi trong ABI 1.x. Behavior
+mới dùng entry point mới, không thêm field.
+
+## Enum
+
+| Enum                    | Giá trị                                                                                                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uwz_error`             | `UWZ_OK`, `UWZ_ERROR_INVALID_ARGUMENT`, `UWZ_ERROR_OUT_OF_MEMORY`, `UWZ_ERROR_INVALID_STATE`, `UWZ_ERROR_ALREADY_EXISTS`, `UWZ_ERROR_CAPACITY`, `UWZ_ERROR_WOULD_BLOCK`, `UWZ_ERROR_PROTOCOL`, `UWZ_ERROR_IO`, `UWZ_ERROR_UNSUPPORTED`, `UWZ_ERROR_INTERNAL` |
+| `uwz_http_method`       | `UWZ_HTTP_GET`, `UWZ_HTTP_HEAD`, `UWZ_HTTP_POST`, `UWZ_HTTP_PUT`, `UWZ_HTTP_DELETE`, `UWZ_HTTP_PATCH`, `UWZ_HTTP_OPTIONS`, `UWZ_HTTP_ANY`, `UWZ_HTTP_QUERY`, `UWZ_HTTP_TRACE`                                                                                |
+| `uwz_handler_result`    | `UWZ_HANDLER_COMPLETE`, `UWZ_HANDLER_PENDING`                                                                                                                                                                                                                |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_CONTINUE`, `UWZ_MIDDLEWARE_COMPLETE`, reserved `UWZ_MIDDLEWARE_PENDING`                                                                                                                                                                      |
+| `uwz_ws_opcode`         | `UWZ_WS_TEXT`, `UWZ_WS_BINARY`, `UWZ_WS_CLOSE`, `UWZ_WS_PING`, `UWZ_WS_PONG`                                                                                                                                                                                 |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_DISABLED`, `UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE`                                                                                                                                                                                       |
+
+`UWZ_MIDDLEWARE_PENDING` là reserved. Middleware là synchronous, nên value này fail
+closed.
+
+## Capacity cố định
+
+| Macro                       | Giá trị | Ý nghĩa                     |
+| --------------------------- | ------: | --------------------------- |
+| `UWZ_MAX_ROUTES`            |    `64` | Route path được copy        |
+| `UWZ_MAX_MIDDLEWARE`        |    `32` | Ordered middleware callback |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |    `16` | Inline route capture        |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` |  `2048` | Một route path              |
+
+C application được tạo với 1.024 connection. Header không có entry point để đổi
+capacity đó; dùng Zig API khi deployment cần slab khác.
+
+## Nhóm function
+
+| Group          | Function                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App lifecycle  | `uwz_app_create`, `uwz_app_create_tls`, `uwz_app_create_http3`, `uwz_app_create_tls_ephemeral`, `uwz_app_create_http3_ephemeral`, `uwz_app_shutdown`, `uwz_app_destroy`                                           |
+| Registration   | `uwz_app_route`, `uwz_app_route_async`, `uwz_app_use`, `uwz_app_ws`                                                                                                                                               |
+| Startup        | `uwz_app_listen`, `uwz_app_listen_udp`, `uwz_app_run`, `uwz_app_publish`                                                                                                                                          |
+| Request        | `uwz_request_method`, `uwz_request_target`, `uwz_request_path`, `uwz_request_query`, `uwz_request_body`, `uwz_request_header`, `uwz_request_header_count`, `uwz_request_parameter`, `uwz_request_parameter_count` |
+| Response       | `uwz_response_end`, `uwz_response_end_with_headers`, `uwz_response_begin_chunked`, `uwz_response_write_chunk`, `uwz_response_end_chunks`                                                                          |
+| Async response | `uwz_async_response_end`, `uwz_async_response_end_with_headers`                                                                                                                                                   |
+| WebSocket      | `uwz_websocket_send`, `uwz_websocket_send_close`, `uwz_websocket_buffered_amount`, `uwz_websocket_subscribe`, `uwz_websocket_unsubscribe`, `uwz_websocket_publish`, `uwz_websocket_terminate`                     |
+
+## Route C tối thiểu
+
+```c src/main.c
+#include <uWebZockets.h>
+
+static void hello(
+    const uwz_request *request,
+    uwz_response *response,
+    void *user_data
+) {
+    (void)request;
+    (void)user_data;
+
+    uwz_slice status = { .data = (const uint8_t *)"200 OK", .length = 6 };
+    uwz_slice body = { .data = (const uint8_t *)"hello", .length = 5 };
+    uwz_response_end(response, status, body);
+}
+
+int main(void) {
+    uwz_app *app = NULL;
+    if (uwz_app_create(&app) != UWZ_OK) return 1;
+
+    if (uwz_app_route(app, UWZ_HTTP_GET, "/", 1, hello, NULL) != UWZ_OK) {
+        uwz_app_destroy(&app);
+        return 1;
+    }
+
+    if (uwz_app_listen(app, "0.0.0.0", 7, 3000) != UWZ_OK) {
+        uwz_app_destroy(&app);
+        return 1;
+    }
+
+    uwz_error result = uwz_app_run(app);
+    uwz_app_destroy(&app);
+    return result == UWZ_OK ? 0 : 1;
+}
+```
+
+`uwz_app_create` yêu cầu `*out_app` là `NULL`; value non-`NULL` bị từ chối để
+không ghi đè live handle. `uwz_app_destroy` ghi `NULL` qua handle khi thành công.
+
+## Quy tắc lifetime
+
+| Value                     | Có hiệu lực đến                                |
+| ------------------------- | ---------------------------------------------- |
+| `uwz_request` pointer     | Handler trả về                                 |
+| `uwz_response` pointer    | Handler trả về, trừ khi complete async         |
+| `uwz_async_response` copy | Completion hoặc app shutdown                   |
+| Route path                | Copy lúc registration                          |
+| `user_data`               | Caller sở hữu; giữ sống tới khi callback drain |
+| `uwz_websocket` pointer   | Callback connection hoặc event sau trên nó     |
+
+Callback trả `UWZ_HANDLER_PENDING` phải copy toàn bộ struct `uwz_async_response`
+vào storage của caller. Token gắn với event loop và invalid sau khi app destroy.
+
+## C ABI không cung cấp gì
+
+| Zig surface                                         | C ABI status                           |
+| --------------------------------------------------- | -------------------------------------- |
+| `ServerConfig` và compile-time capacity             | Không cung cấp; C app capacity cố định |
+| `uz.schema`                                         | Không cung cấp                         |
+| `uz.json_rpc`                                       | Không cung cấp                         |
+| `uz.client`                                         | Không cung cấp                         |
+| HTTP/2 frame, HPACK, HTTP/3 extension, WebTransport | Không cung cấp                         |
+| mTLS                                                | Không cung cấp                         |
+| WebSocket compression                               | Cung cấp theo route                    |
+| Async HTTP route                                    | Cung cấp                               |
+
+Dùng Zig API khi application cần một trong các surface này.
+
+## Tiếp theo
+
+- [Design rules cho consumer](/docs/type-safety/design-rules) trình bày ownership
+  tại application boundary.
+- [Ownership và lifetime](/docs/concepts/ownership-and-lifetimes) giải thích
+  borrowed-view model.
+- [HTTP limits](/docs/http/limits) liệt kê giới hạn dùng chung với Zig API.

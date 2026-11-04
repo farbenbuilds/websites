@@ -22,7 +22,7 @@ const Note = struct { text: []const u8 };
 fn create(req: *uz.Request, res: *uz.Response) void {
     const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
         std.log.warn("json parse failed: {}", .{err});
-        res.end("400 Bad Request", "invalid json") catch {};
+        res.end_best_effort("400 Bad Request", "invalid json");
         return;
     };
     defer parsed.deinit();
@@ -107,7 +107,7 @@ active.
 ```zig
 const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
     std.log.warn("json parse failed: {}", .{err});
-    res.end("400 Bad Request", "invalid json") catch {};
+    res.end_best_effort("400 Bad Request", "invalid json");
     return;
 };
 defer parsed.deinit();
@@ -164,3 +164,5 @@ The streaming route returns a chunked `200 OK` body with 1000 numbers.
 
 Read the [Request API](/docs/http/request) for body access, then
 [streaming responses](/docs/http/streaming) for non-JSON producers.
+[Typed JSON](/docs/type-safety/json) covers parsing into a named Zig type and
+allocator ownership.

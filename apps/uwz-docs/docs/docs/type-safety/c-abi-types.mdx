@@ -1,0 +1,184 @@
+---
+title: C ABI types
+description: Read the opaque handles, slices, enums, frozen structs, and fixed capacities of the C header, and know which Zig surfaces it does not expose.
+sidebar:
+  order: 8
+search:
+  tags: [reference, c-abi]
+---
+
+The C ABI is a high-level server surface. It exposes opaque handles, borrowed
+slices, versioned enums, and fixed-capacity registration. It does not project the
+Zig type system: compile-time capacities, schema validation, JSON-RPC, the
+client, and the low-level protocol modules have no C entry points.
+
+## Header and version
+
+```c
+#include <uWebZockets.h>
+```
+
+The header publishes `UWZ_VERSION_MAJOR`, `UWZ_VERSION_MINOR`, and
+`UWZ_VERSION_PATCH`. `uwz_version()` returns the runtime version string. Use the
+header and library from the same release.
+
+## Opaque handles
+
+| Handle               | Represents                                |
+| -------------------- | ----------------------------------------- |
+| `uwz_app`            | One application, listener, and event loop |
+| `uwz_request`        | A callback-local request view             |
+| `uwz_response`       | The response writer for one request       |
+| `uwz_websocket`      | One upgraded WebSocket connection         |
+| `uwz_async_response` | A copyable one-shot completion token      |
+
+Treat every handle as opaque. Its layout and size are not part of the ABI.
+
+## Value types
+
+```c
+typedef struct uwz_slice {
+    const uint8_t *data;
+    size_t length;
+} uwz_slice;
+```
+
+A zero-length slice may use `NULL` data. A non-empty slice is borrowed only for
+the call unless the registration function explicitly copies it. `uwz_app_route`
+copies the path; `user_data` stays caller-owned.
+
+`uwz_ws_behavior` is frozen for ABI version 1.x:
+
+| Field              | Type                     | Meaning                         |
+| ------------------ | ------------------------ | ------------------------------- |
+| `upgrade`          | `uwz_ws_upgrade_handler` | Authorize before the upgrade    |
+| `open`             | `uwz_ws_open_handler`    | Called after the upgrade        |
+| `message`          | `uwz_ws_message_handler` | Called per complete message     |
+| `drain`            | `uwz_ws_event_handler`   | Called when backpressure clears |
+| `close`            | `uwz_ws_event_handler`   | Called at most once             |
+| `user_data`        | `void *`                 | Caller-owned pointer            |
+| `compression`      | `uwz_ws_compression`     | Disabled or per-message deflate |
+| `max_frame_size`   | `uint64_t`               | Encoded frame bound             |
+| `max_message_size` | `uint64_t`               | Decoded message bound           |
+
+The struct's field order, field types, and size must not change in ABI 1.x. New
+behavior uses new entry points, not new fields.
+
+## Enums
+
+| Enum                    | Values                                                                                                                                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uwz_error`             | `UWZ_OK`, `UWZ_ERROR_INVALID_ARGUMENT`, `UWZ_ERROR_OUT_OF_MEMORY`, `UWZ_ERROR_INVALID_STATE`, `UWZ_ERROR_ALREADY_EXISTS`, `UWZ_ERROR_CAPACITY`, `UWZ_ERROR_WOULD_BLOCK`, `UWZ_ERROR_PROTOCOL`, `UWZ_ERROR_IO`, `UWZ_ERROR_UNSUPPORTED`, `UWZ_ERROR_INTERNAL` |
+| `uwz_http_method`       | `UWZ_HTTP_GET`, `UWZ_HTTP_HEAD`, `UWZ_HTTP_POST`, `UWZ_HTTP_PUT`, `UWZ_HTTP_DELETE`, `UWZ_HTTP_PATCH`, `UWZ_HTTP_OPTIONS`, `UWZ_HTTP_ANY`, `UWZ_HTTP_QUERY`, `UWZ_HTTP_TRACE`                                                                                |
+| `uwz_handler_result`    | `UWZ_HANDLER_COMPLETE`, `UWZ_HANDLER_PENDING`                                                                                                                                                                                                                |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_CONTINUE`, `UWZ_MIDDLEWARE_COMPLETE`, reserved `UWZ_MIDDLEWARE_PENDING`                                                                                                                                                                      |
+| `uwz_ws_opcode`         | `UWZ_WS_TEXT`, `UWZ_WS_BINARY`, `UWZ_WS_CLOSE`, `UWZ_WS_PING`, `UWZ_WS_PONG`                                                                                                                                                                                 |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_DISABLED`, `UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE`                                                                                                                                                                                       |
+
+`UWZ_MIDDLEWARE_PENDING` is reserved. Middleware is synchronous, so the value
+fails closed.
+
+## Fixed capacities
+
+| Macro                       |  Value | Meaning                      |
+| --------------------------- | -----: | ---------------------------- |
+| `UWZ_MAX_ROUTES`            |   `64` | Copied route paths           |
+| `UWZ_MAX_MIDDLEWARE`        |   `32` | Ordered middleware callbacks |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |   `16` | Inline route captures        |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` | `2048` | One route path               |
+
+The C application is created with 1,024 connections. The header has no entry
+point to change that capacity; use the Zig API when the deployment needs a
+different slab.
+
+## Function groups
+
+| Group          | Functions                                                                                                                                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App lifecycle  | `uwz_app_create`, `uwz_app_create_tls`, `uwz_app_create_http3`, `uwz_app_create_tls_ephemeral`, `uwz_app_create_http3_ephemeral`, `uwz_app_shutdown`, `uwz_app_destroy`                                           |
+| Registration   | `uwz_app_route`, `uwz_app_route_async`, `uwz_app_use`, `uwz_app_ws`                                                                                                                                               |
+| Startup        | `uwz_app_listen`, `uwz_app_listen_udp`, `uwz_app_run`, `uwz_app_publish`                                                                                                                                          |
+| Request        | `uwz_request_method`, `uwz_request_target`, `uwz_request_path`, `uwz_request_query`, `uwz_request_body`, `uwz_request_header`, `uwz_request_header_count`, `uwz_request_parameter`, `uwz_request_parameter_count` |
+| Response       | `uwz_response_end`, `uwz_response_end_with_headers`, `uwz_response_begin_chunked`, `uwz_response_write_chunk`, `uwz_response_end_chunks`                                                                          |
+| Async response | `uwz_async_response_end`, `uwz_async_response_end_with_headers`                                                                                                                                                   |
+| WebSocket      | `uwz_websocket_send`, `uwz_websocket_send_close`, `uwz_websocket_buffered_amount`, `uwz_websocket_subscribe`, `uwz_websocket_unsubscribe`, `uwz_websocket_publish`, `uwz_websocket_terminate`                     |
+
+## Minimal C route
+
+```c src/main.c
+#include <uWebZockets.h>
+
+static void hello(
+    const uwz_request *request,
+    uwz_response *response,
+    void *user_data
+) {
+    (void)request;
+    (void)user_data;
+
+    uwz_slice status = { .data = (const uint8_t *)"200 OK", .length = 6 };
+    uwz_slice body = { .data = (const uint8_t *)"hello", .length = 5 };
+    uwz_response_end(response, status, body);
+}
+
+int main(void) {
+    uwz_app *app = NULL;
+    if (uwz_app_create(&app) != UWZ_OK) return 1;
+
+    if (uwz_app_route(app, UWZ_HTTP_GET, "/", 1, hello, NULL) != UWZ_OK) {
+        uwz_app_destroy(&app);
+        return 1;
+    }
+
+    if (uwz_app_listen(app, "0.0.0.0", 7, 3000) != UWZ_OK) {
+        uwz_app_destroy(&app);
+        return 1;
+    }
+
+    uwz_error result = uwz_app_run(app);
+    uwz_app_destroy(&app);
+    return result == UWZ_OK ? 0 : 1;
+}
+```
+
+`uwz_app_create` requires `*out_app` to be `NULL`; a non-`NULL` value is rejected
+so a live handle is never overwritten. `uwz_app_destroy` writes `NULL` through
+the handle on success.
+
+## Lifetime rules
+
+| Value                     | Valid until                                       |
+| ------------------------- | ------------------------------------------------- |
+| `uwz_request` pointer     | The handler returns                               |
+| `uwz_response` pointer    | The handler returns, unless it completes async    |
+| `uwz_async_response` copy | Completion or app shutdown                        |
+| Route path                | Copied at registration                            |
+| `user_data`               | Caller-owned; keep it alive until callbacks drain |
+| `uwz_websocket` pointer   | The connection callback or a later event on it    |
+
+A callback that returns `UWZ_HANDLER_PENDING` must copy the entire
+`uwz_async_response` struct into caller-owned storage. The token is bound to its
+event loop and becomes invalid after app destruction.
+
+## What the C ABI does not expose
+
+| Zig surface                                           | C ABI status                      |
+| ----------------------------------------------------- | --------------------------------- |
+| `ServerConfig` and compile-time capacities            | Not exposed; fixed C app capacity |
+| `uz.schema`                                           | Not exposed                       |
+| `uz.json_rpc`                                         | Not exposed                       |
+| `uz.client`                                           | Not exposed                       |
+| HTTP/2 frames, HPACK, HTTP/3 extensions, WebTransport | Not exposed                       |
+| mTLS                                                  | Not exposed                       |
+| WebSocket compression                                 | Exposed per route                 |
+| Async HTTP routes                                     | Exposed                           |
+
+Use the Zig API when the application needs one of these surfaces.
+
+## Next
+
+- [Design rules for consumers](/docs/type-safety/design-rules) covers ownership
+  at the application boundary.
+- [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) explains the
+  borrowed-view model.
+- [HTTP limits](/docs/http/limits) lists the limits shared with the Zig API.

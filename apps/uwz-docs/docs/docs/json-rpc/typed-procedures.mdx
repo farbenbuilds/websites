@@ -1,0 +1,144 @@
+---
+title: Typed procedures
+description: Register typed JSON-RPC procedures, choose between Service and comptime_service, and keep parameter decoding and result serialization bounded.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, json-rpc, schema]
+---
+
+A typed procedure has one named parameter type and one named result type.
+`register_typed` builds an adapter that decodes `params` into the parameter type,
+calls your function, and serializes the returned value. The adapter uses a fixed
+4 KiB stack scratch, so the request path does not allocate.
+
+## Register a typed procedure
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const TransferParams = struct {
+    from: []const u8,
+    to: []const u8,
+    amount: u64,
+};
+
+const TransferResult = struct {
+    accepted: bool,
+    reference: u64,
+};
+
+fn transfer(params: TransferParams) uz.json_rpc.HandlerError!TransferResult {
+    if (params.amount == 0) {
+        return error.InvalidParams;
+    }
+    return .{ .accepted = true, .reference = params.amount };
+}
+
+var rpc = uz.json_rpc.Service{};
+try rpc.register_typed("ledger.transfer", TransferParams, TransferResult, transfer);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+`TransferParams` and `TransferResult` are ordinary structs. The compiler checks
+that the handler returns `HandlerError!TransferResult`; a mismatched result type
+is a compile error, not a runtime surprise.
+
+## Choose a registration method
+
+| Method                   | Handler shape                               | Parameter decoding             | Context               |
+| ------------------------ | ------------------------------------------- | ------------------------------ | --------------------- |
+| `register`               | `fn (*Call) HandlerError!void`              | Your code, your allocator      | None                  |
+| `register_typed`         | `fn (Params) HandlerError!Result`           | Automatic, 4 KiB stack scratch | None                  |
+| `register_context`       | `fn (*anyopaque, *Call) HandlerError!void`  | Your code, your allocator      | Erased pointer        |
+| `register_typed_context` | `fn (*Context, Params) HandlerError!Result` | Automatic, 4 KiB stack scratch | Typed mutable pointer |
+
+`register_typed_context` requires a mutable single-item pointer. Passing a value
+or a const pointer fails at compile time, because the procedure may update the
+state.
+
+## Decode into a value you own
+
+`register_typed` is the short path. When the parameter document does not fit the
+4 KiB scratch, register the raw handler and choose the allocator:
+
+```zig
+fn transfer_large(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(TransferParams, std.heap.page_allocator);
+    defer parsed.deinit();
+
+    const value = try transfer(parsed.value);
+    try call.result(value);
+}
+
+try rpc.register("ledger.transfer_large", transfer_large);
+```
+
+The allocator is explicit. A production handler can pass a bounded arena or a
+fixed buffer instead of the page allocator. `Parsed(T).deinit()` releases the
+whole decoded value exactly once.
+
+`Call.params` is the raw parameter slice borrowed from the request body. It is
+valid only for the duration of the procedure callback. Do not store it.
+
+## Serialize the result once
+
+`Call.result(value)` writes one JSON value into the caller-owned response
+writer. It accepts any value `std.json.Stringify` supports. Calling it twice
+returns `error.ResultAlreadyWritten`.
+
+A result that does not fit the response buffer returns `error.ResultTooLarge`.
+The dispatcher converts that failure into a `-32603` internal error when the
+error object still fits. Raise `uz.json_rpc.configured_service` response capacity
+for large successful payloads.
+
+## Use compile-time dispatch
+
+`comptime_service` builds a collision-free jump table from a fixed procedure
+list. There is no registration step, no copied method storage, and no runtime
+lookup scan.
+
+```zig
+const procedures = [_]uz.json_rpc.StaticProcedure{
+    .{ .method = "ledger.transfer", .handler = transfer_large },
+};
+
+const StaticRpc = uz.json_rpc.comptime_service(&procedures);
+var rpc = StaticRpc{};
+
+var output: [16 * 1024]u8 = undefined;
+const body = try rpc.dispatch(input, &output);
+```
+
+The procedure list is validated at compile time: an empty list, a duplicate
+method name, an invalid name, or a table that cannot be seeded fails the build.
+The generated type has `dispatch`, `dispatch_with_signal`, and
+`response_buffer`, but no `register*` or `seal` methods.
+
+:::warning[comptime_service is dispatch-only]
+`App.rpc` requires a service with `dispatch`, `response_buffer`, and `seal`. It
+rejects a `comptime_service` type at compile time. Use `Service` or
+`configured_service` for a mounted HTTP route, or call `dispatch` yourself.
+:::
+
+## Parameter lifetime
+
+| Value                           | Valid until                         |
+| ------------------------------- | ----------------------------------- |
+| `Call.params`                   | The procedure callback returns      |
+| `Parsed(T)` from `parse_params` | `Parsed(T).deinit()`                |
+| A typed parameter value         | The typed handler returns           |
+| A returned result value         | Serialized before the callback ends |
+
+Do not retain a parameter slice after the callback. Copy it with an explicit
+allocator when the value must outlive the request.
+
+## Next
+
+- [Context and custom decoding](/docs/json-rpc/context-and-decoding) carries
+  application state into a procedure.
+- [JSON-RPC errors](/docs/json-rpc/errors) turns `HandlerError` values into
+  protocol errors.
+- [JSON-RPC capacities](/docs/json-rpc/capacities) sizes the service for large
+  payloads.

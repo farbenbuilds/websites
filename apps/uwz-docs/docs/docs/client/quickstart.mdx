@@ -1,0 +1,105 @@
+---
+title: Client quickstart
+description: Fetch a route from a running µWebZockets server, read the status and body, and print a failure kind when the request does not complete.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, client]
+---
+
+This tutorial runs one HTTP/1.1 request with `fetch_blocking`. It connects to a
+local server, reads the response, and handles a failure without throwing away the
+reason.
+
+## Prerequisites
+
+- A running µWebZockets server. Start from
+  [Your first HTTP server](/docs/examples/first-http-server) on port 3000.
+- Zig 0.16.0.
+- A second terminal in your client project.
+
+## Write the client
+
+Replace `src/main.zig` in a separate client project with:
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+pub fn main(init: std.process.Init) !void {
+    var storage: uz.client.FetchStorage = .{};
+
+    const outcome = try uz.client.fetch_blocking(init.io, .{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/",
+        .headers = &.{
+            .{ .name = "Accept", .value = "text/plain" },
+        },
+    }, .{
+        .port = 3000,
+        .connect_timeout_ms = 2_000,
+        .read_timeout_ms = 5_000,
+    }, &storage);
+
+    switch (outcome) {
+        .response => |response| {
+            std.log.info("HTTP {d}", .{response.status});
+            std.log.info("body: {s}", .{response.body});
+        },
+        .failure => |failure| {
+            std.log.err("fetch failed ({s}): {s}", .{
+                @tagName(failure.kind),
+                failure.message,
+            });
+        },
+    }
+}
+```
+
+## Run it
+
+```sh
+zig build run
+```
+
+```console
+info: HTTP 200
+info: body: Hello from µWebZockets! Zero allocation achieved.
+```
+
+The exact body depends on the server route. The status and body come from
+`ResponseView`, which borrows the `FetchStorage` value.
+
+## What just happened
+
+`fetch_blocking` created a temporary single-slot client, armed one request, and
+drove the event loop until the callback received an outcome. It then copied the
+response head and body into `storage` and released the temporary client.
+
+| Value          | Meaning                                           |
+| -------------- | ------------------------------------------------- |
+| `FetchStorage` | Caller-owned storage for the response view        |
+| `FetchOptions` | Port, timeouts, optional TLS, and body capacity   |
+| `FetchOutcome` | `.response` or `.failure`                         |
+| `ResponseView` | Status, headers, and body borrowed from `storage` |
+
+## Verify a failure
+
+Stop the server and run the client again:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+The exact message is a static string. The `kind` is the stable category:
+`connect`, `tls`, `protocol`, `timeout`, `closed`, or `capacity`.
+
+## Next
+
+- [fetch_blocking](/docs/client/fetch-blocking) covers the full contract and
+  storage lifetime.
+- [Callback client](/docs/client/callback-client) keeps several requests in
+  flight.
+- [Timeouts and errors](/docs/client/timeouts-and-errors) explains each failure
+  kind.

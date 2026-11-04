@@ -1,0 +1,127 @@
+---
+title: TLS trust
+description: Verify a client connection with an explicit CA bundle, SNI, SAN rules, and TLS 1.3 only, and understand why the client fails closed by default.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, client, tls, security]
+---
+
+BoringSSL ships no default trust store. The client therefore fails closed: a
+verified fetch needs an explicit CA bundle, and `verify = true` with no `ca_path`
+returns an error before a socket is opened. This is deliberate. The client never
+silently trusts the host system store.
+
+## TlsOptions
+
+| Field         | Type            | Default  | Meaning                                          |
+| ------------- | --------------- | -------- | ------------------------------------------------ |
+| `verify`      | `bool`          | `true`   | Verify the chain and the server name             |
+| `ca_path`     | `?[:0]const u8` | `null`   | PEM bundle loaded into the trust store           |
+| `server_name` | `[]const u8`    | required | SNI name and the name checked in the certificate |
+
+`ca_path` is NUL-terminated because BoringSSL receives a C path. A string literal
+works directly; a runtime path must be a sentinel-terminated buffer.
+
+## Verify a server
+
+```zig
+var storage: uz.client.FetchStorage = .{};
+
+const outcome = try uz.client.fetch_blocking(init.io, .{
+    .method = .get,
+    .host = "127.0.0.1",
+    .path = "/health",
+}, .{
+    .port = 8443,
+    .connect_timeout_ms = 2_000,
+    .read_timeout_ms = 5_000,
+    .tls = .{
+        .verify = true,
+        .ca_path = "/etc/ssl/certs/local-ca.pem",
+        .server_name = "localhost",
+    },
+}, &storage);
+```
+
+The TCP connection goes to `127.0.0.1`. SNI and the certificate check use
+`localhost`. The certificate must contain `localhost` in its DNS SANs, and its
+chain must terminate in `local-ca.pem`.
+
+## Name rules
+
+| `server_name` form | Checked against | Notes                                        |
+| ------------------ | --------------- | -------------------------------------------- |
+| DNS name           | DNS SANs        | Subject CN fallback is disabled              |
+| IPv4 literal       | IP SANs         | No DNS lookup                                |
+| IPv6 literal       | IP SANs         | Write the literal without brackets in `host` |
+
+`server_name` is limited to 255 bytes. An empty name returns
+`error.ServerNameEmpty`; a longer name returns `error.ServerNameTooLong`.
+
+## Verification outcomes
+
+| Condition                             | Result                            |
+| ------------------------------------- | --------------------------------- |
+| `verify = true`, no `ca_path`         | `error.CaPathRequired`            |
+| CA path longer than 4096 bytes        | `error.CaPathTooLong`             |
+| CA bundle cannot be loaded            | `error.CertificateLoadFailed`     |
+| Certificate chain is not trusted      | `.tls` failure from the handshake |
+| Certificate name does not match       | `.tls` failure from the handshake |
+| TLS 1.2 only peer                     | `.tls` failure; no fallback       |
+| Different trust policy on same client | `error.TlsConfigurationMismatch`  |
+
+`fetch` returns setup errors as Zig errors. `fetch_blocking` maps them to a
+`.tls` failure with a static message.
+
+## TLS version and ALPN
+
+The client context pins TLS 1.3 as both the minimum and maximum version and
+advertises `http/1.1` through ALPN. A peer that cannot negotiate TLS 1.3 fails
+the handshake instead of falling back. The client does not speak HTTP/2 or
+HTTP/3.
+
+## One context per client
+
+A client caches at most one TLS context. Reusing the client with the same
+`verify` and `ca_path` reuses the context. Changing either value returns
+`error.TlsConfigurationMismatch` so a verification result is never reused under
+different trust rules.
+
+The first TLS fetch creates the context and reads the CA bundle synchronously
+inside `fetch`. Arm that first fetch before `run`, not from a completion
+callback, so the event loop is not blocked by file I/O.
+
+## Development mode
+
+`verify = false` disables chain and name checks. It still uses TLS 1.3 and still
+sends SNI. Use it only with the ephemeral development certificates described in
+[Your first TLS server](/docs/examples/first-tls-server); never ship it.
+
+:::danger[Do not disable verification in production]
+`verify = false` accepts any certificate, including one controlled by an
+attacker. The client has no hostname pinning and no certificate transparency
+check. A production deployment needs a real CA bundle and a matching
+`server_name`.
+:::
+
+## No mutual TLS
+
+The client does not present a certificate and has no client-certificate
+configuration. mTLS is a server-side feature in this version. A service that
+requires client certificates cannot be called by this client.
+
+## Verify the trust path
+
+1. Start a TLS server with a certificate for `localhost`.
+2. Point `ca_path` at the CA that signed it.
+3. Fetch with `server_name = "localhost"`.
+4. Repeat with a different `ca_path` and confirm a `.tls` failure.
+5. Repeat with `server_name = "example.com"` and confirm a `.tls` failure.
+
+## Next
+
+- [Timeouts and errors](/docs/client/timeouts-and-errors) maps the failure kinds.
+- [Client limits](/docs/client/limits) lists the TLS staging bounds.
+- [Your first TLS server](/docs/examples/first-tls-server) covers the server
+  certificate model.

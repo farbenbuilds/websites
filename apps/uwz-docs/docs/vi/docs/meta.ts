@@ -15,5 +15,8 @@ export default defineMeta({
     "websocket",
     "http2",
     "http3",
+    "json-rpc",
+    "type-safety",
+    "client",
   ],
 });

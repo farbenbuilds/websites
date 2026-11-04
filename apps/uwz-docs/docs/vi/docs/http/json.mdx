@@ -22,7 +22,7 @@ const Note = struct { text: []const u8 };
 fn create(req: *uz.Request, res: *uz.Response) void {
     const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
         std.log.warn("json parse failed: {}", .{err});
-        res.end("400 Bad Request", "invalid json") catch {};
+        res.end_best_effort("400 Bad Request", "invalid json");
         return;
     };
     defer parsed.deinit();
@@ -78,7 +78,7 @@ Body cố định được render và đưa vào queue trong một bước. Trê
 đã render không vừa write queue, `json` trả `error.WouldBlock`. Dùng `begin_json`
 khi document có thể vượt queue.
 
-## Response streaming
+## Response streaming [#streaming-responses]
 
 `begin_json()` bắt đầu response `200 OK` chunked với JSON content type và trả
 `JsonStream`. Các write nhỏ coalesce trong stack buffer 4096 byte cố định, nên
@@ -106,7 +106,7 @@ body size không bị giới hạn bởi buffer render.
 ```zig
 const parsed = req.json(Note, std.heap.page_allocator) catch |err| {
     std.log.warn("json parse failed: {}", .{err});
-    res.end("400 Bad Request", "invalid json") catch {};
+    res.end_best_effort("400 Bad Request", "invalid json");
     return;
 };
 defer parsed.deinit();
@@ -126,7 +126,7 @@ handler; framework không tự chọn status.
 `validate_json_detailed` báo issue đầu tiên. [Mô hình type
 safety](/docs/concepts/type-safety) trình bày các khai báo đó.
 
-## Giới hạn kích thước
+## Giới hạn kích thước [#size-limits]
 
 | Ranh giới             | Giới hạn                                      | Kết quả                                     |
 | --------------------- | --------------------------------------------- | ------------------------------------------- |
@@ -162,3 +162,5 @@ Route streaming trả body `200 OK` chunked với 1000 số.
 
 Đọc [Request API](/docs/http/request) cho body access, sau đó
 [response streaming](/docs/http/streaming) cho producer không phải JSON.
+[Typed JSON](/docs/type-safety/json) trình bày parse thành named Zig type và
+allocator ownership.

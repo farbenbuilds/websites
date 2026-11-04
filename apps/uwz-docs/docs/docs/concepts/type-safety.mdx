@@ -62,15 +62,15 @@ fn create_user(req: *uz.Request, res: *uz.Response) void {
         &issue,
     ) catch |err| {
         if (err == error.ConstraintViolation or err == error.MalformedJson) {
-            res.end("422 Unprocessable Entity", @tagName(issue.kind)) catch {};
+            res.end_best_effort("422 Unprocessable Entity", @tagName(issue.kind));
             return;
         }
-        res.end("500 Internal Server Error", "validation failed") catch {};
+        res.end_best_effort("500 Internal Server Error", "validation failed");
         return;
     };
     defer parsed.deinit();
 
-    res.text(parsed.value.name) catch {};
+    res.text(parsed.value.name) catch |err| std.log.err("response failed: {}", .{err});
 }
 ```
 
@@ -176,5 +176,7 @@ producers: the compiler knows the shape before the server starts.
 - [Errors and failure modes](/docs/concepts/errors) turns these error names into
   HTTP statuses and retry decisions.
 - [JSON responses](/docs/http/json) covers the response helpers in task order.
+- [Type safety guide](/docs/type-safety) covers schema validation and typed
+  handlers in depth.
 - [Your first JSON-RPC service](/docs/examples/first-json-rpc-service) builds a
   service end to end.

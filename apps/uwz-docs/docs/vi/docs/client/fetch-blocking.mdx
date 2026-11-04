@@ -1,0 +1,138 @@
+---
+title: fetch_blocking
+description: Chạy một HTTP/1.1 request tới khi xong, đọc response từ storage do caller sở hữu, và phân biệt setup error với failure outcome.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, client]
+---
+
+`fetch_blocking` là đường client ngắn nhất. Nó tạo temporary single-slot client,
+thực hiện một request, copy response vào `FetchStorage` do caller sở hữu và giải
+phóng client. Dùng nó cho health check, one-shot job hoặc test.
+
+## Chữ ký
+
+```zig
+pub fn fetch_blocking(
+    io: std.Io,
+    request: Request,
+    options: FetchOptions,
+    storage: *FetchStorage,
+) !FetchOutcome
+```
+
+| Parameter | Ownership                                  |
+| --------- | ------------------------------------------ |
+| `io`      | Event loop I/O value từ `std.process.Init` |
+| `request` | Mượn tới khi call trả về                   |
+| `options` | Copy theo value                            |
+| `storage` | Caller sở hữu; view trả về mượn nó         |
+
+`fetch_blocking` dùng một slot, nên không thể làm cạn in-flight capacity. Nó vẫn
+có thể thất bại vì request field, host address, TLS configuration hoặc response size.
+
+## Đọc response
+
+```zig
+var storage: uz.client.FetchStorage = .{};
+
+const outcome = try uz.client.fetch_blocking(init.io, .{
+    .method = .get,
+    .host = "127.0.0.1",
+    .path = "/health",
+    .headers = &.{
+        .{ .name = "Accept", .value = "application/json" },
+    },
+}, .{
+    .port = 8080,
+    .connect_timeout_ms = 1_000,
+    .read_timeout_ms = 3_000,
+}, &storage);
+
+switch (outcome) {
+    .response => |response| {
+        if (response.status != 200) {
+            std.log.warn("unexpected status {d}", .{response.status});
+            return;
+        }
+        for (response.headers) |header| {
+            std.log.debug("{s}: {s}", .{ header.name, header.value });
+        }
+        std.log.info("body: {s}", .{response.body});
+    },
+    .failure => |failure| {
+        std.log.err("fetch failed ({s}): {s}", .{
+            @tagName(failure.kind),
+            failure.message,
+        });
+    },
+}
+```
+
+`response.headers` và `response.body` trỏ vào `storage`. Chúng có hiệu lực tới khi
+`storage` được dùng lại hoặc ra khỏi scope.
+
+## Bố cục storage
+
+| Field     | Capacity                       |
+| --------- | ------------------------------ |
+| `headers` | 64 giá trị `Header`            |
+| `head`    | 16 KiB cho status line và head |
+| `body`    | 64 KiB body đã decode          |
+
+`FetchStorage` là value lớn. Giữ nó trên stack của function sở hữu fetch, hoặc
+trong field ổn định. Không trả `ResponseView` mượn `FetchStorage` local.
+
+View không vừa storage trở thành `.capacity` failure với message
+`response exceeded fetch storage`.
+
+## Outcome và lỗi
+
+`fetch_blocking` trả Zig error khi temporary client không tạo được hoặc loop fail.
+Request setup failure trở thành `failure` outcome:
+
+| Failure kind | Nguyên nhân setup                                                              |
+| ------------ | ------------------------------------------------------------------------------ |
+| `.tls`       | Thiếu CA path, CA bundle hỏng, context hoặc session fail, server name sai      |
+| `.capacity`  | Response body capacity trên 64 KiB, hoặc view copy không vừa                   |
+| `.connect`   | Host không phải numeric IPv4 hoặc IPv6 address                                 |
+| `.protocol`  | Path, host, header name hoặc value không hợp lệ, reserved header, head quá lớn |
+| `.closed`    | Request chưa start hoặc peer đóng sớm                                          |
+| `.timeout`   | Deadline hết sau khi I/O bắt đầu                                               |
+
+`message` là static string sống suốt process. An toàn để log sau khi call trả về.
+
+## Khi nào dùng
+
+| Nhu cầu                               | Dùng                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------- |
+| Một request và result đơn giản        | `fetch_blocking`                                                       |
+| Nhiều request in-flight               | `client(N)` và `run`                                                   |
+| Fetch await trong server callback     | Không hỗ trợ; client sở hữu loop riêng. Dùng thread hoặc process riêng |
+| Client sống lâu với TLS context cache | `client(N)`                                                            |
+
+`fetch_blocking` tạo và destroy client mỗi call. Với fetch lặp lại, callback client
+dùng lại slot và một TLS context.
+
+## Kiểm tra
+
+Chạy chương trình với server local và kiểm tra status cùng body. Server không chạy
+tạo:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+Host name thay vì address tạo:
+
+```console
+error: fetch failed (connect): host is not a numeric address
+```
+
+## Tiếp theo
+
+- [Callback client](/docs/client/callback-client) trình bày in-flight capacity và
+  slot reuse.
+- [Client limits](/docs/client/limits) liệt kê storage bound.
+- [TLS trust](/docs/client/tls-trust) thêm verification.

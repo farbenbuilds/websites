@@ -1,0 +1,124 @@
+---
+title: Tin cậy TLS
+description: Verify client connection bằng CA bundle tường minh, SNI, SAN rule và chỉ TLS 1.3, và hiểu vì sao client fail closed mặc định.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, client, tls, security]
+---
+
+BoringSSL không ship default trust store. Vì vậy client fail closed: verified fetch
+cần CA bundle tường minh, và `verify = true` không có `ca_path` trả error trước khi
+socket mở. Đây là có chủ đích. Client không bao giờ âm thầm tin host system store.
+
+## TlsOptions
+
+| Field         | Type            | Default  | Ý nghĩa                                       |
+| ------------- | --------------- | -------- | --------------------------------------------- |
+| `verify`      | `bool`          | `true`   | Verify chain và server name                   |
+| `ca_path`     | `?[:0]const u8` | `null`   | PEM bundle load vào trust store               |
+| `server_name` | `[]const u8`    | bắt buộc | SNI name và name được check trong certificate |
+
+`ca_path` NUL-terminated vì BoringSSL nhận C path. String literal dùng trực tiếp
+được; runtime path phải là sentinel-terminated buffer.
+
+## Verify server
+
+```zig
+var storage: uz.client.FetchStorage = .{};
+
+const outcome = try uz.client.fetch_blocking(init.io, .{
+    .method = .get,
+    .host = "127.0.0.1",
+    .path = "/health",
+}, .{
+    .port = 8443,
+    .connect_timeout_ms = 2_000,
+    .read_timeout_ms = 5_000,
+    .tls = .{
+        .verify = true,
+        .ca_path = "/etc/ssl/certs/local-ca.pem",
+        .server_name = "localhost",
+    },
+}, &storage);
+```
+
+TCP connection đi tới `127.0.0.1`. SNI và certificate check dùng `localhost`.
+Certificate phải chứa `localhost` trong DNS SAN, và chain phải kết thúc ở
+`local-ca.pem`.
+
+## Quy tắc name
+
+| Dạng `server_name` | Check với | Ghi chú                                 |
+| ------------------ | --------- | --------------------------------------- |
+| DNS name           | DNS SAN   | Subject CN fallback bị tắt              |
+| IPv4 literal       | IP SAN    | Không DNS lookup                        |
+| IPv6 literal       | IP SAN    | Viết literal không bracket trong `host` |
+
+`server_name` giới hạn 255 byte. Name rỗng trả `error.ServerNameEmpty`; dài hơn trả
+`error.ServerNameTooLong`.
+
+## Kết quả verification
+
+| Điều kiện                           | Kết quả                          |
+| ----------------------------------- | -------------------------------- |
+| `verify = true`, không có `ca_path` | `error.CaPathRequired`           |
+| CA path dài hơn 4096 byte           | `error.CaPathTooLong`            |
+| CA bundle không load được           | `error.CertificateLoadFailed`    |
+| Chain không được tin                | `.tls` failure từ handshake      |
+| Certificate name không khớp         | `.tls` failure từ handshake      |
+| Peer chỉ có TLS 1.2                 | `.tls` failure; không fallback   |
+| Trust policy khác trên cùng client  | `error.TlsConfigurationMismatch` |
+
+`fetch` trả setup error dưới dạng Zig error. `fetch_blocking` map chúng thành
+`.tls` failure với static message.
+
+## TLS version và ALPN
+
+Client context pin TLS 1.3 làm cả minimum và maximum version, và quảng bá
+`http/1.1` qua ALPN. Peer không negotiate được TLS 1.3 sẽ fail handshake thay vì
+fallback. Client không nói HTTP/2 hay HTTP/3.
+
+## Một context cho mỗi client
+
+Client cache tối đa một TLS context. Dùng lại client với cùng `verify` và
+`ca_path` sẽ dùng lại context. Đổi một trong hai trả
+`error.TlsConfigurationMismatch` để verification result không bị dùng lại dưới
+trust rule khác.
+
+TLS fetch đầu tiên tạo context và đọc CA bundle synchronously bên trong `fetch`.
+Chuẩn bị fetch đó trước `run`, không phải từ completion callback, để event loop không bị
+block bởi file I/O.
+
+## Chế độ development
+
+`verify = false` tắt chain và name check. Nó vẫn dùng TLS 1.3 và vẫn gửi SNI. Chỉ
+dùng với ephemeral development certificate trong
+[Your first TLS server](/docs/examples/first-tls-server); không ship production.
+
+:::danger[Không tắt verification trong production]
+`verify = false` chấp nhận mọi certificate, kể cả certificate do attacker kiểm
+soát. Client không có hostname pinning và không có certificate transparency check.
+Deployment production cần CA bundle thật và `server_name` khớp.
+:::
+
+## Không hỗ trợ mutual TLS
+
+Client không trình certificate và không có client-certificate configuration. mTLS
+là server-side feature trong version này. Service yêu cầu client certificate không
+thể được gọi bởi client này.
+
+## Kiểm tra đường trust
+
+1. Start TLS server với certificate cho `localhost`.
+2. Trỏ `ca_path` tới CA đã ký nó.
+3. Fetch với `server_name = "localhost"`.
+4. Lặp lại với `ca_path` khác và xác nhận `.tls` failure.
+5. Lặp lại với `server_name = "example.com"` và xác nhận `.tls` failure.
+
+## Tiếp theo
+
+- [Timeouts và errors](/docs/client/timeouts-and-errors) map failure kind.
+- [Client limits](/docs/client/limits) liệt kê TLS staging bound.
+- [Your first TLS server](/docs/examples/first-tls-server) trình bày server
+  certificate model.

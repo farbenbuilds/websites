@@ -96,7 +96,7 @@ batch sai, không procedure nào chạy. Tên method thiếu, trùng hoặc quá
 
 Adapter có kiểu vừa tham số trong 4 KiB. Với kiểu lớn hơn, dùng API cấp thấp
 `register` với `Call.parse_params` và allocator tường minh. Đăng ký procedure
-trước khi `server.rpc` mount service; ví dụ dùng tên method khác vì `math.add`
+trước khi `server.rpc` mount service. Ví dụ dùng tên method khác vì `math.add`
 đã được đăng ký ở trên:
 
 ```zig
@@ -107,7 +107,11 @@ fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
 }
 
 try rpc.register("math.add_large", custom);
+_ = try server.rpc("/rpc", &rpc);
 ```
+
+Thay lệnh mount phía trên bằng cặp lệnh này, hoặc chèn phần đăng ký trước lệnh
+mount. Đăng ký sau khi mount trả `error.RegistryLocked`.
 
 Allocator do caller chọn. Request path vẫn có giới hạn khi procedure dùng lưu
 trữ cố định hoặc allocator có giới hạn.
@@ -135,6 +139,8 @@ loop. Trong nhóm worker, tạo một service cho mỗi worker và mount trong c
 
 - [TLS server đầu tiên](/docs/examples/first-tls-server) phục vụ cùng
   route qua HTTPS.
-- [Ví dụ](/docs/examples) liệt kê bước
-  `rpc_server`.
+- [Testing một JSON-RPC service](/docs/json-rpc/testing) trình bày test dispatcher
+  và route.
+- [JSON-RPC 2.0](/docs/json-rpc) trình bày batch, error, capacity và worker
+  deployment.
 - [FAQ](/docs/getting-started/faq) bao gồm lưu ý batch.

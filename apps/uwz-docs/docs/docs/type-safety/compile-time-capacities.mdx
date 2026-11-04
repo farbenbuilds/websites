@@ -1,0 +1,137 @@
+---
+title: Compile-time capacities
+description: Choose the capacities that size the generated application type, read the exact defaults, and see why runtime configuration is rejected.
+sidebar:
+  order: 6
+search:
+  tags: [concept, capacity]
+---
+
+Capacities are not settings applied to a running server. They size the generated
+application type: the connection pool, request buffers, write queues, WebSocket
+message regions, router tables, and protocol sessions. The compiler evaluates the
+plan, and startup performs one allocation for the whole slab.
+
+## Application constructors
+
+| Constructor                                               | Capacities it fixes                                     |
+| --------------------------------------------------------- | ------------------------------------------------------- |
+| `uz.App(N)`                                               | `N` connections, 16 KiB WebSocket message, 64 KiB queue |
+| `uz.ConfiguredApp(N, message, queue)`                     | Connections, WebSocket message, write queue             |
+| `uz.ConfiguredAppWithTimeout(N, message, queue, timeout)` | The same three plus the idle timeout                    |
+| `uz.Server.builder(io)`                                   | A compile-time `ServerConfig` resolved into one slab    |
+| `uz.Server.preset(io, config)`                            | The same, starting from a named preset                  |
+
+The first three return a type. The `Server` builder returns a value factory that
+specializes the type from its configuration.
+
+## Valid and invalid values
+
+| Code                                                        | Result        |
+| ----------------------------------------------------------- | ------------- |
+| `uz.App(128)`                                               | Compiles      |
+| `const connections = 128; uz.App(connections)`              | Compiles      |
+| `var connections: usize = 128; uz.App(connections)`         | Compile error |
+| `.with_max_body_size(256 * 1024)`                           | Compiles      |
+| `var body: usize = 256 * 1024; .with_max_body_size(body)`   | Compile error |
+| `const config = uz.ServerConfig{ .max_connections = 256 };` | Compiles      |
+
+The argument must be known at compile time. A value loaded from a file,
+environment variable, or command line cannot size the type. If the capacity must
+be chosen at startup, compile the maximum and enforce the smaller operational
+limit separately.
+
+## ServerConfig defaults
+
+| Field                   |  Default | Builder method               |
+| ----------------------- | -------: | ---------------------------- |
+| `max_connections`       |   `1024` | `with_max_clients`           |
+| `max_ws_message_size`   | `16 KiB` | `with_max_ws_message_size`   |
+| `write_queue_size`      | `64 KiB` | `with_write_queue_size`      |
+| `max_body_size`         | `16 KiB` | `with_max_body_size`         |
+| `max_request_line_size` |  `8 KiB` | `with_max_request_line_size` |
+| `max_header_size`       | `16 KiB` | `with_max_header_size`       |
+| `max_header_count`      |     `64` | `with_max_header_count`      |
+| `max_route_nodes`       |    `256` | `with_max_route_nodes`       |
+| `max_pattern_routes`    |     `64` | `with_max_pattern_routes`    |
+| `max_middleware`        |     `32` | `with_max_middleware`        |
+| `idle_timeout_ms`       | `120000` | `with_idle_timeout_ms`       |
+
+The full field list is on [HTTP limits](/docs/http/limits), which covers the
+transport limits that share these fields.
+
+## Plan a slab
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+pub fn main(init: std.process.Init) !void {
+    const planned = uz.Server.builder(init.io)
+        .preset(uz.Presets.microservice)
+        .with_max_body_size(256 * 1024);
+
+    const bytes = try planned.slab_bytes();
+    std.log.info("slab bytes: {d}", .{bytes});
+
+    var server = try planned.build(std.heap.page_allocator);
+    defer server.deinit();
+
+    try server.listen("0.0.0.0", 3000);
+    try server.run();
+}
+```
+
+`slab_bytes()` uses the same plan as `build`, so the reported size and the
+allocated size cannot drift. `build` performs exactly one allocation for the
+slab.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+flowchart LR
+    accTitle: Capacity to slab
+    accDescr: A compile-time ServerConfig is validated, converted into a slab layout, allocated once, and used for the process lifetime.
+    A["ServerConfig const"] --> B["Builder specialization"]
+    B --> C["Validate capacities"]
+    C --> D["required_bytes"]
+    D --> E["One allocation"]
+    E --> F["App value"]
+```
+
+## Presets
+
+| Preset                   | Connections | WebSocket message | Write queue | Request body |
+| ------------------------ | ----------: | ----------------: | ----------: | -----------: |
+| `Presets.microservice`   |         256 |             8 KiB |      16 KiB |       64 KiB |
+| `Presets.websocket_chat` |         512 |            32 KiB |      32 KiB |        4 KiB |
+| `Presets.file_server`    |         128 |             4 KiB |     512 KiB |        8 KiB |
+
+A preset is a `const ServerConfig`. Derive from it with `with_*` calls; each call
+returns a new compile-time configuration.
+
+## Per worker
+
+A cluster creates one slab per worker. The capacity in `ServerConfig` is per
+worker, not for the whole process:
+
+| Deployment           | Slab count        | Connection capacity            |
+| -------------------- | ----------------- | ------------------------------ |
+| Single app           | 1                 | `max_connections`              |
+| Four workers         | 4                 | `4 * max_connections`          |
+| Runtime worker count | Compiled capacity | Active workers each own a slab |
+
+See [Cluster model](/docs/concepts/cluster-model) for the shared-nothing rule.
+
+## Why runtime configuration is rejected
+
+A runtime value would change the size of arrays embedded in the application type.
+That would require either dynamic allocation on the request path or a second
+generic instantiation per possible value. Both contradict the fixed-slab design.
+The framework chooses the compile-time type and one startup allocation instead.
+
+## Next
+
+- [Error sets and failures](/docs/type-safety/error-sets) maps the validation
+  errors these capacities return.
+- [Capacity model](/docs/concepts/capacity-model) explains the slab layout.
+- [HTTP limits](/docs/http/limits) lists the per-request bounds.

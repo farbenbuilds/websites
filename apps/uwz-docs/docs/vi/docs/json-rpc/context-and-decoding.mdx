@@ -1,0 +1,153 @@
+---
+title: Context và decode tùy chỉnh
+description: Mang state do caller sở hữu vào procedure JSON-RPC, chọn allocator tường minh cho parameter lớn và dừng công việc khi request bị abort.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, json-rpc]
+---
+
+Procedure thường cần state không nằm trong request: một counter, database handle
+hoặc cache theo worker. JSON-RPC mang state đó dưới dạng context pointer tường
+minh. Context do caller sở hữu, không được serialize và framework không chia sẻ
+nó giữa các worker.
+
+## Dùng typed context
+
+`register_typed_context` giữ context type rõ ràng tại call site:
+
+```zig
+const Counter = struct {
+    value: usize = 0,
+};
+
+const AddParams = struct {
+    amount: usize,
+};
+
+const AddResult = struct {
+    value: usize,
+};
+
+fn add(self: *Counter, params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    self.value += params.amount;
+    return .{ .value = self.value };
+}
+
+var counter = Counter{};
+var rpc = uz.json_rpc.Service{};
+try rpc.register_typed_context("counter.add", &counter, AddParams, AddResult, add);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+Context phải là mutable single-item pointer. Compiler từ chối value, const
+pointer, slice, many-pointer hoặc optional. Giá trị được trỏ tới phải sống lâu hơn
+service vì procedure có thể chạy bất kỳ lúc nào cho tới khi app dừng.
+
+## Dùng erased context
+
+`register_context` nhận `*anyopaque` khi context type đã được biết bên trong
+handler:
+
+```zig
+fn add_raw(context: *anyopaque, call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const counter: *Counter = @ptrCast(@alignCast(context));
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+
+    counter.value += parsed.value.amount;
+    try call.result(.{ .value = counter.value });
+}
+
+try rpc.register_context("counter.add_raw", &counter, add_raw);
+```
+
+Cast là cái giá của erasure. Giữ nó trong một hàm nhỏ và không để erased pointer
+lọt vào application code cần typed value.
+
+## So sánh các dạng context
+
+| Form                     | Context type | Check lúc compile | Dùng khi                   |
+| ------------------------ | ------------ | ----------------- | -------------------------- |
+| `register`               | Không        | Không có context  | Procedure không có state   |
+| `register_context`       | `*anyopaque` | Không             | Handler đã có typed cast   |
+| `register_typed_context` | `*Context`   | Có                | Hầu hết procedure có state |
+
+Một context thuộc một procedure. Đăng ký cùng pointer cho nhiều procedure khi
+chúng chia sẻ state, và giữ state trên một event loop.
+
+## Decode bằng allocator có giới hạn
+
+Typed adapter dùng 4 KiB stack scratch. Khi parameter type có thể vượt giới hạn
+đó, tự decode bằng fixed buffer:
+
+```zig
+const BulkParams = struct {
+    items: []const []const u8,
+};
+
+fn bulk(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    var scratch_buffer: [64 * 1024]u8 = undefined;
+    var scratch = std.heap.FixedBufferAllocator.init(&scratch_buffer);
+    const parsed = try call.parse_params(BulkParams, scratch.allocator());
+    defer parsed.deinit();
+
+    try call.result(.{ .count = parsed.value.items.len });
+}
+```
+
+Fixed buffer giữ upper bound rõ ràng. Parameter document lớn hơn buffer fail với
+`error.OutOfMemory`, và dispatcher báo `-32603` vì đây là procedure failure, không
+phải JSON document sai định dạng.
+
+Không dùng `std.heap.page_allocator` cho payload không tin cậy trừ khi request
+body đã bị giới hạn bởi `ServerConfig.max_body_size` và giới hạn đó đủ nhỏ so với
+memory budget. Request body limit là lớp đầu; allocator là lớp thứ hai.
+
+## Dừng khi request không còn
+
+`Call.checkpoint()` kiểm tra transport abort signal. Gọi nó giữa các bước tốn kém
+để client đã ngắt không giữ worker bận:
+
+```zig
+fn scan(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    for (0..1_000_000) |index| {
+        try call.checkpoint();
+        if (index == 999_999) try call.result(.{ .done = true });
+    }
+}
+```
+
+Call bị abort trả `error.Aborted`. HTTP adapter không ghi JSON-RPC response cho
+client đã biến mất. Batch dừng ở phần tử aborted đầu tiên.
+
+## Trả application fault
+
+`Call.fail` ghi code và message rồi trả `error.ApplicationError`:
+
+```zig
+fn withdraw(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    return call.fail(-32001, "insufficient funds");
+}
+```
+
+Dispatcher ghi fault thành JSON-RPC error object khi request cần response.
+Notification trả fault sẽ không gửi body.
+
+## Quy tắc context
+
+| Rule                           | Hệ quả                                      |
+| ------------------------------ | ------------------------------------------- |
+| Context sống lâu hơn service   | Value bị destroy là dangling pointer        |
+| Một service cho một event loop | Gọi cross-thread race trên response storage |
+| Một context cho một procedure  | Chia sẻ là tường minh qua cùng pointer      |
+| Không có hidden global state   | Service không tự tìm state                  |
+| Context không được serialize   | Không đặt secret trong context để log       |
+
+## Tiếp theo
+
+- [JSON-RPC errors](/docs/json-rpc/errors) trình bày standard code và HTTP
+  mapping.
+- [JSON-RPC trong cluster](/docs/json-rpc/cluster-deployment) cho thấy state
+  theo worker.
+- [Typed procedures](/docs/json-rpc/typed-procedures) trình bày adapter 4 KiB.

@@ -1,0 +1,198 @@
+---
+title: Kiểm thử một JSON-RPC service
+description: Test dispatcher như pure function, snapshot protocol error và batch, rồi kiểm tra mounted route bằng curl và h2load.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, json-rpc, operations]
+---
+
+JSON-RPC service có hai test surface. Dispatcher là pure function trên byte, nên
+phần lớn behavior thuộc `zig test`. Mounted route thêm content type, HTTP status và
+response buffer, nên một end-to-end check nhỏ sẽ kiểm tra adapter.
+
+## Test dispatcher
+
+```zig src/rpc_test.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct { left: i64, right: i64 };
+const AddResult = struct { sum: i64 };
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+test "math.add returns a typed result" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3},\"id\":1}",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":5},\"id\":1}",
+        body,
+    );
+}
+```
+
+Service không có listener, socket hay clock. Test chỉ đăng ký procedure nó dùng,
+gọi `dispatch` và assert trên byte chính xác.
+
+Thêm `src/rpc_test.zig` vào test step trong `build.zig`, sau đó chạy:
+
+```sh
+zig build test
+```
+
+## Snapshot lỗi
+
+```zig
+test "unknown method returns -32601 and preserves the id" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.missing\",\"id\":\"req-7\"}",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32601,\"message\":\"Method not found\"},\"id\":\"req-7\"}",
+        body,
+    );
+}
+```
+
+Snapshot chính xác bắt thay đổi về code, message và id format. Nếu error message
+được phép thay đổi, assert trên object đã parse thay vì byte.
+
+## Test notification và batch
+
+```zig
+test "a notification produces no response" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const response = try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3}}",
+        &output,
+    );
+
+    try std.testing.expect(response == null);
+}
+
+test "a batch omits notifications and keeps order" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [2048]u8 = undefined;
+    const body = (try service.dispatch(
+        "[{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3},\"id\":1}," ++
+            "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":4,\"right\":5}}," ++
+            "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":6,\"right\":7},\"id\":3}]",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "[{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":5},\"id\":1}," ++
+            "{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":11},\"id\":3}]",
+        body,
+    );
+}
+```
+
+## Test batch sai định dạng trước side effect
+
+Procedure có side effect chứng minh batch sai định dạng không chạy prefix hợp lệ:
+
+```zig
+var calls: usize = 0;
+
+fn count(_: AddParams) uz.json_rpc.HandlerError!AddResult {
+    calls += 1;
+    return .{ .sum = 0 };
+}
+
+test "a malformed batch runs no procedure" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("count", AddParams, AddResult, count);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "[{\"jsonrpc\":\"2.0\",\"method\":\"count\",\"params\":{\"left\":1,\"right\":1},\"id\":1},",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null}",
+        body,
+    );
+    try std.testing.expectEqual(@as(usize, 0), calls);
+}
+```
+
+`calls` là test state ở file scope. Giữ nó ngoài service.
+
+## Test route đã mount
+
+Start app và kiểm tra transport boundary:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```console
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+
+{"jsonrpc":"2.0","result":{"sum":5},"id":1}
+```
+
+Sau đó bỏ content type và kỳ vọng `415`:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  --data '{"jsonrpc":"2.0","method":"math.add","id":1}'
+```
+
+Adapter từ chối content type thiếu, trùng hoặc sai trước dispatch. Test chỉ gọi
+`dispatch` không bắt được boundary đó.
+
+## Load test
+
+Lưu một request body và điều khiển route bằng load tool hỗ trợ HTTP/1.1:
+
+```sh
+printf '%s' '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}' > rpc.json
+h2load --h1 -n 1000 -c 10 -d rpc.json \
+  -H 'content-type: application/json' \
+  http://127.0.0.1:3000/rpc
+```
+
+Đọc requests per second, latency percentile và status code. JSON-RPC protocol error
+vẫn là HTTP 200, nên counter status code một mình không chứng minh mọi call thành
+công. Sample vài body hoặc thêm client-side assertion.
+
+| Test layer      | Chứng minh                                    |
+| --------------- | --------------------------------------------- |
+| Dispatcher unit | Code, id, batch, notification, byte chính xác |
+| Adapter route   | Content type, HTTP status, response buffer    |
+| Load test       | Throughput, latency, capacity exhaustion      |
+| Cluster smoke   | Mọi worker đăng ký cùng method set            |
+
+## Tiếp theo
+
+- [JSON-RPC errors](/docs/json-rpc/errors) liệt kê code để snapshot.
+- [JSON-RPC capacities](/docs/json-rpc/capacities) giải thích buffer dưới tải.
+- [JSON-RPC trong cluster](/docs/json-rpc/cluster-deployment) thêm smoke test theo
+  worker.

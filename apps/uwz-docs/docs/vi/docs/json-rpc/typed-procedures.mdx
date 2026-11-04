@@ -1,0 +1,141 @@
+---
+title: Procedure có kiểu
+description: Đăng ký procedure JSON-RPC có kiểu, chọn giữa Service và comptime_service, và giữ parameter decode cùng result serialize trong giới hạn.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, json-rpc, schema]
+---
+
+Một typed procedure có một named parameter type và một named result type.
+`register_typed` build adapter để decode `params` thành parameter type, gọi hàm
+của bạn và serialize giá trị trả về. Adapter dùng stack scratch cố định 4 KiB,
+nên request path không allocate.
+
+## Đăng ký một typed procedure
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const TransferParams = struct {
+    from: []const u8,
+    to: []const u8,
+    amount: u64,
+};
+
+const TransferResult = struct {
+    accepted: bool,
+    reference: u64,
+};
+
+fn transfer(params: TransferParams) uz.json_rpc.HandlerError!TransferResult {
+    if (params.amount == 0) {
+        return error.InvalidParams;
+    }
+    return .{ .accepted = true, .reference = params.amount };
+}
+
+var rpc = uz.json_rpc.Service{};
+try rpc.register_typed("ledger.transfer", TransferParams, TransferResult, transfer);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+`TransferParams` và `TransferResult` là struct bình thường. Compiler kiểm tra
+handler trả `HandlerError!TransferResult`; result type không khớp là compile
+error, không phải lỗi runtime.
+
+## Chọn phương thức đăng ký
+
+| Method                   | Handler shape                               | Parameter decoding              | Context               |
+| ------------------------ | ------------------------------------------- | ------------------------------- | --------------------- |
+| `register`               | `fn (*Call) HandlerError!void`              | Code của bạn, allocator của bạn | Không                 |
+| `register_typed`         | `fn (Params) HandlerError!Result`           | Tự động, stack scratch 4 KiB    | Không                 |
+| `register_context`       | `fn (*anyopaque, *Call) HandlerError!void`  | Code của bạn, allocator của bạn | Erased pointer        |
+| `register_typed_context` | `fn (*Context, Params) HandlerError!Result` | Tự động, stack scratch 4 KiB    | Typed mutable pointer |
+
+`register_typed_context` yêu cầu mutable single-item pointer. Truyền value hoặc
+const pointer sẽ fail lúc compile, vì procedure có thể cập nhật state.
+
+## Decode thành value bạn sở hữu
+
+`register_typed` là đường ngắn. Khi parameter document không vừa scratch 4 KiB,
+đăng ký raw handler và chọn allocator:
+
+```zig
+fn transfer_large(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(TransferParams, std.heap.page_allocator);
+    defer parsed.deinit();
+
+    const value = try transfer(parsed.value);
+    try call.result(value);
+}
+
+try rpc.register("ledger.transfer_large", transfer_large);
+```
+
+Allocator là tường minh. Một handler production có thể truyền bounded arena hoặc
+fixed buffer thay vì page allocator. `Parsed(T).deinit()` giải phóng toàn bộ value
+đã decode đúng một lần.
+
+`Call.params` là raw parameter slice mượn từ request body. Nó chỉ có hiệu lực trong
+thời gian procedure callback. Không lưu lại.
+
+## Serialize result một lần
+
+`Call.result(value)` ghi một JSON value vào response writer do caller sở hữu. Nó
+nhận mọi value mà `std.json.Stringify` hỗ trợ. Gọi hai lần trả
+`error.ResultAlreadyWritten`.
+
+Result không vừa response buffer trả `error.ResultTooLarge`. Dispatcher chuyển
+failure đó thành `-32603` internal error khi error object vẫn vừa. Tăng response
+capacity của `uz.json_rpc.configured_service` cho payload thành công lớn.
+
+## Dùng compile-time dispatch
+
+`comptime_service` build một collision-free jump table từ procedure list cố định.
+Không có bước registration, không copy method storage và không scan lookup lúc
+runtime.
+
+```zig
+const procedures = [_]uz.json_rpc.StaticProcedure{
+    .{ .method = "ledger.transfer", .handler = transfer_large },
+};
+
+const StaticRpc = uz.json_rpc.comptime_service(&procedures);
+var rpc = StaticRpc{};
+
+var output: [16 * 1024]u8 = undefined;
+const body = try rpc.dispatch(input, &output);
+```
+
+Procedure list được validate lúc compile: list rỗng, method name trùng, tên không
+hợp lệ hoặc table không thể seed sẽ làm build fail. Type được sinh ra có `dispatch`,
+`dispatch_with_signal` và `response_buffer`, nhưng không có `register*` hay
+`seal`.
+
+:::warning[comptime_service chỉ dùng để dispatch]
+`App.rpc` yêu cầu service có `dispatch`, `response_buffer` và `seal`. Nó từ chối
+type `comptime_service` lúc compile. Dùng `Service` hoặc `configured_service` cho HTTP
+route đã mount, hoặc tự gọi `dispatch`.
+:::
+
+## Vòng đời parameter
+
+| Value                         | Có hiệu lực đến khi                        |
+| ----------------------------- | ------------------------------------------ |
+| `Call.params`                 | Procedure callback trả về                  |
+| `Parsed(T)` từ `parse_params` | `Parsed(T).deinit()`                       |
+| Typed parameter value         | Typed handler trả về                       |
+| Returned result value         | Được serialize trước khi callback kết thúc |
+
+Không giữ parameter slice sau callback. Copy nó bằng allocator tường minh khi
+value phải sống lâu hơn request.
+
+## Tiếp theo
+
+- [Context và custom decoding](/docs/json-rpc/context-and-decoding) mang
+  application state vào procedure.
+- [JSON-RPC errors](/docs/json-rpc/errors) chuyển `HandlerError` thành protocol
+  error.
+- [JSON-RPC capacities](/docs/json-rpc/capacities) chọn kích thước service cho payload lớn.

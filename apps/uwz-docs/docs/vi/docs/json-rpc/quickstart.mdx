@@ -1,0 +1,145 @@
+---
+title: Bắt đầu với JSON-RPC
+description: Đăng ký procedure math.add có kiểu, mount trên App.rpc và kiểm tra một call, một notification và một error bằng curl.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, json-rpc]
+---
+
+Tutorial này mount một service JSON-RPC 2.0 trên `/rpc`. Bạn định nghĩa một
+procedure với named parameter type và named result type, mount service, rồi kiểm
+tra ba response shape mà client thấy: một result, một notification không có body
+và một protocol error.
+
+## Điều kiện cần
+
+- Một dự án Zig 0.16.0 đã phụ thuộc µWebZockets. Bắt đầu từ
+  [Installation](/docs/getting-started/installation) nếu dự án còn trống.
+- `curl` trên cùng host.
+
+## Viết service
+
+Thay `src/main.zig` bằng:
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct {
+    left: i64,
+    right: i64,
+};
+
+const AddResult = struct {
+    sum: i64,
+};
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var rpc = uz.json_rpc.Service{};
+    try rpc.register_typed("math.add", AddParams, AddResult, add);
+    _ = try app.rpc("/rpc", &rpc);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`register_typed` build decoder và result writer lúc compile. `App.rpc` đăng ký một
+`POST` route, lưu service làm route context và seal registry. Đăng ký sau thời
+điểm đó fail với `error.RegistryLocked`.
+
+## Chạy
+
+```sh
+zig build run
+```
+
+## Kiểm tra một call
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```json
+{ "jsonrpc": "2.0", "result": { "sum": 5 }, "id": 1 }
+```
+
+HTTP status là `200 OK` và body là một JSON-RPC result object. Dispatcher giữ
+nguyên raw `id`, nên string id trả về dưới dạng string.
+
+## Kiểm tra notification
+
+Bỏ `id` khỏi request:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3}}'
+```
+
+```console
+HTTP/1.1 204 No Content
+```
+
+Notification không yêu cầu response. Procedure vẫn chạy và adapter không gửi
+body.
+
+## Kiểm tra protocol error
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.multiply","id":2}'
+```
+
+```json
+{ "jsonrpc": "2.0", "error": { "code": -32601, "message": "Method not found" }, "id": 2 }
+```
+
+JSON-RPC error là HTTP 200 với member `error`. Đây không phải HTTP 4xx.
+Adapter dành HTTP 4xx cho transport-level rejection, ví dụ media type không được
+hỗ trợ.
+
+## Dạng response
+
+| Request                               | HTTP status | Body                                |
+| ------------------------------------- | ----------- | ----------------------------------- |
+| Single call có `id`                   | `200`       | Một result hoặc error object        |
+| Single notification                   | `204`       | Rỗng                                |
+| Batch có ít nhất một `id`             | `200`       | Array của result và error object    |
+| Batch chỉ có notification             | `204`       | Rỗng                                |
+| JSON sai định dạng                    | `200`       | Một `-32700` error object           |
+| Thiếu hoặc sai `Content-Type`         | `415`       | Rỗng; có `Accept: application/json` |
+| Parameter document vượt scratch 4 KiB | `200`       | Một `-32603` error object           |
+| Result không vừa response buffer      | `200`       | Một `-32603` error object           |
+| Response document vượt buffer         | `500`       | Rỗng sau khi adapter log error      |
+
+## Điều gì vừa xảy ra
+
+`rpc.register_typed` lưu method name, function pointer và một adapter lúc compile.
+`app.rpc` seal registry và đăng ký HTTP route. Mỗi request mượn body trong thời
+gian call, decode `params` thành `AddParams` và ghi result vào service response
+buffer.
+
+Service mặc định có 64 procedure, 4 KiB method name được copy và response buffer
+16 KiB. [JSON-RPC capacities](/docs/json-rpc/capacities) giải thích cách đổi các
+giới hạn đó.
+
+## Tiếp theo
+
+- [Typed procedures](/docs/json-rpc/typed-procedures) thêm context, custom
+  decoding và compile-time dispatch.
+- [JSON-RPC errors](/docs/json-rpc/errors) map fault thành code và HTTP.
+- [Batches và notifications](/docs/json-rpc/batches-and-notifications) trình bày
+  mixed document và pre-validation.

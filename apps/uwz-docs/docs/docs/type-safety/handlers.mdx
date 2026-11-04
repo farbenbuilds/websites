@@ -1,0 +1,168 @@
+---
+title: Typed handlers
+description: Use the named callback aliases, route registration methods, explicit context pointers, and deferred or middleware signatures without closures.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, http, schema]
+---
+
+A route callback is a named function type, not an interface or a closure. The
+compiler checks the signature when you register the route, and the context
+pointer carries state without a hidden capture.
+
+## Callback aliases
+
+| Alias                    | Exact signature                                                | Use                          |
+| ------------------------ | -------------------------------------------------------------- | ---------------------------- |
+| `uz.Handler`             | `*const fn (*Request, *Response) void`                         | Synchronous route            |
+| `uz.ContextHandler`      | `*const fn (*anyopaque, *Request, *Response) void`             | Synchronous route with state |
+| `uz.AsyncHandler`        | `*const fn (*Request, AsyncResponse) void`                     | Deferred response            |
+| `uz.ContextAsyncHandler` | `*const fn (*anyopaque, *Request, AsyncResponse) void`         | Deferred response with state |
+| `uz.MiddlewareHandler`   | `*const fn (*anyopaque, *Request, *Response) MiddlewareResult` | Ordered middleware           |
+| `uz.StreamProducer`      | `*const fn (*anyopaque, *Response) anyerror!StreamStatus`      | Drain-driven stream          |
+
+`StreamProducer` is the one public alias with `anyerror`, because a producer can
+surface any transport error. The alias still names the shape; it is not a
+runtime type check.
+
+## Register a synchronous route
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`app.get` stores the function pointer. It does not allocate a closure or inspect
+the function at runtime.
+
+## Registration methods
+
+| Method                                                                              | Callback alias           | Notes                            |
+| ----------------------------------------------------------------------------------- | ------------------------ | -------------------------------- |
+| `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `query`, `trace`, `any` | `uz.Handler`             | One method per route             |
+| `route_context`                                                                     | `uz.ContextHandler`      | Context for any method           |
+| `get_context`                                                                       | `uz.ContextHandler`      | GET convenience                  |
+| `route_async`                                                                       | `uz.AsyncHandler`        | Deferred response for any method |
+| `get_async`                                                                         | `uz.AsyncHandler`        | Deferred GET                     |
+| `route_async_context`                                                               | `uz.ContextAsyncHandler` | Deferred response with state     |
+| `get_async_context`                                                                 | `uz.ContextAsyncHandler` | Deferred GET with state          |
+| `use`                                                                               | `uz.MiddlewareHandler`   | Ordered global middleware        |
+| `ws`                                                                                | `uz.WsBehavior`          | WebSocket callback set           |
+| `rpc`                                                                               | Generated service type   | JSON-RPC POST route              |
+
+`route_context` and `route_async_context` are the general forms. The named
+helpers exist for the common GET cases.
+
+## Pass state with a context pointer
+
+```zig
+const Greeting = struct {
+    text: []const u8 = "hello from state",
+};
+
+fn greet(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const greeting: *Greeting = @ptrCast(@alignCast(context));
+    res.text(greeting.text) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+var greeting = Greeting{};
+_ = try app.get_context("/state", &greeting, greet);
+```
+
+The cast is the only unchecked step. Keep it next to the registration and do not
+reuse the erased pointer for a different type. The pointed-to value must outlive
+the app.
+
+## Deferred responses
+
+An async route returns before the response is complete. The callback receives a
+copyable `AsyncResponse` token:
+
+```zig
+fn deferred(_: *uz.Request, response: uz.AsyncResponse) void {
+    response.complete("200 OK", "deferred") catch |err| {
+        std.log.err("completion failed: {}", .{err});
+    };
+}
+```
+
+This excerpt completes immediately; a real deferred handler copies the token,
+performs the work, and calls `complete` on the owning event loop. Completing the
+same token twice returns `error.AsyncResponseAlreadyCompleted`, and completing a
+reused slot returns `error.AsyncResponseExpired`.
+
+## Middleware
+
+```zig
+fn require_auth(
+    _: *anyopaque,
+    req: *uz.Request,
+    res: *uz.Response,
+) uz.MiddlewareResult {
+    if (req.get_unique_header("authorization") == null) {
+        res.end_best_effort("401 Unauthorized", "");
+        return .stop;
+    }
+    return .continue_dispatch;
+}
+
+_ = try app.use(&greeting, require_auth);
+```
+
+Middleware runs in registration order. `.stop` ends the chain, and the response
+must already be complete. A middleware that returns `.continue_dispatch` must
+not start the response.
+
+## WebSocket callbacks
+
+`uz.WsBehavior` holds named callbacks and fixed limits:
+
+| Field     | Type                                               | Called                      |
+| --------- | -------------------------------------------------- | --------------------------- |
+| `upgrade` | `?*const fn (*const Request) bool`                 | Before the upgrade response |
+| `open`    | `?*const fn (*WebSocket) void`                     | After the upgrade is active |
+| `message` | `?*const fn (*WebSocket, []const u8, Opcode) void` | Per complete message        |
+| `drain`   | `?*const fn (*WebSocket) void`                     | When backpressure clears    |
+| `close`   | `?*const fn (*WebSocket) void`                     | At most once                |
+
+The behavior also carries `compression`, `max_frame_size`, `max_message_size`,
+`ping_interval_ms`, and `pong_timeout_ms`. Invalid limits fail route
+registration with `error.InvalidWebSocketLimits`.
+
+## No closures
+
+A Zig function pointer cannot capture local variables. Use one of these instead:
+
+| Need                           | Mechanism                                      |
+| ------------------------------ | ---------------------------------------------- |
+| Per-route configuration        | Context pointer                                |
+| Per-connection state           | `Request` metadata or a connection-owned value |
+| Shared immutable configuration | A module constant or startup value             |
+| Cross-worker state             | Cluster message or external store              |
+
+This restriction is why the callback aliases are small and why the context
+pointer is explicit. It also keeps the hot path free of hidden allocation.
+
+## Next
+
+- [Typed JSON](/docs/type-safety/json) gives the callback a typed body.
+- [Error sets and failures](/docs/type-safety/error-sets) lists the errors these
+  callbacks can return.
+- [Handlers](/docs/http/handlers) covers request and response behavior.

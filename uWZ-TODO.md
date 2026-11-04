@@ -662,44 +662,44 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.8 JSON-RPC
 
-| ID      | Route                                      | Page                        | Type        | Priority | Milestone | Source                 | Status  |
-| ------- | ------------------------------------------ | --------------------------- | ----------- | -------- | --------- | ---------------------- | ------- |
-| UWZ-150 | `/docs/json-rpc`                           | JSON-RPC 2.0                | Index       | P0       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-151 | `/docs/json-rpc/quickstart`                | JSON-RPC quickstart         | Tutorial    | P0       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-152 | `/docs/json-rpc/typed-procedures`          | Typed procedures            | How-to      | P0       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-153 | `/docs/json-rpc/context-and-decoding`      | Context and custom decoding | How-to      | P1       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-154 | `/docs/json-rpc/errors`                    | JSON-RPC errors             | Reference   | P1       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-155 | `/docs/json-rpc/batches-and-notifications` | Batches and notifications   | How-to      | P1       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-156 | `/docs/json-rpc/capacities`                | JSON-RPC capacities         | Reference   | P1       | M3        | `docs/json_rpc.md`     | Planned |
-| UWZ-157 | `/docs/json-rpc/transports`                | Transports and raw dispatch | Explanation | P2       | M5        | `docs/json_rpc.md`     | Planned |
-| UWZ-158 | `/docs/json-rpc/cluster-deployment`        | JSON-RPC in a cluster       | How-to      | P1       | M4        | `docs/architecture.md` | Planned |
-| UWZ-159 | `/docs/json-rpc/testing`                   | Testing a JSON-RPC service  | How-to      | P2       | M5        | `tests/rpc_tests.zig`  | Planned |
+| ID      | Route                                      | Page                        | Type        | Priority | Milestone | Source                 | Status |
+| ------- | ------------------------------------------ | --------------------------- | ----------- | -------- | --------- | ---------------------- | ------ |
+| UWZ-150 | `/docs/json-rpc`                           | JSON-RPC 2.0                | Index       | P0       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-151 | `/docs/json-rpc/quickstart`                | JSON-RPC quickstart         | Tutorial    | P0       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-152 | `/docs/json-rpc/typed-procedures`          | Typed procedures            | How-to      | P0       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-153 | `/docs/json-rpc/context-and-decoding`      | Context and custom decoding | How-to      | P1       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-154 | `/docs/json-rpc/errors`                    | JSON-RPC errors             | Reference   | P1       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-155 | `/docs/json-rpc/batches-and-notifications` | Batches and notifications   | How-to      | P1       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-156 | `/docs/json-rpc/capacities`                | JSON-RPC capacities         | Reference   | P1       | M3        | `docs/json_rpc.md`     | Draft  |
+| UWZ-157 | `/docs/json-rpc/transports`                | Transports and raw dispatch | Explanation | P2       | M5        | `docs/json_rpc.md`     | Draft  |
+| UWZ-158 | `/docs/json-rpc/cluster-deployment`        | JSON-RPC in a cluster       | How-to      | P1       | M4        | `docs/architecture.md` | Draft  |
+| UWZ-159 | `/docs/json-rpc/testing`                   | Testing a JSON-RPC service  | How-to      | P2       | M5        | `tests/rpc_tests.zig`  | Draft  |
 
 ### 5.9 Type safety
 
-| ID      | Route                                       | Page                       | Type        | Priority | Milestone | Source                                 | Status  |
-| ------- | ------------------------------------------- | -------------------------- | ----------- | -------- | --------- | -------------------------------------- | ------- |
-| UWZ-160 | `/docs/type-safety`                         | Type safety                | Index       | P0       | M2        | `CODING_CONVENTION.md`, `src/root.zig` | Planned |
-| UWZ-161 | `/docs/type-safety/handlers`                | Typed handlers             | Explanation | P0       | M2        | `docs/api.md`                          | Planned |
-| UWZ-162 | `/docs/type-safety/json`                    | Typed JSON                 | How-to      | P0       | M2        | `docs/http.md`                         | Planned |
-| UWZ-163 | `/docs/type-safety/schema-validation`       | Schema validation          | How-to      | P1       | M3        | `src/http/schema.zig`                  | Planned |
-| UWZ-164 | `/docs/type-safety/typed-rpc`               | Typed RPC                  | How-to      | P0       | M3        | `docs/json_rpc.md`                     | Planned |
-| UWZ-165 | `/docs/type-safety/compile-time-capacities` | Compile-time capacities    | Explanation | P0       | M2        | `docs/memory_model.md`                 | Planned |
-| UWZ-166 | `/docs/type-safety/error-sets`              | Error sets and failures    | Explanation | P1       | M3        | `src/root.zig`                         | Planned |
-| UWZ-167 | `/docs/type-safety/c-abi-types`             | C ABI types                | Reference   | P1       | M4        | `include/uWebZockets.h`                | Planned |
-| UWZ-168 | `/docs/type-safety/design-rules`            | Design rules for consumers | Explanation | P2       | M5        | `CODING_CONVENTION.md`                 | Planned |
+| ID      | Route                                       | Page                       | Type        | Priority | Milestone | Source                                 | Status |
+| ------- | ------------------------------------------- | -------------------------- | ----------- | -------- | --------- | -------------------------------------- | ------ |
+| UWZ-160 | `/docs/type-safety`                         | Type safety                | Index       | P0       | M2        | `CODING_CONVENTION.md`, `src/root.zig` | Draft  |
+| UWZ-161 | `/docs/type-safety/handlers`                | Typed handlers             | Explanation | P0       | M2        | `docs/api.md`                          | Draft  |
+| UWZ-162 | `/docs/type-safety/json`                    | Typed JSON                 | How-to      | P0       | M2        | `docs/http.md`                         | Draft  |
+| UWZ-163 | `/docs/type-safety/schema-validation`       | Schema validation          | How-to      | P1       | M3        | `src/http/schema.zig`                  | Draft  |
+| UWZ-164 | `/docs/type-safety/typed-rpc`               | Typed RPC                  | How-to      | P0       | M3        | `docs/json_rpc.md`                     | Draft  |
+| UWZ-165 | `/docs/type-safety/compile-time-capacities` | Compile-time capacities    | Explanation | P0       | M2        | `docs/memory_model.md`                 | Draft  |
+| UWZ-166 | `/docs/type-safety/error-sets`              | Error sets and failures    | Explanation | P1       | M3        | `src/root.zig`                         | Draft  |
+| UWZ-167 | `/docs/type-safety/c-abi-types`             | C ABI types                | Reference   | P1       | M4        | `include/uWebZockets.h`                | Draft  |
+| UWZ-168 | `/docs/type-safety/design-rules`            | Design rules for consumers | Explanation | P2       | M5        | `CODING_CONVENTION.md`                 | Draft  |
 
 ### 5.10 Client
 
-| ID      | Route                              | Page                | Type      | Priority | Milestone | Source           | Status  |
-| ------- | ---------------------------------- | ------------------- | --------- | -------- | --------- | ---------------- | ------- |
-| UWZ-170 | `/docs/client`                     | HTTP client         | Index     | P0       | M3        | `docs/client.md` | Planned |
-| UWZ-171 | `/docs/client/quickstart`          | Client quickstart   | Tutorial  | P0       | M3        | `docs/client.md` | Planned |
-| UWZ-172 | `/docs/client/fetch-blocking`      | `fetch_blocking`    | How-to    | P1       | M3        | `docs/client.md` | Planned |
-| UWZ-173 | `/docs/client/callback-client`     | Callback client     | How-to    | P1       | M3        | `docs/client.md` | Planned |
-| UWZ-174 | `/docs/client/tls-trust`           | TLS trust           | How-to    | P1       | M3        | `docs/client.md` | Planned |
-| UWZ-175 | `/docs/client/timeouts-and-errors` | Timeouts and errors | Reference | P1       | M3        | `docs/client.md` | Planned |
-| UWZ-176 | `/docs/client/limits`              | Client limits       | Reference | P2       | M5        | `docs/client.md` | Planned |
+| ID      | Route                              | Page                | Type      | Priority | Milestone | Source           | Status |
+| ------- | ---------------------------------- | ------------------- | --------- | -------- | --------- | ---------------- | ------ |
+| UWZ-170 | `/docs/client`                     | HTTP client         | Index     | P0       | M3        | `docs/client.md` | Draft  |
+| UWZ-171 | `/docs/client/quickstart`          | Client quickstart   | Tutorial  | P0       | M3        | `docs/client.md` | Draft  |
+| UWZ-172 | `/docs/client/fetch-blocking`      | `fetch_blocking`    | How-to    | P1       | M3        | `docs/client.md` | Draft  |
+| UWZ-173 | `/docs/client/callback-client`     | Callback client     | How-to    | P1       | M3        | `docs/client.md` | Draft  |
+| UWZ-174 | `/docs/client/tls-trust`           | TLS trust           | How-to    | P1       | M3        | `docs/client.md` | Draft  |
+| UWZ-175 | `/docs/client/timeouts-and-errors` | Timeouts and errors | Reference | P1       | M3        | `docs/client.md` | Draft  |
+| UWZ-176 | `/docs/client/limits`              | Client limits       | Reference | P2       | M5        | `docs/client.md` | Draft  |
 
 ### 5.11 TLS and security
 
@@ -915,12 +915,21 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Project               |       9 |      1 |       5 |      3 |       0 |
 | **Total**             | **268** | **96** | **125** | **47** | **107** |
 
-The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
-2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
-all 212 English and Vietnamese docs pages, a keyboard and reduced-motion pass,
-page-content axe checks, and the search QA queries for this scope. The native
-Blume sidebar summary has one known upstream `nested-interactive` axe finding; it
-is tracked as framework chrome, not page content.
+The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On 2026-11-03 the built site passed 320 px, 768 px,
+and 1280 px layout checks across all 212 English and Vietnamese docs pages, a
+keyboard and reduced-motion pass, page-content axe checks, and the search QA
+queries for this scope.
+
+On 2026-11-04 the JSON-RPC, type-safety, and client sections added 26 English and
+26 Vietnamese pages, bringing the site to 264 docs pages plus the two landing
+pages (266 pages total). The build passed `blume check`, `blume validate
+--strict`, and `blume audit --fail-on warning`, and all 52 new routes appear in
+`blume-search.json` under the correct locale. The 26 rows remain `Draft` because
+manual 320 px, 768 px, and 1280 px screenshots plus keyboard and axe checks were
+not run in this environment; the pages use the existing docs layout and
+components. The native Blume sidebar summary has one known upstream
+`nested-interactive` axe finding; it is tracked as framework chrome, not page
+content.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -3177,8 +3186,8 @@ Status vocabulary: `Supported`, `Helper-only`, `Experimental`,
 | HTTP/3 metrics parity                                 | Not supported                        | dev log only                                   | `/docs/http3/observability`                  | roadmap                           |
 | WebTransport live                                     | Not supported                        | helper models only                             | `/docs/http3/webtransport`                   | ADR 0001                          |
 | WebTransport helpers                                  | Helper-only                          | `uz.webtransport`, `uz.http3_extensions`       | `/docs/http3/webtransport`                   | source                            |
-| JSON-RPC single call                                  | Supported                            | `Service.dispatch`, `App.rpc`                  | `/docs/json-rpc`                             | `docs/json_rpc.md`                |
-| JSON-RPC batch/notification                           | Supported                            | `Service`                                      | `/docs/json-rpc/batches-and-notifications`   | `docs/json_rpc.md`                |
+| JSON-RPC                                              | 10                                   | 3                                              | 5                                            | 2                                 | 0   |
+| JSON-RPC                                              | 10                                   | 3                                              | 5                                            | 2                                 | 0   |
 | Typed JSON-RPC                                        | Supported                            | `register_typed`                               | `/docs/json-rpc/typed-procedures`            | `docs/json_rpc.md`                |
 | HTTP/1.1 client                                       | Supported, bounded                   | `uz.client`                                    | `/docs/client`                               | `docs/client.md`                  |
 | Client DNS                                            | Not supported                        | numeric hosts only                             | `/docs/client/limits`                        | `docs/client.md`                  |

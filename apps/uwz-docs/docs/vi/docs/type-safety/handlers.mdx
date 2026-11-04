@@ -1,0 +1,166 @@
+---
+title: Handler có kiểu
+description: Dùng callback alias có tên, route registration method, explicit context pointer và deferred hoặc middleware signature mà không cần closure.
+sidebar:
+  order: 2
+search:
+  tags: [how-to, http, schema]
+---
+
+Route callback là một named function type, không phải interface hay closure.
+Compiler kiểm tra signature khi bạn đăng ký route, và context pointer mang state mà
+không cần hidden capture.
+
+## Callback alias
+
+| Alias                    | Signature chính xác                                            | Dùng                       |
+| ------------------------ | -------------------------------------------------------------- | -------------------------- |
+| `uz.Handler`             | `*const fn (*Request, *Response) void`                         | Synchronous route          |
+| `uz.ContextHandler`      | `*const fn (*anyopaque, *Request, *Response) void`             | Synchronous route có state |
+| `uz.AsyncHandler`        | `*const fn (*Request, AsyncResponse) void`                     | Deferred response          |
+| `uz.ContextAsyncHandler` | `*const fn (*anyopaque, *Request, AsyncResponse) void`         | Deferred response có state |
+| `uz.MiddlewareHandler`   | `*const fn (*anyopaque, *Request, *Response) MiddlewareResult` | Ordered middleware         |
+| `uz.StreamProducer`      | `*const fn (*anyopaque, *Response) anyerror!StreamStatus`      | Drain-driven stream        |
+
+`StreamProducer` là alias public duy nhất có `anyerror`, vì producer có thể trả bất
+kỳ transport error nào. Alias vẫn đặt tên cho shape; nó không phải runtime type
+check.
+
+## Đăng ký synchronous route
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", hello);
+    _ = try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`app.get` lưu function pointer. Nó không allocate closure và không inspect function
+lúc runtime.
+
+## Phương thức đăng ký
+
+| Method                                                                              | Callback alias           | Ghi chú                          |
+| ----------------------------------------------------------------------------------- | ------------------------ | -------------------------------- |
+| `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `query`, `trace`, `any` | `uz.Handler`             | Một method cho mỗi route         |
+| `route_context`                                                                     | `uz.ContextHandler`      | Context cho mọi method           |
+| `get_context`                                                                       | `uz.ContextHandler`      | Convenience cho GET              |
+| `route_async`                                                                       | `uz.AsyncHandler`        | Deferred response cho mọi method |
+| `get_async`                                                                         | `uz.AsyncHandler`        | Deferred GET                     |
+| `route_async_context`                                                               | `uz.ContextAsyncHandler` | Deferred response có state       |
+| `get_async_context`                                                                 | `uz.ContextAsyncHandler` | Deferred GET có state            |
+| `use`                                                                               | `uz.MiddlewareHandler`   | Ordered global middleware        |
+| `ws`                                                                                | `uz.WsBehavior`          | WebSocket callback set           |
+| `rpc`                                                                               | Generated service type   | JSON-RPC POST route              |
+
+`route_context` và `route_async_context` là form tổng quát. Các helper có tên tồn
+tại cho trường hợp GET phổ biến.
+
+## Truyền state bằng context pointer
+
+```zig
+const Greeting = struct {
+    text: []const u8 = "hello from state",
+};
+
+fn greet(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const greeting: *Greeting = @ptrCast(@alignCast(context));
+    res.text(greeting.text) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+var greeting = Greeting{};
+_ = try app.get_context("/state", &greeting, greet);
+```
+
+Cast là bước unchecked duy nhất. Giữ nó cạnh registration và không dùng lại erased
+pointer cho type khác. Giá trị được trỏ tới phải sống lâu hơn app.
+
+## Response deferred
+
+Async route trả về trước khi response hoàn tất. Callback nhận token
+`AsyncResponse` có thể copy:
+
+```zig
+fn deferred(_: *uz.Request, response: uz.AsyncResponse) void {
+    response.complete("200 OK", "deferred") catch |err| {
+        std.log.err("completion failed: {}", .{err});
+    };
+}
+```
+
+Đây là đoạn trích complete ngay; deferred handler thật copy token, thực hiện công việc và
+gọi `complete` trên event loop sở hữu. Complete cùng token hai lần trả
+`error.AsyncResponseAlreadyCompleted`, và complete slot đã tái sử dụng trả
+`error.AsyncResponseExpired`.
+
+## Middleware
+
+```zig
+fn require_auth(
+    _: *anyopaque,
+    req: *uz.Request,
+    res: *uz.Response,
+) uz.MiddlewareResult {
+    if (req.get_unique_header("authorization") == null) {
+        res.end_best_effort("401 Unauthorized", "");
+        return .stop;
+    }
+    return .continue_dispatch;
+}
+
+_ = try app.use(&greeting, require_auth);
+```
+
+Middleware chạy theo registration order. `.stop` kết thúc chain, và response phải
+đã complete. Middleware trả `.continue_dispatch` không được bắt đầu response.
+
+## WebSocket callback
+
+`uz.WsBehavior` giữ named callback và giới hạn cố định:
+
+| Field     | Type                                               | Được gọi               |
+| --------- | -------------------------------------------------- | ---------------------- |
+| `upgrade` | `?*const fn (*const Request) bool`                 | Trước upgrade response |
+| `open`    | `?*const fn (*WebSocket) void`                     | Sau khi upgrade active |
+| `message` | `?*const fn (*WebSocket, []const u8, Opcode) void` | Mỗi complete message   |
+| `drain`   | `?*const fn (*WebSocket) void`                     | Khi backpressure giảm  |
+| `close`   | `?*const fn (*WebSocket) void`                     | Tối đa một lần         |
+
+Behavior còn có `compression`, `max_frame_size`, `max_message_size`,
+`ping_interval_ms` và `pong_timeout_ms`. Limit không hợp lệ làm route registration
+fail với `error.InvalidWebSocketLimits`.
+
+## Không có closure
+
+Zig function pointer không capture được biến local. Dùng một trong các cách sau:
+
+| Nhu cầu                        | Cơ chế                                         |
+| ------------------------------ | ---------------------------------------------- |
+| Cấu hình theo route            | Context pointer                                |
+| State theo connection          | `Request` metadata hoặc value thuộc connection |
+| Shared immutable configuration | Module constant hoặc startup value             |
+| State cross-worker             | Cluster message hoặc external store            |
+
+Giới hạn này là lý do callback alias nhỏ và context pointer tường minh. Nó cũng
+giữ hot path không có hidden allocation.
+
+## Tiếp theo
+
+- [Typed JSON](/docs/type-safety/json) cho callback một body có kiểu.
+- [Error sets và failure](/docs/type-safety/error-sets) liệt kê error mà callback
+  có thể trả.
+- [Handlers](/docs/http/handlers) trình bày request và response behavior.

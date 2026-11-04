@@ -1,0 +1,155 @@
+---
+title: Context and custom decoding
+description: Carry caller-owned state into a JSON-RPC procedure, choose an explicit allocator for large parameters, and stop work when a request is aborted.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, json-rpc]
+---
+
+A procedure often needs state that is not in the request: a counter, a database
+handle, or a per-worker cache. JSON-RPC carries that state as an explicit context
+pointer. The context is caller-owned, never serialized, and never shared by the
+framework between workers.
+
+## Use a typed context
+
+`register_typed_context` keeps the context type visible at the call site:
+
+```zig
+const Counter = struct {
+    value: usize = 0,
+};
+
+const AddParams = struct {
+    amount: usize,
+};
+
+const AddResult = struct {
+    value: usize,
+};
+
+fn add(self: *Counter, params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    self.value += params.amount;
+    return .{ .value = self.value };
+}
+
+var counter = Counter{};
+var rpc = uz.json_rpc.Service{};
+try rpc.register_typed_context("counter.add", &counter, AddParams, AddResult, add);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+The context must be a mutable single-item pointer. The compiler rejects a value,
+a const pointer, a slice, a many-pointer, or an optional. The pointed-to value must
+outlive the service because a procedure can run at any time until the app stops.
+
+## Use an erased context
+
+`register_context` accepts `*anyopaque` when the context type is already known
+inside the handler:
+
+```zig
+fn add_raw(context: *anyopaque, call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const counter: *Counter = @ptrCast(@alignCast(context));
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+
+    counter.value += parsed.value.amount;
+    try call.result(.{ .value = counter.value });
+}
+
+try rpc.register_context("counter.add_raw", &counter, add_raw);
+```
+
+The cast is the cost of erasure. Keep it in one small function and do not expose
+the erased pointer to application code that expects a typed value.
+
+## Compare the context forms
+
+| Form                     | Context type | Checked at compile time | Use when                             |
+| ------------------------ | ------------ | ----------------------- | ------------------------------------ |
+| `register`               | None         | No context              | The procedure is stateless           |
+| `register_context`       | `*anyopaque` | No                      | The handler already has a typed cast |
+| `register_typed_context` | `*Context`   | Yes                     | Most stateful procedures             |
+
+One context belongs to one procedure. Register the same pointer for several
+procedures when they share state, and keep the state on one event loop.
+
+## Decode with a bounded allocator
+
+The typed adapter uses 4 KiB of stack scratch. When a parameter type can exceed
+that bound, decode it yourself with a fixed buffer:
+
+```zig
+const BulkParams = struct {
+    items: []const []const u8,
+};
+
+fn bulk(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    var scratch_buffer: [64 * 1024]u8 = undefined;
+    var scratch = std.heap.FixedBufferAllocator.init(&scratch_buffer);
+    const parsed = try call.parse_params(BulkParams, scratch.allocator());
+    defer parsed.deinit();
+
+    try call.result(.{ .count = parsed.value.items.len });
+}
+```
+
+The fixed buffer keeps the upper bound visible. A parameter document larger than
+the buffer fails with `error.OutOfMemory`, which the dispatcher reports as
+`-32603` because it is a procedure failure, not a malformed JSON document.
+
+Do not use `std.heap.page_allocator` for untrusted payloads unless the request
+body is already bounded by `ServerConfig.max_body_size` and that bound is small
+enough for your memory budget. The request body limit is the first defense; the
+allocator is the second.
+
+## Stop when the request is gone
+
+`Call.checkpoint()` checks the transport abort signal. Call it between expensive
+steps so a disconnected client does not keep a worker busy:
+
+```zig
+fn scan(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    for (0..1_000_000) |index| {
+        try call.checkpoint();
+        if (index == 999_999) try call.result(.{ .done = true });
+    }
+}
+```
+
+An aborted call returns `error.Aborted`. The HTTP adapter does not write a
+JSON-RPC response for a client that has already gone away. A batch stops at the
+first aborted element.
+
+## Return an application fault
+
+`Call.fail` records a code and message and returns `error.ApplicationError`:
+
+```zig
+fn withdraw(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    return call.fail(-32001, "insufficient funds");
+}
+```
+
+The dispatcher writes the fault as a JSON-RPC error object when the request
+expects a response. A notification that returns a fault sends no body.
+
+## Context rules
+
+| Rule                         | Consequence                                   |
+| ---------------------------- | --------------------------------------------- |
+| Context outlives the service | A destroyed value is a dangling pointer       |
+| One service per event loop   | Cross-thread calls race on response storage   |
+| One context per procedure    | Sharing is explicit through the same pointer  |
+| No hidden global state       | The service does not discover state by itself |
+| Context is not serialized    | Do not put secrets in a context for logging   |
+
+## Next
+
+- [JSON-RPC errors](/docs/json-rpc/errors) covers standard codes and HTTP
+  mapping.
+- [JSON-RPC in a cluster](/docs/json-rpc/cluster-deployment) shows per-worker
+  state.
+- [Typed procedures](/docs/json-rpc/typed-procedures) covers the 4 KiB adapter.
