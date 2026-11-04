@@ -8,22 +8,22 @@ catalogMode: prefer
 catalog:
   "@astrojs/compiler-rs": 0.5.2
   "@astrojs/svelte": ^9.1.2
-  "@x18n/cli": 0.1.3
-  "@x18n/core": 0.1.3
+  "@x18n/cli": 0.1.8
+  "@x18n/core": 0.1.8
   blume: ^2.2.6
   eslint: 10.14.0
   eslint-plugin-astro: 3.2.1
-  eslint-plugin-svelte: 3.23.1
+  eslint-plugin-svelte: 3.24.0
   lefthook: ^2.2.2
-  oxfmt: 0.75.0
-  oxlint: 1.89.0
+  oxfmt: 0.76.0
+  oxlint: 1.91.0
   svelte: ^5.57.3
   takumi-js: ^2.19.0
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
   # TypeScript 7 yet, so the workspace stays on 6.
   typescript: ^6.0.3
-  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
-  vite-plus: 1.4.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.5.0
+  vite-plus: 1.5.0
 
 # The glibc and musl dev shells share this checkout's node_modules. Install
 # both libc variants so a checkout installed under one shell still has the
@@ -62,25 +62,35 @@ peerDependencyRules:
 runtimeOnFail: ignore
 pmOnFail: ignore
 minimumReleaseAgeExclude:
-  - "@lucide/svelte@1.62.0"
-  - "@oxfmt/binding-android-arm-eabi@0.75.0"
-  - "@oxfmt/binding-android-arm64@0.75.0"
-  - "@oxfmt/binding-darwin-arm64@0.75.0"
-  - "@oxfmt/binding-darwin-x64@0.75.0"
-  - "@oxfmt/binding-freebsd-x64@0.75.0"
-  - "@oxfmt/binding-linux-arm-gnueabihf@0.75.0"
-  - "@oxfmt/binding-linux-arm-musleabihf@0.75.0"
-  - "@oxfmt/binding-linux-arm64-gnu@0.75.0"
-  - "@oxfmt/binding-linux-arm64-musl@0.75.0"
-  - "@oxfmt/binding-linux-ppc64-gnu@0.75.0"
-  - "@oxfmt/binding-linux-riscv64-gnu@0.75.0"
-  - "@oxfmt/binding-linux-riscv64-musl@0.75.0"
-  - "@oxfmt/binding-linux-s390x-gnu@0.75.0"
-  - "@oxfmt/binding-linux-x64-gnu@0.75.0"
-  - "@oxfmt/binding-linux-x64-musl@0.75.0"
-  - "@oxfmt/binding-openharmony-arm64@0.75.0"
-  - "@oxfmt/binding-win32-arm64-msvc@0.75.0"
-  - "@oxfmt/binding-win32-ia32-msvc@0.75.0"
-  - "@oxfmt/binding-win32-x64-msvc@0.75.0"
-  - oxfmt@0.75.0
+  - "@lucide/svelte@1.67.0"
+  - "@oxfmt/binding-android-arm-eabi@0.76.0"
+  - "@oxfmt/binding-android-arm64@0.76.0"
+  - "@oxfmt/binding-darwin-arm64@0.76.0"
+  - "@oxfmt/binding-darwin-x64@0.76.0"
+  - "@oxfmt/binding-freebsd-x64@0.76.0"
+  - "@oxfmt/binding-linux-arm-gnueabihf@0.76.0"
+  - "@oxfmt/binding-linux-arm-musleabihf@0.76.0"
+  - "@oxfmt/binding-linux-arm64-gnu@0.76.0"
+  - "@oxfmt/binding-linux-arm64-musl@0.76.0"
+  - "@oxfmt/binding-linux-ppc64-gnu@0.76.0"
+  - "@oxfmt/binding-linux-riscv64-gnu@0.76.0"
+  - "@oxfmt/binding-linux-riscv64-musl@0.76.0"
+  - "@oxfmt/binding-linux-s390x-gnu@0.76.0"
+  - "@oxfmt/binding-linux-x64-gnu@0.76.0"
+  - "@oxfmt/binding-linux-x64-musl@0.76.0"
+  - "@oxfmt/binding-openharmony-arm64@0.76.0"
+  - "@oxfmt/binding-win32-arm64-msvc@0.76.0"
+  - "@oxfmt/binding-win32-ia32-msvc@0.76.0"
+  - "@oxfmt/binding-win32-x64-msvc@0.76.0"
+  - oxfmt@0.76.0
   - svelte@5.57.3
+  - "@voidzero-dev/vite-plus-core@1.5.0"
+  - "@voidzero-dev/vite-plus-darwin-arm64@1.5.0"
+  - "@voidzero-dev/vite-plus-darwin-x64@1.5.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.5.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.5.0"
+  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.5.0"
+  - "@voidzero-dev/vite-plus-linux-x64-musl@1.5.0"
+  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.5.0"
+  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.5.0"
+  - vite-plus@1.5.0
