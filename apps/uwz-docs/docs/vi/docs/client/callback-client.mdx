@@ -1,0 +1,172 @@
+---
+title: Client callback
+description: Giữ nhiều HTTP/1.1 request in-flight, complete chúng trên event loop và giải phóng mọi slot của client trước deinit.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, client]
+---
+
+`client(N)` trả client type với `N` request slot và một event loop. `fetch` chuẩn bị
+request, `run` điều khiển loop và callback nhận đúng một outcome cho mỗi request. Client
+sở hữu buffer của mọi slot, nên nó phải ở địa chỉ ổn định sau `init`.
+
+## Tạo và điều khiển client
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const MyClient = uz.client.client(4);
+
+const FetchContext = struct {
+    completed: usize = 0,
+    failed: usize = 0,
+
+    fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+        const self: *FetchContext = @ptrCast(@alignCast(context));
+        switch (outcome) {
+            .response => |response| {
+                _ = response;
+                self.completed += 1;
+            },
+            .failure => |failure| {
+                _ = failure;
+                self.failed += 1;
+            },
+        }
+    }
+};
+
+pub fn main(init: std.process.Init) !void {
+    var fetcher = try MyClient.init(init.io);
+    defer fetcher.deinit();
+
+    var context = FetchContext{};
+
+    try fetcher.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/a",
+    }, .{ .port = 8080 }, &context, FetchContext.on_outcome);
+
+    try fetcher.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/b",
+    }, .{ .port = 8080 }, &context, FetchContext.on_outcome);
+
+    try fetcher.run();
+
+    std.log.info("completed {d}, failed {d}", .{
+        context.completed,
+        context.failed,
+    });
+}
+```
+
+Cả hai request được chuẩn bị trước `run`. `run` trả về khi mọi in-flight request đã
+complete.
+
+## Vòng đời slot
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+sequenceDiagram
+    accTitle: Trình tự callback client
+    accDescr: fetch chuẩn bị một slot, run điều khiển loop, callback nhận một outcome và slot trở về free list.
+    participant App
+    participant Client
+    participant Loop
+    participant Peer
+    App->>Client: fetch(request, callback)
+    Client->>Client: acquire free slot
+    App->>Loop: run()
+    Loop->>Peer: connect and write
+    Peer-->>Loop: response bytes
+    Loop->>Client: parse and complete
+    Client->>App: callback(outcome)
+    Client->>Client: release slot
+    Loop-->>App: run returns when inflight is zero
+```
+
+Callback chạy trước khi slot được trả về free list. Callback bắt đầu một follow-up
+fetch cần `max_inflight` đủ chỗ cho cả request đang kết thúc và request mới.
+
+## Capacity
+
+| Bound               | Giá trị                                    |
+| ------------------- | ------------------------------------------ |
+| In-flight request   | `max_inflight`, compile-time               |
+| Slot acquisition    | Free list; không grow                      |
+| Burst vượt capacity | `error.InflightCapacityReached` từ `fetch` |
+
+`max_inflight` phải là compile-time value lớn hơn zero. Giá trị lớn hơn tốn một
+slot cho mỗi request, gồm response head, body, read buffer và timer.
+
+## Quy tắc
+
+| Rule                                           | Hệ quả                                    |
+| ---------------------------------------------- | ----------------------------------------- |
+| Giữ client ở địa chỉ ổn định                   | Copy sau `init` làm hỏng slot state       |
+| Một thread và một event loop                   | Cross-thread completion không được hỗ trợ |
+| Không gọi `run` đệ quy                         | Callback không được điều khiển cùng loop  |
+| Copy hoặc dùng `ResponseView` trong callback   | Slot có thể được dùng lại sau callback    |
+| Giữ request slice sống tới callback            | Builder mượn chúng                        |
+| Điều khiển `run` tới khi trả về trước `deinit` | `deinit` yêu cầu mọi slot idle            |
+
+`deinit` assert không request nào in-flight và mọi slot idle. Debug build sẽ trap
+khi vi phạm; release build vẫn yêu cầu cùng contract.
+
+## Request follow-up
+
+Callback có thể chuẩn bị request khác khi loop đang chạy:
+
+```zig
+fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+    const self: *FetchContext = @ptrCast(@alignCast(context));
+    _ = outcome;
+
+    self.client.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/next",
+    }, .{ .port = 8080 }, self, on_outcome) catch |err| {
+        std.log.err("follow-up fetch failed: {}", .{err});
+    };
+}
+```
+
+`FetchContext` lưu `client: *MyClient`. Follow-up giữ `run` sống tới khi nó
+complete. Nếu client không còn free slot, `fetch` trả
+`error.InflightCapacityReached`; xử lý trong callback thay vì bỏ qua.
+
+Thêm field vào context từ ví dụ trước:
+
+```zig
+const FetchContext = struct {
+    client: *MyClient,
+    completed: usize = 0,
+    failed: usize = 0,
+
+    fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+        // ...
+    }
+};
+```
+
+## TLS context
+
+Một client cache tối đa một TLS context. TLS fetch đầu tiên tạo context và đọc CA
+bundle synchronously bên trong `fetch`. Chuẩn bị fetch đó trước `run`, không phải
+từ completion callback, để loop không block trên file I/O.
+
+Đổi `verify` hoặc `ca_path` giữa các fetch trên cùng client trả
+`error.TlsConfigurationMismatch`. Dùng client riêng cho trust policy khác.
+
+## Tiếp theo
+
+- [TLS trust](/docs/client/tls-trust) trình bày trust policy và SNI.
+- [Timeouts và errors](/docs/client/timeouts-and-errors) giải thích từng failure
+  kind.
+- [Client limits](/docs/client/limits) size slot array.

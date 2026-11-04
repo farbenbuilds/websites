@@ -1,0 +1,177 @@
+---
+title: Callback client
+description: Keep several HTTP/1.1 requests in flight, complete them on the event loop, and release every slot before deinit.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, client]
+---
+
+`client(N)` returns a client type with `N` request slots and one event loop.
+`fetch` arms a request, `run` drives the loop, and a callback receives exactly one
+outcome per request. The client owns every slot buffer, so it must stay at a
+stable address after `init`.
+
+## Create and drive a client
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const MyClient = uz.client.client(4);
+
+const FetchContext = struct {
+    completed: usize = 0,
+    failed: usize = 0,
+
+    fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+        const self: *FetchContext = @ptrCast(@alignCast(context));
+        switch (outcome) {
+            .response => |response| {
+                _ = response;
+                self.completed += 1;
+            },
+            .failure => |failure| {
+                _ = failure;
+                self.failed += 1;
+            },
+        }
+    }
+};
+
+pub fn main(init: std.process.Init) !void {
+    var fetcher = try MyClient.init(init.io);
+    defer fetcher.deinit();
+
+    var context = FetchContext{};
+
+    try fetcher.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/a",
+    }, .{ .port = 8080 }, &context, FetchContext.on_outcome);
+
+    try fetcher.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/b",
+    }, .{ .port = 8080 }, &context, FetchContext.on_outcome);
+
+    try fetcher.run();
+
+    std.log.info("completed {d}, failed {d}", .{
+        context.completed,
+        context.failed,
+    });
+}
+```
+
+Both requests are armed before `run`. `run` returns when every in-flight request
+has completed.
+
+## Slot lifecycle
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+sequenceDiagram
+    accTitle: Callback client sequence
+    accDescr: fetch arms a slot, run drives the loop, the callback receives one outcome, and the slot returns to the free list.
+    participant App
+    participant Client
+    participant Loop
+    participant Peer
+    App->>Client: fetch(request, callback)
+    Client->>Client: acquire free slot
+    App->>Loop: run()
+    Loop->>Peer: connect and write
+    Peer-->>Loop: response bytes
+    Loop->>Client: parse and complete
+    Client->>App: callback(outcome)
+    Client->>Client: release slot
+    Loop-->>App: run returns when inflight is zero
+```
+
+The callback runs before the slot returns to the free list. A callback that
+starts a follow-up fetch needs `max_inflight` to cover both the finishing request
+and the new one.
+
+## Capacity
+
+| Bound                | Value                                        |
+| -------------------- | -------------------------------------------- |
+| In-flight requests   | `max_inflight`, compile-time                 |
+| Slot acquisition     | Free list; no growth                         |
+| Burst above capacity | `error.InflightCapacityReached` from `fetch` |
+
+`max_inflight` must be a compile-time value greater than zero. A larger value
+costs one slot per request, including the response head, body, read buffer, and
+timer.
+
+## Rules
+
+| Rule                                         | Consequence                               |
+| -------------------------------------------- | ----------------------------------------- |
+| Keep the client at a stable address          | Copying after `init` corrupts slot state  |
+| Use one thread and one event loop            | Cross-thread completion is not supported  |
+| Do not call `run` recursively                | A callback must not drive the same loop   |
+| Copy or use `ResponseView` in the callback   | The slot can be reused after the callback |
+| Keep request slices alive until the callback | The builder borrows them                  |
+| Drive `run` until it returns before `deinit` | `deinit` requires every slot idle         |
+
+`deinit` asserts that no request is in flight and every slot is idle. A debug
+build traps on a violation; a release build still requires the same contract.
+
+## Follow-up requests
+
+A callback can arm another request while the loop is running:
+
+```zig
+fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+    const self: *FetchContext = @ptrCast(@alignCast(context));
+    _ = outcome;
+
+    self.client.fetch(.{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/next",
+    }, .{ .port = 8080 }, self, on_outcome) catch |err| {
+        std.log.err("follow-up fetch failed: {}", .{err});
+    };
+}
+```
+
+The `FetchContext` stores `client: *MyClient`. The follow-up keeps `run` alive
+until it completes. If the client has no free slot, `fetch` returns
+`error.InflightCapacityReached`; handle it in the callback rather than ignoring
+it.
+
+Add the field to the context from the previous example:
+
+```zig
+const FetchContext = struct {
+    client: *MyClient,
+    completed: usize = 0,
+    failed: usize = 0,
+
+    fn on_outcome(context: *anyopaque, outcome: uz.client.FetchOutcome) void {
+        // ...
+    }
+};
+```
+
+## TLS context
+
+One client caches at most one TLS context. The first TLS fetch creates the context
+and reads the CA bundle synchronously inside `fetch`. Arm that first fetch before
+`run`, not from a completion callback, so the loop does not block on file I/O.
+
+Changing `verify` or `ca_path` between fetches on the same client returns
+`error.TlsConfigurationMismatch`. Use a separate client for a different trust
+policy.
+
+## Next
+
+- [TLS trust](/docs/client/tls-trust) covers the trust policy and SNI.
+- [Timeouts and errors](/docs/client/timeouts-and-errors) explains each failure
+  kind.
+- [Client limits](/docs/client/limits) sizes the slot arrays.

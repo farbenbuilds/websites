@@ -1,0 +1,119 @@
+---
+title: Client limits
+description: Read every client buffer, in-flight slot, response bound, and TLS staging value, and size a client for concurrent fetches.
+sidebar:
+  order: 7
+search:
+  tags: [reference, client, capacity]
+---
+
+A client is a fixed slab of request slots. Every slot embeds its response
+accumulator, request head, socket read buffer, and TLS ciphertext buffer. The
+only compile-time choice is `max_inflight`; the per-response body limit is a
+runtime option bounded by 64 KiB.
+
+## Request capacity
+
+| Bound                    | Value                                                    | Failure when exceeded                |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------ |
+| In-flight requests       | `max_inflight`, compile-time                             | `error.InflightCapacityReached`      |
+| Generated request head   | 8 KiB                                                    | `error.HeadTooLarge`                 |
+| Request body             | Borrowed from the caller                                 | No client bound beyond the transport |
+| Response head            | 16 KiB including the status line                         | `.capacity` failure                  |
+| Response header fields   | 64                                                       | `.capacity` failure                  |
+| Response trailers        | 8 KiB                                                    | `.capacity` failure                  |
+| Decoded response body    | `response_body_capacity`, at most 64 KiB                 | `.capacity` failure                  |
+| Response accumulator     | 84 KiB (16 KiB head + 64 KiB body + 4 KiB framing slack) | Internal slot storage                |
+| Socket read chunk        | 8 KiB                                                    | Per read completion                  |
+| TLS plaintext per write  | 16 KiB                                                   | Per `SSL_write`                      |
+| TLS ciphertext per write | 8 KiB                                                    | Per socket write                     |
+| TLS BIO pair side        | 32 KiB                                                   | Handshake and record buffering       |
+| CA bundle path           | 4096 bytes                                               | `error.CaPathTooLong`                |
+| TLS server name          | 255 bytes                                                | `error.ServerNameTooLong`            |
+
+The accumulator is embedded in every slot whether or not the response uses the
+full body capacity. A lower `response_body_capacity` limits decoded bytes but
+does not shrink the slot.
+
+## FetchStorage
+
+`fetch_blocking` uses caller-owned storage:
+
+| Field     | Capacity                         |
+| --------- | -------------------------------- |
+| `headers` | 64 `Header` values               |
+| `head`    | 16 KiB including the status line |
+| `body`    | 64 KiB decoded body              |
+
+`FetchStorage` is about 82 KiB on a 64-bit target. Keep it in a stable scope; the
+returned `ResponseView` borrows it.
+
+## Slot storage
+
+Each slot embeds four buffers:
+
+| Region            | Size   |
+| ----------------- | ------ |
+| Response buffer   | 84 KiB |
+| Request head      | 8 KiB  |
+| Socket read chunk | 8 KiB  |
+| TLS output        | 8 KiB  |
+
+That is 108 KiB of buffer storage per slot before parser state, completions,
+timers, and the socket. A client with `max_inflight = 16` reserves about 1.7 MiB
+of buffers. Measure `@sizeOf(MyClient)` for the exact target.
+
+## TLS memory
+
+A TLS client adds one cached `SSL_CTX` and one `SSL` session per in-flight
+connection. Each session uses a memory BIO pair with a 32 KiB side, so budget
+64 KiB per TLS connection in addition to the slot buffers. The CA bundle is read
+once into BoringSSL's trust store.
+
+## Concurrency
+
+The client performs one request per connection and never pools connections.
+`max_inflight` is therefore the maximum number of simultaneous sockets:
+
+| `max_inflight` | Buffer storage | Use                      |
+| -------------- | -------------: | ------------------------ |
+| `1`            |        108 KiB | Health check, CLI, test  |
+| `4`            |        432 KiB | Small worker             |
+| `16`           |        1.7 MiB | Batch job                |
+| `64`           |        6.8 MiB | High-concurrency fetcher |
+
+The table counts buffers only. Add TLS BIO memory for TLS fetches and the client
+value itself.
+
+## Sizing rules
+
+| Rule                                               | Why                                           |
+| -------------------------------------------------- | --------------------------------------------- |
+| Keep `max_inflight` at the real concurrency        | Every slot is allocated up front              |
+| Lower `response_body_capacity` when possible       | The logical limit still bounds decode         |
+| Reuse one client for repeated fetches              | It caches one TLS context                     |
+| Use a separate client for a different trust policy | The cached context is immutable               |
+| Do not copy a client after `init`                  | Slots and completions live at fixed addresses |
+| Drain every request before `deinit`                | The client asserts idle slots                 |
+
+## Response overflow
+
+| Condition                                  | Result                               |
+| ------------------------------------------ | ------------------------------------ |
+| Head above 16 KiB                          | `.capacity` failure                  |
+| More than 64 header fields                 | `.capacity` failure                  |
+| Trailers above 8 KiB                       | `.capacity` failure                  |
+| Body above `response_body_capacity`        | `.capacity` failure                  |
+| `response_body_capacity` above 64 KiB      | `error.ResponseBodyCapacityExceeded` |
+| `fetch_blocking` view does not fit storage | `.capacity` failure                  |
+
+A capacity failure closes the connection. The client does not return a partial
+body.
+
+## Next
+
+- [Timeouts and errors](/docs/client/timeouts-and-errors) maps every failure
+  kind.
+- [Callback client](/docs/client/callback-client) covers slot reuse.
+- [Capacity model](/docs/concepts/capacity-model) explains the same fixed-slab
+  design on the server.

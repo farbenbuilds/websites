@@ -96,8 +96,8 @@ duplicated, or too long fails registration with a named error.
 
 The typed adapter fits parameters into 4 KiB. For a larger type, use the
 lower-level `register` API with `Call.parse_params` and an explicit allocator.
-Register the procedure before `server.rpc` mounts the service; the example uses
-a different method name because `math.add` is already registered above:
+Register the procedure before `server.rpc` mounts the service. The example uses a
+different method name because `math.add` is already registered above:
 
 ```zig
 fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
@@ -107,7 +107,11 @@ fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
 }
 
 try rpc.register("math.add_large", custom);
+_ = try server.rpc("/rpc", &rpc);
 ```
+
+Replace the earlier mount with this pair, or insert the registration before it.
+Registering after the mount returns `error.RegistryLocked`.
 
 The allocator is the caller's choice. The request path remains bounded when the
 procedure uses fixed storage or a bounded allocator.
@@ -136,6 +140,8 @@ loop. In a worker group, create one service per worker and mount it inside the
 
 - [Your first TLS server](/docs/examples/first-tls-server) serves the
   same routes over HTTPS.
-- [Examples](/docs/examples) lists the runnable
-  `rpc_server` step.
+- [Testing a JSON-RPC service](/docs/json-rpc/testing) covers dispatcher and
+  route tests.
+- [JSON-RPC 2.0](/docs/json-rpc) covers batches, errors, capacities, and worker
+  deployment.
 - [FAQ](/docs/getting-started/faq) covers the batched-request caveat.

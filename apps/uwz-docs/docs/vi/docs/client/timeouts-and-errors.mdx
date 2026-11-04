@@ -1,0 +1,124 @@
+---
+title: Client timeout và lỗi
+description: Đọc connect và read deadline, mọi failure kind, setup error trở thành outcome, và failure nào an toàn để retry.
+sidebar:
+  order: 6
+search:
+  tags: [reference, client, operations]
+---
+
+Client có hai deadline và sáu failure kind. Setup mistake xuất hiện dưới dạng Zig
+error từ `fetch`; failure sau khi I/O bắt đầu đến dưới dạng `FetchOutcome` với kind
+ổn định và static message.
+
+## Deadline
+
+| Option               | Default | Bao phủ                                       |
+| -------------------- | ------: | --------------------------------------------- |
+| `connect_timeout_ms` |  `5000` | Chỉ TCP connect                               |
+| `read_timeout_ms`    | `10000` | TLS handshake, request write và response read |
+
+`read_timeout_ms` là một deadline cho toàn bộ post-connect phase, không phải
+deadline riêng cho từng read. Deadline dùng monotonic clock và libxev timer với
+millisecond granularity; timer không bao giờ fire trước deadline.
+
+Giá trị zero hết hạn ngay khi phase start. Đặt cả hai timeout khác zero trong
+production. Loop wake ít nhất một lần mỗi `read_timeout_ms` khi fetch pending, nên
+thay đổi deadline được quan sát kịp.
+
+## Các failure kind
+
+| Kind       | Ý nghĩa                                    | Message ví dụ                                     |
+| ---------- | ------------------------------------------ | ------------------------------------------------- |
+| `connect`  | TCP connection không hoàn tất              | `TCP connect failed`                              |
+| `tls`      | Handshake, trust hoặc TLS record failure   | `TLS handshake failed`                            |
+| `protocol` | HTTP/1.1 response sai hoặc conflicting     | `conflicting response framing`                    |
+| `timeout`  | Connect hoặc read deadline hết             | `request deadline expired`                        |
+| `closed`   | Peer đóng, truncate hoặc socket write fail | `connection closed before the response completed` |
+| `capacity` | Một response bound bị vượt                 | `response body exceeded the configured capacity`  |
+
+`Failure.message` là static string sống suốt process. Không free nó và không giả
+định nó unique theo request.
+
+## Lỗi setup
+
+`fetch` trả Zig error trước khi I/O khi request không được chuẩn bị:
+
+| Error                                | Nguyên nhân                                                            |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| `error.InvalidHostAddress`           | `host` là name, không phải IPv4 hoặc IPv6 literal                      |
+| `error.InvalidPath`                  | `path` không phải origin-form target                                   |
+| `error.InvalidHost`                  | Value `Host` sai định dạng                                             |
+| `error.InvalidHeaderName`            | Request header name không hợp lệ                                       |
+| `error.InvalidHeaderValue`           | Request header value chứa control byte                                 |
+| `error.ReservedHeader`               | Caller đặt `Host`, `Content-Length`, `Transfer-Encoding` hoặc `Expect` |
+| `error.HeadTooLarge`                 | Generated request head vượt 8 KiB                                      |
+| `error.InflightCapacityReached`      | Mọi client slot đang bận                                               |
+| `error.ResponseBodyCapacityExceeded` | `response_body_capacity` trên 64 KiB                                   |
+| `error.CaPathRequired`               | Verification bật và `ca_path` null                                     |
+| `error.TlsConfigurationMismatch`     | Client đã cache trust policy khác                                      |
+| `error.ServerNameEmpty`              | TLS server name rỗng                                                   |
+| `error.ServerNameTooLong`            | TLS server name vượt 255 byte                                          |
+| `error.CertificateLoadFailed`        | CA bundle không load được                                              |
+
+`fetch_blocking` map setup error thành failure outcome. Gọi `fetch` trực tiếp trả
+error cho caller.
+
+## Xử lý outcome
+
+```zig
+switch (outcome) {
+    .response => |response| {
+        std.log.info("status {d}", .{response.status});
+    },
+    .failure => |failure| switch (failure.kind) {
+        .timeout => std.log.warn("deadline expired: {s}", .{failure.message}),
+        .connect => std.log.warn("connect failed: {s}", .{failure.message}),
+        .tls => std.log.err("TLS failed: {s}", .{failure.message}),
+        .protocol => std.log.err("bad response: {s}", .{failure.message}),
+        .closed => std.log.warn("connection closed: {s}", .{failure.message}),
+        .capacity => std.log.err("capacity exceeded: {s}", .{failure.message}),
+    },
+}
+```
+
+## Chính sách retry
+
+Client không bao giờ retry. Caller quyết định, và chỉ cho request idempotent:
+
+| Kind       | Retry                                            |
+| ---------- | ------------------------------------------------ |
+| `connect`  | Đôi khi; network failure tạm thời                |
+| `timeout`  | Đôi khi; chỉ khi method idempotent               |
+| `closed`   | Đôi khi; chỉ khi method idempotent               |
+| `tls`      | Không retry tới khi trust configuration được sửa |
+| `protocol` | Không retry; peer không nói đúng contract        |
+| `capacity` | Không retry; tăng bound hoặc reject response     |
+
+Retry cần fetch mới và connection mới. Không có connection reuse, redirect handling
+hay cookie jar để coordinate.
+
+## Kiểm tra timeout
+
+Trỏ client tới port accept connection nhưng không bao giờ response, rồi đặt
+`read_timeout_ms = 100`:
+
+```console
+error: fetch failed (timeout): request deadline expired
+```
+
+Trỏ tới port đã đóng để thấy connect kind:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+Message đủ ổn định để assert trong test, nhưng ưu tiên `kind` trong application
+logic.
+
+## Tiếp theo
+
+- [Client limits](/docs/client/limits) liệt kê capacity đằng sau `capacity`.
+- [TLS trust](/docs/client/tls-trust) trình bày lỗi cấu hình `tls`.
+- [Callback client](/docs/client/callback-client) cho thấy deadline áp dụng theo
+  slot.

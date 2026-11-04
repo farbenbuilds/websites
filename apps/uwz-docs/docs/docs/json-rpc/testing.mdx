@@ -1,0 +1,201 @@
+---
+title: Testing a JSON-RPC service
+description: Test the dispatcher as a pure function, snapshot protocol errors and batches, then prove the mounted route with curl and h2load.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, json-rpc, operations]
+---
+
+A JSON-RPC service has two test surfaces. The dispatcher is a pure function over
+bytes, so most behavior belongs in `zig test`. The mounted route adds the content
+type, HTTP status, and response buffer, so a small end-to-end check proves the
+adapter.
+
+## Test the dispatcher
+
+```zig src/rpc_test.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct { left: i64, right: i64 };
+const AddResult = struct { sum: i64 };
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+test "math.add returns a typed result" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3},\"id\":1}",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":5},\"id\":1}",
+        body,
+    );
+}
+```
+
+The service has no listener, socket, or clock. A test registers only the
+procedures it exercises, calls `dispatch`, and asserts on the exact bytes.
+
+Wire `src/rpc_test.zig` into the test step in `build.zig`, then run:
+
+```sh
+zig build test
+```
+
+## Snapshot errors
+
+```zig
+test "unknown method returns -32601 and preserves the id" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.missing\",\"id\":\"req-7\"}",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32601,\"message\":\"Method not found\"},\"id\":\"req-7\"}",
+        body,
+    );
+}
+```
+
+Exact snapshots catch changes to codes, messages, and id formatting. If an error
+message is intentionally allowed to vary, assert on the parsed object instead.
+
+## Test notifications and batches
+
+```zig
+test "a notification produces no response" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [1024]u8 = undefined;
+    const response = try service.dispatch(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3}}",
+        &output,
+    );
+
+    try std.testing.expect(response == null);
+}
+
+test "a batch omits notifications and keeps order" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("math.add", AddParams, AddResult, add);
+
+    var output: [2048]u8 = undefined;
+    const body = (try service.dispatch(
+        "[{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":2,\"right\":3},\"id\":1}," ++
+            "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":4,\"right\":5}}," ++
+            "{\"jsonrpc\":\"2.0\",\"method\":\"math.add\",\"params\":{\"left\":6,\"right\":7},\"id\":3}]",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "[{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":5},\"id\":1}," ++
+            "{\"jsonrpc\":\"2.0\",\"result\":{\"sum\":11},\"id\":3}]",
+        body,
+    );
+}
+```
+
+## Test malformed batches before side effects
+
+A procedure with a side effect proves that a malformed batch never runs a valid
+prefix:
+
+```zig
+var calls: usize = 0;
+
+fn count(_: AddParams) uz.json_rpc.HandlerError!AddResult {
+    calls += 1;
+    return .{ .sum = 0 };
+}
+
+test "a malformed batch runs no procedure" {
+    var service = uz.json_rpc.Service{};
+    try service.register_typed("count", AddParams, AddResult, count);
+
+    var output: [1024]u8 = undefined;
+    const body = (try service.dispatch(
+        "[{\"jsonrpc\":\"2.0\",\"method\":\"count\",\"params\":{\"left\":1,\"right\":1},\"id\":1},",
+        &output,
+    )).?;
+
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null}",
+        body,
+    );
+    try std.testing.expectEqual(@as(usize, 0), calls);
+}
+```
+
+The `calls` counter is file-scope test state. Keep it out of the service.
+
+## Test the mounted route
+
+Start the app and check the transport boundary:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```console
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+
+{"jsonrpc":"2.0","result":{"sum":5},"id":1}
+```
+
+Then remove the content type and expect `415`:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  --data '{"jsonrpc":"2.0","method":"math.add","id":1}'
+```
+
+The adapter rejects a missing, duplicate, or wrong content type before dispatch.
+A test that only calls `dispatch` cannot catch that boundary.
+
+## Load test
+
+Store one request body and drive the route with an HTTP/1.1-capable load tool:
+
+```sh
+printf '%s' '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}' > rpc.json
+h2load --h1 -n 1000 -c 10 -d rpc.json \
+  -H 'content-type: application/json' \
+  http://127.0.0.1:3000/rpc
+```
+
+Read requests per second, latency percentiles, and status codes. A JSON-RPC
+protocol error is still HTTP 200, so a status-code counter alone does not prove
+that every call succeeded. Sample a few bodies or add a client-side assertion.
+
+| Test layer      | Proves                                          |
+| --------------- | ----------------------------------------------- |
+| Dispatcher unit | Codes, ids, batches, notifications, exact bytes |
+| Adapter route   | Content type, HTTP status, response buffer      |
+| Load test       | Throughput, latency, capacity exhaustion        |
+| Cluster smoke   | Every worker registered the same method set     |
+
+## Next
+
+- [JSON-RPC errors](/docs/json-rpc/errors) lists the codes to snapshot.
+- [JSON-RPC capacities](/docs/json-rpc/capacities) explains the buffer under
+  load.
+- [JSON-RPC in a cluster](/docs/json-rpc/cluster-deployment) adds the per-worker
+  smoke test.

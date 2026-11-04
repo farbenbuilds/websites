@@ -1,0 +1,142 @@
+---
+title: fetch_blocking
+description: Run one HTTP/1.1 request to completion, read the response from caller-owned storage, and distinguish setup errors from failure outcomes.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, client]
+---
+
+`fetch_blocking` is the shortest client path. It creates a temporary single-slot
+client, performs one request, copies the response into caller-owned
+`FetchStorage`, and releases the client. Use it for a health check, a one-shot
+job, or a test.
+
+## Signature
+
+```zig
+pub fn fetch_blocking(
+    io: std.Io,
+    request: Request,
+    options: FetchOptions,
+    storage: *FetchStorage,
+) !FetchOutcome
+```
+
+| Parameter | Ownership                                        |
+| --------- | ------------------------------------------------ |
+| `io`      | The event loop I/O value from `std.process.Init` |
+| `request` | Borrowed until the call returns                  |
+| `options` | Copied by value                                  |
+| `storage` | Caller-owned; the returned view borrows it       |
+
+`fetch_blocking` uses one slot, so it cannot exhaust the in-flight capacity. It
+can still fail on the request fields, the host address, the TLS configuration,
+or the response size.
+
+## Read a response
+
+```zig
+var storage: uz.client.FetchStorage = .{};
+
+const outcome = try uz.client.fetch_blocking(init.io, .{
+    .method = .get,
+    .host = "127.0.0.1",
+    .path = "/health",
+    .headers = &.{
+        .{ .name = "Accept", .value = "application/json" },
+    },
+}, .{
+    .port = 8080,
+    .connect_timeout_ms = 1_000,
+    .read_timeout_ms = 3_000,
+}, &storage);
+
+switch (outcome) {
+    .response => |response| {
+        if (response.status != 200) {
+            std.log.warn("unexpected status {d}", .{response.status});
+            return;
+        }
+        for (response.headers) |header| {
+            std.log.debug("{s}: {s}", .{ header.name, header.value });
+        }
+        std.log.info("body: {s}", .{response.body});
+    },
+    .failure => |failure| {
+        std.log.err("fetch failed ({s}): {s}", .{
+            @tagName(failure.kind),
+            failure.message,
+        });
+    },
+}
+```
+
+`response.headers` and `response.body` point into `storage`. They stay valid
+until `storage` is reused or goes out of scope.
+
+## Storage layout
+
+| Field     | Capacity                            |
+| --------- | ----------------------------------- |
+| `headers` | 64 `Header` values                  |
+| `head`    | 16 KiB for the status line and head |
+| `body`    | 64 KiB decoded body                 |
+
+`FetchStorage` is a large value. Keep it on the stack of the function that owns
+the fetch, or in a stable field. Do not return a `ResponseView` that borrows a
+local `FetchStorage`.
+
+A view that does not fit the storage becomes a `.capacity` failure with the
+message `response exceeded fetch storage`.
+
+## Outcomes and errors
+
+`fetch_blocking` returns a Zig error when the temporary client cannot be created
+or the loop fails. A request setup failure becomes a `failure` outcome instead:
+
+| Failure kind | Setup causes                                                                |
+| ------------ | --------------------------------------------------------------------------- |
+| `.tls`       | Missing CA path, bad CA bundle, context or session failure, bad server name |
+| `.capacity`  | Response body capacity above 64 KiB, or the copied view does not fit        |
+| `.connect`   | The host is not a numeric IPv4 or IPv6 address                              |
+| `.protocol`  | Invalid path, host, header name or value, reserved header, oversized head   |
+| `.closed`    | The request never started or the peer closed early                          |
+| `.timeout`   | A deadline expired after I/O started                                        |
+
+The `message` is a static, process-lifetime string. It is safe to log after the
+call returns.
+
+## When to use it
+
+| Need                                          | Use                                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------------------- |
+| One request and a simple result               | `fetch_blocking`                                                              |
+| Several requests in flight                    | `client(N)` and `run`                                                         |
+| A fetch awaited inside a server callback      | Not supported; the client owns its own loop. Use a separate thread or process |
+| A long-lived client with a cached TLS context | `client(N)`                                                                   |
+
+`fetch_blocking` creates and destroys a client per call. For repeated fetches,
+the callback client reuses slots and one TLS context.
+
+## Verify it
+
+Run the program against a local server and check the status and body. A missing
+server produces:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+A host name instead of an address produces:
+
+```console
+error: fetch failed (connect): host is not a numeric address
+```
+
+## Next
+
+- [Callback client](/docs/client/callback-client) covers in-flight capacity and
+  slot reuse.
+- [Client limits](/docs/client/limits) lists the storage bounds.
+- [TLS trust](/docs/client/tls-trust) adds verification.

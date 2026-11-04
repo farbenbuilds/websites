@@ -1,0 +1,126 @@
+---
+title: Client timeouts and errors
+description: Read the connect and read deadlines, every failure kind, the setup errors that become outcomes, and which failures are safe to retry.
+sidebar:
+  order: 6
+search:
+  tags: [reference, client, operations]
+---
+
+The client has two deadlines and six failure kinds. Setup mistakes surface as
+Zig errors from `fetch`; failures after I/O starts arrive as a `FetchOutcome`
+with a stable kind and a static message.
+
+## Deadlines
+
+| Option               | Default | Covers                                          |
+| -------------------- | ------: | ----------------------------------------------- |
+| `connect_timeout_ms` |  `5000` | The TCP connect only                            |
+| `read_timeout_ms`    | `10000` | TLS handshake, request write, and response read |
+
+`read_timeout_ms` is one deadline for the whole post-connect phase, not a
+separate deadline per read. Deadlines use the monotonic clock and a libxev timer
+with millisecond granularity; a timer never fires before its deadline.
+
+A value of zero expires as soon as the phase starts. Set both timeouts to
+non-zero values in production. The loop wakes at least once per
+`read_timeout_ms` while a fetch is pending, so a deadline change is observed
+promptly.
+
+## Failure kinds
+
+| Kind       | Meaning                                        | Example message                                   |
+| ---------- | ---------------------------------------------- | ------------------------------------------------- |
+| `connect`  | The TCP connection did not complete            | `TCP connect failed`                              |
+| `tls`      | Handshake, trust, or TLS record failure        | `TLS handshake failed`                            |
+| `protocol` | Malformed or conflicting HTTP/1.1 response     | `conflicting response framing`                    |
+| `timeout`  | A connect or read deadline expired             | `request deadline expired`                        |
+| `closed`   | Peer closed, truncated, or socket write failed | `connection closed before the response completed` |
+| `capacity` | A response bound was exceeded                  | `response body exceeded the configured capacity`  |
+
+`Failure.message` is a static, process-lifetime string. Do not free it and do not
+assume it is unique per request.
+
+## Setup errors
+
+`fetch` returns a Zig error before any I/O when the request cannot be armed:
+
+| Error                                | Cause                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `error.InvalidHostAddress`           | `host` is a name, not an IPv4 or IPv6 literal                             |
+| `error.InvalidPath`                  | `path` is not an origin-form target                                       |
+| `error.InvalidHost`                  | The `Host` value is malformed                                             |
+| `error.InvalidHeaderName`            | A request header name is invalid                                          |
+| `error.InvalidHeaderValue`           | A request header value contains a control byte                            |
+| `error.ReservedHeader`               | The caller set `Host`, `Content-Length`, `Transfer-Encoding`, or `Expect` |
+| `error.HeadTooLarge`                 | The generated request head exceeds 8 KiB                                  |
+| `error.InflightCapacityReached`      | Every client slot is busy                                                 |
+| `error.ResponseBodyCapacityExceeded` | `response_body_capacity` is above 64 KiB                                  |
+| `error.CaPathRequired`               | Verification is on and `ca_path` is null                                  |
+| `error.TlsConfigurationMismatch`     | The client cached a different trust policy                                |
+| `error.ServerNameEmpty`              | The TLS server name is empty                                              |
+| `error.ServerNameTooLong`            | The TLS server name exceeds 255 bytes                                     |
+| `error.CertificateLoadFailed`        | The CA bundle cannot be loaded                                            |
+
+`fetch_blocking` maps a setup error to a failure outcome. A direct `fetch` call
+returns the error to the caller.
+
+## Handle an outcome
+
+```zig
+switch (outcome) {
+    .response => |response| {
+        std.log.info("status {d}", .{response.status});
+    },
+    .failure => |failure| switch (failure.kind) {
+        .timeout => std.log.warn("deadline expired: {s}", .{failure.message}),
+        .connect => std.log.warn("connect failed: {s}", .{failure.message}),
+        .tls => std.log.err("TLS failed: {s}", .{failure.message}),
+        .protocol => std.log.err("bad response: {s}", .{failure.message}),
+        .closed => std.log.warn("connection closed: {s}", .{failure.message}),
+        .capacity => std.log.err("capacity exceeded: {s}", .{failure.message}),
+    },
+}
+```
+
+## Retry policy
+
+The client never retries. The caller decides, and only for an idempotent
+request:
+
+| Kind       | Retry                                                |
+| ---------- | ---------------------------------------------------- |
+| `connect`  | Sometimes; a transient network failure               |
+| `timeout`  | Sometimes; only if the method is idempotent          |
+| `closed`   | Sometimes; only if the method is idempotent          |
+| `tls`      | Do not retry until the trust configuration is fixed  |
+| `protocol` | Do not retry; the peer is not speaking the contract  |
+| `capacity` | Do not retry; raise the bound or reject the response |
+
+A retry needs a new fetch and a new connection. There is no connection reuse,
+redirect handling, or cookie jar to coordinate.
+
+## Verify a timeout
+
+Point the client at a port that accepts a connection but never responds, then set
+`read_timeout_ms = 100`:
+
+```console
+error: fetch failed (timeout): request deadline expired
+```
+
+Point it at a closed port to see the connect kind:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+The messages are stable enough to assert in a test, but prefer the `kind` in
+application logic.
+
+## Next
+
+- [Client limits](/docs/client/limits) lists the capacities behind `capacity`.
+- [TLS trust](/docs/client/tls-trust) covers the `tls` configuration errors.
+- [Callback client](/docs/client/callback-client) shows where the deadline
+  applies per slot.

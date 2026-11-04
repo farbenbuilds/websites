@@ -1,0 +1,170 @@
+---
+title: Capacity JSON-RPC
+description: Đọc mọi giới hạn procedure, method storage, scratch và response của JSON-RPC, và chọn kích thước service cho result lớn cùng batch.
+sidebar:
+  order: 7
+search:
+  tags: [reference, json-rpc, capacity]
+---
+
+Một JSON-RPC service là value với array cố định, không phải registry tự grow.
+Số procedure, method name được copy, parser scratch và response buffer đều được
+chọn trước khi server start. Request hoặc vừa các giới hạn đó hoặc fail với lỗi
+có tên.
+
+## Giới hạn mặc định
+
+| Constant                          | Giá trị | Ý nghĩa                                        |
+| --------------------------------- | ------: | ---------------------------------------------- |
+| `default_max_procedures`          |    `64` | Procedure được đăng ký cho mỗi service         |
+| `default_method_storage_capacity` |  `4096` | Byte cho method name được copy                 |
+| `default_response_capacity`       | `16384` | Byte cho một result, error hoặc batch response |
+| `scanner_scratch_capacity`        |  `2048` | Stack scratch cho member name và method name   |
+| `typed_params_scratch_capacity`   |  `4096` | Stack scratch cho một typed parameter document |
+| `max_method_length`               |   `255` | Byte trong một method name                     |
+| `max_member_name_length`          |   `255` | Byte trong một JSON member name                |
+| `min_response_capacity`           |   `128` | Response buffer nhỏ nhất được chấp nhận        |
+
+`Service` là type mặc định:
+
+```zig
+pub const Service = configured_service(
+    default_max_procedures,
+    default_method_storage_capacity,
+    default_response_capacity,
+);
+```
+
+## Chọn capacity tường minh
+
+```zig
+const LargeRpc = uz.json_rpc.configured_service(
+    128,          // procedures
+    16 * 1024,    // copied method-name bytes
+    64 * 1024,    // response bytes
+);
+
+var rpc = LargeRpc{};
+try rpc.register_typed("reports.export", ExportParams, ExportResult, export);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+Cả ba argument là compile-time. Hàm trả một type, và mỗi service value nhúng array
+ở kích thước đó.
+
+| Argument                  | Range hợp lệ          | Giá trị bị từ chối           |
+| ------------------------- | --------------------- | ---------------------------- |
+| `max_procedures`          | `1` đến `65534`       | `0` hoặc `>= maxInt(u16)`    |
+| `method_storage_capacity` | `1` đến `maxInt(u32)` | `0` hoặc vượt `u32`          |
+| `response_capacity`       | `128` trở lên         | Dưới `min_response_capacity` |
+
+Lookup table có `max_procedures * 2 + 1` slot. Số procedure lớn hơn tốn table lớn
+hơn ngay cả trước khi dùng hết slot.
+
+## Service lưu gì
+
+| Region           | Kích thước                                |
+| ---------------- | ----------------------------------------- |
+| Method-name byte | `method_storage_capacity`                 |
+| Method offset    | `max_procedures * sizeof(u32)`            |
+| Method length    | `max_procedures * sizeof(u16)`            |
+| Handler kind     | `max_procedures * sizeof(HandlerKind)`    |
+| Direct handler   | `max_procedures * sizeof(Handler)`        |
+| Context handler  | `max_procedures * sizeof(ContextHandler)` |
+| Context pointer  | `max_procedures * sizeof(?*anyopaque)`    |
+| Lookup slot      | `(max_procedures * 2 + 1) * sizeof(u16)`  |
+| Response buffer  | `response_capacity`                       |
+
+Mọi region nằm trong service value. Giữ value ở địa chỉ ổn định sau khi `app.rpc`
+mount nó; không copy.
+
+## Response capacity
+
+Response buffer chứa toàn bộ JSON-RPC document cho một HTTP request. Với single
+call, đó là result, envelope và id. Với batch, đó là mọi non-notification
+response, mọi dấu phẩy và cả hai bracket.
+
+| Kích thước result             | Kết quả                                      |
+| ----------------------------- | -------------------------------------------- |
+| Result và envelope vừa        | `200` với result                             |
+| Chỉ result không vừa          | `-32603 Internal error` khi error vừa        |
+| Envelope sau result không vừa | `DispatchError.ResponseTooLarge`; HTTP `500` |
+| Batch response không vừa      | `DispatchError.ResponseTooLarge`; HTTP `500` |
+
+Failure đầu là procedure failure và vẫn là JSON-RPC response. Failure thứ hai là
+document failure và thành HTTP failure vì dispatcher không thể hoàn thành document
+hợp lệ.
+
+Chọn kích thước buffer từ result lớn nhất dự kiến, không phải trung bình:
+
+| Workload                  | Sizing rule                                       |
+| ------------------------- | ------------------------------------------------- |
+| Result scalar nhỏ         | Mặc định 16 KiB là đủ                             |
+| Một JSON object lớn       | Object encode lớn nhất cộng khoảng 64 byte        |
+| Batch `N` result tương tự | `N * (result + 64)` cộng framing                  |
+| Batch nhiều error         | `N * 128` cộng framing                            |
+| Stream report lớn         | Không dùng JSON-RPC; trả HTTP stream thông thường |
+
+JSON-RPC là protocol buffered request/response. Result lớn hơn response buffer
+không thể stream qua service.
+
+## Method storage
+
+Method name được copy trong lúc đăng ký, nên source slice có thể free sau khi call
+trả về. Bản copy cũng có nghĩa storage capacity, không phải source lifetime, là
+giới hạn.
+
+| Failure                        | Nguyên nhân                               |
+| ------------------------------ | ----------------------------------------- |
+| `MethodStorageCapacityReached` | Tổng tên đã đăng ký vượt capacity         |
+| `ProcedureCapacityReached`     | Số procedure chạm `max_procedures`        |
+| `DuplicateProcedure`           | Cùng tên được đăng ký hai lần             |
+| `InvalidMethodName`            | Rỗng, quá 255 byte, UTF-8 sai hoặc `rpc.` |
+| `RegistryLocked`               | Đăng ký sau `seal` hoặc `app.rpc`         |
+
+Tên 255 byte dùng 255 byte storage. Service 64 procedure với 4 KiB storage chứa
+được 64 tên trung bình 64 byte, nhưng không chứa 64 tên 100 byte. Đo tổng thực tế
+khi tên dài.
+
+## Compile-time dispatch
+
+`comptime_service` không lưu method-name copy và không có runtime registry. Nó
+build perfect hash table lúc compile từ static procedure list.
+
+```zig
+const StaticRpc = uz.json_rpc.comptime_service(&procedures);
+var rpc = StaticRpc{};
+```
+
+| Property                | `configured_service`      | `comptime_service`          |
+| ----------------------- | ------------------------- | --------------------------- |
+| Registration            | Runtime                   | Compile time                |
+| Method storage          | Copy lúc đăng ký          | Static literal              |
+| Lookup                  | Open-addressed hash table | Perfect hash table          |
+| Response buffer         | Có thể cấu hình           | `default_response_capacity` |
+| Mount bằng `App.rpc`    | Có                        | Không; chỉ dispatch         |
+| Thay đổi procedure list | Lúc startup               | Lúc build                   |
+
+Bảng được sinh ra cần seed đặt mọi method vào slot riêng. List rỗng, tên trùng,
+tên không hợp lệ hoặc table không seed được sẽ fail build thay vì fallback sang
+đường chậm hơn.
+
+## Chi phí theo worker
+
+Mỗi cluster worker cần service riêng. Nhân service value với số worker, và không
+đặt array trên stack có thể bị tái sử dụng:
+
+| Deployment        | Service    | Memory rule                    |
+| ----------------- | ---------- | ------------------------------ |
+| Single app        | 1          | Một service value              |
+| `N` worker        | `N`        | `N * sizeof(Service)`          |
+| HTTP và WebSocket | 1 mỗi loop | Một service cho mỗi event loop |
+
+Xem [JSON-RPC trong cluster](/docs/json-rpc/cluster-deployment) cho mount pattern.
+
+## Tiếp theo
+
+- [Transports và raw dispatch](/docs/json-rpc/transports) dùng response buffer
+  trực tiếp.
+- [JSON-RPC errors](/docs/json-rpc/errors) map các overflow failure.
+- [Testing một JSON-RPC service](/docs/json-rpc/testing) trình bày capacity test.

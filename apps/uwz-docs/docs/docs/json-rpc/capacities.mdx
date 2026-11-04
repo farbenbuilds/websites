@@ -1,0 +1,171 @@
+---
+title: JSON-RPC capacities
+description: Read every JSON-RPC procedure, method-storage, scratch, and response bound, and size a service for large results and batches.
+sidebar:
+  order: 7
+search:
+  tags: [reference, json-rpc, capacity]
+---
+
+A JSON-RPC service is a value with fixed arrays, not a registry that grows on
+demand. The procedure count, copied method names, parser scratch, and response
+buffer are all chosen before the server starts. A request either fits those
+bounds or fails with a named error.
+
+## Default bounds
+
+| Constant                          |   Value | Meaning                                         |
+| --------------------------------- | ------: | ----------------------------------------------- |
+| `default_max_procedures`          |    `64` | Registered procedures per service               |
+| `default_method_storage_capacity` |  `4096` | Bytes for copied method names                   |
+| `default_response_capacity`       | `16384` | Bytes for one result, error, or batch response  |
+| `scanner_scratch_capacity`        |  `2048` | Stack scratch for member names and method names |
+| `typed_params_scratch_capacity`   |  `4096` | Stack scratch for a typed parameter document    |
+| `max_method_length`               |   `255` | Bytes in one method name                        |
+| `max_member_name_length`          |   `255` | Bytes in one JSON member name                   |
+| `min_response_capacity`           |   `128` | Smallest accepted response buffer               |
+
+`Service` is the default type:
+
+```zig
+pub const Service = configured_service(
+    default_max_procedures,
+    default_method_storage_capacity,
+    default_response_capacity,
+);
+```
+
+## Choose explicit capacities
+
+```zig
+const LargeRpc = uz.json_rpc.configured_service(
+    128,          // procedures
+    16 * 1024,    // copied method-name bytes
+    64 * 1024,    // response bytes
+);
+
+var rpc = LargeRpc{};
+try rpc.register_typed("reports.export", ExportParams, ExportResult, export);
+_ = try app.rpc("/rpc", &rpc);
+```
+
+All three arguments are compile-time. The function returns a type, and each
+service value embeds its arrays at that size.
+
+| Argument                  | Valid range          | Rejected value                |
+| ------------------------- | -------------------- | ----------------------------- |
+| `max_procedures`          | `1` to `65534`       | `0` or `>= maxInt(u16)`       |
+| `method_storage_capacity` | `1` to `maxInt(u32)` | `0` or above `u32`            |
+| `response_capacity`       | `128` or more        | Below `min_response_capacity` |
+
+The lookup table is sized to `max_procedures * 2 + 1` slots. A larger procedure
+count costs a larger table even before every slot is used.
+
+## What the service stores
+
+| Region            | Size                                      |
+| ----------------- | ----------------------------------------- |
+| Method-name bytes | `method_storage_capacity`                 |
+| Method offsets    | `max_procedures * sizeof(u32)`            |
+| Method lengths    | `max_procedures * sizeof(u16)`            |
+| Handler kind      | `max_procedures * sizeof(HandlerKind)`    |
+| Direct handlers   | `max_procedures * sizeof(Handler)`        |
+| Context handlers  | `max_procedures * sizeof(ContextHandler)` |
+| Context pointers  | `max_procedures * sizeof(?*anyopaque)`    |
+| Lookup slots      | `(max_procedures * 2 + 1) * sizeof(u16)`  |
+| Response buffer   | `response_capacity`                       |
+
+Every region is inside the service value. Keep the value at a stable address
+after `app.rpc` mounts it; do not copy it.
+
+## Response capacity
+
+The response buffer holds the complete JSON-RPC document for one HTTP request.
+For a single call that is the result, the envelope, and the id. For a batch it
+is every non-notification response, every comma, and both brackets.
+
+| Result size                          | Outcome                                      |
+| ------------------------------------ | -------------------------------------------- |
+| Result and envelope fit              | `200` with the result                        |
+| Result alone does not fit            | `-32603 Internal error` when the error fits  |
+| Envelope after a result does not fit | `DispatchError.ResponseTooLarge`; HTTP `500` |
+| Batch response does not fit          | `DispatchError.ResponseTooLarge`; HTTP `500` |
+
+The first failure is a procedure failure and remains a JSON-RPC response. The
+second is a document failure and becomes an HTTP failure because the dispatcher
+cannot finish a valid document.
+
+Size the buffer from the largest expected result, not from the average:
+
+| Workload                     | Sizing rule                                      |
+| ---------------------------- | ------------------------------------------------ |
+| Small scalar results         | Default 16 KiB is enough                         |
+| One large JSON object        | Largest encoded object plus about 64 bytes       |
+| Batch of `N` similar results | `N * (result + 64)` plus framing                 |
+| Error-heavy batch            | `N * 128` plus framing                           |
+| Streaming a large report     | Do not use JSON-RPC; return a normal HTTP stream |
+
+JSON-RPC is a buffered request/response protocol. A result larger than the
+response buffer cannot be streamed through the service.
+
+## Method storage
+
+Method names are copied during registration, so the source slice can be freed
+after the call returns. The copy also means the storage capacity, not the source
+lifetime, is the limit.
+
+| Failure                        | Cause                                            |
+| ------------------------------ | ------------------------------------------------ |
+| `MethodStorageCapacityReached` | The sum of registered names exceeds the capacity |
+| `ProcedureCapacityReached`     | The procedure count reaches `max_procedures`     |
+| `DuplicateProcedure`           | The same name is registered twice                |
+| `InvalidMethodName`            | Empty, over 255 bytes, invalid UTF-8, or `rpc.`  |
+| `RegistryLocked`               | Registration after `seal` or `app.rpc`           |
+
+A name of 255 bytes uses 255 bytes of storage. A service with 64 procedures and
+4 KiB of storage can hold 64 average names of 64 bytes, but not 64 names of 100
+bytes. Measure the actual sum when names are long.
+
+## Compile-time dispatch
+
+`comptime_service` stores no method-name copy and no runtime registry. It builds
+a perfect hash table at compile time from the static procedure list.
+
+```zig
+const StaticRpc = uz.json_rpc.comptime_service(&procedures);
+var rpc = StaticRpc{};
+```
+
+| Property               | `configured_service`      | `comptime_service`          |
+| ---------------------- | ------------------------- | --------------------------- |
+| Registration           | Runtime                   | Compile time                |
+| Method storage         | Copied at registration    | Static literals             |
+| Lookup                 | Open-addressed hash table | Perfect hash table          |
+| Response buffer        | Configurable              | `default_response_capacity` |
+| `App.rpc` mount        | Yes                       | No; dispatch-only           |
+| Procedure list changes | At startup                | At build time               |
+
+The generated table requires a seed that places every method in a unique slot.
+An empty list, a duplicate name, an invalid name, or a table that cannot be
+seeded fails the build instead of falling back to a slower path.
+
+## Per-worker cost
+
+Each cluster worker needs its own service. Multiply the service value by the
+worker count, and do not put the array on a stack that can be reused:
+
+| Deployment         | Services   | Memory rule                |
+| ------------------ | ---------- | -------------------------- |
+| Single app         | 1          | One service value          |
+| `N` workers        | `N`        | `N * sizeof(Service)`      |
+| HTTP and WebSocket | 1 per loop | One service per event loop |
+
+See [JSON-RPC in a cluster](/docs/json-rpc/cluster-deployment) for the mount
+pattern.
+
+## Next
+
+- [Transports and raw dispatch](/docs/json-rpc/transports) uses the response
+  buffer directly.
+- [JSON-RPC errors](/docs/json-rpc/errors) maps the overflow failures.
+- [Testing a JSON-RPC service](/docs/json-rpc/testing) covers capacity tests.

@@ -1,0 +1,103 @@
+---
+title: Bắt đầu với client
+description: Fetch một route từ server µWebZockets đang chạy, đọc status và body, và in failure kind khi request không hoàn tất.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, client]
+---
+
+Tutorial này chạy một HTTP/1.1 request bằng `fetch_blocking`. Nó connect tới
+server local, đọc response và xử lý failure mà không vứt mất lý do.
+
+## Điều kiện cần
+
+- Một server µWebZockets đang chạy. Bắt đầu từ
+  [Your first HTTP server](/docs/examples/first-http-server) trên port 3000.
+- Zig 0.16.0.
+- Terminal thứ hai trong dự án client.
+
+## Viết client
+
+Thay `src/main.zig` trong một dự án client riêng bằng:
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+pub fn main(init: std.process.Init) !void {
+    var storage: uz.client.FetchStorage = .{};
+
+    const outcome = try uz.client.fetch_blocking(init.io, .{
+        .method = .get,
+        .host = "127.0.0.1",
+        .path = "/",
+        .headers = &.{
+            .{ .name = "Accept", .value = "text/plain" },
+        },
+    }, .{
+        .port = 3000,
+        .connect_timeout_ms = 2_000,
+        .read_timeout_ms = 5_000,
+    }, &storage);
+
+    switch (outcome) {
+        .response => |response| {
+            std.log.info("HTTP {d}", .{response.status});
+            std.log.info("body: {s}", .{response.body});
+        },
+        .failure => |failure| {
+            std.log.err("fetch failed ({s}): {s}", .{
+                @tagName(failure.kind),
+                failure.message,
+            });
+        },
+    }
+}
+```
+
+## Chạy
+
+```sh
+zig build run
+```
+
+```console
+info: HTTP 200
+info: body: Hello from µWebZockets! Zero allocation achieved.
+```
+
+Body chính xác phụ thuộc route server. Status và body đến từ `ResponseView`, mượn
+`FetchStorage` value.
+
+## Điều gì vừa xảy ra
+
+`fetch_blocking` tạo temporary single-slot client, chuẩn bị một request và điều khiển event
+loop tới khi callback nhận outcome. Sau đó nó copy response head và body vào
+`storage` rồi giải phóng temporary client.
+
+| Value          | Ý nghĩa                                      |
+| -------------- | -------------------------------------------- |
+| `FetchStorage` | Storage do caller sở hữu cho response view   |
+| `FetchOptions` | Port, timeout, TLS tùy chọn và body capacity |
+| `FetchOutcome` | `.response` hoặc `.failure`                  |
+| `ResponseView` | Status, header và body mượn từ `storage`     |
+
+## Kiểm tra failure
+
+Dừng server và chạy client lại:
+
+```console
+error: fetch failed (connect): TCP connect failed
+```
+
+Message chính xác là static string. `kind` là category ổn định: `connect`, `tls`,
+`protocol`, `timeout`, `closed` hoặc `capacity`.
+
+## Tiếp theo
+
+- [fetch_blocking](/docs/client/fetch-blocking) trình bày contract đầy đủ và
+  storage lifetime.
+- [Callback client](/docs/client/callback-client) giữ nhiều request in-flight.
+- [Timeouts và errors](/docs/client/timeouts-and-errors) giải thích từng failure
+  kind.

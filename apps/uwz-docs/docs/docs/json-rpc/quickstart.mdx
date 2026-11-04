@@ -1,0 +1,147 @@
+---
+title: JSON-RPC quickstart
+description: Register a typed math.add procedure, mount it on App.rpc, and verify one call, one notification, and one error with curl.
+sidebar:
+  order: 2
+search:
+  tags: [tutorial, json-rpc]
+---
+
+This tutorial mounts a JSON-RPC 2.0 service on `/rpc`. You define one procedure
+with a named parameter type and a named result type, mount the service, and
+verify the three response shapes a client sees: a result, a notification with
+no body, and a protocol error.
+
+## Prerequisites
+
+- A Zig 0.16.0 project that already depends on µWebZockets. Start from
+  [Installation](/docs/getting-started/installation) if the project is empty.
+- `curl` on the same host.
+
+## Write the service
+
+Replace `src/main.zig` with:
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct {
+    left: i64,
+    right: i64,
+};
+
+const AddResult = struct {
+    sum: i64,
+};
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var rpc = uz.json_rpc.Service{};
+    try rpc.register_typed("math.add", AddParams, AddResult, add);
+    _ = try app.rpc("/rpc", &rpc);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`register_typed` builds the decoder and result writer at compile time. `App.rpc`
+registers one `POST` route, stores the service as the route context, and seals
+the registry. Registration after that point fails with
+`error.RegistryLocked`.
+
+## Run it
+
+```sh
+zig build run
+```
+
+## Verify a call
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}'
+```
+
+```json
+{ "jsonrpc": "2.0", "result": { "sum": 5 }, "id": 1 }
+```
+
+The HTTP status is `200 OK` and the body is one JSON-RPC result object. The
+dispatcher preserves the raw `id` value, so a string id comes back as a string.
+
+## Verify a notification
+
+Remove `id` from the request:
+
+```sh
+curl -i -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3}}'
+```
+
+```console
+HTTP/1.1 204 No Content
+```
+
+A notification requests no response. The procedure still runs, and the adapter
+sends no body.
+
+## Verify a protocol error
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.multiply","id":2}'
+```
+
+```json
+{ "jsonrpc": "2.0", "error": { "code": -32601, "message": "Method not found" }, "id": 2 }
+```
+
+A JSON-RPC error is an HTTP 200 response with an `error` member. It is not an
+HTTP 4xx status. The adapter reserves HTTP 4xx for transport-level rejection,
+such as an unsupported media type.
+
+## Response shapes
+
+| Request                                  | HTTP status | Body                                   |
+| ---------------------------------------- | ----------- | -------------------------------------- |
+| Single call with `id`                    | `200`       | One result or error object             |
+| Single notification                      | `204`       | Empty                                  |
+| Batch with at least one `id`             | `200`       | Array of result and error objects      |
+| Batch of notifications only              | `204`       | Empty                                  |
+| Malformed JSON                           | `200`       | One `-32700` error object              |
+| Missing or wrong `Content-Type`          | `415`       | Empty; `Accept: application/json` set  |
+| Parameter document exceeds 4 KiB scratch | `200`       | One `-32603` error object              |
+| Result does not fit the response buffer  | `200`       | One `-32603` error object              |
+| Response document exceeds buffer         | `500`       | Empty after the adapter logs the error |
+
+## What just happened
+
+`rpc.register_typed` stored the method name, a function pointer, and a
+compile-time adapter. `app.rpc` sealed the registry and registered the HTTP
+route. Each request borrowed its body for the duration of the call, decoded
+`params` into `AddParams`, and wrote the result into the service response
+buffer.
+
+The service is fixed at 64 procedures, 4 KiB of copied method names, and a
+16 KiB response buffer by default. [JSON-RPC capacities](/docs/json-rpc/capacities)
+explains how to change those bounds.
+
+## Next
+
+- [Typed procedures](/docs/json-rpc/typed-procedures) adds context, custom
+  decoding, and compile-time dispatch.
+- [JSON-RPC errors](/docs/json-rpc/errors) maps faults to codes and HTTP.
+- [Batches and notifications](/docs/json-rpc/batches-and-notifications) covers
+  mixed documents and pre-validation.

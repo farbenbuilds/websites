@@ -1,0 +1,116 @@
+---
+title: Giới hạn client
+description: Đọc mọi client buffer, in-flight slot, response bound và TLS staging value, và chọn kích thước client cho fetch đồng thời.
+sidebar:
+  order: 7
+search:
+  tags: [reference, client, capacity]
+---
+
+Client là slab cố định gồm các request slot. Mỗi slot nhúng response accumulator,
+request head, socket read buffer và TLS ciphertext buffer. Lựa chọn compile-time
+duy nhất là `max_inflight`; giới hạn body theo response là runtime option bị chặn
+trên bởi 64 KiB.
+
+## Capacity request
+
+| Bound                    | Giá trị                                                  | Failure khi vượt                      |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------- |
+| In-flight request        | `max_inflight`, compile-time                             | `error.InflightCapacityReached`       |
+| Generated request head   | 8 KiB                                                    | `error.HeadTooLarge`                  |
+| Request body             | Mượn từ caller                                           | Không có client bound ngoài transport |
+| Response head            | 16 KiB gồm status line                                   | `.capacity` failure                   |
+| Response header field    | 64                                                       | `.capacity` failure                   |
+| Response trailer         | 8 KiB                                                    | `.capacity` failure                   |
+| Decoded response body    | `response_body_capacity`, tối đa 64 KiB                  | `.capacity` failure                   |
+| Response accumulator     | 84 KiB (16 KiB head + 64 KiB body + 4 KiB framing slack) | Internal slot storage                 |
+| Socket read chunk        | 8 KiB                                                    | Mỗi read completion                   |
+| TLS plaintext mỗi write  | 16 KiB                                                   | Mỗi `SSL_write`                       |
+| TLS ciphertext mỗi write | 8 KiB                                                    | Mỗi socket write                      |
+| TLS BIO pair side        | 32 KiB                                                   | Handshake và record buffering         |
+| CA bundle path           | 4096 byte                                                | `error.CaPathTooLong`                 |
+| TLS server name          | 255 byte                                                 | `error.ServerNameTooLong`             |
+
+Accumulator được nhúng trong mọi slot dù response có dùng hết body capacity hay
+không. `response_body_capacity` thấp hơn giới hạn byte decode nhưng không thu nhỏ
+slot.
+
+## FetchStorage
+
+`fetch_blocking` dùng storage do caller sở hữu:
+
+| Field     | Capacity               |
+| --------- | ---------------------- |
+| `headers` | 64 giá trị `Header`    |
+| `head`    | 16 KiB gồm status line |
+| `body`    | 64 KiB body đã decode  |
+
+`FetchStorage` khoảng 82 KiB trên target 64-bit. Giữ nó trong scope ổn định;
+`ResponseView` trả về mượn nó.
+
+## Storage của slot
+
+Mỗi slot nhúng bốn buffer:
+
+| Region            | Size   |
+| ----------------- | ------ |
+| Response buffer   | 84 KiB |
+| Request head      | 8 KiB  |
+| Socket read chunk | 8 KiB  |
+| TLS output        | 8 KiB  |
+
+Đó là 108 KiB buffer storage mỗi slot trước parser state, completion, timer và
+socket. Client `max_inflight = 16` dự trữ khoảng 1,7 MiB buffer. Đo
+`@sizeOf(MyClient)` cho target chính xác.
+
+## Memory TLS
+
+TLS client thêm một cached `SSL_CTX` và một `SSL` session cho mỗi in-flight
+connection. Mỗi session dùng memory BIO pair với mỗi side 32 KiB, nên budget thêm
+64 KiB mỗi TLS connection ngoài slot buffer. CA bundle được đọc một lần vào trust
+store của BoringSSL.
+
+## Concurrency
+
+Client thực hiện một request mỗi connection và không pool connection.
+`max_inflight` do đó là số socket đồng thời tối đa:
+
+| `max_inflight` | Buffer storage | Dùng                     |
+| -------------- | -------------: | ------------------------ |
+| `1`            |        108 KiB | Health check, CLI, test  |
+| `4`            |        432 KiB | Worker nhỏ               |
+| `16`           |        1,7 MiB | Batch job                |
+| `64`           |        6,8 MiB | High-concurrency fetcher |
+
+Bảng chỉ đếm buffer. Thêm TLS BIO memory cho TLS fetch và bản thân client value.
+
+## Quy tắc chọn kích thước
+
+| Rule                                     | Lý do                                     |
+| ---------------------------------------- | ----------------------------------------- |
+| Giữ `max_inflight` đúng concurrency thật | Mọi slot allocate trước                   |
+| Giảm `response_body_capacity` khi có thể | Logical limit vẫn bound decode            |
+| Dùng lại một client cho fetch lặp lại    | Nó cache một TLS context                  |
+| Dùng client riêng cho trust policy khác  | Cached context là immutable               |
+| Không copy client sau `init`             | Slot và completion sống ở địa chỉ cố định |
+| Drain mọi request trước `deinit`         | Client assert slot idle                   |
+
+## Response vượt giới hạn
+
+| Điều kiện                               | Kết quả                              |
+| --------------------------------------- | ------------------------------------ |
+| Head trên 16 KiB                        | `.capacity` failure                  |
+| Hơn 64 header field                     | `.capacity` failure                  |
+| Trailer trên 8 KiB                      | `.capacity` failure                  |
+| Body trên `response_body_capacity`      | `.capacity` failure                  |
+| `response_body_capacity` trên 64 KiB    | `error.ResponseBodyCapacityExceeded` |
+| View `fetch_blocking` không vừa storage | `.capacity` failure                  |
+
+Capacity failure đóng connection. Client không trả partial body.
+
+## Tiếp theo
+
+- [Timeouts và errors](/docs/client/timeouts-and-errors) map mọi failure kind.
+- [Callback client](/docs/client/callback-client) trình bày slot reuse.
+- [Capacity model](/docs/concepts/capacity-model) giải thích cùng fixed-slab design
+  trên server.
