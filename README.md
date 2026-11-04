@@ -27,7 +27,7 @@ Install dependencies and run the full check suite:
 
 ```bash
 pnpm install
-pnpm ready   # lint, format, typecheck, size, Vitest, workspace tests, builds
+pnpm ready   # lint, format, typecheck, size, tests, link validation, builds
 ```
 
 Day-to-day commands, all through the project-local Vite+ CLI:
@@ -43,21 +43,29 @@ pnpm typecheck                            # type-check every workspace
 pnpm i18n:check                           # check locale key parity and coverage
 pnpm test                                 # run the root Vitest suite
 pnpm test:watch                           # run Vitest in watch mode
-pnpm exec vp run uwz-docs#build           # build the uWebZockets docs site
-pnpm exec vp run uwz-docs#doctor          # diagnose the uWebZockets docs project
-pnpm exec vp run @farben/ui#check         # type-check the shared UI package
-pnpm exec vp run -r test                  # run tests across the workspace
-pnpm exec vp run -r build                 # build all workspace members
+pnpm test:all                             # root Vitest plus workspace test tasks
+pnpm test:workspace                       # every docs app test task
+pnpm build                                # build every workspace member
+pnpm build:uwz                            # build the uWebZockets docs site
+pnpm build:vws                            # build the ventiws docs site
+pnpm check:uwz                            # type-check the uWebZockets docs site
+pnpm check:vws                            # type-check the ventiws docs site
+pnpm check:ui                             # type-check the shared UI package
+pnpm preview:uwz                          # preview the built uWebZockets docs
+pnpm preview:vws                          # preview the built ventiws docs
+pnpm doctor:uwz                           # diagnose the uWebZockets docs project
+pnpm doctor:vws                           # diagnose the ventiws docs project
+pnpm validate:docs                        # strict Blume link validation
+pnpm audit:uwz                            # audit the built uWebZockets docs
 ```
 
 > The docs sites are Blume/Astro apps, so their dev servers start through their
 > package scripts. `vp dev` is Vite+'s built-in Vite server and cannot start
-> them; use `pnpm dev:uwz` / `pnpm dev:vws` (or `pnpm exec vp run dev:uwz`).
+> them; use `pnpm dev:uwz` / `pnpm dev:vws`.
 
-> On musl hosts, reach for the project-local CLI through `pnpm` (`pnpm exec vp …`).
-> The global `vp` is glibc-based and its helper tools cannot load the
-> musl-flavored native bindings that pnpm installs; the project-local CLI runs
-> under the shell's Node.js and stays consistent with the installed packages.
+> On musl hosts, use the pnpm scripts above. They resolve the project-local
+> Vite+ CLI, which runs under the shell's Node.js and matches the installed
+> native bindings; the global `vp` is glibc-based.
 
 ## Shared UI
 

@@ -138,11 +138,13 @@ pnpm typecheck
 pnpm i18n:check
 pnpm check:size
 pnpm test
-pnpm exec vp run -r test
-pnpm exec vp run -r build
-pnpm exec vp run uwz-docs#check
-pnpm exec vp run vws-docs#check
-pnpm exec vp run @farben/ui#check
+pnpm test:all
+pnpm build
+pnpm check:uwz
+pnpm check:vws
+pnpm check:ui
+pnpm validate:docs
+pnpm audit:uwz
 ```
 
 A report states the command, the working directory when it is not the root, the

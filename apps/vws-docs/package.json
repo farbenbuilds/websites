@@ -10,6 +10,8 @@
     "preview": "blume preview",
     "check": "blume check",
     "test": "blume validate",
+    "validate": "blume validate --strict",
+    "audit": "blume audit --fail-on warning",
     "doctor": "blume doctor"
   },
   "dependencies": {

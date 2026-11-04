@@ -47,18 +47,20 @@ pnpm typecheck
 pnpm i18n:check
 pnpm test
 pnpm test:watch
+pnpm test:all
 pnpm check:size
-pnpm exec vp run -r test
-pnpm exec vp run -r build
+pnpm build
 pnpm dev:uwz
 pnpm dev:vws
-pnpm exec vp run uwz-docs#check
-pnpm exec vp run vws-docs#check
-pnpm exec vp run @farben/ui#check
+pnpm check:uwz
+pnpm check:vws
+pnpm check:ui
+pnpm validate:docs
+pnpm audit:uwz
 ```
 
-Use `pnpm exec vp ...` on every host. The global `vp` cannot load musl native
-bindings on musl systems.
+Use these pnpm scripts on every host. They resolve the project-local Vite+ CLI;
+the global `vp` cannot load musl native bindings on musl systems.
 
 ## Engineering Contract
 
