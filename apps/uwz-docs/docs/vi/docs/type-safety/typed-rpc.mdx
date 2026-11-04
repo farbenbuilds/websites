@@ -1,5 +1,5 @@
 ---
-title: RPC có kiểu
+title: Typed RPC
 description: Mang named parameter và result type xuyên suốt JSON-RPC procedure và map mọi HandlerError thành protocol response.
 sidebar:
   order: 5
@@ -46,7 +46,7 @@ parameter type khác sẽ không compile.
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
 flowchart LR
-    accTitle: Luồng JSON-RPC có kiểu
+    accTitle: Luồng JSON-RPC có type
     accDescr: Adapter decode params thành named type, gọi procedure và serialize named result vào service buffer.
     A["JSON params"] --> B["parse_params"]
     B --> C["TransferParams"]

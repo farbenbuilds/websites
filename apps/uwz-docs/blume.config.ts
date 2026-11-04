@@ -23,6 +23,46 @@ const landingShellMarkdown: ComponentMarkdown = ({ childBlocks }) =>
     .map(({ markdown }) => markdown)
     .join("\n\n");
 
+type AstroIntegration = NonNullable<Parameters<typeof defineConfig>[0]["integrations"]>[number];
+
+// Narrow screens turn wide tables into horizontal scroll regions; they need a
+// tab stop so keyboard users can reach the overflow.
+const accessibleScrollableTables: AstroIntegration = {
+  name: "uwz-accessible-scrollable-tables",
+  hooks: {
+    "astro:config:setup": ({ injectScript }) => {
+      injectScript(
+        "head-inline",
+        `{
+          const update = () => {
+            for (const table of document.querySelectorAll(".prose table")) {
+              if (table.scrollWidth > table.clientWidth) {
+                table.setAttribute("tabindex", "0");
+              } else {
+                table.removeAttribute("tabindex");
+              }
+            }
+          };
+          const start = () => {
+            update();
+            const main = document.querySelector("main");
+            if (main && "ResizeObserver" in window) {
+              new ResizeObserver(update).observe(main);
+            }
+            window.addEventListener("resize", update, { passive: true });
+            document.fonts?.ready.then(update);
+          };
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", start, { once: true });
+          } else {
+            start();
+          }
+        }`,
+      );
+    },
+  },
+};
+
 export default defineConfig({
   title: "µWebZockets",
   description:
@@ -125,7 +165,7 @@ export default defineConfig({
       },
     },
   },
-  integrations: [svelte()],
+  integrations: [svelte(), accessibleScrollableTables],
   agents: {
     markdownComponents: {
       LandingShell: landingShellMarkdown,

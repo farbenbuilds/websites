@@ -1,12 +1,12 @@
 ---
 title: JSON-RPC 2.0
-description: Mount một service JSON-RPC 2.0 có kiểu và capacity cố định trên bất kỳ route nào, với procedure, error và giới hạn rõ ràng.
+description: Mount một service JSON-RPC 2.0 với type rõ ràng và capacity cố định trên bất kỳ route nào, với procedure, error và giới hạn rõ ràng.
 search:
   tags: [json-rpc, concept]
 ---
 
 `uz.json_rpc.Service` là một registry JSON-RPC 2.0 có capacity cố định. Nó decode
-named parameter thành kiểu Zig, serialize kết quả có kiểu vào response buffer có
+named parameter thành kiểu Zig, serialize kết quả theo type đã khai báo vào response buffer có
 giới hạn, và mount trên một POST route bằng `app.rpc`. Dispatcher không phụ thuộc
 request hay response HTTP; nó chỉ cần abort signal. Bạn có thể gọi nó từ một
 transport khác khi HTTP adapter không phù hợp.

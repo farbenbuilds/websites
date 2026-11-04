@@ -1,5 +1,5 @@
 ---
-title: C ABI types
+title: C ABI types and enums
 description: Read the opaque handles, slices, enums, frozen structs, and fixed capacities of the C header, and know which Zig surfaces it does not expose.
 sidebar:
   order: 8
@@ -64,7 +64,7 @@ copies the path; `user_data` stays caller-owned.
 The struct's field order, field types, and size must not change in ABI 1.x. New
 behavior uses new entry points, not new fields.
 
-## Enums
+## C ABI enums
 
 | Enum                    | Values                                                                                                                                                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
