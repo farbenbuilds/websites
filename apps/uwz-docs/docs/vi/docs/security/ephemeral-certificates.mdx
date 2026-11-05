@@ -1,0 +1,142 @@
+---
+title: Certificate tạm thời
+description: Khởi động HTTPS hoặc HTTP/3 server trong memory không cần certificate file, đọc nội dung certificate được generate và giữ nó ngoài production.
+sidebar:
+  order: 3
+search:
+  tags: [how-to, security, tls]
+---
+
+`init_https_ephemeral` generate ECDSA P-256 key và self-signed X.509 certificate
+bằng BoringSSL lúc startup. Không cần chạy `openssl`, không có file `.pem` và
+không có cấu hình chung phải đồng bộ với đồng đội. Cùng entry point này cũng có
+trên C ABI.
+
+## Khởi động HTTPS server cục bộ
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from ephemeral TLS") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_ephemeral(init.io);
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+```sh
+zig build run
+curl -k https://127.0.0.1:3443/
+```
+
+Response body là `hello from ephemeral TLS`. `-k` tắt certificate verification vì
+certificate generate ra là self-signed và không client nào tự tin nó.
+
+## Certificate được generate chứa gì
+
+| Field             | Giá trị                                       |
+| ----------------- | --------------------------------------------- |
+| Key               | ECDSA P-256, ký bằng SHA-256                  |
+| Subject           | `CN=localhost`                                |
+| SubjectAltName    | `DNS:localhost`, `IP:127.0.0.1`, `IP:::1`     |
+| Extended key use  | `serverAuth`                                  |
+| Key usage         | `digitalSignature`                            |
+| Basic constraints | `critical, CA:FALSE`                          |
+| Validity          | Một giờ trước startup đến 90 ngày sau startup |
+| Issuer            | Chính subject, vì certificate self-signed     |
+
+Thời điểm bắt đầu được lùi lại để chịu được lệch clock nhỏ giữa các máy. Ràng
+buộc `CA:FALSE` là thứ browser yêu cầu cho leaf certificate.
+
+## Tên tùy chỉnh
+
+`init_https_ephemeral` luôn dùng giá trị mặc định ở trên. Khi project dùng
+hostname cục bộ khác, tạo context bằng `CertificateNames`:
+
+```zig
+const names = uz.tls.CertificateNames{
+    .common_name = "api.example.test",
+    .dns_names = &.{ "api.example.test", "localhost" },
+    .ip_addresses = &.{ "127.0.0.1", "::1" },
+};
+var credentials = try uz.tls.TlsContext.init_ephemeral(names);
+defer credentials.deinit();
+```
+
+`CertificateNames` mặc định là `common_name = "localhost"`,
+`dns_names = &.{"localhost"}` và `ip_addresses = &.{"127.0.0.1", "::1"}`. Biến
+thể HTTP/3 là `TlsContext.init_http3_ephemeral(names)`.
+
+## HTTP/3 với credential generate
+
+`App.init_http3_ephemeral` tạo cả hai context: TCP quảng bá `h2` và `http/1.1`,
+QUIC quảng bá `h3`. Bind QUIC listener riêng:
+
+```zig
+var server = try uz.App(128).init_http3_ephemeral(init.io);
+defer server.deinit();
+
+_ = try server.get("/", index);
+try server.listen_udp("0.0.0.0", 8443);
+try server.catch_shutdown_signals();
+try server.run();
+```
+
+## Lifecycle và allocation
+
+Generation chạy một lần trong initializer, trước khi event loop khởi động.
+BoringSSL allocate trong lúc build key và certificate, còn context giữ reference
+riêng. Sau khi call trả về, connection setup, handshake, record processing và
+request path không allocate gì thêm. Không có gì được ghi xuống disk và credential
+không export được.
+
+Certificate mới được tạo ở mỗi lần start. Vì vậy restart sẽ làm mất hiệu lực các
+handshake đã cache, điều này chấp nhận được cho development và không phù hợp cho
+production fleet.
+
+## C ABI
+
+```c
+uwz_app *app = NULL;
+if (uwz_app_create_tls_ephemeral(&app) != UWZ_OK) {
+    /* generation failed */
+}
+/* register routes, listen, run, destroy as usual */
+```
+
+`uwz_app_create_http3_ephemeral` tương ứng với biến thể HTTP/3 của Zig. Khi
+generation fail, C layer trả `UWZ_ERROR_INTERNAL`; Zig layer trả error
+`Ephemeral*` cụ thể.
+
+## Vì sao không dùng cho production
+
+| Thuộc tính                       | Hệ quả                                             |
+| -------------------------------- | -------------------------------------------------- |
+| Self-signed và không export được | Không client hay trust store bên ngoài verify được |
+| Certificate mới ở mỗi lần start  | Session đã cache không sống qua restart            |
+| Một certificate cho mỗi process  | Pinning không đáng tin trên cả fleet               |
+| Không có issuer chain            | Client cần `-k` hoặc exception thủ công            |
+
+Hãy tạo certificate cục bộ được tin bằng `mkcert` hoặc internal CA. Truyền file
+cho `init_https` với HTTPS, hoặc cho `init_http3` với HTTP/3, khi service worker,
+thiết bị mobile hoặc HTTP/3 client strict cần verify name.
+
+## Liên quan
+
+- [Certificate production](/docs/security/production-certificates) thay credential
+  generate bằng PEM file.
+- [TLS 1.3 và ALPN](/docs/security/tls) giải thích context và negotiation policy mà
+  credential generate kế thừa.
+- [TLS server đầu tiên](/docs/examples/first-tls-server) hướng dẫn cùng server cục
+  bộ dưới dạng tutorial.

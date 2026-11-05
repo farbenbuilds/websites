@@ -1,0 +1,113 @@
+---
+title: Mô hình chi phí
+description: Đọc một ServerConfig như ngân sách bộ nhớ cố định, và tách chi phí slab mỗi connection khỏi throughput mà workload đạt được.
+sidebar:
+  order: 2
+search:
+  tags: [performance, capacity]
+---
+
+µWebZockets trả chi phí cho capacity một lần lúc startup. Sau đó request path
+tái sử dụng các region đã carve và trả về error có tên khi input hoặc output
+vượt giới hạn. Trang này biến `ServerConfig` thành những region tiêu bộ nhớ và
+giải thích vì sao ngân sách lớn hơn không tự nâng throughput.
+
+## Một allocation lúc startup
+
+`Server.builder(...).build` và `App.init` cấp phát một application slab liền
+mạch qua allocator bạn truyền. `App.init_from_slab` nhận storage do caller sở
+hữu với cùng hợp đồng. Slab được giải phóng một lần ở `deinit`.
+
+| Phase                             | Allocation                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `build` hoặc `init`               | Một application slab liền mạch                                                      |
+| Build (event loop)                | Bảng backend libxev cố định 4096 entry, độc lập với capacity                        |
+| `with_http_compression(true)`     | Một gzip codec và output scratch có giới hạn mỗi worker, ngoài slab                 |
+| `ServerConfig.compression = true` | RFC 7692 engine tái sử dụng cộng scratch mỗi connection                             |
+| Route registration                | Router storage cố định; RFC 7692 scratch khi đăng ký WebSocket route có compression |
+| TLS accept                        | Một `SSL` và BIO pair mỗi TLS connection                                            |
+| `Cluster.enable_https`            | Một `SSL_CTX` mỗi worker cộng credential loading lúc startup                        |
+| `listen_udp`                      | QUIC engine pool trước khi listener thành công                                      |
+| Request path                      | Không có sau dispatch và handshake                                                  |
+| `deinit`                          | Slab được giải phóng một lần                                                        |
+
+## Không allocation trên request path
+
+Cam kết này bao phủ dispatch của framework sau khi connection và TLS handshake
+đã tồn tại. Application code có thể allocation, và bốn request API làm việc đó
+với allocator bạn truyền: `Request.clone`, `req.json(T, allocator)`,
+`req.validate_json(T, allocator)` và `validate_json_detailed(T, allocator, issue)`.
+`Response.json` render qua allocator rồi giải phóng temporary trước khi trả về;
+`Response.json_buf` là lựa chọn có giới hạn.
+
+Khi request vượt capacity, framework từ chối thay vì mở rộng buffer. Kết quả
+thường gặp là `431` cho request line hoặc header block, `413` cho body, `503` cho
+WebSocket tunnel đã cạn và `error.WouldBlock` cho write ring đầy.
+
+## Một connection tốn bao nhiêu
+
+Mỗi region theo connection được nhân với `max_connections`. Region tuỳ chọn có độ
+dài 0 khi tính năng của nó tắt.
+
+| Region                        | Kích thước mỗi connection                             |
+| ----------------------------- | ----------------------------------------------------- |
+| Connection pool               | `sizeof(TcpConnection)`                               |
+| Pool freelist                 | `sizeof(usize)`                                       |
+| Request buffer                | `request_stride`                                      |
+| Header extras ngoài 64        | `extra_header_stride`                                 |
+| Route-capture extras ngoài 16 | `extra_route_param_stride`                            |
+| HTTP/2 session                | `h2_session_stride`                                   |
+| Write queue                   | `write_queue_size`                                    |
+| WebSocket message             | `max_ws_message_size`                                 |
+| RFC 7692 scratch              | `2 * worst_case_scratch` khi bật compression          |
+| Datagram ring                 | `datagram_slots * max_datagram_size` khi bật datagram |
+
+Router storage và metrics registry nằm sau các region theo connection và thuộc
+phạm vi toàn ứng dụng, không phải mỗi connection.
+
+## Bảng công thức
+
+| Đại lượng             | Công thức                                                                         |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `request_stride`      | `align16(max_request_line_size + max_header_size + max_body_size + 1024)`         |
+| Header slot bổ sung   | `align16((max_header_count - 64) * 2 * @sizeOf([]const u8))` khi count lớn hơn 64 |
+| Route capture bổ sung | `((max_route_params - 16) * 2 * @sizeOf([]const u8))` căn theo pointer alignment  |
+| HTTP/2 session        | `align(h2_session_bytes(), storage_alignment)`                                    |
+| RFC 7692 scratch      | `align16(2 * worst_case_scratch(max_ws_message_size))` khi bật `compression`      |
+| Datagram ring         | `datagram_slots * max_datagram_size` khi `max_datagram_size` khác 0               |
+| Application slab      | tổng các region theo connection nhân `max_connections`, cộng router và metrics    |
+| Worker inbox          | `(64 + 1) * max_ws_message_size` mỗi active worker                                |
+
+`request_stride` gồm request line, header block, 1024 byte framing slack và
+`max_body_size`, làm tròn lên bội số 16 byte. Write queue bắt đầu tại cache line
+64 byte.
+
+## HTTP/2 chiếm phần lớn footprint mỗi connection
+
+Mỗi connection nhúng một HTTP/2 session với tám stream cùng storage cho request,
+body và response. Session cũng sở hữu HPACK table và decoded-header storage. Vì
+vậy preset dồn byte vào chiều mà workload thực sự dùng thay vì tối đa hoá mọi
+field.
+
+`slab_bytes()` không tính inbox mỗi worker, `SSL_CTX` mỗi worker, bảng backend
+libxev, HTTP gzip pool, RFC 7692 engine hay QUIC engine pool. Hãy cộng chúng vào
+ngân sách riêng.
+
+## Capacity không phải throughput
+
+| Câu hỏi                           | Trả lời                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `max_connections` lớn hơn mua gì? | Nhiều connection slot đồng thời hơn trước khi TCP connection mới bị đóng                                |
+| Write queue lớn hơn mua gì?       | Một burst dài hơn trước khi producer thấy `error.WouldBlock`                                            |
+| Body limit lớn hơn mua gì?        | Chấp nhận upload lớn hơn, đổi lại request buffer của mọi connection lớn hơn                             |
+| Điều gì nâng throughput?          | Nhiều việc hữu ích hơn mỗi vòng event loop, nhiều worker hơn, ít handshake hơn và workload vừa capacity |
+
+Capacity là bound lúc compile-time hoặc startup. Throughput là thứ host và
+workload tạo ra trong bound đó. Slab lớn hơn có thể loại bỏ một rejection; nó
+không làm CPU nhanh hơn.
+
+## Liên quan
+
+- [Capacity model](/docs/concepts/capacity-model)
+- [Zero allocation](/docs/concepts/zero-allocation)
+- [Định cỡ capacity](/docs/performance/capacity-sizing)

@@ -1,0 +1,139 @@
+---
+title: Profiling
+description: Separate kernel sampling, user-space latency, allocator counts, runtime logs, and metrics before you explain a slowdown.
+sidebar:
+  order: 6
+search:
+  tags: [performance, observability]
+---
+
+Profiling is a set of layers, not a single tool. Kernel sampling, user-space
+latency, allocation counts, the development log, and the metrics registry answer
+different questions. This page states what each layer can show and where it
+stops.
+
+## What each layer can show
+
+| Layer              | Tool or surface                             | Shows                                              | Cannot show                                             |
+| ------------------ | ------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------- |
+| Kernel sampling    | `perf` when the host permits it             | CPU time by symbol and call stack                  | Blocked I/O or scheduler waits with full accuracy       |
+| User-space latency | `h2load` connect and TTFB rows              | Handshake time versus first byte                   | Kernel scheduling or driver time                        |
+| Allocation         | Counting allocator around `build` or `init` | Allocation count and order                         | Allocation inside vendor code after the wrapper returns |
+| Runtime events     | Development log                             | Request, connection, WebSocket, and metric records | Aggregate rates across a long run                       |
+| Counters           | Bounded Prometheus registry                 | Accepted, closed, requests, and WebSocket messages | Per-route latency or per-request allocation             |
+| eBPF               | Pinned per-CPU histogram                    | Packet observations from the kernel map            | A per-request trace or a bypass data path               |
+
+## perf limits
+
+Kernel sampling depends on `perf_event_paranoid` and on the host's permissions.
+A restricted host can deny kernel profiling entirely. The 2026-10-19
+`h2-tls-scaling-v1` archive records that kernel profiling was restricted on that
+host and claims no kernel profile. When sampling is unavailable, use user-space
+connect and TTFB rows, CPU and RSS samples, the development log, and the
+counters.
+
+| Condition                   | What you still have                                         |
+| --------------------------- | ----------------------------------------------------------- |
+| Kernel sampling allowed     | Symbol-level CPU attribution                                |
+| Kernel sampling restricted  | Generator latency, CPU and RSS observations, logs, counters |
+| Shared host with other work | Relative trends within the run, not absolute numbers        |
+| Unknown backend             | Do not attribute a result to io_uring or epoll              |
+
+The backend matters. A dynamic Linux build probes io_uring first and degrades to
+epoll when the kernel or a container policy rejects the ring. Record the
+selected backend and its fallback status when the loop exposes them.
+
+## User-space connect and TTFB
+
+`h2load` reports connect time and time to first byte. Use them to separate
+handshake cost from request handling. A plaintext control on the same host and
+flags isolates TLS cost. A single-application control isolates the cluster's
+accept distribution.
+
+| Observation                        | Interpretation                                        |
+| ---------------------------------- | ----------------------------------------------------- |
+| Connect time dominates TTFB        | Handshake or accept path is the bottleneck            |
+| TTFB dominates connect time        | Handler, queueing, or response path is the bottleneck |
+| Both rise with connection count    | Saturation or capacity pressure                       |
+| Both stay flat while failures rise | Rejection or reset path, not latency                  |
+
+## Allocator instrumentation
+
+Pass a counting allocator wrapper to `build` or `init`. The framework expects
+one allocation at startup and one release at `deinit`. The request path should
+not change the count.
+
+| Phase                                                                                    | Expected allocation                                    |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `build` or `init`                                                                        | One application slab                                   |
+| Request path                                                                             | None                                                   |
+| `Request.clone`, `req.json(T, allocator)`, `req.validate_json`, `validate_json_detailed` | Explicit application allocation                        |
+| `Response.json`                                                                          | A temporary through the allocator, freed before return |
+| `Response.json_buf`                                                                      | None; renders into caller storage                      |
+| `deinit`                                                                                 | One release                                            |
+
+If the count grows per request, inspect the handler for allocator-taking helpers,
+growable containers, body-building helpers, and slices stored past their
+callback.
+
+## Development log
+
+The development log is allocation-free and per worker. Each record is rendered
+into a fixed 4096-byte buffer and written immediately. A worker owns one sink;
+failed or short writes are dropped and counted in `Sink.dropped`.
+
+| API or setting             | Effect                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `with_observability(true)` | Enables the bounded Prometheus registry                                        |
+| `enable_dev_log`           | Defaults on; the default stderr sink stays quiet when stderr is not a terminal |
+| `with_dev_log(false)`      | Silences the wordmark, request lines, metric snapshots, and event records      |
+| `App.set_dev_log_file`     | Binds an output that always records                                            |
+| `App.flush_dev_log`        | Writes pending bytes                                                           |
+| `App.log_metrics`          | Writes every counter in the registry as one batch                              |
+
+HTTP/1.1 and HTTP/2 requests log as `HH:MM:SS | [METHOD] /path : STATUS`.
+Connection, WebSocket, and metric events follow with a direction badge.
+
+## Metrics registry
+
+The registry renders Prometheus text without allocating. Enable it with
+`with_observability(true)` and read it from the configured metrics path.
+
+| Counter                          | Advances on                          |
+| -------------------------------- | ------------------------------------ |
+| `uwz_connections_accepted_total` | An accepted TCP connection           |
+| `uwz_connections_closed_total`   | A closed connection                  |
+| `uwz_http_requests_total`        | HTTP/1.1 and HTTP/2 request dispatch |
+| `uwz_ws_messages_total`          | A WebSocket message                  |
+
+HTTP/3 emits one `http_request` record per completed exchange through the owning
+thread's sink, but the QUIC path does not advance the counter registry. Do not
+use `uwz_http_requests_total` as an HTTP/3 request count.
+
+## eBPF histogram limits
+
+The optional eBPF latency histogram is read when its map is pinned at
+`/sys/fs/bpf/uwz_latency`. Attaching the redirect, pinning the histogram, and
+populating the XSK map require Linux network-administration privileges.
+
+The server data path always serves through the standard network stack. A
+`ServerConfig.transport = .kernel_bypass` request reports `.standard` with reason
+`.data_path_unwired`; applications that want AF_XDP drive `uz.xdp_transport` and
+`uz.xdp` directly. The histogram is a per-CPU observation, not a per-request
+trace.
+
+## What cannot be claimed
+
+| Claim                                                | Why it is unsupported                                 |
+| ---------------------------------------------------- | ----------------------------------------------------- |
+| A kernel hotspot on a restricted host                | Sampling permission is missing                        |
+| HTTP/3 request counts from `uwz_http_requests_total` | The QUIC path does not advance the registry           |
+| Allocation source inside BoringSSL or lsquic         | The counting wrapper sees only the allocator boundary |
+| Bypass throughput from a standard-stack run          | The data path reports `.data_path_unwired`            |
+| A portable absolute number from one host             | Hardware, kernel, and backend differ                  |
+
+## Related
+
+- [Benchmarking](/docs/performance/benchmarking)
+- [Tuning](/docs/performance/tuning)
+- [Zero allocation](/docs/concepts/zero-allocation)

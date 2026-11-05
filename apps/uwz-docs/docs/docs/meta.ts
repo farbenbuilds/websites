@@ -18,5 +18,8 @@ export default defineMeta({
     "json-rpc",
     "type-safety",
     "client",
+    "security",
+    "architecture",
+    "performance",
   ],
 });

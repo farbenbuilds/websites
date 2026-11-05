@@ -1,0 +1,104 @@
+---
+title: Architecture
+description: Map the runtime beneath the public API, separate stable contracts from internals, and find the page for each subsystem.
+search:
+  tags: [concept, reference]
+---
+
+The architecture section explains how one application value becomes bounded
+runtime behavior. Read it when a preset, a latency number, or a shutdown failure
+needs an explanation below the signal that you observe.
+
+## Public contract and internals
+
+Two layers share this section. The public layer is what your application may
+name and depend on. The internal layer explains how that contract is delivered
+and may change between releases.
+
+| Layer    | Includes                                                                                            | Stability                            |
+| -------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Public   | `App`, `Server`, `ServerConfig`, `Presets`, `Request`, `Response`, `AsyncResponse`, cluster types   | Documented names, limits, and errors |
+| Internal | libxev loop wrapper, slab planner, completion callbacks, router arrays, worker group, cluster inbox | Implementation detail                |
+
+Public means documented on this site as a consumer entry point. Some modules are
+exported so framework internals and direct integrations can reach them, but they
+are not a stable consumer contract; the page labels those internal. Treat an
+undocumented symbol as internal even when the compiler can name it. A page never
+presents an internal entry point as public API, and no page asks you to read
+framework source to use the library.
+
+## Runtime map
+
+This page is the first of 14 in the section. The cards below cover the other 13:
+the runtime core first, then the boundaries and integrations built on it.
+
+### Core runtime
+
+<CardGroup cols={2}>
+  <Card title="Shared-nothing workers" href="/docs/architecture/shared-nothing" icon="share-2">
+    See what each worker owns, how one port feeds every loop, and why connection state never crosses
+    a thread.
+  </Card>
+  <Card title="Event loop and completions" href="/docs/architecture/event-loop" icon="activity">
+    Follow libxev backend selection, completion ownership, the release gate, and the timer tick.
+  </Card>
+  <Card title="Slab and memory model" href="/docs/architecture/memory-model" icon="database">
+    Read the slab regions, exact strides, presets, SoA layout, and exhaustion behavior.
+  </Card>
+  <Card title="Router internals" href="/docs/architecture/router-internals" icon="route">
+    Inspect parallel arrays, the static index, the radix walk, and the bounded pattern tables.
+  </Card>
+  <Card title="Callback lifecycle" href="/docs/architecture/callback-lifecycle" icon="git-branch">
+    Map every native completion to its handler, from accept to pool release.
+  </Card>
+  <Card title="Shutdown ordering" href="/docs/architecture/shutdown" icon="power">
+    Trace the five steps that reject work, cancel completions, verify the drain, and release
+    storage.
+  </Card>
+</CardGroup>
+
+### Boundaries and integrations
+
+<CardGroup cols={2}>
+  <Card title="Transports" href="/docs/architecture/transports" icon="network">
+    Separate the protocol core from TCP, TLS, HTTP/2, HTTP/3, UDP, and client transports.
+  </Card>
+  <Card title="Cluster internals" href="/docs/architecture/cluster-internals" icon="boxes">
+    Follow the worker group lifecycle, first-failure capture, and the publish report.
+  </Card>
+  <Card title="Runtime backends" href="/docs/architecture/backends" icon="cpu">
+    Compare io_uring, epoll, kqueue, and IOCP behavior and the fallback rules.
+  </Card>
+  <Card title="Edge and WASM" href="/docs/architecture/edge-and-wasm" icon="globe">
+    Read the freestanding and WASI exports, bounded allocators, and generation-checked handles.
+  </Card>
+  <Card title="C ABI architecture" href="/docs/architecture/c-abi" icon="braces">
+    Understand opaque handles, fixed capacities, and async tokens at the C boundary.
+  </Card>
+  <Card title="Dependency policy" href="/docs/architecture/dependencies" icon="package">
+    See which dependencies are vendored, which are forked, and why the versions are pinned.
+  </Card>
+  <Card title="kTLS and AF_XDP" href="/docs/architecture/ktls-and-xdp" icon="zap">
+    Check the standalone helper status, privileges, and what is not on the default data path.
+  </Card>
+</CardGroup>
+
+## How to read this section
+
+Start with [Shared-nothing workers](/docs/architecture/shared-nothing) and
+[Slab and memory model](/docs/architecture/memory-model) to learn what one
+worker owns and how that ownership is sized. Then read
+[Event loop and completions](/docs/architecture/event-loop) and
+[Callback lifecycle](/docs/architecture/callback-lifecycle) to follow work
+through the loop. Read [Shutdown ordering](/docs/architecture/shutdown) when a
+drain or a release fails.
+
+If you are choosing capacities, go directly to the memory model and then to the
+[Capacity model](/docs/concepts/capacity-model). If you are debugging a request,
+start from the [Request lifecycle](/docs/concepts/request-lifecycle).
+
+## Related
+
+- [Shared-nothing workers](/docs/concepts/shared-nothing)
+- [Capacity model](/docs/concepts/capacity-model)
+- [Server lifecycle](/docs/http/server-lifecycle)

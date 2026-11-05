@@ -1,0 +1,106 @@
+---
+title: Chính sách dependency
+description: Xem các thư viện được pin, maintained fork, quy tắc revision bất biến và chi phí build đầu tiên của một dependency µWebZockets.
+sidebar:
+  order: 13
+search:
+  tags: [concept, operations]
+---
+
+µWebZockets build TLS, QUIC, event loop, compression và WebSocket framing từ các
+package đã pin. Zig fetch và compile chúng, nên consumer không cần cài CMake,
+Ninja, Go, Perl, Python, `patch` hay system zlib. Trang này giải thích đồ thị
+dependency và policy giữ cho nó reproducible.
+
+## Đồ thị dependency
+
+| Dependency | Vai trò                                     | Dạng pin                     |
+| ---------- | ------------------------------------------- | ---------------------------- |
+| BoringSSL  | TLS 1.3 record, ALPN và crypto primitive    | Upstream commit              |
+| lsquic     | QUIC và HTTP/3 engine                       | Maintained fork, full commit |
+| ls-qpack   | QPACK header compression cho lsquic         | Upstream commit              |
+| ls-hpack   | HPACK support cho lsquic                    | Upstream commit              |
+| libxev     | Event loop backend và completion            | Maintained fork, full commit |
+| zslay      | WebSocket frame state machine               | Release archive              |
+| libdeflate | Deflate và gzip cho compression helper      | Upstream commit              |
+| zlib       | Compression compatibility và static archive | Release archive              |
+
+Mỗi entry trong `build.zig.zon` mang URL bất biến và Zig package hash. Hash là một
+phần của dependency resolution, nên archive hoặc commit bị đổi sẽ fail resolve
+thay vì âm thầm thay source đã review.
+
+## Maintained fork
+
+Hai runtime dependency dùng maintained fork:
+
+| Dependency | Fork branch    | Lý do fork                                             |
+| ---------- | -------------- | ------------------------------------------------------ |
+| libxev     | `uwz/zig-0.16` | Tương thích Zig 0.16 và sửa completion trên kqueue     |
+| lsquic     | `uwz/main`     | Scoping QPACK request-error và generated version table |
+
+Fork pin full 40-hex commit. Branch, tag hoặc short SHA không có thẩm quyền với
+maintained fork hoặc `h1spec` submodule. Gitlink `h1spec` trong parent tree và
+`.gitmodules` phải cùng trỏ tới một full commit.
+
+Fork mirror là bản copy chỉ đọc của upstream. Integration branch là append-only.
+Mọi downstream change có một ledger row với upstream reference, invariant, test
+evidence và retirement criterion, nên lý do divergence còn lại sau commit đã tạo
+nó.
+
+## Upstream chỉ đọc
+
+Upstream repository chỉ để fetch. Project không push lên đó, không mở issue hay
+pull request, và không gửi downstream patch ngược lên upstream. Fix cần diverge sẽ
+ở lại trong fork và ledger của nó. Nhờ vậy dependency audit diễn ra cục bộ: range
+được review là integration branch của fork, không phải upstream state khó đoán.
+
+## Build đầu và cache
+
+Build đầu tiên tải các package đã pin vào global và local cache của Zig rồi compile
+BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib. Các build sau dùng lại
+cache và không fetch lại. Chi phí này trả một lần cho mỗi cặp toolchain và cache,
+không phải mỗi lần application start.
+
+Package zlib đi kèm compile cho target đã chọn. Cross build không cần external zlib
+prefix, và Windows build không cần cài MinGW zlib. Bộ artifact `zig build lib` gồm
+static archive của µWebZockets, BoringSSL, lsquic, libdeflate và zlib.
+
+## Dùng package
+
+Thêm dependency từ project của bạn và pin revision bất biến:
+
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'
+```
+
+Sau đó nối module trong `build.zig`:
+
+```zig
+const uz = b.dependency("uWebZockets", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+```
+
+Pin release tag hoặc full commit thay vì branch đang di chuyển. Local path
+dependency cũng dùng được khi application vendor source. Package manifest tự fetch
+runtime dependency, nên downstream path dependency không cần `h1spec` development
+submodule.
+
+## Những gì policy không cam kết
+
+- Fork mirror không được build hoặc pin.
+- Tag không bao giờ là thẩm quyền cho maintained fork hoặc h1spec gitlink.
+- Package đã fetch dưới `zig-pkg` hoặc global cache không bao giờ bị sửa tại chỗ.
+- Nếu pin thiếu hoặc không truy cập được, cách xử lý là revert dependency change
+  hoặc khôi phục pin tốt gần nhất, không rewrite history.
+
+## Liên quan
+
+- [Transport](/docs/architecture/transports) cho thấy dependency nào sở hữu layer
+  transport nào.
+- [kTLS và AF_XDP](/docs/architecture/ktls-and-xdp) nói về standalone helper trên
+  Linux, không thuộc data path mặc định.
+- [Kiến trúc C ABI](/docs/architecture/c-abi) liệt kê static archive mà C consumer
+  link.

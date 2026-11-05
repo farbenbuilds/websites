@@ -1,0 +1,99 @@
+---
+title: Báo cáo lỗ hổng
+description: Dùng kênh riêng tư, gửi kèm bằng chứng maintainer cần và hiểu rõ version nào nhận được bản sửa trong release tiếp theo.
+sidebar:
+  order: 16
+search:
+  tags: [reference, security]
+---
+
+Báo cáo security đi qua kênh riêng tư. Một issue, pull request, discussion hoặc
+compliance report công khai có thể tiết lộ defect trước khi có bản sửa. Trang này
+tóm tắt policy trong
+[SECURITY.md](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+
+## Version được hỗ trợ
+
+| Version                        | Nhận bản sửa security |
+| ------------------------------ | --------------------- |
+| Revision development hiện tại  | Có                    |
+| Minor line đã release gần nhất | Có                    |
+| Tag release cũ hơn             | Không                 |
+| Snapshot trước đó              | Không                 |
+
+Snapshot cũ và raw transport internal không được hỗ trợ sẽ không nhận backport.
+Nếu bạn chạy một release cũ đã pin, hãy tái hiện vấn đề trên minor line mới nhất
+trước khi báo, hoặc nói rõ bạn không thể nâng cấp.
+
+## Kênh riêng tư
+
+Gửi báo cáo qua email tới một trong hai địa chỉ:
+
+- [trananhquan1009@gmail.com](mailto:trananhquan1009@gmail.com)
+- [noah1109.tran@gmail.com](mailto:noah1109.tran@gmail.com)
+
+Không mở issue, pull request, discussion hay Autobahn report công khai có chứa lỗ
+hổng chưa công bố. Không đính exploit đang hoạt động vào artifact công khai, kết
+quả benchmark hoặc log bundle trong một thread công khai.
+
+## Nội dung cần gửi
+
+| Mục                            | Chi tiết                                           |
+| ------------------------------ | -------------------------------------------------- |
+| Revision bị ảnh hưởng          | Commit hoặc tag, cùng platform đích và build mode  |
+| Reproducer tối thiểu           | Chương trình, chuỗi request hoặc packet capture    |
+| Kỳ vọng và quan sát            | Protocol hoặc API nên làm gì, và thực tế đã làm gì |
+| Impact và điều kiện tiên quyết | Ai kích hoạt được và họ được gì                    |
+| Log hoặc sanitizer output      | Đã loại bỏ secret, token và private key            |
+| Mitigation đề xuất             | Optional, nhưng giúp rút ngắn assessment           |
+
+Một reproducer tốt hơn một bản mô tả. Nếu vấn đề cần TLS, HTTP/2, HTTP/3 hoặc
+WebSocket upgrade, hãy nêu transport và client chính xác. Nếu cần một cấu hình,
+hãy gửi giá trị `ServerConfig`, vì nhiều bound là compile-time và không suy ra
+được từ trace.
+
+## Phạm vi
+
+| Bề mặt                                                     | Trong phạm vi |
+| ---------------------------------------------------------- | ------------- |
+| Routing request HTTP/1.1, HTTP/2 và HTTP/3                 | Có            |
+| WebSocket RFC 6455 và per-message deflate RFC 7692         | Có            |
+| TLS 1.3 context và mutual TLS                              | Có            |
+| Client HTTP/1.1 outbound                                   | Có            |
+| Middleware authentication và rate limit                    | Có            |
+| C ABI trong `include/uWebZockets.h`                        | Có            |
+| Raw QUIC engine, stream, packet và QPACK callback          | Không         |
+| `http3_extensions` và `webtransport` như feature đang chạy | Không         |
+| Handler, proxy hoặc secret storage của deployment          | Không         |
+
+Module raw QUIC dưới `src/quic` là internal và không phải consumer interface được
+hỗ trợ. Các extension module là helper có bound mà listener đang chạy không gọi,
+nên defect chỉ tái hiện khi gọi trực tiếp chúng là báo cáo khác với defect trên
+đường đang chạy.
+
+## Coordinated disclosure
+
+Maintainer xác nhận báo cáo, tái hiện và đánh giá, chuẩn bị bản sửa cùng regression
+test, rồi phối hợp công bố với bạn. Thời gian phản hồi phụ thuộc severity và thời
+gian của maintainer; không có service-level agreement cố định.
+
+| Giai đoạn         | Việc diễn ra                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| Xác nhận          | Báo cáo được đọc và một kênh trao đổi được thống nhất              |
+| Tái hiện          | Vấn đề được tái hiện trên revision được hỗ trợ                     |
+| Đánh giá          | Impact, điều kiện tiên quyết và version bị ảnh hưởng được xác lập  |
+| Sửa và regression | Patch được merge cùng regression test, test này fail trước khi sửa |
+| Công bố           | Advisory nêu version, impact và hướng dẫn nâng cấp                 |
+
+Hãy dành một khoảng remediation và release hợp lý trước khi công bố. Advisory ghi
+công reporter nếu được yêu cầu và tránh chi tiết exploit không cần thiết trước
+khi có bản sửa. Nếu bạn định công bố độc lập, hãy nói với maintainer khi gửi báo
+cáo để lịch trình rõ ràng thay vì ngầm hiểu.
+
+## Tiếp theo
+
+- [Threat model](/docs/security/threat-model) nêu các boundary framework nhận.
+- [Mô hình bảo mật](/docs/concepts/security-model) tóm tắt control và bằng chứng
+  đã có.
+- [Gia cố input](/docs/security/input-hardening) trình bày các parser limit mà báo
+  cáo thường liên quan.

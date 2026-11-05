@@ -1,0 +1,109 @@
+---
+title: Dependency policy
+description: Review the pinned libraries, maintained forks, immutable revision rules, and first-build cost behind a µWebZockets dependency.
+sidebar:
+  order: 13
+search:
+  tags: [concept, operations]
+---
+
+µWebZockets builds its TLS, QUIC, event loop, compression, and WebSocket
+framing from pinned packages. Zig fetches and compiles them, so a consumer needs
+no CMake, Ninja, Go, Perl, Python, `patch`, or system zlib installation. This
+page explains the dependency graph and the policy that keeps it reproducible.
+
+## Dependency graph
+
+| Dependency | Role                                         | Pin form                     |
+| ---------- | -------------------------------------------- | ---------------------------- |
+| BoringSSL  | TLS 1.3 records, ALPN, and crypto primitives | Upstream commit              |
+| lsquic     | QUIC and HTTP/3 engine                       | Maintained fork, full commit |
+| ls-qpack   | QPACK header compression used by lsquic      | Upstream commit              |
+| ls-hpack   | HPACK support used by lsquic                 | Upstream commit              |
+| libxev     | Event loop backends and completions          | Maintained fork, full commit |
+| zslay      | WebSocket frame state machine                | Release archive              |
+| libdeflate | Deflate and gzip for compression helpers     | Upstream commit              |
+| zlib       | Compression compatibility and static archive | Release archive              |
+
+Every entry in `build.zig.zon` carries an immutable URL and a Zig package hash.
+The hash is part of dependency resolution, so a changed archive or commit fails
+to resolve instead of silently replacing the reviewed source.
+
+## Maintained forks
+
+Two runtime dependencies use a maintained fork:
+
+| Dependency | Fork branch    | Why the fork exists                                       |
+| ---------- | -------------- | --------------------------------------------------------- |
+| libxev     | `uwz/zig-0.16` | Zig 0.16 compatibility and kqueue completion fixes        |
+| lsquic     | `uwz/main`     | QPACK request-error scoping and a generated version table |
+
+A fork pins a full 40-hex commit. A branch, tag, or short SHA is not
+authoritative for the maintained forks or for the `h1spec` submodule. The
+`h1spec` gitlink in the parent tree and `.gitmodules` must both name the same
+full commit.
+
+Fork mirrors are read-only copies of upstream. Integration branches are
+append-only. Every downstream change has a ledger row with its upstream
+reference, invariant, test evidence, and retirement criterion, so the reason for
+a divergence survives the commit that introduced it.
+
+## Read-only upstreams
+
+Upstream repositories are fetch-only. The project does not push to them, open
+issues or pull requests there, or submit a downstream patch upstream. A fix that
+needs to diverge stays in the fork and its ledger. This keeps the dependency
+audit local: the reviewed range is the fork's integration branch, not an
+unpredictable upstream state.
+
+## First build and caches
+
+The first build downloads the pinned packages into Zig's global and local
+caches and compiles BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib.
+Later builds reuse those caches and need no re-fetch. The cost is paid once per
+toolchain and cache pair, not per application start.
+
+The bundled zlib package compiles for the selected target. A cross build needs
+no external zlib prefix, and a Windows build needs no MinGW zlib installation.
+The `zig build lib` artifact set includes the µWebZockets, BoringSSL, lsquic,
+libdeflate, and zlib static archives.
+
+## Consuming the package
+
+Add the dependency from your own project and pin an immutable revision:
+
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'
+```
+
+Then wire the module in your `build.zig`:
+
+```zig
+const uz = b.dependency("uWebZockets", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+```
+
+Pin a release tag or a full commit rather than a moving branch. A local path
+dependency also works when your application vendors the source. The package
+manifest fetches the runtime dependencies itself, so a downstream path
+dependency does not need the `h1spec` development submodule.
+
+## What the policy does not promise
+
+- A fork mirror is not built or pinned.
+- A tag is never the authority for a maintained fork or the h1spec gitlink.
+- A fetched package under `zig-pkg` or a global cache is never edited in place.
+- A missing or unreachable pin is fixed by reverting the dependency change or
+  restoring the last known-good pin, not by rewriting history.
+
+## Related
+
+- [Transports](/docs/architecture/transports) shows which dependency owns which
+  transport layer.
+- [kTLS and AF_XDP](/docs/architecture/ktls-and-xdp) covers the standalone Linux
+  helpers that are not part of the default data path.
+- [C ABI architecture](/docs/architecture/c-abi) lists the static archives a C
+  consumer links.

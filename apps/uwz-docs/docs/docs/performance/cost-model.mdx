@@ -1,0 +1,114 @@
+---
+title: Cost model
+description: Read one ServerConfig as a fixed memory budget, and separate per-connection slab cost from the throughput your workload can reach.
+sidebar:
+  order: 2
+search:
+  tags: [performance, capacity]
+---
+
+µWebZockets pays for capacity once at startup. After that, the request path
+reuses carved regions and reports a named error when input or output exceeds a
+limit. This page turns `ServerConfig` into the regions that consume memory and
+explains why a larger budget does not by itself raise throughput.
+
+## One allocation at startup
+
+`Server.builder(...).build` and `App.init` allocate one contiguous application
+slab through the allocator you pass. `App.init_from_slab` accepts caller-owned
+storage with the same contract. The slab is released once at `deinit`.
+
+| Phase                             | Allocation                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `build` or `init`                 | One contiguous application slab                                                        |
+| Build (event loop)                | A fixed 4096-entry libxev backend table, independent of capacity                       |
+| `with_http_compression(true)`     | One gzip codec and bounded output scratch per worker, outside the slab                 |
+| `ServerConfig.compression = true` | Reusable RFC 7692 engines plus per-connection scratch                                  |
+| Route registration                | Fixed router storage; RFC 7692 scratch when a compressed WebSocket route is registered |
+| TLS accept                        | One `SSL` and BIO pair per TLS connection                                              |
+| `Cluster.enable_https`            | One `SSL_CTX` per worker plus startup credential loading                               |
+| `listen_udp`                      | QUIC engine pools before the listener succeeds                                         |
+| Request path                      | None after dispatch and handshake                                                      |
+| `deinit`                          | The slab is released once                                                              |
+
+## No allocation on the request path
+
+The guarantee covers framework dispatch after the connection and its TLS
+handshake exist. Application code can allocate, and four request APIs do so with
+the allocator you pass: `Request.clone`, `req.json(T, allocator)`,
+`req.validate_json(T, allocator)`, and `validate_json_detailed(T, allocator, issue)`.
+`Response.json` renders through an allocator and frees the temporary before it
+returns; `Response.json_buf` is the bounded alternative.
+
+When a request exceeds capacity, the framework rejects it instead of growing a
+buffer. The common results are `431` for a request line or header block, `413`
+for a body, `503` for an exhausted WebSocket tunnel, and `error.WouldBlock` for a
+full write ring.
+
+## What one connection costs
+
+Each per-connection region is multiplied by `max_connections`. An optional region
+has zero length when its feature is off.
+
+| Region                         | Size per connection                                        |
+| ------------------------------ | ---------------------------------------------------------- |
+| Connection pool                | `sizeof(TcpConnection)`                                    |
+| Pool freelist                  | `sizeof(usize)`                                            |
+| Request buffer                 | `request_stride`                                           |
+| Header extras beyond 64        | `extra_header_stride`                                      |
+| Route-capture extras beyond 16 | `extra_route_param_stride`                                 |
+| HTTP/2 session                 | `h2_session_stride`                                        |
+| Write queue                    | `write_queue_size`                                         |
+| WebSocket message              | `max_ws_message_size`                                      |
+| RFC 7692 scratch               | `2 * worst_case_scratch` when compression is on            |
+| Datagram ring                  | `datagram_slots * max_datagram_size` when datagrams are on |
+
+Router storage and the metrics registry follow the per-connection regions and
+are application-wide rather than per connection.
+
+## Formula table
+
+| Quantity             | Formula                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `request_stride`     | `align16(max_request_line_size + max_header_size + max_body_size + 1024)`              |
+| Extra header slots   | `align16((max_header_count - 64) * 2 * @sizeOf([]const u8))` when the count exceeds 64 |
+| Extra route captures | `((max_route_params - 16) * 2 * @sizeOf([]const u8))` aligned to pointer alignment     |
+| HTTP/2 session       | `align(h2_session_bytes(), storage_alignment)`                                         |
+| RFC 7692 scratch     | `align16(2 * worst_case_scratch(max_ws_message_size))` when `compression` is on        |
+| Datagram ring        | `datagram_slots * max_datagram_size` when `max_datagram_size` is nonzero               |
+| Application slab     | sum of per-connection regions times `max_connections`, plus router and metrics         |
+| Worker inbox         | `(64 + 1) * max_ws_message_size` per active worker                                     |
+
+`request_stride` is the request line, the header block, 1024 bytes of framing
+slack, and `max_body_size`, rounded up to 16 bytes. Write queues start on a
+64-byte cache line.
+
+## HTTP/2 dominates the per-connection footprint
+
+Each connection embeds one HTTP/2 session with eight streams and request, body,
+and response storage. The session also owns the HPACK table and decoded-header
+storage. That is why the presets spend bytes on the dimensions a workload
+actually uses instead of maximizing every field.
+
+`slab_bytes()` does not include the per-worker inbox, the per-worker `SSL_CTX`,
+the libxev backend table, the HTTP gzip pool, the RFC 7692 engines, or the QUIC
+engine pools. Add them to the budget separately.
+
+## Capacity is not throughput
+
+| Question                                  | Answer                                                                                                                     |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| What does a larger `max_connections` buy? | More simultaneous connection slots before new TCP connections are closed                                                   |
+| What does a larger write queue buy?       | A longer burst before a producer sees `error.WouldBlock`                                                                   |
+| What does a larger body limit buy?        | Acceptance of a larger upload, at the cost of every connection's request buffer                                            |
+| What raises throughput?                   | More useful work per event-loop iteration, more workers, fewer handshakes, and a workload that fits the available capacity |
+
+Capacity is a compile-time or startup bound. Throughput is what the host and
+workload deliver within that bound. A larger slab can remove a rejection; it
+does not make the CPU faster.
+
+## Related
+
+- [Capacity model](/docs/concepts/capacity-model)
+- [Zero allocation](/docs/concepts/zero-allocation)
+- [Capacity sizing](/docs/performance/capacity-sizing)

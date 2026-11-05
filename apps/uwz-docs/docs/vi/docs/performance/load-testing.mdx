@@ -1,0 +1,159 @@
+---
+title: Load test
+description: Định hình workload khớp traffic của bạn, đếm mọi failure và coi headroom là evidence thay vì một phỏng đoán thiếu cơ sở.
+sidebar:
+  order: 5
+search:
+  tags: [performance, capacity]
+---
+
+Load test trả lời hai câu hỏi: workload có vừa capacity đã cấu hình không, và
+latency bắt đầu cong ở đâu? Nó không tạo ra một benchmark number dùng chung. Dùng
+cùng host, generator và toolchain cho mọi lần chạy bạn so sánh.
+
+## Định hình workload
+
+| Chiều                          | Quyết định                                      | Vì sao làm đổi kết quả                                       |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------ |
+| Method và path                 | `GET /`, `POST /upload`, WebSocket route        | Parser, handler và response path khác nhau                   |
+| Body size                      | Dưới `max_body_size`                            | Body quá lớn nhận `413`, không phải handler chậm hơn         |
+| Header size và count           | Dưới `max_header_size` và `max_header_count`    | Block quá lớn nhận `431`                                     |
+| Keep-alive                     | Bật cho HTTP/1.1                                | Connection mới mỗi request đo handshake thay vì request path |
+| Connection                     | Bằng hoặc dưới `max_connections`                | TCP connection vượt mức bị đóng                              |
+| TLS                            | Bật hoặc tắt, chỉ TLS 1.3 cho lần chạy được ghi | Handshake và record processing thêm chi phí                  |
+| HTTP version                   | HTTP/1.1, HTTP/2 hoặc HTTP/3                    | Multiplexing và flow control khác nhau                       |
+| Stream HTTP/2                  | 1 và 8                                          | Session compile-time mang tám stream                         |
+| WebSocket message size và rate | Bằng hoặc dưới `max_ws_message_size`            | Message quá lớn bị từ chối                                   |
+| Duration                       | Đủ dài để tới steady state                      | Run ngắn đo startup và warmup                                |
+
+Dùng credential PEM thật cho lần chạy TLS được ghi. Ephemeral development
+certificate không phải evidence chấp nhận được cho một measurement công bố.
+
+## Keep-alive và connection count
+
+`idle_timeout_ms` đóng một keep-alive connection đã drain sau 120 giây mặc định.
+Generator mở connection mỗi request sẽ đo handshake path thay vì request path.
+Generator vượt `max_connections` thấy TCP connection mới bị đóng, không phải
+request được xếp hàng.
+
+| Quan sát                                       | Nguyên nhân có khả năng                     |
+| ---------------------------------------------- | ------------------------------------------- |
+| Throughput tăng khi bật keep-alive             | Handshake cost đang chiếm ưu thế            |
+| Connection mới đóng ngay tại một mốc cố định   | Đã chạm `max_connections`                   |
+| Throughput giảm trong khi CPU rảnh             | Peer không đọc, nên write ring backpressure |
+| Tail latency tăng trước khi throughput bão hoà | Queueing, không phải parser defect          |
+
+## TLS
+
+TLS 1.3 handshake và `SSL` state mỗi connection là chi phí thật. Đo cả plaintext
+control lẫn TLS path, và giữ chúng ở cohort riêng. Cluster TLS tạo một `SSL_CTX`
+mỗi worker, nên session resumption bị giới hạn bởi ticket key của từng worker.
+Không biến resumption mix của một worker thành claim xuyên worker.
+
+| Kiểm tra          | Ghi lại                                  |
+| ----------------- | ---------------------------------------- |
+| Nguồn certificate | File PEM thật ký bởi local CA            |
+| Protocol          | TLS 1.3 và ALPN đã negotiate             |
+| Resumption        | Session mới và tái sử dụng mỗi worker    |
+| Control           | Plaintext cluster trên cùng host và flag |
+
+## Stream HTTP/2
+
+Một connection nhúng một HTTP/2 session với tám stream. Chạy ở một và tám stream
+đồng thời mỗi session. Flow control và stream storage có giới hạn; stream không
+nhận được write báo `error.WouldBlock`, và HTTP/2 tunnel không đủ chỗ cho một
+send sẽ kết thúc tunnel thay vì giữ frame.
+
+| Mức      | Bài kiểm tra                                                     |
+| -------- | ---------------------------------------------------------------- |
+| 1 stream | Latency mỗi request và header processing                         |
+| 8 stream | Session storage, flow control và write scheduling                |
+| Hơn 8    | Bị session capacity từ chối hoặc xếp hàng, không phải stream mới |
+
+## WebSocket echo
+
+Workload echo kiểm tra upgrade, framing và outbound queue. Giới hạn inbound
+message bằng `max_ws_message_size` và pending outbound byte bằng
+`write_queue_size`. Khi gặp `error.WouldBlock`, giữ frame trong storage do ứng
+dụng sở hữu, trả về từ callback và thử lại trong `drain` callback của route. Dùng
+`ws.buffered_amount()` để quyết định còn frame nào vừa không.
+
+| Measurement             | Nguồn                     |
+| ----------------------- | ------------------------- |
+| Message gửi và nhận     | Counter của ứng dụng      |
+| Send bị drop hoặc block | Số lần `error.WouldBlock` |
+| Close code              | WebSocket close frame     |
+| Backlog mỗi connection  | `ws.buffered_amount()`    |
+
+## Tooling
+
+| Tool          | Dùng cho                               | Đọc                                                            |
+| ------------- | -------------------------------------- | -------------------------------------------------------------- |
+| `wrk`         | Throughput HTTP/1.1 keep-alive         | Requests per second, latency, socket error, response non-2xx   |
+| `h2load`      | HTTP/2 trên TLS hoặc prior knowledge   | Succeeded, failed, errored, timeout, status code, TLS protocol |
+| Custom client | WebSocket echo và application protocol | Round-trip time, drop, close code, lỗi application             |
+
+Contract `http-throughput-v1` dùng `wrk` với hai thread, 64 connection và
+duration 10 giây:
+
+```sh
+wrk -t2 -c64 -d10s http://127.0.0.1:3000/
+```
+
+Contract `h2-tls-scaling-v1` dùng `h2load` ở 64 đến 2,048 connection và một hoặc
+tám stream mỗi session. Giữ generator version trong record.
+
+## Định nghĩa thành công
+
+| Kiểm tra        | Điều kiện pass                                       |
+| --------------- | ---------------------------------------------------- |
+| Request failed  | `failed == 0`                                        |
+| Request errored | `errored == 0`                                       |
+| Timeout         | `timeout == 0`                                       |
+| Status code     | Mọi status được báo là `2xx`                         |
+| TLS sample      | `TLS Protocol: TLSv1.3` cho mọi sample               |
+| Response body   | Đúng body `hello from a TLS worker group`            |
+| Server log      | Không panic, protocol error hay libxev invalid-state |
+| Shutdown        | Exit status 0 sau `SIGTERM`; status 143 làm run fail |
+
+Run thiếu counter hoặc rate bằng 0 là fail. Nó không pass im lặng chỉ vì con số
+tiêu đề trông hợp lý.
+
+## Error accounting
+
+| Signal                                 | Ý nghĩa                                     | Việc cần làm                               |
+| -------------------------------------- | ------------------------------------------- | ------------------------------------------ |
+| `413 Payload Too Large`                | Body vượt `max_body_size`                   | Tăng body limit hoặc giảm body             |
+| `431 Request Header Fields Too Large`  | Request line hoặc header block vượt limit   | Tăng limit hoặc giảm header                |
+| `503 Service Unavailable`              | WebSocket tunnel hoặc capacity limit đã cạn | Tăng capacity hoặc giảm concurrency        |
+| `error.WouldBlock`                     | Write không vừa queue có giới hạn           | Resume từ `drain`; không spin              |
+| `error.ClusterQueueFull`               | Inbox của worker đầy                        | Xem `publish_report` và làm chậm publisher |
+| `failed` hoặc `errored` trong `h2load` | Generator không hoàn tất request            | Giữ sample là failure và điều tra          |
+
+## Capacity headroom
+
+Chạy ở các tỷ lệ tăng dần của `max_connections`, ví dụ 50, 75 và 90 percent.
+Chỉ claim headroom khi mọi sample có zero request failed, errored, timed-out và
+non-2xx, đồng thời latency nằm trong mục tiêu của bạn.
+
+Nếu failure xuất hiện, giới hạn là workload chứ không phải connection count.
+Tăng capacity liên quan hoặc giảm load, rồi lặp lại run. Không lấy trung bình để
+xóa sample fail.
+
+## Tránh so sánh host khác nhau
+
+| Không so sánh                            | Vì sao                                    |
+| ---------------------------------------- | ----------------------------------------- |
+| Host local với shared CI runner          | CPU quota, scheduling và cache khác nhau  |
+| Linux io_uring với macOS kqueue          | Backend, kernel và CPU sampling khác nhau |
+| Quiet host với host đang chạy build khác | Tranh chấp làm đổi median                 |
+| Một generator version với version khác   | Request generation và counter khác nhau   |
+
+Kết quả chỉ so sánh được trong cùng một host, kernel, toolchain và backend
+cohort. Ghi cohort cùng với kết quả.
+
+## Liên quan
+
+- [Benchmarking](/docs/performance/benchmarking)
+- [Định cỡ capacity](/docs/performance/capacity-sizing)
+- [Backpressure](/docs/concepts/backpressure)

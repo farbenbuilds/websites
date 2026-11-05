@@ -1,0 +1,121 @@
+---
+title: kTLS and AF_XDP
+description: Separate the standalone Linux kTLS and AF_XDP helper modules from the server data path, which neither one drives.
+sidebar:
+  order: 14
+search:
+  tags: [concept, ktls, xdp, platform]
+---
+
+`uz.ktls` and `uz.xdp` are Linux helpers that an application can drive
+directly. Neither is integrated into the server's accept, read, or write path.
+This page states what each module owns, which kernel features it needs, and why
+a `kernel_bypass` request still reports the standard transport.
+
+## Standalone status
+
+| Module             | Provides                                      | Server data path    |
+| ------------------ | --------------------------------------------- | ------------------- |
+| `uz.ktls`          | Kernel TLS socket options and zero-copy sends | Not wired           |
+| `uz.xdp`           | AF_XDP sockets, UMEM rings, and TX frames     | Not wired           |
+| `uz.xdp_transport` | Availability policy, UMEM helpers, fallback   | Direct callers only |
+
+kTLS rejects a non-Linux target at compile time when the helper is used.
+AF_XDP reports `.standard` with `unsupported_platform` at runtime when the
+target is not Linux.
+
+## kTLS
+
+`uz.ktls` applies Linux kernel TLS to a socket that the application already
+owns. It does not perform a handshake and does not manage certificates.
+
+| Function                | Effect                                                      |
+| ----------------------- | ----------------------------------------------------------- |
+| `enable`                | Sets the `tls` upper-layer protocol on a TCP socket         |
+| `configure_aes_gcm_128` | Installs TLS 1.2 AES-128-GCM record state for one direction |
+| `enable_aes_gcm_128`    | Enables kTLS and installs that record state in one call     |
+| `sendfile_once`         | Sends file bytes to a kTLS socket without a user copy       |
+| `splice_once`           | Splices pipe bytes to a kTLS socket without a user copy     |
+
+The record state is AES-128-GCM for TLS 1.2. The module reports
+`KernelTlsUnavailable` when the kernel lacks the upper-layer protocol,
+`PermissionDenied` when the socket options are not permitted, and `WouldBlock`
+for a non-blocking transfer that cannot make progress.
+
+The pinned BoringSSL has no supported key handoff to the kernel. The framework
+therefore cannot move an established server TLS connection into kTLS, and the
+connection path never attempts it. kTLS remains available to an application
+that terminates or manages its own record layer and wants kernel-assisted
+record processing and zero-copy file or pipe sends.
+
+## AF_XDP
+
+`uz.xdp` is the socket layer. It owns UMEM registration, the fill, completion,
+receive, and transmit rings, and frame recycling. A frame returns to the free
+stack only after the completion ring reports that the kernel is done with it.
+
+`uz.xdp_transport` is the policy and ownership layer. `XdpTransport` owns one
+socket, the caller-provided UMEM, and a fixed free-frame stack of up to 4,096
+frames. Its default configuration uses 2,048-byte chunks, 1,024 frames, and a
+copying data path; zero-copy is requested explicitly.
+
+`resolve_mode` returns `.standard` on a non-Linux target. `probe` creates and
+releases a probe socket and never fails, so startup can fall back:
+
+| Reason                  | Meaning                                             |
+| ----------------------- | --------------------------------------------------- |
+| `unsupported_platform`  | Not Linux                                           |
+| `kernel_unavailable`    | The kernel or socket family does not support AF_XDP |
+| `permission_denied`     | The process lacks permission                        |
+| `invalid_configuration` | UMEM or ring geometry rejected                      |
+| `data_path_unwired`     | The helper exists, but no server path dispatches    |
+
+## Why kernel bypass is not active
+
+`ServerConfig.transport = .kernel_bypass` is a request, not a guarantee. The
+server data path always serves through the standard stack. At startup, a
+`kernel_bypass` request reports `.standard` with reason `.data_path_unwired` and
+increments the `xdp_kernel_bypass_fallbacks` counter instead of claiming a
+bypass that no accept or read path uses.
+
+| Path                     | Result                                           |
+| ------------------------ | ------------------------------------------------ |
+| `ServerConfig.transport` | Reports `.standard`, reason `.data_path_unwired` |
+| XSK redirect             | Never attached by the server                     |
+| `uz.xdp_transport`       | Available to code that drives it directly        |
+| `uz.xdp`                 | Available to code that owns its own rings        |
+
+Applications that want AF_XDP drive `uz.xdp_transport` and `uz.xdp` themselves
+and take responsibility for the socket, UMEM, rings, and frame lifetime.
+
+## eBPF objects and privileges
+
+The `ebpf` build step emits two objects:
+
+| Object          | Purpose                         |
+| --------------- | ------------------------------- |
+| `uwz_xdp.o`     | XSK redirect program            |
+| `uwz_latency.o` | Per-CPU packet-length histogram |
+
+The hidden `/metrics` endpoint reads the histogram when it is pinned at
+`/sys/fs/bpf/uwz_latency`. Attaching the redirect, pinning the histogram, and
+populating the XSK map require Linux network-administration privileges. None of
+these steps is part of an unprivileged application start.
+
+## Limits
+
+- kTLS is Linux-only and is not a TLS 1.3 offload in this build.
+- AF_XDP is Linux-only and needs a compatible driver, queue, and privileges.
+- Neither module changes the server's transport when configured through
+  `ServerConfig`.
+- A deployment that needs a real bypass must build and operate the direct path
+  itself, then verify it outside the framework's standard transport metrics.
+
+## Related
+
+- [Transports](/docs/architecture/transports) shows where these helpers sit
+  relative to the protocol core.
+- [Dependency policy](/docs/architecture/dependencies) covers the pinned
+  BoringSSL and libxev revisions.
+- [QUIC transport](/docs/http3/quic-transport) covers the UDP path that is
+  integrated.

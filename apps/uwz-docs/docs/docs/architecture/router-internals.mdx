@@ -1,0 +1,150 @@
+---
+title: Router internals
+description: See how the router stores routes in parallel arrays, resolves static paths through an FNV-1a index, and freezes after listening.
+sidebar:
+  order: 5
+search:
+  tags: [concept, routing]
+---
+
+The router is a bounded data structure that the application carves once and
+never grows. It combines an open-addressed index for exact paths with a radix
+walk and a small pattern table. This page explains the storage, the lookup
+order, and the registration rules behind the public routing model.
+
+## Carved router storage
+
+`src/router/radix.zig` holds the router. `ServerConfig` projects its capacities
+through `router_capacities()`, and the slab's router region is carved with the
+internal `radix.carve_storage` during application startup. Nothing in the router
+allocates on a request.
+
+| Capacity               | Default | `ServerConfig` field      |
+| ---------------------- | ------: | ------------------------- |
+| Radix nodes            |     256 | `max_route_nodes`         |
+| Parameterized patterns |      64 | `max_pattern_routes`      |
+| Middleware callbacks   |      32 | `max_middleware`          |
+| Route path length      |   2 KiB | `max_route_path_size`     |
+| Captures per request   |      16 | `max_route_params`        |
+| Retained path registry |  64 KiB | `max_route_registry_size` |
+
+Each node stores one path segment, so a shared prefix counts once. Node indexes
+are `u16`, which is why the node count is bounded at `maxInt(u16)`.
+
+## Parallel arrays
+
+The router keeps each field in its own array instead of one large node struct.
+A lookup that only needs child links does not touch handler or registry storage.
+
+| Array             | Purpose                                                       |
+| ----------------- | ------------------------------------------------------------- |
+| `segment_offsets` | Offset of each node's segment inside the shared route bytes   |
+| `segment_lengths` | Byte length of each node's segment                            |
+| `first_child`     | First child node index, or the null sentinel                  |
+| `next_sibling`    | Next sibling node index, or the null sentinel                 |
+| `parents`         | Parent node per node, used to verify an index hit             |
+| `has_route`       | Whether a node terminates at least one registered route       |
+| `http_handlers`   | One callback slot per HTTP method per node                    |
+| `ws_behaviors`    | Optional WebSocket behavior per node                          |
+| `static_nodes`    | Static-index slot to node mapping                             |
+| `static_hashes`   | Static-index slot to full-path FNV-1a hash                    |
+| `pattern_routes`  | Pattern callbacks, static byte count, capture count, wildcard |
+| `route_records`   | Retained path offsets for introspection and OpenAPI output    |
+
+The array names and the `PatternRoute` type are internal fields of the router.
+
+## The static index
+
+Exact static paths resolve before the radix walk. The index is open-addressed
+with linear probing:
+
+1. Hash the full path with 64-bit FNV-1a.
+2. Mask the low bits into the table size.
+3. Probe forward until an empty slot or a matching entry appears.
+4. Accept a hit only when the hash matches and the node's stored segments
+   concatenate to exactly the request path.
+
+The segment verification is what makes a hash collision harmless: a colliding
+hash falls through to the next probe instead of selecting the wrong route. The
+table is sized to the next power of two at or above twice `max_nodes`, with a
+floor of 16 slots, so the load factor stays at or below one half and a probe
+always reaches an empty slot.
+
+The index stores one entry per path. Registering another method for the same
+path probes the existing slot and leaves the table unchanged. When a radix split
+truncates a node and moves its route to a new child, the index entry is
+re-pointed to the new node.
+
+The index is internal. `find_static_node`, `index_static_path`, and
+`relocate_static_index` are implementation functions, not public API.
+
+## The radix walk
+
+When the static index misses, the router walks the radix tree:
+
+1. Start at the root with the remaining path.
+2. Scan the current node's sibling list for a child whose segment starts with
+   the next path byte.
+3. Require the whole child segment to be a prefix of the remaining path.
+4. Advance and repeat until the remaining path is empty.
+5. Accept the node only when `has_route` is set.
+
+A segment mismatch stops the walk. The pattern table is not consulted until the
+radix walk fails.
+
+## Bounded pattern tables
+
+Parameterized and wildcard routes live in a fixed side table of 64 entries. A
+`PatternRoute` stores one handler slot per method, an optional WebSocket
+behavior, the static byte count, the capture count, and whether the pattern has
+a wildcard. These fields drive ranking: more static bytes win, a pattern without
+a wildcard beats one with a wildcard, and fewer captures win a remaining tie.
+Two patterns that differ only in capture names fail registration with
+`error.RoutePatternConflicts` instead of shadowing each other.
+
+## Captures are borrowed slices
+
+`Request` holds 16 inline capture pairs by default. Each capture is two slices,
+one for the name and one for the value, both borrowed from the request path.
+That is why a captured segment stays valid only for the callback and never
+allocates.
+
+A larger `max_route_params` carves `(max_route_params - 16) * 2` extra slice
+entries per connection into the slab. The inline arrays cannot shrink, so a
+value below 16 is rejected as `error.InvalidRouterCapacity`.
+
+## Immutable after listening
+
+Route registration is a startup activity. Before a listener binds, every
+registration helper checks the internal `routes_locked` flag, registers the
+route, and records it. After a successful `listen_all` or `listen_udp`, the flag
+is set and further calls return `error.RoutesLocked`.
+
+A failed `listen_all` closes the sockets it created, leaves `listener_count` at
+zero, and keeps routes unlocked so you can fix the port and retry. Calls after
+shutdown starts or after `deinit` return `error.ApplicationUnavailable`.
+
+## Registration failures
+
+| Error                                 | Cause                                                                        |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | Empty path, no leading `/`, `?`, `#`, CR, LF, or length above the limit      |
+| `error.InvalidRoutePattern`           | Empty capture name, duplicate capture name, or a nonterminal wildcard        |
+| `error.RoutePatternConflicts`         | Another pattern has the same static bytes, capture count, and wildcard shape |
+| `error.RouteAlreadyRegistered`        | The same method and path already has a handler                               |
+| `error.RouteCapacityReached`          | Node table or pattern table is full                                          |
+| `error.RouteParameterCapacityReached` | The pattern needs more captures than the configured limit                    |
+| `error.RouteStorageCapacityReached`   | The retained path registry cannot hold another path                          |
+
+Malformed patterns fail instead of matching ambiguously. The
+[Routing model](/docs/concepts/routing-model) covers method fallback and
+precedence from the caller's side.
+
+## Related
+
+- [Routing model](/docs/concepts/routing-model) explains the public matching
+  rules.
+- [Slab and memory model](/docs/architecture/memory-model) shows where router
+  storage sits in the startup slab.
+- [Callback lifecycle](/docs/architecture/callback-lifecycle) covers what runs
+  after a route match.
