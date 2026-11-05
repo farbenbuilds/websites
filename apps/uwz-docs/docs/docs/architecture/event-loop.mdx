@@ -39,6 +39,7 @@ usable in Docker Desktop and OrbStack without extra privileges. Other targets
 keep libxev's static single-backend API.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
   accTitle: Event loop backend selection
   accDescr: The first loop probes io_uring and may fall back to epoll; later loops reuse the process selection and cannot switch.

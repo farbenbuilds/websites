@@ -71,7 +71,8 @@ Mọi lần cancel đều đi qua shim internal thay vì gọi backend trực ti
 8. `release_closed_connection` chỉ trả slot về pool sau khi release gate sạch.
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Đường đi completion của connection
   accDescr: Accept, read, dispatch, write, close và pool release theo thứ tự.
   accept["accept"] --> slot["nhận slot và arm read"]

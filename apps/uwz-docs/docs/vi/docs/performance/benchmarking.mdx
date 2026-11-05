@@ -42,7 +42,8 @@ số dùng chung.
 ## Candidate so với baseline
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Candidate so với baseline
   accDescr: Build cả hai revision bằng cùng toolchain, chạy tuần tự trên một host, lấy ba sample và so median.
   A["Candidate commit"] --> C["Build ReleaseFast"]

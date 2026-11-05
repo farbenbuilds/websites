@@ -26,8 +26,8 @@ tới khi process thoát.
 ## Rolling restart
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Rolling rotation certificate
     accDescr: Cài PEM file mới, start process mới, verify handshake, chuyển traffic, gửi signal để process cũ drain và release sau khi thoát.
     A[Cài PEM file mới] --> B[Start process mới]

@@ -46,8 +46,8 @@ WebSocket.
 ## Request lifecycle
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Client request lifecycle
     accDescr: A fetch arms a slot, connects, optionally handshakes TLS, writes the request, reads and parses the response, then runs the callback and closes the connection.
     A[fetch] --> B[Connect]

@@ -35,6 +35,7 @@ convenience wildcard would move that decision to the attacker.
 ## Preflight
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: CORS preflight decision
     accDescr: The middleware adds origin and Vary fields only for an exact origin match, answers a valid preflight with 204, and rejects a disallowed method or header with 403.

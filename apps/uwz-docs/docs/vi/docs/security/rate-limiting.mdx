@@ -18,6 +18,7 @@ API nằm ở [Rate limiting HTTP](/docs/http/rate-limiting).
 `RateLimitOptions` phân giải key theo thứ tự cố định:
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Dẫn xuất key cho rate limit
     accDescr: Hàm tự định nghĩa thắng trước, rồi tới header đã cấu hình, cuối cùng là hằng số, và đường header có sẵn hash field khớp đầu tiên bằng FNV-1a.

@@ -44,8 +44,8 @@ result type, or takes a different parameter type, does not compile.
 ## Type flow
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Typed JSON-RPC flow
     accDescr: The adapter decodes params into a named type, calls the procedure, and serializes the named result into the service buffer.
     A["JSON params"] --> B["parse_params"]

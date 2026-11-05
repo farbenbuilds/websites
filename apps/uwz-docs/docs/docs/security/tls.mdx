@@ -52,7 +52,7 @@ contexts: one for TCP and one for QUIC, both loaded from the same PEM files.
   handshake and returns `.none` when no protocol was selected.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: ALPN selection on the TCP listener
     accDescr: A client list containing h2 selects HTTP/2 first; a list with only http/1.1 selects HTTP/1.1; a list with no match gets a fatal alert.

@@ -33,7 +33,7 @@ replay-safe và bị từ chối, cùng với `POST`, `PUT`, `DELETE`, `PATCH`, 
 và method không parse được.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Gate method cho early data
     accDescr: Request tới trước khi TLS handshake confirmed chỉ được dispatch khi method là GET, HEAD, OPTIONS hoặc TRACE; mọi method khác nhận 425 Too Early.

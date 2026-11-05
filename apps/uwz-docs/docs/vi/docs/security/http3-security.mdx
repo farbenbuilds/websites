@@ -16,6 +16,7 @@ tại dưới dạng helper có bound. Cấu hình transport nằm ở
 ## Bề mặt đang chạy và bị gate
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Bề mặt HTTP/3 đang chạy
     accDescr: lsquic listener đang chạy nhận request và response sau handshake. Extended CONNECT, WebTransport session, server push và datagram vẫn không tới được do capability gate.

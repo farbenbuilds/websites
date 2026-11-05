@@ -23,6 +23,7 @@ that order and the entry points that trigger it.
 | 5    | Release TLS, QUIC, the loop, and the slab through the original allocator               |
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
   accTitle: Shutdown ordering
   accDescr: Five ordered steps reject work, stop recurring sources, cancel completions, verify the drain, and release storage.

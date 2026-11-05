@@ -15,8 +15,8 @@ session-cache, handshake, or ticket state is shared between loops.
 ## Lifecycle order
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: TLS cluster lifecycle
     accDescr: The worker group is built, configured, given one TLS context per worker, bound to a shared port, run, and then shut down and released.
     A[build_cluster] --> B[configure]

@@ -34,7 +34,7 @@ replay-unsafe and is rejected, as are `POST`, `PUT`, `DELETE`, `PATCH`,
 `CONNECT`, and an unparsable method.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Early data method gate
     accDescr: A request that arrives before the TLS handshake confirms is dispatched only when its method is GET, HEAD, OPTIONS, or TRACE; every other method gets 425 Too Early.

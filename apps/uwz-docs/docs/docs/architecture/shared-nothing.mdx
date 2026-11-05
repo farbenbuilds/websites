@@ -28,6 +28,7 @@ lands wholly inside the accepting worker's slab and is only ever touched by that
 worker's loop.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
   accTitle: Shared-nothing worker topology
   accDescr: One shared address and port feeds independent workers, each with its own loop, slab, TLS context, and inbox.

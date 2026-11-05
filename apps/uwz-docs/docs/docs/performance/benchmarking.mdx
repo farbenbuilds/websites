@@ -42,7 +42,8 @@ portable number.
 ## Candidate versus baseline
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Candidate versus baseline
   accDescr: Build both revisions with the same toolchain, run them sequentially on one host, take three samples, and compare medians.
   A["Candidate commit"] --> C["ReleaseFast build"]

@@ -116,7 +116,7 @@ failed before the validator reached a named field.
 ## Validation order
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Schema validation order
     accDescr: JSON parsing happens before rule validation, and the first rejected field or parse failure becomes the reported issue.

@@ -31,6 +31,7 @@ nó mượn.
 Linux build probe backend khi loop đầu tiên được tạo.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Chọn backend cho loop đầu tiên
     accDescr: Loop đầu tiên probe io_uring, có thể fallback sang epoll, rồi publish backend cho mọi loop sau.

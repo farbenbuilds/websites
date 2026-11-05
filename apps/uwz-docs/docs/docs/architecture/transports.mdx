@@ -15,6 +15,7 @@ buffers. This page maps those pieces and states which one owns what.
 ## Transport stack
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Transport ownership stack
     accDescr: Native sockets, the QUIC transport, and a WASM host loop all feed the same protocol core and router.

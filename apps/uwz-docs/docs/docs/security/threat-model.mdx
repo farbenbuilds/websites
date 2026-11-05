@@ -27,7 +27,8 @@ disagree with a specific claim instead of the whole design.
 ## Trust boundaries
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Trust boundaries
     accDescr: Network bytes cross TLS, the protocol parser, the middleware chain, and the handler. A C ABI consumer is a parallel in-process application surface, and shared memory is a separate host bridge.
     A[Network] --> B[TLS and QUIC]

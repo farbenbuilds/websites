@@ -31,7 +31,8 @@ lifecycle invariant. Hãy dùng method của cluster.
 ## State machine vòng đời
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Chuyển trạng thái của cluster
     accDescr: Group đi từ configured sang running, stopped, releasing và released, với đường release trực tiếp trước run.
     C["configured"] --> R["running"]

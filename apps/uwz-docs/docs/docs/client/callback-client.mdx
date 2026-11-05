@@ -72,23 +72,23 @@ has completed.
 ## Slot lifecycle
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40},"sequence":{"useMaxWidth":false}} }%%
 sequenceDiagram
     accTitle: Callback client sequence
     accDescr: fetch arms a slot, run drives the loop, the callback receives one outcome, and the slot returns to the free list.
     participant App
     participant Client
-    participant Loop
+    participant EventLoop
     participant Peer
     App->>Client: fetch(request, callback)
     Client->>Client: acquire free slot
-    App->>Loop: run()
-    Loop->>Peer: connect and write
-    Peer-->>Loop: response bytes
-    Loop->>Client: parse and complete
+    App->>EventLoop: run()
+    EventLoop->>Peer: connect and write
+    Peer-->>EventLoop: response bytes
+    EventLoop->>Client: parse and complete
     Client->>App: callback(outcome)
     Client->>Client: release slot
-    Loop-->>App: run returns when inflight is zero
+    EventLoop-->>App: run returns when inflight is zero
 ```
 
 The callback runs before the slot returns to the free list. A callback that

@@ -29,7 +29,8 @@ Application sở hữu router, route table cố định và native `App` phía s
 ## Chuỗi ownership
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Ownership của C application
     accDescr: Create trả handle opaque, shutdown drain công việc, destroy release và null handle.
     C["uwz_app_create"] --> R["đăng ký route và middleware"]

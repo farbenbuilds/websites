@@ -44,8 +44,8 @@ parameter type khác sẽ không compile.
 ## Luồng type
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Luồng JSON-RPC có type
     accDescr: Adapter decode params thành named type, gọi procedure và serialize named result vào service buffer.
     A["JSON params"] --> B["parse_params"]

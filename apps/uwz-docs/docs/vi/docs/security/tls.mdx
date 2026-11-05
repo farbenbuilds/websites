@@ -51,7 +51,7 @@ cho TCP và một cho QUIC, cùng load từ bộ PEM file.
   `.none` khi không có protocol nào.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Chọn ALPN trên TCP listener
     accDescr: Danh sách client có h2 sẽ chọn HTTP/2 trước; danh sách chỉ có http/1.1 chọn HTTP/1.1; danh sách không match nhận fatal alert.

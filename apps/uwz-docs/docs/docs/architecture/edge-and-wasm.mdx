@@ -20,7 +20,8 @@ JSON-RPC. It does not include the native TCP, TLS, QUIC, or libxev loop modules.
 There is no socket to create and no completion to arm.
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: WASM data path
     accDescr: The host loop supplies bytes to the driver, the protocol core parses them, and the host writes response bytes.
     N["host network"] --> H["host loop"]

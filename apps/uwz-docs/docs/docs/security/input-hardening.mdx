@@ -15,7 +15,8 @@ configuration reference is on [HTTP limits](/docs/http/limits).
 ## Bounded pipeline
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Bounded request path
     accDescr: Bytes enter a bounded read buffer, the parser proves completeness or rejects the request, and only a bounded borrowed request reaches the handler.
     A[Network bytes] --> B[Bounded read buffer]

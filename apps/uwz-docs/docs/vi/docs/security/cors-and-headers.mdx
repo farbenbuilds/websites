@@ -34,6 +34,7 @@ Khớp chính xác không phải hình thức. So sánh origin là thứ duy nh�
 ## Preflight
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Quyết định preflight CORS
     accDescr: Middleware chỉ thêm field origin và Vary khi origin khớp chính xác, trả 204 cho preflight hợp lệ và từ chối method hoặc header không được phép bằng 403.

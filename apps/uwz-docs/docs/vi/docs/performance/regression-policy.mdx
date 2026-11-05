@@ -45,7 +45,8 @@ environment file đã ship để ép run mới vào ID cũ.
 ## Công bố evidence
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Luồng benchmark evidence
   accDescr: Contract có version chạy trên host được kiểm soát, tạo raw sample và công bố record append-only.
   A["Contract và env file"] --> B["Run trên host được kiểm soát"]

@@ -15,6 +15,7 @@ transport sở hữu socket, completion và buffer riêng. Trang này map các t
 ## Stack transport
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Stack ownership của transport
     accDescr: Native socket, QUIC transport và WASM host loop cùng đưa dữ liệu vào protocol core và router.

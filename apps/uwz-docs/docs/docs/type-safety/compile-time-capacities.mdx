@@ -87,8 +87,8 @@ allocated size cannot drift. `build` performs exactly one allocation for the
 slab.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Capacity to slab
     accDescr: A compile-time ServerConfig is validated, converted into a slab layout, allocated once, and used for the process lifetime.
     A["ServerConfig const"] --> B["Builder specialization"]

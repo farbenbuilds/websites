@@ -13,7 +13,7 @@ control nằm cạnh nó.
 ## Ranh giới tin cậy
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Ranh giới tin cậy của bảo mật
     accDescr: Client đi vào TLS layer, rồi tới parser protocol có giới hạn, middleware và handler; certificate issuance, identity và secret storage do deployment quản lý.

@@ -25,32 +25,48 @@ const landingShellMarkdown: ComponentMarkdown = ({ childBlocks }) =>
 
 type AstroIntegration = NonNullable<Parameters<typeof defineConfig>[0]["integrations"]>[number];
 
-// Narrow screens turn wide tables into horizontal scroll regions; they need a
-// tab stop so keyboard users can reach the overflow.
-const accessibleScrollableTables: AstroIntegration = {
-  name: "uwz-accessible-scrollable-tables",
+// Wide tables and diagrams become horizontal scroll regions; they need a tab
+// stop so keyboard users can reach the overflow. Mermaid renders after load, so
+// a mutation observer rechecks the wrappers when the SVG arrives.
+const accessibleScrollRegions: AstroIntegration = {
+  name: "uwz-accessible-scroll-regions",
   hooks: {
     "astro:config:setup": ({ injectScript }) => {
       injectScript(
         "head-inline",
         `{
+          let queued = false;
           const update = () => {
-            for (const table of document.querySelectorAll(".prose table")) {
-              if (table.scrollWidth > table.clientWidth) {
-                table.setAttribute("tabindex", "0");
+            queued = false;
+            for (const region of document.querySelectorAll(".prose table, .prose blume-mermaid")) {
+              if (region.scrollWidth > region.clientWidth + 1) {
+                region.setAttribute("tabindex", "0");
               } else {
-                table.removeAttribute("tabindex");
+                region.removeAttribute("tabindex");
               }
             }
+          };
+          const schedule = () => {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(update);
           };
           const start = () => {
             update();
             const main = document.querySelector("main");
-            if (main && "ResizeObserver" in window) {
-              new ResizeObserver(update).observe(main);
+            if (main) {
+              if ("ResizeObserver" in window) {
+                new ResizeObserver(schedule).observe(main);
+              }
+              if ("MutationObserver" in window) {
+                new MutationObserver(schedule).observe(main, {
+                  childList: true,
+                  subtree: true,
+                });
+              }
             }
-            window.addEventListener("resize", update, { passive: true });
-            document.fonts?.ready.then(update);
+            window.addEventListener("resize", schedule, { passive: true });
+            document.fonts?.ready.then(schedule);
           };
           if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", start, { once: true });
@@ -165,7 +181,7 @@ export default defineConfig({
       },
     },
   },
-  integrations: [svelte(), accessibleScrollableTables],
+  integrations: [svelte(), accessibleScrollRegions],
   agents: {
     markdownComponents: {
       LandingShell: landingShellMarkdown,

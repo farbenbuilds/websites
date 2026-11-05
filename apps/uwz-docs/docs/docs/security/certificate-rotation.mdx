@@ -28,8 +28,8 @@ keeps serving until the process exits.
 ## Rolling restart
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Rolling certificate rotation
     accDescr: Install new PEM files, start a new process, verify its handshake, shift traffic, signal the old process to drain, and release it after exit.
     A[Install new PEM files] --> B[Start new process]

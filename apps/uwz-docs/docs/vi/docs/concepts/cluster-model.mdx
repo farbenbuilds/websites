@@ -30,6 +30,7 @@ Chỉ active worker mới cấp slab, inbox và thread handle, cộng TLS contex
 ## Topology
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Topology của cluster
     accDescr: Một listener cấp connection cho loop, slab, TLS context và inbox có giới hạn của từng worker.
@@ -133,6 +134,7 @@ cần câu trả lời có kiểu.
 Gọi một trong hai đúng một lần sau `configure` và trước `listen`:
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Thứ tự startup của TLS cluster
     accDescr: Configure, bật TLS, listen, run, rồi drain và release.

@@ -20,7 +20,8 @@ JSON-RPC. Nó không gồm TCP, TLS, QUIC hay libxev loop module native. Không 
 socket để tạo và không có completion để arm.
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Data path WASM
     accDescr: Host loop cấp byte cho driver, protocol core parse, rồi host ghi response byte.
     N["host network"] --> H["host loop"]

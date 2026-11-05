@@ -15,8 +15,8 @@ session-cache, handshake hay ticket state nào được chia sẻ giữa các lo
 ## Lifecycle order
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Lifecycle của TLS cluster
     accDescr: Worker group được build, configure, gán một TLS context cho mỗi worker, bind vào port chung, run rồi shutdown và release.
     A[build_cluster] --> B[configure]

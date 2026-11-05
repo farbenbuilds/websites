@@ -46,7 +46,8 @@ old ID.
 ## Publish evidence
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Benchmark evidence flow
   accDescr: A versioned contract runs on a controlled host, produces raw samples, and publishes append-only records.
   A["Contract and env file"] --> B["Controlled host run"]

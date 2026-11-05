@@ -67,7 +67,7 @@ ownership rules that make one service safe on one event loop.
 ## Request path
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: JSON-RPC request path
     accDescr: An HTTP POST enters the adapter, the content type is checked, the dispatcher validates the document, and a procedure writes a bounded result.

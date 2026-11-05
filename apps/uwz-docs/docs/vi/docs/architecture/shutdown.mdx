@@ -23,6 +23,7 @@ các entry point kích hoạt nó.
 | 5    | Giải phóng TLS, QUIC, loop và slab qua allocator ban đầu                             |
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
   accTitle: Thứ tự shutdown
   accDescr: Năm bước có thứ tự từ chối work, dừng nguồn lặp lại, cancel completion, xác minh drain và giải phóng storage.

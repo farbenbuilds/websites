@@ -30,7 +30,8 @@ native `App` behind the handle.
 ## Ownership sequence
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: C application ownership
     accDescr: Create returns an opaque handle, shutdown drains work, and destroy releases and nulls the handle.
     C["uwz_app_create"] --> R["register routes and middleware"]

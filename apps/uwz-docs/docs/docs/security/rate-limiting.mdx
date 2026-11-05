@@ -17,6 +17,7 @@ The API walkthrough lives on [HTTP rate limiting](/docs/http/rate-limiting).
 `RateLimitOptions` resolves a key in a fixed order:
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Rate-limit key derivation
     accDescr: A custom function wins, then a configured header, then the constant fallback, and the built-in header path hashes the first matching field with FNV-1a.

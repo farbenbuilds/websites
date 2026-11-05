@@ -31,6 +31,7 @@ the storage it borrows.
 Linux builds probe for a backend when the first loop is created.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: First-loop backend selection
     accDescr: The first loop probes io_uring, may fall back to epoll, then publishes the backend for every later loop.

@@ -16,7 +16,8 @@ quanh nó; phần API theo từng request nằm ở
 ## Trust boundary
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Trust boundary của authentication
     accDescr: Request đi qua TLS và parser, middleware credential từ chối hoặc tiếp tục dispatch, còn handler chịu trách nhiệm phân quyền.
     A[Client] --> B[TLS 1.3]

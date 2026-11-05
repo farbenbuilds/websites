@@ -31,7 +31,8 @@ lifecycle invariants. Use the cluster methods.
 ## Lifecycle state machine
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Cluster lifecycle transitions
     accDescr: A group moves from configured to running, stopped, releasing, and released, with a direct release path before run.
     C["configured"] --> R["running"]

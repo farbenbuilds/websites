@@ -14,7 +14,8 @@ host này không tự động thắng trên host khác.
 ## Thứ tự tuning
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Thứ tự tuning
   accDescr: Chọn capacity trước, rồi worker count, transport flag, queue, compression và HTTP/3 transmit, sau đó đo lại.
   A["Capacity"] --> B["Worker count và affinity"]

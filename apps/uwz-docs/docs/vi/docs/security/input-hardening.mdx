@@ -15,7 +15,8 @@ rejection và các quy tắc framing ngăn request smuggling. Tham chiếu cấu
 ## Đường đi có bound
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Đường request có bound
     accDescr: Byte đi vào read buffer có giới hạn, parser chứng minh request hoàn chỉnh hoặc từ chối, và chỉ request đã bound dạng borrowed mới tới handler.
     A[Byte từ network] --> B[Read buffer có bound]

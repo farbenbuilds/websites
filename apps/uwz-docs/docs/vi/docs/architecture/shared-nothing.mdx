@@ -27,6 +27,7 @@ Không tài nguyên nào được reference count hay chia sẻ. Connection đư
 trọn vào slab của worker accept nó và chỉ event loop của worker đó chạm tới.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TB
   accTitle: Topology worker shared-nothing
   accDescr: Một địa chỉ và port chung nuôi các worker độc lập, mỗi worker có loop, slab, TLS context và inbox riêng.

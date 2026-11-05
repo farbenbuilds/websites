@@ -49,6 +49,7 @@ stream credit before it is written and refunds it if the transport refuses the
 write.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     A[Response body remains] --> B{Credit available?}
     B -- "connection and stream window above zero" --> C[Send one DATA frame]

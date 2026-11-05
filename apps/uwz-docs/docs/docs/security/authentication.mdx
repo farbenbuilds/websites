@@ -16,7 +16,8 @@ deployment checks around it; the request-level API lives on
 ## Trust boundary
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Authentication trust boundary
     accDescr: A request crosses TLS and the parser, the credential middleware rejects it or continues dispatch, and the handler owns authorization.
     A[Client] --> B[TLS 1.3]

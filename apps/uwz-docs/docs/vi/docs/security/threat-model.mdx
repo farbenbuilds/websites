@@ -27,7 +27,8 @@ một claim cụ thể thay vì phản đối toàn bộ thiết kế.
 ## Trust boundary
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Các trust boundary
     accDescr: Byte từ network đi qua TLS, protocol parser, middleware chain và handler. Consumer C ABI là application surface song song trong process, còn shared memory là host bridge riêng.
     A[Network] --> B[TLS và QUIC]

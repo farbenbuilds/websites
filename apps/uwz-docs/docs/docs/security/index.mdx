@@ -13,7 +13,7 @@ controls that sit next to it.
 ## Trust boundaries
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TB
     accTitle: Security trust boundaries
     accDescr: A client reaches the TLS layer, then bounded protocol parsers, middleware, and the handler; certificate issuance, identity, and secret storage stay with the deployment.

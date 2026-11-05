@@ -75,7 +75,8 @@ backend directly.
    release gate is clear.
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Connection completion path
   accDescr: Accept, read, dispatch, write, close, and pool release in order.
   accept["accept"] --> slot["acquire slot and arm read"]

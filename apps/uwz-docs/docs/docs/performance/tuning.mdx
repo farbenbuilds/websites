@@ -14,7 +14,8 @@ result. A setting that wins on one host is not automatically a win on another.
 ## Tuning order
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
   accTitle: Tuning order
   accDescr: Size capacity first, then worker count, transport flags, queues, compression, and HTTP/3 transmit behavior, then measure again.
   A["Capacity"] --> B["Worker count and affinity"]

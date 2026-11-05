@@ -38,6 +38,7 @@ trong Docker Desktop và OrbStack mà không cần thêm quyền. Target khác g
 single-backend tĩnh của libxev.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
   accTitle: Chọn backend cho event loop
   accDescr: Loop đầu tiên probe io_uring và có thể hạ xuống epoll; các loop sau dùng lại lựa chọn của process và không thể đổi.
