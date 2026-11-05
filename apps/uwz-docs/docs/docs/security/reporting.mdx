@@ -1,0 +1,102 @@
+---
+title: Report a vulnerability
+description: Use the private channel, include the evidence maintainers need, and understand which versions receive a fixed release.
+sidebar:
+  order: 16
+search:
+  tags: [reference, security]
+---
+
+Security reports go through a private channel. A public issue, pull request,
+discussion, or compliance report can disclose the defect before a fix exists.
+This page summarizes the policy in
+[SECURITY.md](https://github.com/farbenbuilds/uWebZockets/blob/main/SECURITY.md).
+
+## Supported versions
+
+| Version                      | Receives security fixes |
+| ---------------------------- | ----------------------- |
+| Current development revision | Yes                     |
+| Latest released minor line   | Yes                     |
+| Older tagged releases        | No                      |
+| Earlier snapshots            | No                      |
+
+Older snapshots and unsupported raw transport internals do not receive backports.
+If you run a pinned older release, reproduce the issue on the latest minor line
+before reporting it, or state clearly that you cannot upgrade.
+
+## Private channels
+
+Send the report by email to either address:
+
+- [trananhquan1009@gmail.com](mailto:trananhquan1009@gmail.com)
+- [noah1109.tran@gmail.com](mailto:noah1109.tran@gmail.com)
+
+Do not open a public issue, pull request, discussion, or Autobahn report that
+contains an undisclosed vulnerability. Do not attach a working exploit to a public
+artifact, a benchmark result, or a log bundle attached to a public thread.
+
+## What to include
+
+| Item                     | Detail                                                 |
+| ------------------------ | ------------------------------------------------------ |
+| Affected revision        | Commit or tag, plus the target platform and build mode |
+| Minimal reproducer       | A program, request sequence, or packet capture         |
+| Expected and observed    | What the protocol or API should do, and what it did    |
+| Impact and preconditions | Who can trigger it, and what they gain                 |
+| Logs or sanitizer output | With secrets, tokens, and private keys removed         |
+| Suggested mitigation     | Optional, but it shortens the assessment               |
+
+A reproducer beats a description. If the issue needs TLS, HTTP/2, HTTP/3, or a
+WebSocket upgrade, state the transport and the exact client. If it needs a
+configuration, include the `ServerConfig` values, because many bounds are
+compile-time and cannot be inferred from the trace alone.
+
+## Scope
+
+| Surface                                                | In scope |
+| ------------------------------------------------------ | -------- |
+| HTTP/1.1, HTTP/2, and HTTP/3 request routing           | Yes      |
+| RFC 6455 WebSocket and RFC 7692 per-message deflate    | Yes      |
+| TLS 1.3 contexts and mutual TLS                        | Yes      |
+| Outbound HTTP/1.1 client                               | Yes      |
+| Authentication and rate-limit middleware               | Yes      |
+| C ABI in `include/uWebZockets.h`                       | Yes      |
+| Raw QUIC engine, stream, packet, and QPACK callbacks   | No       |
+| `http3_extensions` and `webtransport` as live features | No       |
+| A deployment's own handler, proxy, or secret storage   | No       |
+
+The raw QUIC modules under `src/quic` are internal and are not a supported
+consumer interface. The extension modules are bounded helpers that the live
+listener does not call, so a defect that requires reaching them directly is a
+different report from a defect on the live path.
+
+## Coordinated disclosure
+
+The maintainers acknowledge the report, reproduce and assess it, prepare a fix
+and a regression test, and coordinate disclosure with you. Response time depends
+on severity and maintainer availability; no fixed service-level agreement is
+offered.
+
+| Stage              | What happens                                                 |
+| ------------------ | ------------------------------------------------------------ |
+| Acknowledgement    | The report is read and a channel is agreed                   |
+| Reproduction       | The issue is reproduced on a supported revision              |
+| Assessment         | Impact, preconditions, and affected versions are established |
+| Fix and regression | A patch lands with a test that fails before it               |
+| Disclosure         | An advisory describes versions, impact, and upgrade guidance |
+
+Allow a reasonable remediation and release window before publication. An advisory
+credits reporters who request attribution and avoids unnecessary exploit detail
+before a fix is available. If you plan to publish independently, tell the
+maintainers when you send the report so the schedule is explicit rather than
+assumed.
+
+## Related
+
+- [Threat model](/docs/security/threat-model) states which boundaries the
+  framework claims.
+- [Security model](/docs/concepts/security-model) summarizes the shipped
+  controls and evidence.
+- [Input hardening](/docs/security/input-hardening) covers the parser limits a
+  report often involves.

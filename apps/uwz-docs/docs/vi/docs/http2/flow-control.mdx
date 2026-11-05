@@ -48,6 +48,7 @@ Response body được ghi thành DATA frame. Mỗi frame reserve connection và
 credit trước khi ghi và hoàn credit nếu transport từ chối write.
 
 ```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
 flowchart TD
     A[Response body còn lại] --> B{Có credit?}
     B -- "connection và stream window trên zero" --> C[Gửi một DATA frame]

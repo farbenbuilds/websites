@@ -1,0 +1,130 @@
+---
+title: Control bảo mật WebSocket
+description: Coi upgrade là một HTTP request đã xác thực, bound connection sau khi chuyển protocol và biết framework để lại gì cho application.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, security, websocket]
+---
+
+Một WebSocket connection bắt đầu như HTTP request, nên mọi control HTTP vẫn áp
+dụng cho tới lúc switch. Sau switch, framework enforce parse frame và bound
+message; identity, origin policy, phân quyền và giới hạn lạm dụng vẫn ở
+application code. Route API nằm ở
+[Bảo mật WebSocket](/docs/websocket/security).
+
+## Control nào thuộc bên nào
+
+| Control              | Framework                           | Application                               |
+| -------------------- | ----------------------------------- | ----------------------------------------- |
+| Upgrade request      | Line, header và body có bound       | Credential và quyết định admission        |
+| Policy `Origin`      | Không có check sẵn                  | Allow list chính xác hoặc yêu cầu token   |
+| Subprotocol          | Không chọn                          | Chọn hoặc từ chối                         |
+| Parse frame          | Masking, opcode, UTF-8, size, close | Không có                                  |
+| Nội dung message     | Chỉ bound kích thước                | Decode, validate, phân quyền từng message |
+| Rate theo connection | Không có                            | Counter riêng và policy close             |
+| Vòng đời identity    | Không có session object             | Lưu theo connection                       |
+| Fan-out              | Registry và queue có bound          | Topic policy và phân quyền                |
+
+Browser client gửi cookie trong handshake. Nếu server tin cookie và bỏ qua
+`Origin`, một trang cross-site có thể mở socket đã xác thực. Hãy kiểm tra cả hai,
+và từ chối field `Origin` hoặc `Authorization` bị trùng thay vì chọn một giá trị.
+
+## Xác thực trước switch
+
+| Bước                    | Nơi phù hợp                                |
+| ----------------------- | ------------------------------------------ |
+| Kiểm tra credential     | Callback `upgrade`, trước mọi socket state |
+| Kiểm tra origin         | Cùng callback, với allow list chính xác    |
+| Đọc account state       | HTTP route cấp ticket ngắn hạn             |
+| Phân quyền từng message | Message callback, dựa trên identity đã lưu |
+
+Callback upgrade chạy đồng bộ trên worker thread. Một round trip database ở đó
+sẽ chặn event loop. Hãy cấp ticket từ HTTP route thông thường, rồi kiểm tra
+ticket trong upgrade.
+
+Đừng chấp nhận peer chỉ vì request "trông như internal". Hãy đọc field thật.
+`get_unique_header` trả `null` khi field xuất hiện hai lần, và đó là câu trả lời
+đúng cho credential mơ hồ.
+
+## Bound connection
+
+| Tài nguyên       | Control                               | Mặc định       |
+| ---------------- | ------------------------------------- | -------------- |
+| Message size     | `max_message_size` trên route         | 16 KiB         |
+| Frame size       | `max_frame_size` trên route           | 16 KiB         |
+| Output đang chờ  | `write_queue_size`                    | 64 KiB         |
+| Connection idle  | `idle_timeout_ms`                     | 120 s          |
+| Heartbeat        | `ping_interval_ms`, `pong_timeout_ms` | tắt            |
+| Connection       | `App(N)` hoặc `with_max_clients`      | 1.024          |
+| Message mỗi giây | Counter của application               | Không cung cấp |
+
+Route không thể nâng `max_message_size` vượt message capacity đã cấu hình.
+Registration fail với `error.InvalidWebSocketLimits`. Nếu một behavior không hợp
+lệ vẫn tới bước upgrade, upgrade bị từ chối bằng `500 Internal Server Error` thay
+vì nhận peer nó không thể phục vụ.
+
+Rate limiter có sẵn đếm HTTP request. WebSocket route không có request boundary,
+nên hãy giữ counter riêng key theo socket và close bằng `1008 Policy violation`
+khi hết budget. Framework tự phát `1009 Message too large` khi message vượt route
+limit và `1002` cho protocol error.
+
+## Side channel của compression
+
+Per-message deflate tắt mặc định. Khi bật:
+
+- Negotiation luôn chọn `server_no_context_takeover` và
+  `client_no_context_takeover`, nên không có state đi qua giữa các message.
+- Input và output nén dùng scratch slice riêng.
+- Decompression không thể vượt message capacity đã cấu hình.
+- Message sẽ phình quá `max_frame_size` được gửi không nén nếu payload thô vừa;
+  nếu không, `send` fail với `error.PayloadTooLarge`.
+
+Bỏ context takeover loại bỏ tín hiệu dictionary giữa các message, không loại bỏ
+tín hiệu độ dài trong từng message. Nếu attacker điều khiển được byte nằm cạnh
+secret trong cùng một message, kích thước sau nén vẫn rò rỉ thông tin. Tắt
+compression trên route mang token, và không bao giờ echo secret. Xem
+[per-message deflate](/docs/websocket/compression).
+
+## Heartbeat và hành vi close
+
+Route có heartbeat dùng worker timer năm giây. Peer idle nhận ping rỗng và bị đóng
+khi pong timeout đã cấu hình hết hạn. Không có heartbeat, idle deadline 120 giây
+là bound duy nhất cho peer im lặng.
+
+| Cấu hình               | Tác dụng                                   |
+| ---------------------- | ------------------------------------------ |
+| Cả hai interval bằng 0 | Không heartbeat; idle deadline vẫn áp dụng |
+| Một interval bằng 0    | Route registration fail                    |
+| `send_close`           | Close sau khi frame drain                  |
+| `terminate`            | Close ngay, không có close handshake       |
+
+Chọn close code mô tả đúng lý do: `1008` cho vi phạm policy của application,
+`1009` cho message quá lớn, và `1002` cho protocol error. Đừng gửi close code
+kèm reason string không bound; close data được validate nhưng vẫn tốn write
+capacity. Danh sách đầy đủ ở [Close code](/docs/websocket/close-codes).
+
+## Tunnel RFC 8441
+
+WebSocket trên HTTP/2 dùng extended CONNECT. Connection sở hữu parse và message
+storage, nên mỗi connection chỉ cho một tunnel active; tunnel thêm nhận `503
+Service Unavailable` mà không ảnh hưởng tunnel đang chạy.
+
+| Quy tắc                        | Hành vi                                                |
+| ------------------------------ | ------------------------------------------------------ |
+| `Sec-WebSocket-Version`        | Đúng một giá trị, `13`                                 |
+| Thiếu, trùng hoặc giá trị khác | `426 Upgrade Required` kèm `Sec-WebSocket-Version: 13` |
+| `Sec-WebSocket-Key`            | Không bắt buộc và không được kiểm tra                  |
+| Per-message deflate            | Không negotiate trên tunnel; frame không nén           |
+| Số tunnel                      | Một tunnel active mỗi connection                       |
+
+Quy tắc một tunnel là quyết định capacity, không tự nó là security boundary. Nó
+giới hạn state một connection có thể giữ, qua đó giới hạn lượng tài nguyên một
+peer chưa xác thực có thể khiến server nắm giữ sau admission.
+
+## Tiếp theo
+
+- [Bảo mật WebSocket](/docs/websocket/security) trình bày các control handshake
+  trong route API.
+- [Giới hạn WebSocket](/docs/websocket/limits) liệt kê mọi bound và preset.
+- [Tunnel HTTP/2](/docs/websocket/http2-tunnels) giải thích hành vi RFC 8441.

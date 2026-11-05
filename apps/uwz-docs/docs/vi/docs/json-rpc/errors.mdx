@@ -68,7 +68,7 @@ trả `error.ApplicationError` mà không gọi `Call.fail` sẽ nhận `-32603`
 ## Lỗi protocol
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Phân loại lỗi JSON-RPC
     accDescr: Dispatcher phân loại JSON syntax, request shape, method lookup, parameter decode và procedure failure thành các JSON-RPC code riêng.

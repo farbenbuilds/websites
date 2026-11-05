@@ -1,0 +1,93 @@
+---
+title: Hiệu năng
+description: Nắm những gì µWebZockets có thể cam kết về chi phí và tốc độ, và claim nào cần artifact benchmark có ngày tháng.
+search:
+  tags: [performance, capacity]
+---
+
+Phần này giải thích cost model, capacity sizing, benchmarking, load testing,
+profiling, tuning và regression policy cho ứng dụng dùng µWebZockets. Trang này
+không công bố một con số requests-per-second dùng chung. Mục tiêu là giúp bạn đo
+workload của mình và đọc evidence của project đúng cách.
+
+## Những gì phần này có thể cam kết
+
+| Cam kết                                             | Cơ sở                                                                     | Trang                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Một allocation lúc startup cho application slab     | `build` và `init` cấp phát một lần qua allocator bạn truyền               | [Mô hình chi phí](/docs/performance/cost-model)              |
+| Không có allocation của framework trên request path | Request buffer, queue, message và route table được carve trước khi listen | [Mô hình chi phí](/docs/performance/cost-model)              |
+| Bộ nhớ có giới hạn với hành vi từ chối có tên       | Mọi capacity cố định lúc startup và trả về error hoặc status cụ thể       | [Định cỡ capacity](/docs/performance/capacity-sizing)        |
+| Một regression guard có đo đạc                      | `http-throughput-v1` so sánh candidate với baseline trên cùng runner      | [Benchmarking](/docs/performance/benchmarking)               |
+| Phương pháp tái lập được                            | Contract có version cố định parameter và ghi provenance                   | [Chính sách regression](/docs/performance/regression-policy) |
+| Cách tách CPU, allocation và queueing               | Các lớp profiling trả lời câu hỏi khác nhau                               | [Profiling](/docs/performance/profiling)                     |
+
+## Những gì phần này không thể cam kết
+
+| Không cam kết                             | Lý do                                                              | Việc cần làm                                |
+| ----------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| Một con số requests-per-second dùng chung | Kết quả phụ thuộc CPU, kernel, backend, TLS, workload và generator | Đo workload của bạn trên host đích          |
+| Latency với traffic shape của bạn         | Project không biết body size, số peer hay tốc độ đọc của bạn       | Chạy load test với workload của bạn         |
+| Kernel attribution trên mọi host          | `perf_event_paranoid` có thể chặn sampling                         | Dùng counter user-space và development log  |
+| HTTP/3 ngang bằng trong metrics registry  | HTTP/3 phát request record nhưng không tăng counter                | Đọc HTTP/3 record từ development log        |
+| Một absolute capacity claim dùng chung    | Shared runner không đáp ứng quiet-host contract                    | Coi relative guard đúng như bản chất của nó |
+
+## Claim policy
+
+Mỗi performance claim cần năm trường: commit hoặc tag, ngày, hardware, command
+và artifact path. Một con số thiếu những trường này chỉ là giai thoại. Relative
+regression guard là contract giữa hai revision trên một host; nó không phải
+absolute capacity claim. [Benchmarking](/docs/performance/benchmarking) định
+nghĩa contract, còn [Chính sách regression](/docs/performance/regression-policy) định
+nghĩa cách công bố evidence.
+
+## Bản đồ trang
+
+<CardGroup cols={2}>
+  <Card title="Mô hình chi phí" href="/docs/performance/cost-model" icon="calculator">
+    Theo một startup slab từ `ServerConfig` tới byte mỗi connection, và hiểu vì sao capacity không
+    phải throughput.
+  </Card>
+  <Card title="Định cỡ capacity" href="/docs/performance/capacity-sizing" icon="ruler">
+    Đi qua connection, body, queue, message, protocol limit, worker và TLS context bằng một
+    worksheet có phép tính.
+  </Card>
+  <Card title="Benchmarking" href="/docs/performance/benchmarking" icon="bar-chart">
+    Áp dụng quiet-host contract, quy tắc candidate so với baseline và guard 90 percent theo median.
+  </Card>
+  <Card title="Load test" href="/docs/performance/load-testing" icon="activity">
+    Định hình workload, đếm mọi failure và giữ evidence headroom trung thực.
+  </Card>
+  <Card title="Profiling" href="/docs/performance/profiling" icon="microscope">
+    Tách kernel sampling, latency user-space, allocator count, log và metrics.
+  </Card>
+  <Card title="Tuning" href="/docs/performance/tuning" icon="sliders-horizontal">
+    Chỉ đổi TCP flag, worker count, queue, compression và HTTP/3 transmit khi có evidence.
+  </Card>
+  <Card title="Chính sách regression" href="/docs/performance/regression-policy" icon="git-branch">
+    Thêm benchmark, version parameter và công bố evidence append-only.
+  </Card>
+</CardGroup>
+
+## Evidence artifact
+
+| Artifact                                           | Nội dung                                                        |
+| -------------------------------------------------- | --------------------------------------------------------------- |
+| `benchmarks/http_throughput_guarantee.md`          | Contract `http-throughput-v1` và guard 90 percent               |
+| `benchmarks/http_throughput_v1.env`                | Load parameter ở dạng machine-readable                          |
+| `benchmarks/h2_tls_scaling_guarantee.md`           | Contract characterization `h2-tls-scaling-v1`                   |
+| `benchmarks/h2_tls_scaling_v1.env`                 | Connection, stream, duration, generator và schema version       |
+| `benchmarks/results/h2_tls_scaling_v1/2026_10_19/` | Host record, bảng kết quả, quyết định hypothesis và raw archive |
+| Nhánh `benchmark-data`                             | Record append-only, raw sample, index và latest pointer         |
+
+Contract nêu rõ rằng thay đổi một parameter cần benchmark ID mới và history
+series mới. Results directory giữ một compressed archive, một `README.md` và một
+`manifest.sha256` cho mỗi lần chạy được ghi. [Benchmarking](/docs/performance/benchmarking)
+giải thích cách từng artifact được tạo, còn [Chính sách regression](/docs/performance/regression-policy)
+giải thích cách nó được công bố. Hãy đọc artifact và caveat của nó trước khi trích
+dẫn bất kỳ giá trị nào.
+
+## Liên quan
+
+- [Capacity model](/docs/concepts/capacity-model)
+- [Zero allocation](/docs/concepts/zero-allocation)
+- [HTTP limits](/docs/http/limits)

@@ -12,7 +12,7 @@ và HTTP/2 dùng. Nó không dựng request text HTTP/1.1 rồi parse lại. Tra
 một request từ QUIC stream tới handler và quay lại.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     A[QUIC stream] --> B[QPACK decode]
     B --> C[Kiểm tra header]

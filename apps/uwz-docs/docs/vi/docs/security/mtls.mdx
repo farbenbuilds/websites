@@ -1,0 +1,117 @@
+---
+title: Mutual TLS
+description: Yêu cầu client certificate với CA bundle, chọn đúng ClientAuth mode và tính đến ràng buộc early data cùng HTTP/3.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, security, tls]
+---
+
+Ở chế độ `.required`, mutual TLS chứng minh identity của caller trước khi request
+tới route. Server verify client chain với CA bundle bạn cung cấp, và TLS layer fail
+handshake closed trước khi HTTP parser đọc byte nào. `.optional` chỉ verify khi
+client gửi certificate và vẫn cho phép client anonymous. Dùng `.required` cho API
+service-to-service, admin surface nội bộ và device fleet đã có certificate từ
+private CA.
+
+## Cấu hình server
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from a verified client") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_mtls(
+        init.io,
+        "certs/fullchain.pem",
+        "certs/privkey.pem",
+        .{ .mode = .required, .ca_path = "certs/client-ca.pem" },
+    );
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 8443);
+    try server.run();
+}
+```
+
+`tls.TlsContext.init_mtls(cert_path, key_path, config)` là entry point ở tầng
+context; `App.init_https_mtls` là entry point ở tầng application. Cả hai giữ ALPN
+policy của `init`/`init_https`: `h2`, rồi `http/1.1`.
+
+## Mode
+
+`tls.ClientAuth` chọn một trong ba policy:
+
+| Mode                      | Request certificate | Verify                  | Client anonymous |
+| ------------------------- | ------------------- | ----------------------- | ---------------- |
+| `tls.ClientAuth.none`     | Không               | Không                   | Được phép        |
+| `tls.ClientAuth.optional` | Có                  | Khi client gửi          | Được phép        |
+| `tls.ClientAuth.required` | Có                  | Có; thiếu cert thì fail | Bị từ chối       |
+
+`none` là mặc định của `init`/`init_https`. Mode này không gửi
+CertificateRequest, nên BoringSSL không mở `ca_path` và field có thể để rỗng.
+`optional` và `required` yêu cầu `ca_path` khác rỗng.
+
+## Định dạng CA bundle
+
+`ClientAuthConfig.ca_path` nhận path NUL-terminated (`[:0]const u8`) và mặc định
+rỗng. File chứa PEM trust anchor cho client chain. Một file có thể chứa một CA
+certificate hoặc nhiều certificate nối tiếp theo bất kỳ thứ tự; BoringSSL load
+tất cả.
+
+Bundle được đọc một lần lúc tạo context. Thay bundle cần restart. CRL trong file
+được load vào trust store nhưng revocation không được thực thi, nên certificate
+đã revoke vẫn validate cho tới khi hết hạn. Application cần revocation phải tự
+kiểm tra, ví dụ với CRL hoặc OCSP responder, trước khi tin connection.
+
+## Early data bị tắt
+
+Với `.optional` và `.required`, TLS 1.3 early data bị tắt. Client certificate
+được verify ở flight thứ hai của handshake, sau khi early data đã tới server, nên
+nhận 0-RTT sẽ cho một request chưa xác thực đi qua. `.none` giữ policy 0-RTT cho
+safe method của `init`.
+
+## HTTP/3 chưa được nối
+
+Client authentication chỉ chạy trên TCP. HTTP/3 context do `init_http3` tạo quảng
+bá `h3`, giữ early data tắt và không request client certificate.
+`init_https_mtls` chỉ tạo TCP context, nên process cần QUIC dùng `init_http3`
+mà không có client certificate.
+
+## Error
+
+| Error                     | Nguyên nhân                                |
+| ------------------------- | ------------------------------------------ |
+| `InvalidClientAuthConfig` | Mode khác `.none` nhưng `ca_path` rỗng     |
+| `TrustStoreLoadFailed`    | Không đọc hoặc parse được client CA bundle |
+| `CertificateLoadFailed`   | Không đọc hoặc parse được server PEM chain |
+| `PrivateKeyLoadFailed`    | Không đọc hoặc parse được server PEM key   |
+
+Context không bao giờ được trả về với trust store cấu hình dở dang. Load fail sẽ
+release context mà call đó tạo.
+
+## Trust boundary
+
+- Verification chạy trong TLS layer, trước routing và middleware.
+- Certificate đã verify chứng minh client giữ private key. Nó không cấp role hay
+  authorize route; handler vẫn sở hữu authorization.
+- CA bundle là quyết định trust của bạn. BoringSSL không có default client trust
+  store và không dùng host system store cho check này.
+- Giữ bundle và server file ngoài repository và ngoài log.
+
+## Liên quan
+
+- [TLS 1.3 và ALPN](/docs/security/tls) giải thích context policy và protocol error
+  dùng chung với mTLS.
+- [Early data và 0-RTT](/docs/security/early-data) trình bày safe-method gate mà
+  mTLS tắt đi.
+- [Authentication](/docs/security/authentication) thêm Basic và Bearer check ở
+  tầng application sau TLS handshake.

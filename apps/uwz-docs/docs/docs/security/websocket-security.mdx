@@ -1,0 +1,132 @@
+---
+title: WebSocket security controls
+description: Treat the upgrade as an authenticated HTTP request, bound the connection after the switch, and decide what the framework leaves to you.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, security, websocket]
+---
+
+A WebSocket connection begins as an HTTP request, so every HTTP control applies
+until the switch. After the switch, the framework enforces frame parsing and
+message bounds; identity, origin policy, authorization, and abuse limits stay in
+application code. The route API is on [WebSocket security](/docs/websocket/security).
+
+## Who owns which control
+
+| Control             | Framework                           | Application                             |
+| ------------------- | ----------------------------------- | --------------------------------------- |
+| Upgrade request     | Bounded line, headers, and body     | Credentials and admission decision      |
+| `Origin` policy     | No built-in check                   | Exact allow list or token requirement   |
+| Subprotocol         | No selection                        | Choose or reject                        |
+| Frame parsing       | Masking, opcode, UTF-8, size, close | None                                    |
+| Message content     | Size bound only                     | Decode, validate, authorize per message |
+| Per-connection rate | None                                | Own counter and close policy            |
+| Identity lifetime   | No session object                   | Store per connection                    |
+| Fan-out             | Bounded registry and queues         | Topic policy and authorization          |
+
+Browser clients send cookies with the handshake. If the server trusts the cookie
+and ignores `Origin`, a cross-site page can open an authenticated socket. Check
+both, and reject a duplicate `Origin` or `Authorization` field rather than
+picking one.
+
+## Authenticate before the switch
+
+| Step                  | Where it belongs                                |
+| --------------------- | ----------------------------------------------- |
+| Verify the credential | The `upgrade` callback, before any socket state |
+| Verify the origin     | The same callback, against an exact allow list  |
+| Load account state    | An HTTP route that issues a short-lived ticket  |
+| Authorize per message | The message callback, against stored identity   |
+
+The upgrade callback is synchronous and runs on the worker thread. A database
+round trip there blocks the event loop. Issue a ticket from an ordinary HTTP
+route, then verify the ticket during the upgrade.
+
+Never accept a peer because the request "looks internal". Read the actual fields.
+`get_unique_header` returns `null` when a field appears twice, which is the
+correct answer for ambiguous credentials.
+
+## Bound the connection
+
+| Resource            | Control                               | Default      |
+| ------------------- | ------------------------------------- | ------------ |
+| Message size        | `max_message_size` on the route       | 16 KiB       |
+| Frame size          | `max_frame_size` on the route         | 16 KiB       |
+| Pending output      | `write_queue_size`                    | 64 KiB       |
+| Idle connection     | `idle_timeout_ms`                     | 120 s        |
+| Heartbeat           | `ping_interval_ms`, `pong_timeout_ms` | off          |
+| Connections         | `App(N)` or `with_max_clients`        | 1,024        |
+| Messages per second | Application counter                   | Not provided |
+
+A route cannot raise `max_message_size` above the configured message capacity.
+Registration fails with `error.InvalidWebSocketLimits`. If an invalid behavior
+reaches an upgrade anyway, the upgrade is rejected with `500 Internal Server
+Error` instead of accepting a peer it cannot serve.
+
+The built-in rate limiter counts HTTP requests. A WebSocket route has no request
+boundary, so keep your own counter keyed by the socket, and close with `1008
+Policy violation` when the budget is exhausted. The framework itself emits `1009
+Message too large` when a message exceeds the route limit and `1002` for protocol
+errors.
+
+## Compression side channel
+
+Per-message deflate is disabled by default. When enabled:
+
+- Negotiation always selects `server_no_context_takeover` and
+  `client_no_context_takeover`, so no state crosses messages.
+- Compressed input and output use separate scratch slices.
+- Decompression cannot exceed the configured message capacity.
+- A message that would expand past `max_frame_size` is sent uncompressed when the
+  raw payload fits; otherwise `send` fails with `error.PayloadTooLarge`.
+
+Removing context takeover removes the cross-message dictionary signal, not the
+per-message length signal. If an attacker can influence bytes compressed next to
+a secret in the same message, the compressed size still leaks information. Disable
+compression on routes that carry tokens, and never echo a secret. See
+[per-message deflate](/docs/websocket/compression).
+
+## Heartbeats and close behavior
+
+Heartbeat routes use a five-second worker timer. Idle peers receive an empty ping
+and are closed when the configured pong timeout expires. Without heartbeats, the
+120-second idle deadline is the only bound on a silent peer.
+
+| Setting             | Effect                                        |
+| ------------------- | --------------------------------------------- |
+| Both intervals zero | No heartbeat; idle deadline still applies     |
+| One interval zero   | Route registration fails                      |
+| `send_close`        | Closes after the frame drains                 |
+| `terminate`         | Closes immediately, without a close handshake |
+
+Choose a close code that describes the reason: `1008` for an application policy
+violation, `1009` for an oversized message, and `1002` for a protocol error. Do
+not send a close code with an unbounded reason string; close data is validated,
+but it still costs write capacity. The full list is on
+[close codes](/docs/websocket/close-codes).
+
+## RFC 8441 tunnels
+
+WebSocket over HTTP/2 uses extended CONNECT. The connection owns parsing and
+message storage, so each connection permits one active tunnel; additional tunnels
+receive `503 Service Unavailable` without disturbing the active one.
+
+| Rule                         | Behavior                                                |
+| ---------------------------- | ------------------------------------------------------- |
+| `Sec-WebSocket-Version`      | Exactly one value, `13`                                 |
+| Missing, duplicate, or other | `426 Upgrade Required` with `Sec-WebSocket-Version: 13` |
+| `Sec-WebSocket-Key`          | Not required and not inspected                          |
+| Per-message deflate          | Not negotiated on tunnels; frames are uncompressed      |
+| Tunnel count                 | One active per connection                               |
+
+The one-tunnel rule is a capacity decision, not a security boundary by itself.
+It limits how much state one connection can hold, which also limits how much an
+unauthenticated peer can make the server retain after admission.
+
+## Related
+
+- [WebSocket security](/docs/websocket/security) covers the handshake controls in
+  the route API.
+- [WebSocket limits](/docs/websocket/limits) lists every bound and preset.
+- [HTTP/2 tunnels](/docs/websocket/http2-tunnels) explains RFC 8441 behavior.

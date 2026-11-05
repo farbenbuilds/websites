@@ -1,0 +1,119 @@
+---
+title: Mutual TLS
+description: Require client certificates with a CA bundle, choose the right ClientAuth mode, and account for the early-data and HTTP/3 boundaries.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, security, tls]
+---
+
+In `.required` mode, mutual TLS proves the caller's identity before a request
+reaches a route. The server verifies the client chain against a CA bundle you
+provide, and the TLS layer fails the handshake closed before the HTTP parser sees
+a byte. `.optional` verifies a certificate only when the client presents one and
+still admits anonymous clients. Use `.required` for service-to-service APIs,
+internal admin surfaces, and device fleets that already hold certificates from a
+private CA.
+
+## Configure the server
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from a verified client") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https_mtls(
+        init.io,
+        "certs/fullchain.pem",
+        "certs/privkey.pem",
+        .{ .mode = .required, .ca_path = "certs/client-ca.pem" },
+    );
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 8443);
+    try server.run();
+}
+```
+
+`tls.TlsContext.init_mtls(cert_path, key_path, config)` is the context-level
+entry point; `App.init_https_mtls` is the application-level one. Both keep the
+`init`/`init_https` ALPN policy: `h2`, then `http/1.1`.
+
+## Modes
+
+`tls.ClientAuth` selects one of three policies:
+
+| Mode                      | Requests a certificate | Verifies it             | Anonymous clients |
+| ------------------------- | ---------------------- | ----------------------- | ----------------- |
+| `tls.ClientAuth.none`     | No                     | No                      | Allowed           |
+| `tls.ClientAuth.optional` | Yes                    | When presented          | Allowed           |
+| `tls.ClientAuth.required` | Yes                    | Yes; missing cert fails | Rejected          |
+
+`none` is the `init`/`init_https` default. It sends no CertificateRequest, so
+BoringSSL never opens `ca_path` and the field may stay empty. `optional` and
+`required` require a non-empty `ca_path`.
+
+## CA bundle format
+
+`ClientAuthConfig.ca_path` accepts a NUL-terminated (`[:0]const u8`) path and
+defaults to empty. The file holds PEM trust anchors for client chains. One file
+may contain a single CA certificate or several concatenated in any order;
+BoringSSL loads them all.
+
+The bundle is read once when the context is created. Replacing it requires a
+restart. CRLs in the file are loaded into the trust store but revocation is not
+enforced, so a revoked certificate still validates until it expires. Applications
+that require revocation must check it themselves, for example against a CRL or
+an OCSP responder, before trusting the connection.
+
+## Early data is disabled
+
+For `.optional` and `.required`, TLS 1.3 early data is disabled. The client
+certificate is verified in the second handshake flight, after early data has
+already reached the server, so admitting 0-RTT would let an unauthenticated
+request through. `.none` keeps the safe-method 0-RTT policy of `init`.
+
+## HTTP/3 is not wired
+
+Client authentication is TCP-only. The HTTP/3 context created by `init_http3`
+advertises `h3`, keeps early data disabled, and does not request a client
+certificate. `init_https_mtls` creates only the TCP context, so a process that
+needs QUIC uses `init_http3` without client certificates.
+
+## Errors
+
+| Error                     | Cause                                                       |
+| ------------------------- | ----------------------------------------------------------- |
+| `InvalidClientAuthConfig` | A mode other than `.none` was given with an empty `ca_path` |
+| `TrustStoreLoadFailed`    | The client CA bundle could not be read or parsed            |
+| `CertificateLoadFailed`   | The server PEM chain could not be read or parsed            |
+| `PrivateKeyLoadFailed`    | The server PEM key could not be read or parsed              |
+
+A context is never returned with a partially configured trust store. A failed
+load releases the context that call created.
+
+## Trust boundary
+
+- Verification happens in the TLS layer, before routing and middleware.
+- A verified certificate proves possession of a key. It does not grant a role or
+  authorize a route; the handler still owns authorization.
+- The CA bundle is your trust decision. BoringSSL ships no default client trust
+  store and does not consult the host system store for this check.
+- Keep the bundle and server files out of the repository and out of logs.
+
+## Related
+
+- [TLS 1.3 and ALPN](/docs/security/tls) explains the context policy and the
+  protocol errors shared with mTLS.
+- [Early data and 0-RTT](/docs/security/early-data) covers the safe-method gate
+  that mTLS disables.
+- [Authentication](/docs/http/authentication) adds application-level Basic and
+  Bearer checks after the TLS handshake.

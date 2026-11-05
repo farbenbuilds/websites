@@ -1,0 +1,134 @@
+---
+title: Profiling
+description: Tách kernel sampling, latency user-space, allocator count, runtime log và metrics trước khi giải thích một slowdown.
+sidebar:
+  order: 6
+search:
+  tags: [performance, observability]
+---
+
+Profiling là một tập hợp các lớp, không phải một tool duy nhất. Kernel sampling,
+latency user-space, allocation count, development log và metrics registry trả lời
+những câu hỏi khác nhau. Trang này nêu mỗi lớp cho thấy gì và dừng ở đâu.
+
+## Mỗi lớp cho thấy gì
+
+| Lớp                | Tool hoặc surface                            | Cho thấy                                        | Không cho thấy                                          |
+| ------------------ | -------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| Kernel sampling    | `perf` khi host cho phép                     | CPU time theo symbol và call stack              | Blocked I/O hoặc scheduler wait với độ chính xác đầy đủ |
+| Latency user-space | Dòng connect và TTFB của `h2load`            | Thời gian handshake so với first byte           | Kernel scheduling hoặc driver time                      |
+| Allocation         | Counting allocator quanh `build` hoặc `init` | Số allocation và thứ tự                         | Allocation bên trong vendor code sau khi wrapper trả về |
+| Runtime event      | Development log                              | Record request, connection, WebSocket và metric | Aggregate rate qua run dài                              |
+| Counter            | Prometheus registry có giới hạn              | Accepted, closed, request và WebSocket message  | Latency theo route hoặc allocation theo request         |
+| eBPF               | Histogram per-CPU được pin                   | Packet observation từ kernel map                | Per-request trace hoặc bypass data path                 |
+
+## Giới hạn của perf
+
+Kernel sampling phụ thuộc `perf_event_paranoid` và quyền của host. Host bị giới
+hạn có thể từ chối kernel profiling hoàn toàn. Archive `h2-tls-scaling-v1` ngày
+2026-10-19 ghi rằng kernel profiling bị giới hạn trên host đó và không claim
+kernel profile. Khi sampling không có, dùng dòng connect và TTFB, sample CPU và
+RSS, development log và counter.
+
+| Điều kiện                   | Bạn vẫn có                                              |
+| --------------------------- | ------------------------------------------------------- |
+| Kernel sampling được phép   | CPU attribution theo symbol                             |
+| Kernel sampling bị giới hạn | Latency từ generator, quan sát CPU và RSS, log, counter |
+| Shared host có việc khác    | Trend tương đối trong run, không phải số tuyệt đối      |
+| Backend không rõ            | Không quy kết kết quả cho io_uring hay epoll            |
+
+Backend quan trọng. Build Linux động thử io_uring trước và hạ xuống epoll khi
+kernel hoặc container policy từ chối ring. Ghi backend đã chọn và trạng thái
+fallback khi loop expose chúng.
+
+## Connect và TTFB user-space
+
+`h2load` báo connect time và time to first byte. Dùng chúng để tách handshake cost
+khỏi request handling. Plaintext control trên cùng host và flag cô lập TLS cost.
+Single-application control cô lập accept distribution của cluster.
+
+| Quan sát                              | Diễn giải                                          |
+| ------------------------------------- | -------------------------------------------------- |
+| Connect time chiếm ưu thế so với TTFB | Handshake hoặc accept path là bottleneck           |
+| TTFB chiếm ưu thế so với connect time | Handler, queueing hoặc response path là bottleneck |
+| Cả hai tăng theo connection count     | Saturation hoặc capacity pressure                  |
+| Cả hai phẳng trong khi failure tăng   | Rejection hoặc reset path, không phải latency      |
+
+## Allocator instrumentation
+
+Truyền một counting allocator wrapper vào `build` hoặc `init`. Framework kỳ vọng
+một allocation lúc startup và một release ở `deinit`. Request path không được
+làm đổi count.
+
+| Phase                                                                                    | Allocation kỳ vọng                                   |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `build` hoặc `init`                                                                      | Một application slab                                 |
+| Request path                                                                             | Không                                                |
+| `Request.clone`, `req.json(T, allocator)`, `req.validate_json`, `validate_json_detailed` | Allocation tường minh của ứng dụng                   |
+| `Response.json`                                                                          | Temporary qua allocator, giải phóng trước khi trả về |
+| `Response.json_buf`                                                                      | Không; render vào storage của caller                 |
+| `deinit`                                                                                 | Một release                                          |
+
+Nếu count tăng theo request, kiểm tra handler để tìm helper nhận allocator,
+container có thể grow, helper dựng body và slice được giữ quá callback.
+
+## Development log
+
+Development log không allocation và theo từng worker. Mỗi record được render vào
+buffer cố định 4096 byte và ghi ngay. Mỗi worker sở hữu một sink; write fail hoặc
+write ngắn bị drop và đếm trong `Sink.dropped`.
+
+| API hoặc setting           | Tác dụng                                                                  |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `with_observability(true)` | Bật Prometheus registry có giới hạn                                       |
+| `enable_dev_log`           | Mặc định bật; stderr sink mặc định im lặng khi stderr không phải terminal |
+| `with_dev_log(false)`      | Tắt wordmark, request line, metric snapshot và event record               |
+| `App.set_dev_log_file`     | Gắn output luôn ghi                                                       |
+| `App.flush_dev_log`        | Ghi byte đang chờ                                                         |
+| `App.log_metrics`          | Ghi mọi counter trong registry thành một batch                            |
+
+Request HTTP/1.1 và HTTP/2 log dạng `HH:MM:SS | [METHOD] /path : STATUS`. Event
+connection, WebSocket và metric theo sau với direction badge.
+
+## Metrics registry
+
+Registry render Prometheus text không allocation. Bật bằng
+`with_observability(true)` và đọc từ metrics path đã cấu hình.
+
+| Counter                          | Tăng khi                            |
+| -------------------------------- | ----------------------------------- |
+| `uwz_connections_accepted_total` | TCP connection được accept          |
+| `uwz_connections_closed_total`   | Connection đóng                     |
+| `uwz_http_requests_total`        | Dispatch request HTTP/1.1 và HTTP/2 |
+| `uwz_ws_messages_total`          | Một WebSocket message               |
+
+HTTP/3 phát một record `http_request` cho mỗi exchange hoàn tất qua sink của
+thread sở hữu, nhưng QUIC path không tăng counter registry. Không dùng
+`uwz_http_requests_total` như số request HTTP/3.
+
+## Giới hạn histogram eBPF
+
+Histogram latency eBPF tuỳ chọn được đọc khi map của nó được pin tại
+`/sys/fs/bpf/uwz_latency`. Gắn redirect, pin histogram và populate XSK map cần
+quyền network-administration trên Linux.
+
+Server data path luôn phục vụ qua network stack chuẩn. Một request
+`ServerConfig.transport = .kernel_bypass` báo `.standard` với reason
+`.data_path_unwired`; ứng dụng muốn AF_XDP tự drive `uz.xdp_transport` và `uz.xdp`.
+Histogram là quan sát per-CPU, không phải per-request trace.
+
+## Những gì không thể claim
+
+| Claim                                            | Vì sao không có cơ sở                        |
+| ------------------------------------------------ | -------------------------------------------- |
+| Kernel hotspot trên host bị giới hạn             | Thiếu quyền sampling                         |
+| Số request HTTP/3 từ `uwz_http_requests_total`   | QUIC path không tăng registry                |
+| Nguồn allocation bên trong BoringSSL hoặc lsquic | Counting wrapper chỉ thấy allocator boundary |
+| Bypass throughput từ run standard stack          | Data path báo `.data_path_unwired`           |
+| Con số tuyệt đối dùng chung từ một host          | Hardware, kernel và backend khác nhau        |
+
+## Liên quan
+
+- [Benchmarking](/docs/performance/benchmarking)
+- [Tuning](/docs/performance/tuning)
+- [Zero allocation](/docs/concepts/zero-allocation)

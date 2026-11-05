@@ -15,7 +15,7 @@ không thể chạy một prefix hợp lệ.
 ## Phân loại document
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: Phân loại document JSON-RPC
     accDescr: Object top-level là một call hoặc notification, array là batch, và mọi giá trị top-level khác là invalid request.
@@ -58,7 +58,7 @@ Batch được validate qua hai pass. Pass đầu parse toàn bộ JSON syntax v
 document kết thúc sau array. Chỉ sau đó dispatcher scan lại array và gọi procedure.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40},"sequence":{"useMaxWidth":false}} }%%
 sequenceDiagram
     accTitle: Pre-validation batch
     accDescr: Dispatcher validate toàn bộ JSON document trước khi procedure nào chạy, sau đó dispatch từng phần tử.

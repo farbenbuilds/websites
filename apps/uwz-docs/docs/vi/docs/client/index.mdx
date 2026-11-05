@@ -45,8 +45,8 @@ cookie, dùng proxy, retry, pool connection hay nói HTTP/2, HTTP/3 hoặc WebSo
 ## Vòng đời request
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Vòng đời request client
     accDescr: Fetch chuẩn bị một slot, connect, handshake TLS nếu cần, ghi request, đọc và parse response, chạy callback rồi đóng connection.
     A[fetch] --> B[Connect]

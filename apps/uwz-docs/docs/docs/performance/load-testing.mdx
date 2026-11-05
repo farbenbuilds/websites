@@ -1,0 +1,161 @@
+---
+title: Load testing
+description: Shape a workload that matches your traffic, count every failure, and treat headroom as evidence rather than a guess.
+sidebar:
+  order: 5
+search:
+  tags: [performance, capacity]
+---
+
+A load test answers two questions: does the workload fit the configured
+capacity, and where does latency start to bend? It does not produce a portable
+benchmark number. Use the same host, generator, and toolchain for every run you
+compare.
+
+## Define the workload shape
+
+| Dimension                       | Decide                                         | Why it changes the result                                |
+| ------------------------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| Method and path                 | `GET /`, `POST /upload`, WebSocket route       | Different parsers, handlers, and response paths          |
+| Body size                       | Below `max_body_size`                          | An oversized body receives `413`, not a slower handler   |
+| Header size and count           | Below `max_header_size` and `max_header_count` | An oversized block receives `431`                        |
+| Keep-alive                      | On for HTTP/1.1                                | A new connection per request measures handshakes instead |
+| Connections                     | At or below `max_connections`                  | Excess TCP connections are closed                        |
+| TLS                             | On or off, TLS 1.3 only for recorded runs      | Handshakes and record processing add cost                |
+| HTTP version                    | HTTP/1.1, HTTP/2, or HTTP/3                    | Multiplexing and flow control differ                     |
+| HTTP/2 streams                  | 1 and 8                                        | The compile-time session carries eight streams           |
+| WebSocket message size and rate | At or below `max_ws_message_size`              | Oversized messages are rejected                          |
+| Duration                        | Long enough for steady state                   | A short run measures startup and warmup                  |
+
+Use real PEM credentials for a recorded TLS run. Ephemeral development
+certificates are not acceptable evidence for a published measurement.
+
+## Keep-alive and connection count
+
+`idle_timeout_ms` closes a drained keep-alive connection after 120 seconds by
+default. A load generator that opens a connection per request measures the
+handshake path instead of the request path. A generator that exceeds
+`max_connections` sees new TCP connections closed, not a queued request.
+
+| Observation                                        | Likely cause                                           |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| Throughput rises with keep-alive                   | Handshake cost was dominating                          |
+| New connections close immediately at a fixed count | `max_connections` reached                              |
+| Throughput falls while CPU is idle                 | A peer is not reading, so the write ring backpressures |
+| Tail latency rises before throughput saturates     | Queueing, not a parser defect                          |
+
+## TLS
+
+TLS 1.3 handshakes and per-connection `SSL` state are real costs. Measure the
+plaintext control as well as the TLS path, and keep them in separate cohorts.
+Cluster TLS creates one `SSL_CTX` per worker, so session resumption is bounded by
+per-worker ticket keys. Do not turn a per-worker resumption mix into a
+cross-worker claim.
+
+| Check              | Record                                       |
+| ------------------ | -------------------------------------------- |
+| Certificate source | Real PEM files signed by a local CA          |
+| Protocol           | TLS 1.3 and the negotiated ALPN              |
+| Resumption         | New and reused sessions per worker           |
+| Control            | Plaintext cluster on the same host and flags |
+
+## HTTP/2 streams
+
+One connection embeds an HTTP/2 session with eight streams. Run at one and eight
+concurrent streams per session. Flow control and stream storage are bounded; a
+stream that cannot accept a write reports `error.WouldBlock`, and an HTTP/2
+tunnel that cannot fit a send ends the tunnel instead of parking the frame.
+
+| Level       | What it exercises                                            |
+| ----------- | ------------------------------------------------------------ |
+| 1 stream    | Per-request latency and header processing                    |
+| 8 streams   | Session storage, flow control, and write scheduling          |
+| More than 8 | Rejected or queued by the session capacity, not a new stream |
+
+## WebSocket echo
+
+An echo workload exercises the upgrade, framing, and outbound queue. Bound the
+inbound message with `max_ws_message_size` and the pending outbound bytes with
+`write_queue_size`. On `error.WouldBlock`, keep the frame in application-owned
+storage, return from the callback, and retry from the route's `drain` callback.
+Use `ws.buffered_amount()` to decide whether more frames fit.
+
+| Measurement                | Source                   |
+| -------------------------- | ------------------------ |
+| Messages sent and received | Application counter      |
+| Dropped or blocked sends   | `error.WouldBlock` count |
+| Close codes                | WebSocket close frame    |
+| Per-connection backlog     | `ws.buffered_amount()`   |
+
+## Tooling
+
+| Tool          | Use                                     | Read                                                            |
+| ------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `wrk`         | HTTP/1.1 keep-alive throughput          | Requests per second, latency, socket errors, non-2xx responses  |
+| `h2load`      | HTTP/2 over TLS or prior knowledge      | Succeeded, failed, errored, timeout, status codes, TLS protocol |
+| Custom client | WebSocket echo and application protocol | Round-trip time, drops, close codes, app-level errors           |
+
+The `http-throughput-v1` contract uses `wrk` with two threads, 64 connections,
+and a 10-second duration:
+
+```sh
+wrk -t2 -c64 -d10s http://127.0.0.1:3000/
+```
+
+The `h2-tls-scaling-v1` contract uses `h2load` at 64 to 2,048 connections and one
+or eight streams per session. Keep the generator version in the record.
+
+## Success definition
+
+| Check            | Pass condition                                          |
+| ---------------- | ------------------------------------------------------- |
+| Failed requests  | `failed == 0`                                           |
+| Errored requests | `errored == 0`                                          |
+| Timeouts         | `timeout == 0`                                          |
+| Status codes     | Every reported status is `2xx`                          |
+| TLS samples      | `TLS Protocol: TLSv1.3` for every sample                |
+| Response body    | The exact body `hello from a TLS worker group`          |
+| Server log       | No panic, protocol error, or libxev invalid-state text  |
+| Shutdown         | Exit status 0 after `SIGTERM`; status 143 fails the run |
+
+A run with a missing counter or a zeroed rate fails. It does not pass silently
+because the headline number looked plausible.
+
+## Error accounting
+
+| Signal                                | Meaning                                      | Action                                          |
+| ------------------------------------- | -------------------------------------------- | ----------------------------------------------- |
+| `413 Payload Too Large`               | Body above `max_body_size`                   | Raise the body limit or reduce the body         |
+| `431 Request Header Fields Too Large` | Request line or header block above its limit | Raise the limit or reduce headers               |
+| `503 Service Unavailable`             | Exhausted WebSocket tunnel or capacity limit | Raise capacity or reduce concurrency            |
+| `error.WouldBlock`                    | A write did not fit the bounded queue        | Resume from `drain`; do not spin                |
+| `error.ClusterQueueFull`              | A worker inbox is full                       | Inspect `publish_report` and slow the publisher |
+| `failed` or `errored` in `h2load`     | The generator could not complete a request   | Keep the sample as a failure and investigate    |
+
+## Capacity headroom
+
+Run at increasing fractions of `max_connections`, for example 50, 75, and 90
+percent. Claim headroom only when every sample has zero failed, errored,
+timed-out, and non-2xx requests and latency stays within your target.
+
+If failures appear, the limit is the workload, not the connection count. Raise
+the relevant capacity or reduce the load, then repeat the run. Do not average
+away failed samples.
+
+## Avoid unlike hosts
+
+| Do not compare                                | Because                                  |
+| --------------------------------------------- | ---------------------------------------- |
+| A local host with a shared CI runner          | CPU quota, scheduling, and cache differ  |
+| Linux io_uring with macOS kqueue              | Backend, kernel, and CPU sampling differ |
+| A quiet host with a host running other builds | Contention changes medians               |
+| One generator version with another            | Request generation and counters differ   |
+
+Results are comparable only within one host, kernel, toolchain, and backend
+cohort. Record the cohort with the result.
+
+## Related
+
+- [Benchmarking](/docs/performance/benchmarking)
+- [Capacity sizing](/docs/performance/capacity-sizing)
+- [Backpressure](/docs/concepts/backpressure)

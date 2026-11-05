@@ -15,7 +15,7 @@ loop. Sharing one service across workers would race on the response bytes.
 ## Topology
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart LR
     accTitle: JSON-RPC worker topology
     accDescr: A listening socket distributes connections across workers, and each worker owns its own JSON-RPC service and procedure state.

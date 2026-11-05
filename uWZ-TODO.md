@@ -3,7 +3,7 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-03
+> Last updated: 2026-11-05
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
@@ -703,56 +703,56 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.11 TLS and security
 
-| ID      | Route                                    | Page                      | Type        | Priority | Milestone | Source              | Status  |
-| ------- | ---------------------------------------- | ------------------------- | ----------- | -------- | --------- | ------------------- | ------- |
-| UWZ-180 | `/docs/security`                         | Security                  | Index       | P0       | M4        | `SECURITY.md`       | Planned |
-| UWZ-181 | `/docs/security/tls`                     | TLS 1.3 and ALPN          | Explanation | P0       | M4        | `docs/tls.md`       | Planned |
-| UWZ-182 | `/docs/security/ephemeral-certificates`  | Ephemeral certificates    | How-to      | P1       | M4        | `docs/tls.md`       | Planned |
-| UWZ-183 | `/docs/security/production-certificates` | Production certificates   | How-to      | P0       | M4        | `docs/tls.md`       | Planned |
-| UWZ-184 | `/docs/security/mtls`                    | Mutual TLS                | How-to      | P1       | M4        | `docs/tls.md`       | Planned |
-| UWZ-185 | `/docs/security/tls-clusters`            | TLS clusters              | How-to      | P1       | M4        | `docs/tls.md`       | Planned |
-| UWZ-186 | `/docs/security/early-data`              | Early data and 0-RTT      | Explanation | P1       | M4        | `docs/tls.md`       | Planned |
-| UWZ-187 | `/docs/security/certificate-rotation`    | Certificate rotation      | How-to      | P1       | M4        | ADR 0003            | Planned |
-| UWZ-188 | `/docs/security/authentication`          | Authentication            | How-to      | P0       | M4        | `docs/http.md`      | Planned |
-| UWZ-189 | `/docs/security/rate-limiting`           | Rate limiting             | How-to      | P0       | M4        | `docs/http.md`      | Planned |
-| UWZ-190 | `/docs/security/cors-and-headers`        | CORS and security headers | How-to      | P0       | M4        | `docs/http.md`      | Planned |
-| UWZ-191 | `/docs/security/input-hardening`         | Input hardening           | Explanation | P1       | M4        | `docs/http.md`      | Planned |
-| UWZ-192 | `/docs/security/websocket-security`      | WebSocket security        | How-to      | P1       | M4        | `docs/websocket.md` | Planned |
-| UWZ-193 | `/docs/security/http3-security`          | HTTP/3 security           | Explanation | P1       | M4        | `docs/quic.md`      | Planned |
-| UWZ-194 | `/docs/security/threat-model`            | Threat model              | Explanation | P2       | M5        | `SECURITY.md`       | Planned |
-| UWZ-195 | `/docs/security/reporting`               | Report a vulnerability    | Reference   | P1       | M4        | `SECURITY.md`       | Planned |
+| ID      | Route                                    | Page                        | Type        | Priority | Milestone | Source              | Status |
+| ------- | ---------------------------------------- | --------------------------- | ----------- | -------- | --------- | ------------------- | ------ |
+| UWZ-180 | `/docs/security`                         | Security                    | Index       | P0       | M4        | `SECURITY.md`       | Live   |
+| UWZ-181 | `/docs/security/tls`                     | TLS 1.3 and ALPN            | Explanation | P0       | M4        | `docs/tls.md`       | Live   |
+| UWZ-182 | `/docs/security/ephemeral-certificates`  | Ephemeral certificates      | How-to      | P1       | M4        | `docs/tls.md`       | Live   |
+| UWZ-183 | `/docs/security/production-certificates` | Production certificates     | How-to      | P0       | M4        | `docs/tls.md`       | Live   |
+| UWZ-184 | `/docs/security/mtls`                    | Mutual TLS                  | How-to      | P1       | M4        | `docs/tls.md`       | Live   |
+| UWZ-185 | `/docs/security/tls-clusters`            | TLS clusters                | How-to      | P1       | M4        | `docs/tls.md`       | Live   |
+| UWZ-186 | `/docs/security/early-data`              | Early data and 0-RTT        | Explanation | P1       | M4        | `docs/tls.md`       | Live   |
+| UWZ-187 | `/docs/security/certificate-rotation`    | Certificate rotation        | How-to      | P1       | M4        | ADR 0003            | Live   |
+| UWZ-188 | `/docs/security/authentication`          | Authentication boundary     | How-to      | P0       | M4        | `docs/http.md`      | Live   |
+| UWZ-189 | `/docs/security/rate-limiting`           | Rate limiting controls      | How-to      | P0       | M4        | `docs/http.md`      | Live   |
+| UWZ-190 | `/docs/security/cors-and-headers`        | CORS and security headers   | How-to      | P0       | M4        | `docs/http.md`      | Live   |
+| UWZ-191 | `/docs/security/input-hardening`         | Input hardening             | Explanation | P1       | M4        | `docs/http.md`      | Live   |
+| UWZ-192 | `/docs/security/websocket-security`      | WebSocket security controls | How-to      | P1       | M4        | `docs/websocket.md` | Live   |
+| UWZ-193 | `/docs/security/http3-security`          | HTTP/3 security             | Explanation | P1       | M4        | `docs/quic.md`      | Live   |
+| UWZ-194 | `/docs/security/threat-model`            | Threat model                | Explanation | P2       | M5        | `SECURITY.md`       | Live   |
+| UWZ-195 | `/docs/security/reporting`               | Report a vulnerability      | Reference   | P1       | M4        | `SECURITY.md`       | Live   |
 
 ### 5.12 Architecture and internals
 
-| ID      | Route                                   | Page                       | Type        | Priority | Milestone | Source                       | Status  |
-| ------- | --------------------------------------- | -------------------------- | ----------- | -------- | --------- | ---------------------------- | ------- |
-| UWZ-200 | `/docs/architecture`                    | Architecture               | Index       | P0       | M4        | `docs/architecture.md`       | Planned |
-| UWZ-201 | `/docs/architecture/shared-nothing`     | Shared-nothing workers     | Explanation | P0       | M4        | `docs/architecture.md`       | Planned |
-| UWZ-202 | `/docs/architecture/event-loop`         | Event loop and completions | Explanation | P0       | M4        | `docs/callback_lifecycle.md` | Planned |
-| UWZ-203 | `/docs/architecture/memory-model`       | Slab and memory model      | Explanation | P0       | M4        | `docs/memory_model.md`       | Planned |
-| UWZ-204 | `/docs/architecture/router-internals`   | Router internals           | Explanation | P2       | M5        | `src/router/radix.zig`       | Planned |
-| UWZ-205 | `/docs/architecture/callback-lifecycle` | Callback lifecycle         | Reference   | P1       | M4        | `docs/callback_lifecycle.md` | Planned |
-| UWZ-206 | `/docs/architecture/transports`         | Transports                 | Explanation | P1       | M4        | `docs/architecture.md`       | Planned |
-| UWZ-207 | `/docs/architecture/cluster-internals`  | Cluster internals          | Explanation | P2       | M5        | ADR 0007                     | Planned |
-| UWZ-208 | `/docs/architecture/shutdown`           | Shutdown ordering          | Explanation | P1       | M4        | `docs/architecture.md`       | Planned |
-| UWZ-209 | `/docs/architecture/backends`           | Runtime backends           | Explanation | P2       | M5        | `docs/architecture.md`       | Planned |
-| UWZ-210 | `/docs/architecture/edge-and-wasm`      | Edge and WASM              | Explanation | P2       | M5        | `docs/operations.md`         | Planned |
-| UWZ-211 | `/docs/architecture/c-abi`              | C ABI architecture         | Explanation | P1       | M4        | `include/uWebZockets.h`      | Planned |
-| UWZ-212 | `/docs/architecture/dependencies`       | Dependency policy          | Explanation | P2       | M5        | `docs/dependency_forks.md`   | Planned |
-| UWZ-213 | `/docs/architecture/ktls-and-xdp`       | kTLS and AF_XDP            | Explanation | P2       | M5        | `docs/operations.md`         | Planned |
+| ID      | Route                                   | Page                       | Type        | Priority | Milestone | Source                       | Status |
+| ------- | --------------------------------------- | -------------------------- | ----------- | -------- | --------- | ---------------------------- | ------ |
+| UWZ-200 | `/docs/architecture`                    | Architecture               | Index       | P0       | M4        | `docs/architecture.md`       | Live   |
+| UWZ-201 | `/docs/architecture/shared-nothing`     | Worker runtime topology    | Explanation | P0       | M4        | `docs/architecture.md`       | Live   |
+| UWZ-202 | `/docs/architecture/event-loop`         | Event loop and completions | Explanation | P0       | M4        | `docs/callback_lifecycle.md` | Live   |
+| UWZ-203 | `/docs/architecture/memory-model`       | Slab and memory model      | Explanation | P0       | M4        | `docs/memory_model.md`       | Live   |
+| UWZ-204 | `/docs/architecture/router-internals`   | Router internals           | Explanation | P2       | M5        | `src/router/radix.zig`       | Live   |
+| UWZ-205 | `/docs/architecture/callback-lifecycle` | Callback lifecycle         | Reference   | P1       | M4        | `docs/callback_lifecycle.md` | Live   |
+| UWZ-206 | `/docs/architecture/transports`         | Transports                 | Explanation | P1       | M4        | `docs/architecture.md`       | Live   |
+| UWZ-207 | `/docs/architecture/cluster-internals`  | Cluster internals          | Explanation | P2       | M5        | ADR 0007                     | Live   |
+| UWZ-208 | `/docs/architecture/shutdown`           | Shutdown ordering          | Explanation | P1       | M4        | `docs/architecture.md`       | Live   |
+| UWZ-209 | `/docs/architecture/backends`           | Runtime backends           | Explanation | P2       | M5        | `docs/architecture.md`       | Live   |
+| UWZ-210 | `/docs/architecture/edge-and-wasm`      | Edge and WASM              | Explanation | P2       | M5        | `docs/operations.md`         | Live   |
+| UWZ-211 | `/docs/architecture/c-abi`              | C ABI architecture         | Explanation | P1       | M4        | `include/uWebZockets.h`      | Live   |
+| UWZ-212 | `/docs/architecture/dependencies`       | Dependency policy          | Explanation | P2       | M5        | `docs/dependency_forks.md`   | Live   |
+| UWZ-213 | `/docs/architecture/ktls-and-xdp`       | kTLS and AF_XDP            | Explanation | P2       | M5        | `docs/operations.md`         | Live   |
 
 ### 5.13 Performance
 
-| ID      | Route                                 | Page              | Type        | Priority | Milestone | Source                 | Status  |
-| ------- | ------------------------------------- | ----------------- | ----------- | -------- | --------- | ---------------------- | ------- |
-| UWZ-220 | `/docs/performance`                   | Performance       | Index       | P1       | M4        | README, benchmarks     | Planned |
-| UWZ-221 | `/docs/performance/cost-model`        | Cost model        | Explanation | P1       | M4        | `docs/memory_model.md` | Planned |
-| UWZ-222 | `/docs/performance/capacity-sizing`   | Capacity sizing   | How-to      | P0       | M4        | `docs/memory_model.md` | Planned |
-| UWZ-223 | `/docs/performance/benchmarking`      | Benchmarking      | How-to      | P1       | M5        | `CI_CD_PIPELINE.md`    | Planned |
-| UWZ-224 | `/docs/performance/load-testing`      | Load testing      | How-to      | P2       | M5        | `benchmarks/`          | Planned |
-| UWZ-225 | `/docs/performance/profiling`         | Profiling         | How-to      | P2       | M5        | `docs/operations.md`   | Planned |
-| UWZ-226 | `/docs/performance/tuning`            | Tuning            | How-to      | P2       | M5        | `docs/architecture.md` | Planned |
-| UWZ-227 | `/docs/performance/regression-policy` | Regression policy | Explanation | P2       | M5        | CI docs                | Planned |
+| ID      | Route                                 | Page              | Type        | Priority | Milestone | Source                 | Status |
+| ------- | ------------------------------------- | ----------------- | ----------- | -------- | --------- | ---------------------- | ------ |
+| UWZ-220 | `/docs/performance`                   | Performance       | Index       | P1       | M4        | README, benchmarks     | Live   |
+| UWZ-221 | `/docs/performance/cost-model`        | Cost model        | Explanation | P1       | M4        | `docs/memory_model.md` | Live   |
+| UWZ-222 | `/docs/performance/capacity-sizing`   | Capacity sizing   | How-to      | P0       | M4        | `docs/memory_model.md` | Live   |
+| UWZ-223 | `/docs/performance/benchmarking`      | Benchmarking      | How-to      | P1       | M5        | `CI_CD_PIPELINE.md`    | Live   |
+| UWZ-224 | `/docs/performance/load-testing`      | Load testing      | How-to      | P2       | M5        | `benchmarks/`          | Live   |
+| UWZ-225 | `/docs/performance/profiling`         | Profiling         | How-to      | P2       | M5        | `docs/operations.md`   | Live   |
+| UWZ-226 | `/docs/performance/tuning`            | Tuning            | How-to      | P2       | M5        | `docs/architecture.md` | Live   |
+| UWZ-227 | `/docs/performance/regression-policy` | Regression policy | Explanation | P2       | M5        | CI docs                | Live   |
 
 ### 5.14 Operations
 
@@ -903,9 +903,9 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | JSON-RPC              |      10 |      3 |       5 |      2 |      10 |
 | Type safety           |       9 |      5 |       3 |      1 |       9 |
 | Client                |       7 |      2 |       4 |      1 |       7 |
-| TLS and security      |      16 |      6 |       9 |      1 |       0 |
-| Architecture          |      14 |      4 |       4 |      6 |       0 |
-| Performance           |       8 |      1 |       3 |      4 |       0 |
+| TLS and security      |      16 |      6 |       9 |      1 |      16 |
+| Architecture          |      14 |      4 |       4 |      6 |      14 |
+| Performance           |       8 |      1 |       3 |      4 |       8 |
 | Operations            |      20 |      8 |       7 |      5 |       0 |
 | Deployment            |      15 |      7 |       7 |      1 |       0 |
 | Guides                |      23 |      0 |      17 |      6 |       0 |
@@ -913,7 +913,7 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Reference             |      11 |      7 |       4 |      0 |       0 |
 | Examples              |      11 |      1 |       8 |      2 |       0 |
 | Project               |       9 |      1 |       5 |      3 |       0 |
-| **Total**             | **268** | **96** | **125** | **47** | **133** |
+| **Total**             | **268** | **96** | **125** | **47** | **171** |
 
 The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
 2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
@@ -930,6 +930,17 @@ queries returned the intended page in the top three in both locales. `blume
 check`, `blume validate --strict`, and `blume audit --fail-on warning` pass. The
 native Blume sidebar summary has one known upstream `nested-interactive` axe
 finding; it is tracked as framework chrome, not page content.
+
+On 2026-11-05 the security, architecture, and performance sections added 38
+English and 38 Vietnamese pages, bringing the site to 342 docs pages plus the two
+landing pages (344 pages total). `blume check` type-checked 342 pages with 0
+errors, 0 warnings, and 0 hints; `blume validate --strict` found no broken links;
+`blume build` built 373 pages including generated `.md` mirrors; and `blume audit
+--fail-on warning` reported 0 errors, 0 warnings, and 0 notes across 343 audited
+pages. `pnpm ready`, `pnpm format:check`, and `pnpm check:size` passed, and the
+root Vitest suite passed 24 files and 66 tests. Browser viewport, axe, keyboard, reduced-motion, and search QA
+for the 76 new routes were not run in this environment; the next review should
+repeat the 320/768/1280 pass before the section is treated as launch-verified.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain

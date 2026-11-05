@@ -71,23 +71,23 @@ complete.
 ## Vòng đời slot
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40},"sequence":{"useMaxWidth":false}} }%%
 sequenceDiagram
     accTitle: Trình tự callback client
     accDescr: fetch chuẩn bị một slot, run điều khiển loop, callback nhận một outcome và slot trở về free list.
     participant App
     participant Client
-    participant Loop
+    participant EventLoop
     participant Peer
     App->>Client: fetch(request, callback)
     Client->>Client: acquire free slot
-    App->>Loop: run()
-    Loop->>Peer: connect and write
-    Peer-->>Loop: response bytes
-    Loop->>Client: parse and complete
+    App->>EventLoop: run()
+    EventLoop->>Peer: connect and write
+    Peer-->>EventLoop: response bytes
+    EventLoop->>Client: parse and complete
     Client->>App: callback(outcome)
     Client->>Client: release slot
-    Loop-->>App: run returns when inflight is zero
+    EventLoop-->>App: run returns when inflight is zero
 ```
 
 Callback chạy trước khi slot được trả về free list. Callback bắt đầu một follow-up

@@ -13,7 +13,7 @@ re-parse it. This page follows one request from the QUIC stream to the handler a
 back.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     A[QUIC stream] --> B[QPACK decode]
     B --> C[Validate headers]

@@ -111,10 +111,28 @@ html .prose thead th {
   text-transform: uppercase;
 }
 
-/* Mermaid renders SVG at its natural width; let Blume's wrapper scroll when a
- * diagram is wider than the prose column. Do not force a minimum width. */
+/* Mermaid renders at its natural size so labels stay legible; a diagram wider
+ * than the prose column scrolls inside its wrapper instead of shrinking. */
+html .prose blume-mermaid {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+html .prose blume-mermaid > div {
+  width: max-content;
+  min-width: 100%;
+}
+
 html .prose blume-mermaid svg {
   height: auto;
+  max-width: none !important;
+}
+
+html .prose blume-mermaid:focus-visible {
+  outline: 2px solid var(--blume-accent);
+  outline-offset: 3px;
 }
 
 html .prose tbody tr + tr {

@@ -1,0 +1,96 @@
+---
+title: Performance
+description: Learn what µWebZockets can promise about cost and speed, and which claims require a dated benchmark artifact before you quote them.
+search:
+  tags: [performance, capacity]
+---
+
+This section explains the cost model, capacity sizing, benchmarking, load
+testing, profiling, tuning, and regression policy for applications that use
+µWebZockets. It does not publish a portable requests-per-second number. It
+teaches you to measure your own workload and to read the project's evidence
+correctly.
+
+## What this section can promise
+
+| Promise                                         | Basis                                                                           | Page                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| One startup allocation for the application slab | `build` and `init` allocate once through the caller allocator                   | [Cost model](/docs/performance/cost-model)               |
+| No framework allocation on the request path     | Request buffers, queues, messages, and route tables are carved before listening | [Cost model](/docs/performance/cost-model)               |
+| Bounded memory with named rejection behavior    | Every capacity is fixed at startup and reports a specific error or status       | [Capacity sizing](/docs/performance/capacity-sizing)     |
+| A measured regression guard                     | `http-throughput-v1` compares a candidate with its baseline on one runner       | [Benchmarking](/docs/performance/benchmarking)           |
+| Reproducible methodology                        | Versioned contracts fix parameters and record provenance                        | [Regression policy](/docs/performance/regression-policy) |
+| A way to separate CPU, allocation, and queueing | Profiling layers answer different questions                                     | [Profiling](/docs/performance/profiling)                 |
+
+## What this section cannot promise
+
+| Not promised                           | Why                                                                  | What to do instead                              |
+| -------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------- |
+| A universal requests-per-second figure | Results depend on CPU, kernel, backend, TLS, workload, and generator | Measure your own workload on your target host   |
+| Latency under your traffic shape       | The project does not know your body sizes, peer count, or read speed | Run a load test with your workload              |
+| Kernel attribution on every host       | `perf_event_paranoid` can restrict sampling                          | Use user-space counters and the development log |
+| HTTP/3 parity in the metrics registry  | HTTP/3 emits request records but does not advance the counters       | Read HTTP/3 records from the development log    |
+| A portable absolute capacity claim     | Shared runners cannot satisfy the quiet-host contract                | Treat a relative guard as a relative guard      |
+
+## Claim policy
+
+Every performance claim needs five fields: the commit or tag, the date, the
+hardware, the command, and the artifact path. A number without them is an
+anecdote. A relative regression guard is a contract between two revisions on one
+host; it is not an absolute capacity claim. [Benchmarking](/docs/performance/benchmarking)
+defines the contract, and [Regression policy](/docs/performance/regression-policy)
+defines how evidence is published.
+
+## Page map
+
+<CardGroup cols={2}>
+  <Card title="Cost model" href="/docs/performance/cost-model" icon="calculator">
+    Follow one startup slab from `ServerConfig` to per-connection bytes, and see why capacity is not
+    throughput.
+  </Card>
+  <Card title="Capacity sizing" href="/docs/performance/capacity-sizing" icon="ruler">
+    Work through connections, bodies, queues, messages, protocol limits, workers, and TLS context
+    with a derived worksheet.
+  </Card>
+  <Card title="Benchmarking" href="/docs/performance/benchmarking" icon="bar-chart">
+    Apply the quiet-host contract, the candidate-versus-baseline rule, and the 90 percent median
+    guard.
+  </Card>
+  <Card title="Load testing" href="/docs/performance/load-testing" icon="activity">
+    Shape a workload, count every failure, and keep headroom evidence honest.
+  </Card>
+  <Card title="Profiling" href="/docs/performance/profiling" icon="microscope">
+    Separate kernel sampling, user-space latency, allocator counts, logs, and metrics.
+  </Card>
+  <Card title="Tuning" href="/docs/performance/tuning" icon="sliders-horizontal">
+    Change TCP flags, worker count, queues, compression, and HTTP/3 transmit behavior only with
+    evidence.
+  </Card>
+  <Card title="Regression policy" href="/docs/performance/regression-policy" icon="git-branch">
+    Add a benchmark, version its parameters, and publish append-only evidence.
+  </Card>
+</CardGroup>
+
+## Evidence artifacts
+
+| Artifact                                           | What it contains                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| `benchmarks/http_throughput_guarantee.md`          | The `http-throughput-v1` contract and the 90 percent guard        |
+| `benchmarks/http_throughput_v1.env`                | Machine-readable load parameters                                  |
+| `benchmarks/h2_tls_scaling_guarantee.md`           | The `h2-tls-scaling-v1` characterization contract                 |
+| `benchmarks/h2_tls_scaling_v1.env`                 | Connections, streams, duration, generator, and schema version     |
+| `benchmarks/results/h2_tls_scaling_v1/2026_10_19/` | Host record, result tables, hypothesis decisions, and raw archive |
+| `benchmark-data` branch                            | Append-only records, raw samples, index, and latest pointer       |
+
+The contracts state that a changed parameter requires a new benchmark ID and a
+new history series. The results directory keeps one compressed archive, one
+`README.md`, and one `manifest.sha256` per recorded run. [Benchmarking](/docs/performance/benchmarking)
+explains how each artifact is produced, and [Regression policy](/docs/performance/regression-policy)
+explains how it is published. Read the artifact and its caveats before quoting
+any value from it.
+
+## Related
+
+- [Capacity model](/docs/concepts/capacity-model)
+- [Zero allocation](/docs/concepts/zero-allocation)
+- [HTTP limits](/docs/http/limits)

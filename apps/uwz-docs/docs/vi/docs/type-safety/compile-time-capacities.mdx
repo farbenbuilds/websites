@@ -85,8 +85,8 @@ pub fn main(init: std.process.Init) !void {
 thể drift. `build` thực hiện đúng một allocation cho slab.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
-flowchart LR
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
+flowchart TB
     accTitle: Từ capacity đến slab
     accDescr: ServerConfig compile-time được validate, chuyển thành slab layout, allocate một lần và dùng suốt process.
     A["ServerConfig const"] --> B["Builder specialization"]

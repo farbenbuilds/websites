@@ -1,0 +1,147 @@
+---
+title: Router internals
+description: Xem cách router lưu route trong mảng song song, resolve static path qua FNV-1a index và đóng băng sau khi listen.
+sidebar:
+  order: 5
+search:
+  tags: [concept, routing]
+---
+
+Router là một cấu trúc dữ liệu có giới hạn, được application carve một lần và
+không bao giờ mở rộng. Nó kết hợp index open-addressed cho exact path với radix
+walk và một pattern table nhỏ. Trang này giải thích storage, thứ tự lookup và quy
+tắc đăng ký phía sau routing model public.
+
+## Router storage được carve
+
+`src/router/radix.zig` giữ router. `ServerConfig` chiếu capacity của nó qua
+`router_capacities()`, và region router của slab được carve bằng
+`radix.carve_storage` internal khi application khởi động. Không phần nào của
+router cấp phát trên request.
+
+| Capacity              | Mặc định | Field `ServerConfig`      |
+| --------------------- | -------: | ------------------------- |
+| Radix node            |      256 | `max_route_nodes`         |
+| Pattern có tham số    |       64 | `max_pattern_routes`      |
+| Middleware callback   |       32 | `max_middleware`          |
+| Độ dài route path     |    2 KiB | `max_route_path_size`     |
+| Capture mỗi request   |       16 | `max_route_params`        |
+| Registry path giữ lại |   64 KiB | `max_route_registry_size` |
+
+Mỗi node lưu một path segment, nên prefix dùng chung chỉ tính một lần. Chỉ số
+node là `u16`, vì vậy số node bị giới hạn ở `maxInt(u16)`.
+
+## Mảng song song
+
+Router giữ mỗi field trong một mảng riêng thay vì một struct node lớn. Một lần
+lookup chỉ cần child link sẽ không chạm handler hay storage của registry.
+
+| Mảng              | Mục đích                                                     |
+| ----------------- | ------------------------------------------------------------ |
+| `segment_offsets` | Offset của segment mỗi node trong vùng route byte dùng chung |
+| `segment_lengths` | Độ dài byte của segment mỗi node                             |
+| `first_child`     | Chỉ số node con đầu tiên, hoặc sentinel null                 |
+| `next_sibling`    | Chỉ số node sibling kế tiếp, hoặc sentinel null              |
+| `parents`         | Node cha của mỗi node, dùng để xác minh một index hit        |
+| `has_route`       | Node có kết thúc ít nhất một route đã đăng ký hay không      |
+| `http_handlers`   | Một slot callback cho mỗi HTTP method trên mỗi node          |
+| `ws_behaviors`    | WebSocket behavior tùy chọn trên mỗi node                    |
+| `static_nodes`    | Ánh xạ slot static index sang node                           |
+| `static_hashes`   | Ánh xạ slot static index sang FNV-1a hash của full path      |
+| `pattern_routes`  | Callback pattern, số static byte, số capture và wildcard     |
+| `route_records`   | Offset path giữ lại cho introspection và OpenAPI output      |
+
+Tên các mảng và kiểu `PatternRoute` là field internal của router.
+
+## Static index
+
+Exact static path được resolve trước radix walk. Index là open-addressed với
+linear probing:
+
+1. Hash full path bằng FNV-1a 64-bit.
+2. Mask các bit thấp vào kích thước bảng.
+3. Probe tiến tới khi gặp slot trống hoặc entry khớp.
+4. Chỉ accept một hit khi hash khớp và các segment đã lưu của node ghép lại
+   đúng bằng request path.
+
+Bước xác minh segment là thứ làm hash collision vô hại: một hash trùng sẽ rơi
+sang probe kế tiếp thay vì chọn nhầm route. Bảng được định cỡ bằng lũy thừa hai
+gần nhất lớn hơn hoặc bằng hai lần `max_nodes`, với mức sàn 16 slot, nên load
+factor luôn ở mức một nửa trở xuống và một lần probe luôn tới được slot trống.
+
+Index lưu một entry cho mỗi path. Đăng ký thêm method cho cùng path sẽ probe slot
+đã có và giữ nguyên bảng. Khi một radix split cắt ngắn node và chuyển route của
+nó sang node con mới, entry trong index được trỏ lại sang node mới.
+
+Index là internal. `find_static_node`, `index_static_path` và
+`relocate_static_index` là các hàm hiện thực, không phải public API.
+
+## Radix walk
+
+Khi static index miss, router đi qua radix tree:
+
+1. Bắt đầu ở root với phần path còn lại.
+2. Quét sibling list của node hiện tại để tìm child có segment bắt đầu bằng byte
+   kế tiếp của path.
+3. Yêu cầu toàn bộ child segment là prefix của phần path còn lại.
+4. Tiến lên và lặp tới khi phần path còn lại rỗng.
+5. Chỉ accept node khi `has_route` được đặt.
+
+Một segment mismatch dừng walk. Pattern table chỉ được xét sau khi radix walk thất
+bại.
+
+## Pattern table có giới hạn
+
+Route có tham số và wildcard nằm trong một side table cố định 64 entry. Một
+`PatternRoute` lưu một slot handler cho mỗi method, WebSocket behavior tùy chọn,
+số static byte, số capture và việc pattern có wildcard hay không. Các field này
+quyết định ranking: nhiều static byte hơn thắng, pattern không có wildcard thắng
+pattern có wildcard, và ít capture hơn thắng khi vẫn hòa. Hai pattern chỉ khác
+tên capture sẽ thất bại đăng ký với `error.RoutePatternConflicts` thay vì che
+khuất nhau.
+
+## Capture là slice mượn
+
+`Request` giữ 16 cặp capture inline theo mặc định. Mỗi capture là hai slice, một
+cho tên và một cho giá trị, đều mượn từ request path. Vì vậy một segment được
+capture chỉ còn hợp lệ trong callback và không bao giờ cấp phát.
+
+`max_route_params` lớn hơn sẽ carve `(max_route_params - 16) * 2` entry slice
+thêm cho mỗi connection vào slab. Mảng inline không thể thu nhỏ, nên giá trị dưới
+16 bị từ chối là `error.InvalidRouterCapacity`.
+
+## Bất biến sau khi listen
+
+Đăng ký route là hoạt động lúc startup. Trước khi listener bind, mọi helper đăng
+ký kiểm tra cờ `routes_locked` internal, đăng ký route và ghi lại. Sau khi
+`listen_all` hoặc `listen_udp` thành công, cờ được đặt và các lần gọi sau trả
+`error.RoutesLocked`.
+
+Một `listen_all` thất bại đóng các socket nó đã tạo, giữ `listener_count` bằng
+không và để route chưa khóa, nên bạn có thể sửa port rồi thử lại. Lần gọi sau khi
+shutdown bắt đầu hoặc sau `deinit` trả `error.ApplicationUnavailable`.
+
+## Lỗi đăng ký
+
+| Error                                 | Nguyên nhân                                                         |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| `error.InvalidRoutePath`              | Path rỗng, thiếu `/` đầu, có `?`, `#`, CR, LF hoặc dài quá giới hạn |
+| `error.InvalidRoutePattern`           | Tên capture rỗng, capture trùng tên hoặc wildcard không ở cuối      |
+| `error.RoutePatternConflicts`         | Pattern khác có cùng static byte, số capture và dạng wildcard       |
+| `error.RouteAlreadyRegistered`        | Cùng method và path đã có handler                                   |
+| `error.RouteCapacityReached`          | Node table hoặc pattern table đầy                                   |
+| `error.RouteParameterCapacityReached` | Pattern cần nhiều capture hơn giới hạn đã cấu hình                  |
+| `error.RouteStorageCapacityReached`   | Registry path giữ lại không chứa thêm được path                     |
+
+Pattern sai định dạng thất bại thay vì match mơ hồ.
+[Mô hình định tuyến](/docs/concepts/routing-model) bao quát method fallback và
+precedence từ phía người gọi.
+
+## Liên quan
+
+- [Mô hình định tuyến](/docs/concepts/routing-model) giải thích quy tắc match
+  public.
+- [Slab và memory model](/docs/architecture/memory-model) cho thấy router storage
+  nằm ở đâu trong startup slab.
+- [Callback lifecycle](/docs/architecture/callback-lifecycle) bao quát phần chạy
+  sau khi match route.

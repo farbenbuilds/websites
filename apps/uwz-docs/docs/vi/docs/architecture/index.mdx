@@ -1,0 +1,104 @@
+---
+title: Kiến trúc
+description: Nắm bản đồ runtime bên dưới public API, phân biệt hợp đồng ổn định với internal và tìm trang cho từng subsystem.
+search:
+  tags: [concept, reference]
+---
+
+Phần kiến trúc giải thích cách một giá trị application trở thành hành vi runtime
+có giới hạn. Đọc phần này khi một preset, một con số latency hay một lỗi shutdown
+cần được giải thích ở tầng thấp hơn tín hiệu bạn quan sát được.
+
+## Hợp đồng public và internal
+
+Hai lớp cùng tồn tại trong phần này. Lớp public là những gì application của bạn
+được phép gọi tên và phụ thuộc. Lớp internal giải thích cách hợp đồng đó được
+hiện thực và có thể thay đổi giữa các bản phát hành.
+
+| Lớp      | Bao gồm                                                                                              | Mức ổn định                          |
+| -------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Public   | `App`, `Server`, `ServerConfig`, `Presets`, `Request`, `Response`, `AsyncResponse`, các kiểu cluster | Tên, giới hạn và error được ghi nhận |
+| Internal | libxev loop wrapper, slab planner, completion callback, router array, worker group, cluster inbox    | Chi tiết hiện thực                   |
+
+Public nghĩa là được ghi nhận trên site này như một entry point cho consumer. Một
+số module được export để internal của framework và integration trực tiếp dùng
+được, nhưng chúng không phải hợp đồng ổn định cho consumer; trang tương ứng ghi
+rõ là internal. Hãy coi một symbol không được ghi nhận là internal kể cả khi
+compiler gọi được tên đó. Không trang nào trình bày entry point internal như public
+API, và không trang nào yêu cầu bạn đọc source của framework để dùng thư viện.
+
+## Bản đồ runtime
+
+Trang này là trang đầu trong 14 trang của phần. Các card bên dưới bao phủ 13
+trang còn lại: phần lõi của runtime trước, rồi các ranh giới và tích hợp dựng
+trên đó.
+
+### Runtime lõi
+
+<CardGroup cols={2}>
+  <Card title="Worker shared-nothing" href="/docs/architecture/shared-nothing" icon="share-2">
+    Xem mỗi worker sở hữu gì, cách một port nuôi mọi loop và vì sao connection state không vượt
+    thread.
+  </Card>
+  <Card title="Event loop và completion" href="/docs/architecture/event-loop" icon="activity">
+    Theo dõi chọn backend libxev, quyền sở hữu completion, release gate và nhịp timer.
+  </Card>
+  <Card title="Slab và memory model" href="/docs/architecture/memory-model" icon="database">
+    Đọc các region của slab, stride chính xác, preset, SoA layout và hành vi khi cạn capacity.
+  </Card>
+  <Card title="Router internals" href="/docs/architecture/router-internals" icon="route">
+    Xem parallel array, static index, radix walk và các pattern table có giới hạn.
+  </Card>
+  <Card title="Callback lifecycle" href="/docs/architecture/callback-lifecycle" icon="git-branch">
+    Ánh xạ mọi native completion tới handler, từ accept đến pool release.
+  </Card>
+  <Card title="Thứ tự shutdown" href="/docs/architecture/shutdown" icon="power">
+    Theo năm bước từ chối work, cancel completion, xác minh drain đến giải phóng storage.
+  </Card>
+</CardGroup>
+
+### Ranh giới và tích hợp
+
+<CardGroup cols={2}>
+  <Card title="Transport" href="/docs/architecture/transports" icon="network">
+    Tách protocol core khỏi TCP, TLS, HTTP/2, HTTP/3, UDP và transport phía client.
+  </Card>
+  <Card title="Cluster internals" href="/docs/architecture/cluster-internals" icon="boxes">
+    Theo lifecycle của worker group, cách giữ first failure và publish report.
+  </Card>
+  <Card title="Runtime backend" href="/docs/architecture/backends" icon="cpu">
+    So sánh hành vi io_uring, epoll, kqueue, IOCP và quy tắc fallback.
+  </Card>
+  <Card title="Edge và WASM" href="/docs/architecture/edge-and-wasm" icon="globe">
+    Đọc export freestanding và WASI, allocator có giới hạn và handle kiểm tra generation.
+  </Card>
+  <Card title="Kiến trúc C ABI" href="/docs/architecture/c-abi" icon="braces">
+    Hiểu opaque handle, capacity cố định và async token ở ranh giới C.
+  </Card>
+  <Card title="Chính sách dependency" href="/docs/architecture/dependencies" icon="package">
+    Xem dependency nào được vendored, nào bị fork và vì sao version được pin.
+  </Card>
+  <Card title="kTLS và AF_XDP" href="/docs/architecture/ktls-and-xdp" icon="zap">
+    Kiểm tra trạng thái helper độc lập, quyền cần thiết và phần không nằm trên data path mặc định.
+  </Card>
+</CardGroup>
+
+## Cách đọc phần này
+
+Bắt đầu với [Worker shared-nothing](/docs/architecture/shared-nothing) và
+[Slab và memory model](/docs/architecture/memory-model) để biết mỗi worker sở
+hữu gì và quyền sở hữu đó được định cỡ ra sao. Sau đó đọc
+[Event loop và completion](/docs/architecture/event-loop) cùng
+[Callback lifecycle](/docs/architecture/callback-lifecycle) để theo work đi qua
+loop. Đọc [Thứ tự shutdown](/docs/architecture/shutdown) khi drain hoặc release
+gặp lỗi.
+
+Nếu bạn đang chọn capacity, đi thẳng tới memory model rồi tới
+[Mô hình capacity](/docs/concepts/capacity-model). Nếu bạn đang debug một
+request, bắt đầu từ [Vòng đời request](/docs/concepts/request-lifecycle).
+
+## Liên quan
+
+- [Worker shared-nothing](/docs/concepts/shared-nothing)
+- [Mô hình capacity](/docs/concepts/capacity-model)
+- [Vòng đời server](/docs/http/server-lifecycle)

@@ -1,0 +1,104 @@
+---
+title: Certificate production
+description: Load PEM chain và private key, fail nhanh khi mismatch và theo startup checklist đầy đủ trước khi public deployment.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, security, tls]
+---
+
+Deployment production truyền certificate file cho `init_https` hoặc `init_http3`.
+Certificate là PEM chain, key là PEM private key, và BoringSSL validate cặp này
+ngay khi tạo context. File sai làm startup fail, không phải handshake đầu tiên.
+
+## Load PEM file
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, response: *uz.Response) void {
+    response.text("hello from TLS") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.App(128).init_https(
+        init.io,
+        "certs/fullchain.pem",
+        "certs/privkey.pem",
+    );
+    defer server.deinit();
+
+    _ = try server.get("/", index);
+    try server.catch_shutdown_signals();
+    try server.listen("0.0.0.0", 3443);
+    try server.run();
+}
+```
+
+`init_http3` load cùng certificate và key vào hai context: một cho TCP (`h2`, rồi
+`http/1.1`) và một cho QUIC (`h3`).
+
+## Yêu cầu credential
+
+| Mục            | Yêu cầu                                              |
+| -------------- | ---------------------------------------------------- |
+| Certificate    | PEM chain với leaf certificate đứng đầu              |
+| Private key    | PEM private key khớp với leaf                        |
+| Kiểu path      | Zig slice NUL-terminated (`[:0]const u8`)            |
+| Key validation | `SSL_CTX_check_private_key` chạy lúc tạo context     |
+| Key mismatch   | Bị từ chối lúc load, không phải ở handshake đầu tiên |
+
+String literal đã có kiểu NUL-terminated. Path runtime phải là buffer
+sentinel-terminated; không truyền `[]const u8` thường.
+
+## Tên error khi startup
+
+| Error                         | Nguyên nhân                                             |
+| ----------------------------- | ------------------------------------------------------- |
+| `CertificateLoadFailed`       | Không đọc hoặc parse được PEM chain                     |
+| `PrivateKeyLoadFailed`        | Không đọc hoặc parse được PEM key, kể cả mismatch       |
+| `KeyMismatch`                 | Check phòng vệ ở context; load path đã từ chối từ trước |
+| `TlsContextCreationFailed`    | BoringSSL không allocate được context                   |
+| `ProtocolConfigurationFailed` | Không áp được TLS 1.3 bound                             |
+
+Load fail sẽ release context mà call đó tạo. Sửa file rồi restart; không có
+partial credential state cần dọn.
+
+## Startup checklist
+
+1. Giữ `App` ở địa chỉ ổn định sau `listen`. Listener lưu con trỏ tới nó.
+2. Gọi initializer trước `listen`; TLS setup là startup work.
+3. Dùng chain file, không chỉ leaf certificate, để client nhận intermediate.
+4. Xác nhận key thuộc leaf trước khi deploy. Load check từ chối mismatch, nhưng
+   không phát hiện được certificate sai nhưng vẫn valid.
+5. Gọi `defer server.deinit()` để context được release trên mọi exit path.
+6. Lên kế hoạch rotation như rolling restart. Không có hot reload.
+
+## Không có hot reload
+
+File được đọc một lần lúc tạo context. Thay file trên disk không ảnh hưởng process
+đang chạy. Rotate bằng cách start process mới và drain process cũ; xem
+[Rotate certificate](/docs/security/certificate-rotation).
+
+## Verify
+
+Với certificate được tin, client verification bình thường sẽ pass:
+
+```sh
+curl -v https://127.0.0.1:3443/
+```
+
+Đọc dòng ALPN và subject của certificate. Bản `curl` có HTTP/2 sẽ thương lượng
+`h2`; bản không có sẽ thương lượng `http/1.1`. Với certificate self-signed cục bộ,
+thêm `-k` như mô tả ở [Certificate tạm thời](/docs/security/ephemeral-certificates).
+
+## Liên quan
+
+- [Certificate tạm thời](/docs/security/ephemeral-certificates) trình bày đường
+  cục bộ không cần file.
+- [Mutual TLS](/docs/security/mtls) thêm client CA bundle vào cùng bộ server file.
+- [TLS cluster](/docs/security/tls-clusters) load cùng PEM file một lần cho mỗi
+  worker.

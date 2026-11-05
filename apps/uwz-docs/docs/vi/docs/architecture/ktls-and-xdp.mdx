@@ -1,0 +1,115 @@
+---
+title: kTLS và AF_XDP
+description: Tách các helper module kTLS và AF_XDP standalone trên Linux khỏi server data path, nơi cả hai đều không điều khiển.
+sidebar:
+  order: 14
+search:
+  tags: [concept, ktls, xdp, platform]
+---
+
+`uz.ktls` và `uz.xdp` là helper Linux mà application có thể tự điều khiển. Cả hai
+đều không được tích hợp vào accept, read hay write path của server. Trang này nêu
+rõ mỗi module sở hữu gì, cần kernel feature nào, và vì sao request `kernel_bypass`
+vẫn báo transport chuẩn.
+
+## Trạng thái standalone
+
+| Module             | Cung cấp                                   | Server data path     |
+| ------------------ | ------------------------------------------ | -------------------- |
+| `uz.ktls`          | Kernel TLS socket option và zero-copy send | Không nối            |
+| `uz.xdp`           | AF_XDP socket, UMEM ring và TX frame       | Không nối            |
+| `uz.xdp_transport` | Availability policy, UMEM helper, fallback | Chỉ caller trực tiếp |
+
+kTLS từ chối target không phải Linux lúc compile time khi helper được dùng. AF_XDP
+báo `.standard` với `unsupported_platform` lúc runtime khi target không phải Linux.
+
+## kTLS
+
+`uz.ktls` áp dụng Linux kernel TLS cho socket mà application đã sở hữu. Nó không
+thực hiện handshake và không quản lý certificate.
+
+| Function                | Tác dụng                                                   |
+| ----------------------- | ---------------------------------------------------------- |
+| `enable`                | Set upper-layer protocol `tls` trên TCP socket             |
+| `configure_aes_gcm_128` | Cài record state TLS 1.2 AES-128-GCM cho một direction     |
+| `enable_aes_gcm_128`    | Bật kTLS và cài record state đó trong một call             |
+| `sendfile_once`         | Gửi file byte tới kTLS socket không copy qua user space    |
+| `splice_once`           | Splice pipe byte tới kTLS socket không copy qua user space |
+
+Record state là AES-128-GCM cho TLS 1.2. Module báo `KernelTlsUnavailable` khi
+kernel thiếu upper-layer protocol, `PermissionDenied` khi socket option không được
+phép, và `WouldBlock` khi transfer non-blocking chưa thể tiến triển.
+
+BoringSSL đã pin không có key handoff được hỗ trợ sang kernel. Vì vậy framework
+không thể chuyển một server TLS connection đã thiết lập sang kTLS, và connection
+path không bao giờ thử. kTLS vẫn dành cho application tự terminate hoặc tự quản lý
+record layer và muốn kernel hỗ trợ xử lý record cùng zero-copy file hoặc pipe send.
+
+## AF_XDP
+
+`uz.xdp` là socket layer. Nó sở hữu UMEM registration, fill, completion, receive
+và transmit ring, cùng việc recycle frame. Frame chỉ trở lại free stack sau khi
+completion ring báo kernel đã xong với nó.
+
+`uz.xdp_transport` là policy và ownership layer. `XdpTransport` sở hữu một socket,
+UMEM do caller cung cấp và free-frame stack cố định tối đa 4.096 frame. Cấu hình
+mặc định dùng chunk 2.048 byte, 1.024 frame và data path copy; zero-copy phải được
+request tường minh.
+
+`resolve_mode` trả `.standard` trên target không phải Linux. `probe` tạo và release
+một probe socket, không bao giờ fail, nên startup có thể fallback:
+
+| Reason                  | Ý nghĩa                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `unsupported_platform`  | Không phải Linux                                        |
+| `kernel_unavailable`    | Kernel hoặc socket family không hỗ trợ AF_XDP           |
+| `permission_denied`     | Process thiếu quyền                                     |
+| `invalid_configuration` | UMEM hoặc ring geometry bị từ chối                      |
+| `data_path_unwired`     | Helper tồn tại nhưng không server path nào dispatch tới |
+
+## Vì sao kernel bypass không active
+
+`ServerConfig.transport = .kernel_bypass` là request, không phải bảo đảm. Server
+data path luôn phục vụ qua stack chuẩn. Lúc startup, request `kernel_bypass` báo
+`.standard` với reason `.data_path_unwired` và tăng counter
+`xdp_kernel_bypass_fallbacks` thay vì tuyên bố một bypass mà không accept/read path
+nào dùng.
+
+| Path                     | Kết quả                                      |
+| ------------------------ | -------------------------------------------- |
+| `ServerConfig.transport` | Báo `.standard`, reason `.data_path_unwired` |
+| XSK redirect             | Server không bao giờ attach                  |
+| `uz.xdp_transport`       | Dành cho code tự điều khiển                  |
+| `uz.xdp`                 | Dành cho code tự sở hữu ring                 |
+
+Application muốn AF_XDP tự điều khiển `uz.xdp_transport` và `uz.xdp`, đồng thời tự
+chịu trách nhiệm cho socket, UMEM, ring và frame lifetime.
+
+## eBPF object và quyền
+
+Build step `ebpf` tạo hai object:
+
+| Object          | Mục đích                             |
+| --------------- | ------------------------------------ |
+| `uwz_xdp.o`     | Chương trình XSK redirect            |
+| `uwz_latency.o` | Histogram packet length theo per-CPU |
+
+Endpoint `/metrics` ẩn đọc histogram khi nó được pin tại `/sys/fs/bpf/uwz_latency`.
+Attach redirect, pin histogram và populate XSK map cần quyền quản trị network trên
+Linux. Không bước nào trong số này thuộc application start không đặc quyền.
+
+## Giới hạn
+
+- kTLS chỉ có trên Linux và không phải TLS 1.3 offload trong build này.
+- AF_XDP chỉ có trên Linux và cần driver, queue và quyền tương thích.
+- Cả hai module không đổi transport của server khi cấu hình qua `ServerConfig`.
+- Deployment cần bypass thật phải tự build và vận hành direct path, rồi xác minh
+  ngoài metric của transport chuẩn.
+
+## Liên quan
+
+- [Transport](/docs/architecture/transports) cho thấy các helper này nằm đâu so với
+  protocol core.
+- [Policy dependency](/docs/architecture/dependencies) nói về revision BoringSSL và
+  libxev đã pin.
+- [QUIC transport](/docs/http3/quic-transport) nói về UDP path đã được tích hợp.

@@ -1,0 +1,117 @@
+---
+title: Tuning
+description: Change capacity, workers, TCP flags, queues, compression, and HTTP/3 transmit behavior one variable at a time with evidence.
+sidebar:
+  order: 7
+search:
+  tags: [performance, capacity]
+---
+
+Most tuning is choosing capacity and worker count, then leaving the hot path
+alone. Change one variable, keep the same host and workload, and record the
+result. A setting that wins on one host is not automatically a win on another.
+
+## Tuning order
+
+```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart TB
+  accTitle: Tuning order
+  accDescr: Size capacity first, then worker count, transport flags, queues, compression, and HTTP/3 transmit behavior, then measure again.
+  A["Capacity"] --> B["Worker count and affinity"]
+  B --> C["TCP flags"]
+  C --> D["Write queue and body size"]
+  D --> E["Compression"]
+  E --> F["HTTP/3 transmit"]
+  F --> G["Re-measure"]
+```
+
+## TCP flags
+
+| Flag               | Applied to             | Behavior                                                           | Caveat                                                                              |
+| ------------------ | ---------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `TCP_NODELAY`      | Accepted sockets       | Disables Nagle aggregation                                         | Best effort; macOS can return `EINVAL` after a peer reset and the result is ignored |
+| `TCP_QUICKACK`     | Linux accepted sockets | Requests a quick ACK once at accept                                | One-shot by design; not a per-read syscall                                          |
+| `TCP_DEFER_ACCEPT` | Linux listeners        | Wakes on the first application byte instead of the handshake alone | Other kernels keep their default accept policy                                      |
+| `SO_REUSEPORT`     | Cluster listeners      | Kernel distributes connections across listening sockets            | Windows uses `SO_REUSEADDR`; distribution is unspecified there                      |
+| `SO_REUSEADDR`     | Windows cluster        | Shared-bind fallback                                               | Not a load-balancing guarantee                                                      |
+
+Do not add a socket option that the transport does not already apply and expect
+it to be measured. The accepted-socket `TCP_NODELAY` call is best effort: it
+ignores the raw `setsockopt` result, so a Darwin `EINVAL` cannot reach the
+`std.posix` unreachable branch during accept.
+
+## Worker count and affinity
+
+| Control                       | Effect                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Compiled worker capacity      | Upper bound; only active workers allocate slabs, inboxes, and thread handles |
+| `ClusterOptions.worker_count` | Selects an explicit active count                                             |
+| `UWEBZOCKETS_WORKERS`         | Environment fallback through `build_cluster_from_environment`                |
+| Platform CPU count            | Default when neither the option nor the variable selects a count             |
+| Affinity                      | Pins worker `i` to a distinct physical core on Linux and Windows             |
+| Extra workers                 | Wrap over the selected cores instead of reserving unused slabs               |
+
+Pinning is best effort. A restricted cpuset or a failed syscall logs once and
+leaves the worker unpinned. macOS has no hard-affinity API and runs unpinned. A
+logical-CPU default can oversubscribe SMT hosts when affinity is enabled.
+
+## Write queue and body size
+
+| Knob                  | Cost                                                          | Raise when                                                  |
+| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
+| `write_queue_size`    | Per connection; the static file body is the queue minus 4 KiB | A slow reader or a large streamed step needs a longer burst |
+| `max_body_size`       | Enters `request_stride` for every connection                  | Uploads need the headroom; keep it small otherwise          |
+| `max_ws_message_size` | Per connection; the worker inbox uses 65 times this value     | One inbound message is larger                               |
+| `max_connections`     | Multiplies every per-connection region                        | More peers connect at once                                  |
+| `max_header_size`     | Enters `request_stride` and HTTP/2 and HTTP/3 header storage  | Clients send larger header blocks                           |
+| `max_header_count`    | Adds extra name/value slots per connection above 64           | Clients send more fields                                    |
+
+A large write queue does not raise the total bytes a stream producer may send.
+The producer is re-invoked when the ring drains, so the queue bounds one step of
+a response.
+
+## Compression tradeoffs
+
+| Setting                       | Memory                                                                 | Tradeoff                                            |
+| ----------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| `compression = true`          | Paired RFC 7692 scratch per connection in the slab                     | Smaller WebSocket frames, more per-connection bytes |
+| `with_http_compression(true)` | One gzip codec and bounded output scratch per worker, outside the slab | Smaller HTTP bodies, compression work per response  |
+| No compression                | No compression scratch                                                 | Largest wire size, least memory                     |
+
+`Presets.websocket_chat` reserves compression scratch. Every other preset leaves
+`compression` off unless you enable it. Check `slab_bytes()` after enabling compression,
+because the scratch is part of the per-connection cost.
+
+## HTTP/3 transmit
+
+| Behavior                                | Current policy                                                      |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| Equal-sized packets for one destination | Submitted with one `sendmsg` carrying `UDP_SEGMENT` (GSO) on Linux  |
+| Mixed sizes or destinations             | Fall back to the per-packet path                                    |
+| Receive-side GRO                        | Disabled; the loop does not expose ancillary segment boundaries     |
+| Coalesced receive buffer                | Would corrupt short-header parsing if fed to lsquic as one datagram |
+
+Do not enable GRO without a transport change that exposes segment boundaries.
+The receive path uses `msghdr.control = null`, so lsquic cannot recover the
+segments from a coalesced buffer.
+
+## When to change nothing
+
+| Signal                                                    | Interpretation                       | Action                                                 |
+| --------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------ |
+| Capacity errors are zero and p99 rises smoothly with load | Saturation, not a queue defect       | Add workers or reduce load; leave HTTP/2 windows alone |
+| Throughput scales with workers and p99 falls              | The single-loop saturation signature | Keep the worker count and measure again                |
+| A buffer cap change has no measurement                    | Unproven change                      | Revert it or run a controlled test                     |
+| A setting wins on one host only                           | Host-specific effect                 | Repeat on the target cohort before keeping it          |
+| Zero failures at the target load                          | Capacity is sufficient               | Keep the settings and record the evidence              |
+
+The 1.9.0 characterization closed HTTP/2 window tuning as measured and not
+needed: throughput scaled with worker count and p99 fell, with no timeout,
+failure, or write-queue stall. No buffer cap was expanded without evidence.
+
+## Related
+
+- [Capacity sizing](/docs/performance/capacity-sizing)
+- [Profiling](/docs/performance/profiling)
+- [Backpressure](/docs/concepts/backpressure)

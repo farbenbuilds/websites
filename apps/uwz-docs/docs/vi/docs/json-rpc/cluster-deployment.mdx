@@ -15,7 +15,7 @@ service giữa các worker sẽ race trên response byte.
 ## Sơ đồ
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart LR
     accTitle: Topology worker JSON-RPC
     accDescr: Socket listen phân phối connection cho các worker, và mỗi worker sở hữu service JSON-RPC cùng procedure state riêng.

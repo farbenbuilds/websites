@@ -15,7 +15,7 @@ procedure, so a malformed batch cannot run a valid prefix.
 ## Classify the document
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40,"useMaxWidth":false}} }%%
 flowchart TD
     accTitle: JSON-RPC document classification
     accDescr: A top-level object is one call or notification, an array is a batch, and any other top-level value is an invalid request.
@@ -60,7 +60,7 @@ syntax and checks that the document ends after the array. Only then does the
 dispatcher re-scan the array and invoke procedures.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 30, "rankSpacing": 40}}}%%
+%%{init: {"themeVariables":{"fontSize":"18px"},"flowchart":{"nodeSpacing":30,"rankSpacing":40},"sequence":{"useMaxWidth":false}} }%%
 sequenceDiagram
     accTitle: Batch pre-validation
     accDescr: The dispatcher validates the complete JSON document before any procedure runs, then dispatches each element.
