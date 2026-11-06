@@ -22,11 +22,11 @@ const LIGHT_PALETTE: ButterflyPalette = {
   paper: { r: 244, g: 240, b: 230 },
   ink: { r: 23, g: 21, b: 18 },
   muted: { r: 95, g: 90, b: 82 },
-  accent: { r: 166, g: 70, b: 0 },
+  accent: { r: 194, g: 65, b: 12 },
   wings: [
-    { r: 194, g: 65, b: 12 },
-    { r: 161, g: 98, b: 7 },
-    { r: 217, g: 119, b: 6 },
+    { r: 217, g: 72, b: 15 },
+    { r: 232, g: 117, b: 46 },
+    { r: 240, g: 140, b: 74 },
   ],
 };
 

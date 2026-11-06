@@ -12,6 +12,8 @@
  * imports resolve from that generated directory rather than the app root. */
 @import "../../../components/butterfly-hero/butterfly-hero.css";
 @import "../../../styles/blume-chrome.css";
+@import "../../../styles/blume-reading.css";
+@import "../../../styles/blume-navigation.css";
 @import "../../../styles/site-colophon.css";
 @import "../../../styles/blume-content.css";
 @import "../../../styles/docs-home.css";
@@ -37,6 +39,14 @@ html {
   --blume-radius: 0;
   --blume-content-width: 42rem;
   --blume-code-background: #ffffff;
+
+  --uwz-docs-frame-width: 82.5rem;
+
+  /* Vivid reading indicator; the text stays at 6.9:1 on this paper. */
+  --docs-active-bar: #d9480f;
+  --docs-active-text: #8f3500;
+  --docs-active-surface: color-mix(in srgb, var(--docs-active-bar) 12%, var(--blume-background));
+  --docs-active-border: color-mix(in srgb, var(--docs-active-bar) 40%, var(--blume-border));
 
   /* The orange preset is 4.37:1 on this paper. This darker orange is 5.28:1. */
   --blume-accent: #a64600;
@@ -90,8 +100,19 @@ html {
   --blume-accent: #ffb300;
   --blume-accent-foreground: #160f02;
 
+  /* Polished gold indicator; text clears 9:1 on the gold-tinted surface. */
+  --docs-active-bar: #d4af37;
+  --docs-active-text: #edcb7a;
+
   /* 3.2:1 against the dark paper surface. */
   --farben-border-strong: #6b665c;
+}
+
+/* Keep the shorter line length on tablets; widen the reading measure on desktop. */
+@media (min-width: 64rem) {
+  :root {
+    --blume-content-width: 44rem;
+  }
 }
 
 /* Generate the utility classes the shared components and local Svelte islands use. */

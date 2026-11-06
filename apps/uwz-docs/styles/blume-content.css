@@ -32,6 +32,18 @@ html .prose h1 {
   line-height: 1.15;
 }
 
+/* The reading title is the page anchor; the direct-child guard keeps the
+ * landing hero's display typography out of this rule. */
+html:has(#blume-content > article > h1) .prose > h1 {
+  margin-block: 0 1rem;
+  color: var(--blume-foreground);
+  font-size: clamp(2.125rem, 1.6rem + 2vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
 html .prose > h2 {
   margin-top: 2.75rem;
   border-top: 1px solid var(--blume-border);
