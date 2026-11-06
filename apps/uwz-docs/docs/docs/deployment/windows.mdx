@@ -1,0 +1,115 @@
+---
+title: Windows
+description: Read the Windows support gate, the x86_64-windows-gnu build path, the IOCP transport facts, and what a deployment may claim.
+sidebar:
+  order: 14
+search:
+  tags: [reference, deployment, windows]
+---
+
+Windows coverage in µWebZockets is `x86_64-windows-gnu`. The repository compiles
+the test and C ABI graph for that target, builds the ReleaseFast libraries, and
+runs the test suite on a `windows-2025` runner. Official support begins only when
+that runtime job is green for the release commit. No Windows binaries are
+published.
+
+## Support gate
+
+| Gate               | What runs                                            | What it proves                         |
+| ------------------ | ---------------------------------------------------- | -------------------------------------- |
+| Compile            | `zig build test-compile -Dtarget=x86_64-windows-gnu` | The test graph compiles for the target |
+| Library            | `zig build lib -Dtarget=x86_64-windows-gnu`          | The C ABI archives and header install  |
+| Runtime            | `zig build test --summary all` on `windows-2025`     | The suite executes on native Windows   |
+| Official support   | A green runtime job for the release commit           | The support claim for that release     |
+| Published binaries | None                                                 | Consumers build from a source tag      |
+
+The first four rows are the framework's own gates; they are evidence for a
+release, not steps in your application build. Your application builds for the
+target with its own command:
+
+```sh
+zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe
+```
+
+## Transport and runtime facts
+
+| Area             | Behavior                                                               |
+| ---------------- | ---------------------------------------------------------------------- |
+| Accept           | IOCP with `AcceptEx` through the pinned libxev backend                 |
+| Queued close     | Completions are submitted before cancel, so the pool slot is released  |
+| QUIC receive     | IOCP UDP receives                                                      |
+| QUIC send        | Winsock `WSASendTo`                                                    |
+| Console shutdown | `SetConsoleCtrlHandler` for Ctrl+C, console close, and logoff/shutdown |
+| Worker affinity  | `SetThreadAffinityMask`; a worker count above the core count wraps     |
+| Cluster port     | `SO_REUSEADDR` fallback, because Windows has no `SO_REUSEPORT`         |
+| Sanitizers       | Native Linux only; MSan covers the C/C++ boundary, not Zig code        |
+
+The 1.9.0 fixes for the accept lifecycle and the queued-close path are recorded in
+ADR 0004. The accept bug was upstream: a connected socket stayed in the completion
+and the next `AcceptEx` returned `WSAEINVAL`. The queued-close bug was local:
+`Completion.state()` mapped queued and submitted completions to the same value, so
+a cancel before submission never cleared the write flags.
+
+Windows shared-nothing clustering uses `SO_REUSEADDR` because `SO_REUSEPORT` does
+not exist there. Every worker can bind the address, but kernel distribution across
+the accepting sockets is unspecified, so do not promise even connection spread on
+Windows.
+
+## Signals and services
+
+The console handler covers Ctrl+C, console close, and logoff/shutdown events. It
+does not cover a Service Control Manager stop: a Windows service receives
+`SERVICE_CONTROL_STOP` through its own handler, not as a console control event.
+
+| Host shape          | Stop path                                                          |
+| ------------------- | ------------------------------------------------------------------ |
+| Console application | Ctrl+C or console close reaches the installed handler              |
+| Windows service     | The wrapper must call `App.request_shutdown` or the C ABI shutdown |
+| Windows container   | The runtime must deliver a console control event or call shutdown  |
+
+If you wrap the binary in a service, translate the service stop into the
+application's shutdown path and wait for the process to exit. A wrapper that calls
+`TerminateProcess` skips the drain and resets every connection.
+
+## Linking the C ABI
+
+`zig build lib` installs `uWebZockets.h` and the static archives. A consumer that
+links them directly also links:
+
+| Requirement        | Notes                                                   |
+| ------------------ | ------------------------------------------------------- |
+| libc               | The target uses the GNU ABI                             |
+| C++ runtime        | BoringSSL and lsquic are C++                            |
+| Installed `libz.a` | The bundled zlib archive from `zig-out/lib`             |
+| `ws2_32`           | Winsock                                                 |
+| `mswsock`          | `AcceptEx` and related extension functions              |
+| `crypt32`          | Certificate and crypto support                          |
+| `advapi32`         | Registry and security APIs used by the dependency graph |
+
+A missing system library shows up as a link error, not a runtime error, so fix the
+link line before debugging the server.
+
+## What a deployment may claim
+
+| Claim                                      | Allowed when                                        |
+| ------------------------------------------ | --------------------------------------------------- |
+| The code compiles for `x86_64-windows-gnu` | Always, for the pinned toolchain                    |
+| Release X passed the native test suite     | The `windows-2025` job is green for that commit     |
+| Windows is officially supported            | The same green runtime job, stated for that release |
+| Prebuilt Windows binaries are available    | Never; releases are source tags                     |
+| Windows runs the sanitizer matrix          | Never; sanitizers are native Linux only             |
+| HTTP/3 clusters on Windows                 | Never; HTTP/3 has no cluster on any platform        |
+
+Write the claim with the release and the job, not as a general statement. "2.1.6
+passed the native Windows runtime job" is checkable; "Windows is supported" without
+a green run is not.
+
+## Common mistakes
+
+| Symptom                           | Cause                                             | Fix                                                 |
+| --------------------------------- | ------------------------------------------------- | --------------------------------------------------- |
+| Link error for `AcceptEx`         | `mswsock` missing from the link line              | Add `mswsock` and `ws2_32`                          |
+| Link error for crypto symbols     | `crypt32` or `advapi32` missing                   | Add both to the link line                           |
+| Service stop resets connections   | Wrapper calls `TerminateProcess`                  | Translate the stop into `request_shutdown` and wait |
+| Uneven connections across workers | `SO_REUSEADDR` distribution is unspecified        | Accept it, or place a proxy in front                |
+| Tests pass but the service fails  | Console handler is not armed in a service context | Install the wrapper's stop translation before `run` |

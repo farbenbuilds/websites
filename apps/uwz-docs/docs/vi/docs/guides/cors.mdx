@@ -1,0 +1,180 @@
+---
+title: Cấu hình CORS
+description: Liệt kê origin chính xác, trả lời preflight trước authentication và giữ browser read policy tách khỏi access control.
+sidebar:
+  order: 13
+search:
+  tags: [guide, cors, security]
+---
+
+CORS là browser read policy mà server của bạn chủ động bật. Middleware thêm field
+response cho các origin trong list; mọi origin khác không nhận field CORS nào.
+
+## Bài toán
+
+Một browser app ở origin này gọi API ở origin khác. Preflight phải thành công mà
+không cần credential check, request thật vẫn phải yêu cầu credential, và không
+origin nào khác đọc được response.
+
+## Giả định
+
+- Origin biết trước lúc build; middleware so sánh byte.
+- CORS chạy trước `Auth` và `RateLimit`.
+- CORS không authenticate ai; client không phải browser bỏ qua nó.
+
+## Build middleware stack
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn list_items(_: *uz.Request, res: *uz.Response) void {
+    res.text("[]") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_item(_: *uz.Request, res: *uz.Response) void {
+    res.end("201 Created", "") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var cors = uz.middleware.cors(.{
+        .origins = &.{ "https://app.example.com", "https://admin.example.com" },
+        .methods = &.{ .get, .post },
+        .allow_headers = &.{ "content-type", "x-request-id" },
+        .expose_headers = &.{"x-request-id"},
+        .allow_credentials = true,
+        .max_age = 600,
+    });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    var auth = uz.middleware.auth(.{
+        .realm = "api",
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&auth, uz.middleware.Auth.handler);
+
+    _ = try app.get("/api/items", list_items);
+    _ = try app.post("/api/items", create_item);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.use` lưu pointer tới từng middleware value, nên giữ cả hai sống đến
+`app.deinit()`; load credential từ configuration.
+
+## Khớp origin chính xác
+
+| `Origin` của request           | Entry trong list          | Kết quả    |
+| ------------------------------ | ------------------------- | ---------- |
+| `https://app.example.com`      | `https://app.example.com` | Khớp       |
+| `https://app.example.com/`     | `https://app.example.com` | Không khớp |
+| `https://app.example.com:8443` | `https://app.example.com` | Không khớp |
+
+Không có wildcard reflection và không có prefix match: `*` chỉ khớp đúng chuỗi
+literal `*`, thứ browser không bao giờ gửi. Request không có `Origin`, hoặc có hai
+field `Origin`, tiếp tục dispatch mà không có field CORS.
+
+## Thứ tự preflight
+
+Middleware kiểm tra origin, thêm `Access-Control-Allow-Origin` và `Vary: Origin`,
+rồi validate method và header được yêu cầu. Preflight hợp lệ kết thúc `204`;
+preflight sai kết thúc `403`. Các check chạy trước route dispatch, nên preflight
+không cần route `OPTIONS` và path không tồn tại vẫn nhận `204`.
+
+## Thứ tự trước authentication
+
+Preflight không mang field `Authorization`, nên nếu `Auth` chạy trước, nó trả `401`
+và browser không bao giờ gửi request thật.
+
+| Thứ tự                   | Kết quả preflight              |
+| ------------------------ | ------------------------------ |
+| `Cors` rồi `Auth`        | `204` từ CORS; auth không chạy |
+| `Auth` rồi `Cors`        | `401`; browser chặn call thật  |
+| `RateLimit` trước `Cors` | Preflight tiêu một token       |
+
+`allow_credentials` thêm `Access-Control-Allow-Credentials: true` cho origin trong
+list, nhưng server vẫn validate cookie hoặc token. Không bao giờ ghép credentials
+với wildcard origin.
+
+## Giả định capacity
+
+| Tài nguyên             | Giới hạn                                                  |
+| ---------------------- | --------------------------------------------------------- |
+| Middleware mỗi app     | Tổng 32; CORS dùng một                                    |
+| Method trong preflight | Tối đa 10 entry; nhiều hơn trả `error.TooManyCorsMethods` |
+
+## Hành vi khi lỗi
+
+| Điều kiện                                     | Kết quả                             |
+| --------------------------------------------- | ----------------------------------- |
+| Origin không có trong list                    | Không field CORS; dispatch tiếp tục |
+| Method yêu cầu không có trong `methods`       | `403 Forbidden`, body rỗng          |
+| Header yêu cầu không có trong `allow_headers` | `403 Forbidden`, body rỗng          |
+| Header list vượt 1024 byte                    | `500` qua `error.BufferTooSmall`    |
+
+Lỗi cuối là configuration defect; test một preflight lúc startup.
+
+## Kiểm chứng
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+
+curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS \
+  http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST'
+```
+
+Command đầu trả `204` với `Access-Control-Allow-Origin`, `Vary: Origin` và field
+credentials, không có field `Authorization` nào. Command thứ hai trả `401`: origin
+không có trong list nên không nhận field CORS, và `Auth` từ chối request.
+
+## Biến thể: browser application
+
+First-party app gửi cookie cần credentials, exposed request id và `SameSite` policy
+cho phép cross-site call.
+
+```zig
+var cors = uz.middleware.cors(.{
+    .origins = &.{"https://app.example.com"},
+    .methods = &.{ .get, .post, .delete },
+    .allow_headers = &.{ "content-type", "x-csrf-token" },
+    .expose_headers = &.{ "x-request-id", "retry-after" },
+    .allow_credentials = true,
+    .max_age = 300,
+});
+```
+
+Cookie cần `SameSite=None` và `Secure`, yếu hơn `Lax`. Ưu tiên triển khai same-site
+khi cookie chính là credential.
+
+## Biến thể: service API
+
+API chỉ dùng token không cần credentials. Thu hẹp method list và bỏ `max_age` khi
+muốn browser hỏi lại mỗi lần.
+
+```zig
+var cors = uz.middleware.cors(.{
+    .origins = &.{"https://console.example.com"},
+    .methods = &.{.get},
+    .allow_headers = &.{"authorization"},
+    .allow_credentials = false,
+});
+```
+
+Machine client không gửi `Origin` và không nhận field CORS; bearer token là access
+control.
+
+## Tiếp theo
+
+- [CORS](/docs/http/cors) là reference cho matching và mọi error.
+- [Security headers](/docs/http/security-headers) trình bày field response cho mọi
+  page.

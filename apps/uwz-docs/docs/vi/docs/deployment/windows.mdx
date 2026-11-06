@@ -1,0 +1,113 @@
+---
+title: Windows
+description: Đọc support gate của Windows, đường build x86_64-windows-gnu, các fact về IOCP transport và những gì deployment được phép claim.
+sidebar:
+  order: 14
+search:
+  tags: [reference, deployment, windows]
+---
+
+Windows coverage trong µWebZockets là `x86_64-windows-gnu`. Repository compile test
+graph và C ABI graph cho target đó, build ReleaseFast library và chạy test suite
+trên runner `windows-2025`. Official support chỉ bắt đầu khi runtime job đó xanh
+cho release commit. Không có binary Windows nào được publish.
+
+## Support gate
+
+| Gate                | Chạy gì                                              | Chứng minh gì                        |
+| ------------------- | ---------------------------------------------------- | ------------------------------------ |
+| Compile             | `zig build test-compile -Dtarget=x86_64-windows-gnu` | Test graph compile được cho target   |
+| Library             | `zig build lib -Dtarget=x86_64-windows-gnu`          | C ABI archive và header được install |
+| Runtime             | `zig build test --summary all` trên `windows-2025`   | Suite chạy trên Windows native       |
+| Official support    | Runtime job xanh cho release commit                  | Support claim cho release đó         |
+| Binary được publish | Không                                                | Consumer build từ source tag         |
+
+Bốn dòng đầu là gate của framework; chúng là evidence cho một release, không phải
+bước trong build application của bạn. Application tự build cho target bằng lệnh của
+nó:
+
+```sh
+zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe
+```
+
+## Transport và runtime fact
+
+| Khu vực          | Hành vi                                                              |
+| ---------------- | -------------------------------------------------------------------- |
+| Accept           | IOCP với `AcceptEx` qua libxev backend được pin                      |
+| Queued close     | Completion được submit trước khi cancel, nên pool slot được release  |
+| QUIC receive     | IOCP UDP receive                                                     |
+| QUIC send        | Winsock `WSASendTo`                                                  |
+| Console shutdown | `SetConsoleCtrlHandler` cho Ctrl+C, console close và logoff/shutdown |
+| Worker affinity  | `SetThreadAffinityMask`; worker count vượt số core sẽ wrap           |
+| Cluster port     | Fallback `SO_REUSEADDR`, vì Windows không có `SO_REUSEPORT`          |
+| Sanitizer        | Chỉ native Linux; MSan phủ C/C++ boundary, không phủ Zig code        |
+
+Các fix 1.9.0 cho accept lifecycle và queued-close path được ghi trong ADR 0004.
+Accept bug đến từ upstream: socket đã connect còn nằm trong completion và lần
+`AcceptEx` sau trả `WSAEINVAL`. Queued-close bug là của project:
+`Completion.state()` map completion đang queued và đã submit về cùng một giá trị,
+nên cancel trước khi submit không bao giờ clear write flag.
+
+Shared-nothing clustering trên Windows dùng `SO_REUSEADDR` vì `SO_REUSEPORT` không
+tồn tại ở đó. Mọi worker bind được địa chỉ, nhưng kernel phân phối giữa các
+accepting socket là không xác định, nên đừng hứa connection chia đều trên Windows.
+
+## Signal và service
+
+Console handler phủ Ctrl+C, console close và logoff/shutdown. Nó không phủ
+Service Control Manager stop: Windows service nhận `SERVICE_CONTROL_STOP` qua
+handler riêng của nó, không phải console control event.
+
+| Hình thức host      | Đường stop                                                  |
+| ------------------- | ----------------------------------------------------------- |
+| Console application | Ctrl+C hoặc console close đến handler đã cài                |
+| Windows service     | Wrapper phải gọi `App.request_shutdown` hoặc C ABI shutdown |
+| Windows container   | Runtime phải gửi console control event hoặc gọi shutdown    |
+
+Nếu bọc binary trong service, hãy chuyển service stop thành shutdown path của
+application và chờ process thoát. Wrapper gọi `TerminateProcess` sẽ bỏ qua drain và
+reset toàn bộ connection.
+
+## Link C ABI
+
+`zig build lib` install `uWebZockets.h` và các static archive. Consumer link trực
+tiếp cũng phải link:
+
+| Yêu cầu             | Ghi chú                                           |
+| ------------------- | ------------------------------------------------- |
+| libc                | Target dùng GNU ABI                               |
+| C++ runtime         | BoringSSL và lsquic là C++                        |
+| `libz.a` đã install | Archive zlib đi kèm trong `zig-out/lib`           |
+| `ws2_32`            | Winsock                                           |
+| `mswsock`           | `AcceptEx` và các extension function liên quan    |
+| `crypt32`           | Certificate và crypto support                     |
+| `advapi32`          | Registry và security API mà dependency graph dùng |
+
+Thiếu system library sẽ hiện thành link error, không phải runtime error, nên sửa
+link line trước khi debug server.
+
+## Deployment được phép claim gì
+
+| Claim                                      | Được phép khi                                            |
+| ------------------------------------------ | -------------------------------------------------------- |
+| Code compile được cho `x86_64-windows-gnu` | Luôn luôn, với toolchain đã pin                          |
+| Release X pass test suite native           | Job `windows-2025` xanh cho commit đó                    |
+| Windows được official support              | Cũng job runtime xanh đó, nêu rõ cho release nào         |
+| Có binary Windows dựng sẵn                 | Không bao giờ; release là source tag                     |
+| Windows chạy sanitizer matrix              | Không bao giờ; sanitizer chỉ native Linux                |
+| HTTP/3 cluster trên Windows                | Không bao giờ; HTTP/3 không có cluster trên platform nào |
+
+Viết claim kèm release và job, không viết như câu chung. "2.1.6 pass native Windows
+runtime job" kiểm chứng được; "Windows được hỗ trợ" mà không có lần chạy xanh thì
+không.
+
+## Các lỗi thường gặp
+
+| Triệu chứng                           | Nguyên nhân                                          | Cách sửa                                     |
+| ------------------------------------- | ---------------------------------------------------- | -------------------------------------------- |
+| Link error với `AcceptEx`             | Thiếu `mswsock` trong link line                      | Thêm `mswsock` và `ws2_32`                   |
+| Link error với crypto symbol          | Thiếu `crypt32` hoặc `advapi32`                      | Thêm cả hai vào link line                    |
+| Service stop reset connection         | Wrapper gọi `TerminateProcess`                       | Chuyển stop thành `request_shutdown` rồi chờ |
+| Connection chia không đều giữa worker | Phân phối `SO_REUSEADDR` không xác định              | Chấp nhận, hoặc đặt proxy phía trước         |
+| Test pass nhưng service fail          | Console handler không được arm trong service context | Cài stop translation của wrapper trước `run` |

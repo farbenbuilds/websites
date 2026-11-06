@@ -1,0 +1,155 @@
+---
+title: Serve HTTPS
+description: Start a TLS 1.3 listener with a development certificate, switch to PEM files, add mutual TLS, and verify ALPN and early-data behavior.
+sidebar:
+  order: 19
+search:
+  tags: [guide, tls, https, certificates]
+---
+
+TLS termination is one initializer choice. The listener, router, and handlers
+stay the same; only the credential source and the client policy change.
+
+## Problem
+
+You need HTTPS in development without certificate files, then the same server in
+production with real PEM credentials, and optionally a client certificate check.
+
+## Assumptions
+
+- Zig 0.16.0 and `curl` are available.
+- Production uses a certificate chain and private key on disk.
+- TLS is 1.3 only. HTTP/1.1 and HTTP/2 share one context; HTTP/3 uses another.
+- One process loads its credentials once. Rotation is a rolling restart.
+
+## Write the program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello over TLS") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init_https_ephemeral(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3443);
+    try app.run();
+}
+```
+
+`init_https_ephemeral` generates an ECDSA P-256 key and a self-signed
+certificate in memory before the loop starts. The certificate covers
+`localhost`, `127.0.0.1`, and `::1`, carries `serverAuth`, and is valid for 90
+days. It is not exportable and is recreated on every start.
+
+## Verify it
+
+```sh
+zig build run
+```
+
+```sh
+curl -k -v https://127.0.0.1:3443/
+```
+
+```console
+hello over TLS
+* ALPN: server accepted h2
+```
+
+`-k` disables verification. Use it for the generated certificate only. The
+verbose line shows the negotiated ALPN: a `curl` with HTTP/2 support gets `h2`,
+otherwise `http/1.1`. HTTP/3 is not offered on this TCP listener.
+
+## ALPN and early data
+
+| Policy                   | Value                             |
+| ------------------------ | --------------------------------- |
+| TLS versions             | 1.3 only                          |
+| TCP ALPN                 | `h2`, then `http/1.1`             |
+| QUIC ALPN                | `h3` only                         |
+| 0-RTT on TCP             | Enabled unless mTLS is configured |
+| Methods before handshake | `GET`, `HEAD`, `OPTIONS`, `TRACE` |
+| Other methods at 0-RTT   | `425 Too Early`                   |
+
+Early data can be replayed, so only safe methods run before the handshake
+confirms. A `GET` handler that mutates state still breaks that assumption; keep
+mutations behind `POST` or another unsafe method.
+
+## Capacity assumptions
+
+| Resource      | Bound                               | Consequence                            |
+| ------------- | ----------------------------------- | -------------------------------------- |
+| Connections   | `max_clients`                       | Handshake state is per connection      |
+| TLS context   | One per application, one per worker | No shared session cache across workers |
+| Credentials   | Read once at startup                | Rotation restarts the process          |
+| Handshake CPU | One core per worker's loop          | Handshakes compete with requests       |
+
+Per-worker ticket keys mean a session resumed on another worker performs a full
+handshake. A load balancer without session affinity therefore sees a lower
+resumption rate than a single process.
+
+## Failure behavior
+
+| Condition                      | Result                             |
+| ------------------------------ | ---------------------------------- |
+| Certificate file unreadable    | `error.CertificateLoadFailed`      |
+| Key does not match certificate | `error.PrivateKeyLoadFailed`       |
+| Client rejects the chain       | Handshake fails before any request |
+| Unsafe method at 0-RTT         | `425 Too Early`                    |
+| Client offers no shared cipher | Handshake fails                    |
+| Certificate expired            | Handshake fails at the client      |
+
+## Variations
+
+### Production PEM files
+
+```zig
+var app = try uz.App(128).init_https(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer app.deinit();
+```
+
+The certificate argument is a PEM chain with the leaf first; the key is a PEM
+private key. BoringSSL checks the pair while loading, so a mismatch fails at
+startup instead of on the first handshake. Paths are NUL-terminated Zig slices;
+string literals already have that type.
+
+A worker group uses the same files through `group.enable_https(cert, key)` after
+`configure` and before `listen`.
+
+### Mutual TLS
+
+```zig
+var app = try uz.App(128).init_https_mtls(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+    .{ .mode = .required, .ca_path = "certs/client-ca.pem" },
+);
+defer app.deinit();
+```
+
+`.required` rejects a client without a valid chain before the HTTP parser runs.
+`.optional` verifies a certificate when one is presented and still admits
+anonymous clients. mTLS disables TCP early data because the client certificate
+arrives after the first flight. Client authentication is TCP-only; the HTTP/3
+context does not request a certificate.
+
+CRLs in the bundle are loaded but revocation is not enforced, so a revoked
+certificate validates until it expires.
+
+## Related
+
+- [TLS 1.3 and ALPN](/docs/security/tls) covers the context policy and errors.
+- [Mutual TLS](/docs/security/mtls) explains the client CA bundle and modes.
+- [Serve HTTP/3](/docs/guides/http3) uses the separate QUIC context.

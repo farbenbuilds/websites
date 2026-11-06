@@ -1,0 +1,144 @@
+---
+title: Build từ source
+description: Clone framework, cài Zig 0.16.0, build với ReleaseSafe và kiểm tra checkout bằng toàn bộ unit suite cùng package consumer.
+sidebar:
+  order: 2
+search:
+  tags: [operations, build, zig]
+---
+
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Đây không phải application build step. Nếu đã cài package bằng `zig fetch --save`, xem
+[Installation](/docs/getting-started/installation).
+:::
+
+Build framework từ checkout khi bạn cần sửa nó, chạy các test gate hoặc tự tạo
+static library. Application project thường fetch một release tag bằng `zig fetch`
+và không clone repository này; xem [Installation](/docs/getting-started/installation)
+cho hướng đó.
+
+## Yêu cầu
+
+| Yêu cầu            | Giá trị                                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| Zig                | 0.16.0                                                                        |
+| Host platform      | Linux và macOS trên `x86_64` và `aarch64`                                     |
+| Windows            | Compile gate cho `x86_64-windows-gnu` và runtime job trên `windows-2025`      |
+| BSD                | Build target cộng đồng: FreeBSD, NetBSD, OpenBSD và DragonFlyBSD              |
+| Submodule h1spec   | `vendor/h1spec`, chỉ cần cho gate compliance h1spec                           |
+| System C toolchain | Không. Zig tự build BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib |
+
+Không cần CMake, Ninja, Go, Perl, Python, `patch` hay system zlib. Các dependency
+C và C++ đã pin được build bằng toolchain của chính Zig.
+
+## Clone và build
+
+1. Clone repository. Thêm `--recurse-submodules` khi bạn sẽ chạy target h1spec.
+
+   ```sh
+   git clone https://github.com/farbenbuilds/uWebZockets.git
+   cd uWebZockets
+   ```
+
+2. Vào shell đã pin, hoặc dùng bản cài Zig 0.16.0 trên máy.
+
+   ```sh
+   nix develop
+   ```
+
+3. Chạy unit suite và build artifact mặc định.
+
+   ```sh
+   zig build test --summary all
+   zig build -Doptimize=ReleaseSafe
+   ```
+
+`zig build` một mình dùng optimization mode debug. Dùng
+`-Doptimize=ReleaseSafe` cho gate vẫn giữ runtime safety check trong khi tối ưu.
+`ReleaseFast` là mode dùng cho static library mà consumer link; xem
+[Cross-compilation](/docs/operations/cross-compilation).
+
+## Build graph
+
+`build.zig` ở root chỉ khai báo version và inject module graph. Phần dựng target,
+vendor, sanitizer, test, fuzz và example nằm trong các module chuyên trách dưới
+`builds/`.
+
+| Module                      | Phụ trách                                                           |
+| --------------------------- | ------------------------------------------------------------------- |
+| `builds/orchestrator.zig`   | Chọn target, `all-targets` và clangd database                       |
+| `builds/targets/native.zig` | Native library, executable, `lib` và phần kết nối test graph        |
+| `builds/targets/wasm.zig`   | Artifact `wasm-freestanding` và `wasm-wasi`                         |
+| `builds/targets/ebpf.zig`   | `uwz_xdp.o` và `uwz_latency.o`                                      |
+| `builds/vendor/`            | Build BoringSSL, lsquic, libdeflate và zlib                         |
+| `builds/testing.zig`        | `test`, `test-compile`, `h1spec`, `autobahn`, `msan` và C ABI smoke |
+| `builds/fuzzing.zig`        | `fuzz`, `oss-fuzz-objects` và `oss-fuzz-smoke`                      |
+| `builds/sanitizers.zig`     | Thiết lập toolchain có instrumentation và môi trường chạy sanitizer |
+| `builds/examples.zig`       | Mỗi example là một build step riêng                                 |
+
+## Build lần đầu và cache
+
+Lần build đầu tiên tải các package đã pin qua package manager của Zig vào global
+cache và thư mục `.zig-cache` cục bộ. Sau đó nó build dependency C và C++ cho
+target đã chọn. Những lần build sau dùng lại cả hai cache và không fetch lại
+source.
+
+| Cache        | Vị trí mặc định | Chứa                                             |
+| ------------ | --------------- | ------------------------------------------------ |
+| Global cache | `~/.cache/zig`  | Package đã fetch và object dependency đã build   |
+| Local cache  | `.zig-cache`    | Trạng thái build graph và artifact theo cấu hình |
+
+Hãy dùng một cache nhất quán. Chuyển qua lại giữa `ZIG_GLOBAL_CACHE_DIR` tùy
+chỉnh và cache mặc định có thể khiến build tìm object mà cache kia chưa từng tạo;
+hãy build lại với cache bạn định giữ thay vì xóa source hoặc dependency pin.
+
+## Artifact tùy chọn
+
+Build các target edge và kernel-bypass một cách tường minh. Chúng không nằm trong
+install step mặc định.
+
+```sh
+zig build wasm-freestanding -Doptimize=ReleaseSafe
+zig build wasm-wasi -Doptimize=ReleaseSafe
+zig build ebpf
+zig build all-targets -Doptimize=ReleaseSafe
+```
+
+| Artifact          | Output                                                            |
+| ----------------- | ----------------------------------------------------------------- |
+| WASM freestanding | Linear memory cho host dùng V8 isolate                            |
+| WASM WASI         | `alloc`/`free` có giới hạn và handle function có generation check |
+| eBPF              | `zig-out/share/uwebzockets/uwz_xdp.o` và `uwz_latency.o`          |
+| Static library    | Archive trong `zig-out/lib` và `zig-out/include/uWebZockets.h`    |
+
+Endpoint `/metrics` ẩn chỉ đọc latency histogram eBPF khi map được pin tại
+`/sys/fs/bpf/uwz_latency`. Attach XSK redirect và populate map cần quyền network
+administration trên Linux. `ServerConfig.transport = .kernel_bypass` trả về
+`.standard` với reason `.data_path_unwired`; application muốn dùng AF_XDP phải
+điều khiển `uz.xdp_transport` và `uz.xdp` trực tiếp.
+
+## Kiểm tra checkout
+
+```sh
+zig build test --summary all
+```
+
+Step `test` chạy unit suite tập trung từ `src/tests/main.zig`, compile và chạy
+chương trình C ABI smoke, compile C++ header check và chạy archive check. Một lần
+chạy xanh là evidence tối thiểu rằng checkout sạch build được và các production
+module vẫn đáp ứng test của chúng.
+
+Thêm `-Dsanitize=true -Doptimize=ReleaseSafe` trên Linux cho lần chạy có
+instrumentation, hoặc dùng `nix develop "path:." -c zig build test --summary all`
+để khớp cách CI gọi shell. Cả hai được trình bày trong
+[Test](/docs/operations/testing) và [Sanitizer](/docs/operations/sanitizers).
+
+## Liên quan
+
+- [Nix development shell](/docs/operations/nix) pin compiler và sanitizer runtime.
+- [Cross-compilation](/docs/operations/cross-compilation) đi qua target musl, Windows, macOS và BSD.
+- [Dependencies](/docs/architecture/dependencies) giải thích các package và fork đã pin.

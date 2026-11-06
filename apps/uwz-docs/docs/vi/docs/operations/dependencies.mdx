@@ -1,0 +1,142 @@
+---
+title: Dependency
+description: Audit các pin bất biến, maintained fork, provenance check và quy tắc rollback phía sau một dependency µWebZockets.
+sidebar:
+  order: 10
+search:
+  tags: [explanation, dependencies, operations]
+---
+
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application pin package trong `build.zig.zon` của bạn; xem
+[Installation](/docs/getting-started/installation). Trang này nói về dependency graph của framework.
+:::
+
+µWebZockets build event loop, TLS, QUIC và compression từ các package đã pin. Mọi
+pin là một URL bất biến hoặc một full commit kèm Zig package hash, nên một archive
+bị thay đổi sẽ làm dependency resolution fail thay vì âm thầm thay source đã
+review. Trang này trình bày pin, branch model của fork, provenance check và quy
+tắc rollback.
+
+## Pin bất biến
+
+| Dependency         | Vai trò                  | Dạng pin                            |
+| ------------------ | ------------------------ | ----------------------------------- |
+| zslay              | WebSocket framing        | URL archive release và hash         |
+| libxev             | Event loop và completion | Maintained fork, full commit 40 hex |
+| BoringSSL          | TLS 1.3 và cryptography  | Commit upstream và hash             |
+| lsquic             | QUIC và HTTP/3 engine    | Maintained fork, full commit 40 hex |
+| ls-qpack, ls-hpack | QPACK và HPACK           | Commit upstream, sync với lsquic    |
+| libdeflate         | Deflate và gzip codec    | Commit upstream và hash             |
+| zlib               | Backing store cho gzip   | Archive release và hash             |
+
+Revision đã pin và Zig package hash đều là một phần của resolution. Branch, tag,
+short SHA hay local path không phải pin hợp lệ cho một maintained dependency.
+
+## Maintained fork
+
+Ba dependency cố ý tách khỏi upstream. Mỗi lần tách như vậy giữ behavior
+downstream reproducible trên Zig toolchain đã pin.
+
+| Dependency | Upstream               | Fork branch    | Commit đã pin                              |
+| ---------- | ---------------------- | -------------- | ------------------------------------------ |
+| libxev     | `mitchellh/libxev`     | `uwz/zig-0.16` | `c49f6dfb83038c146232472c063e4b2681d098d8` |
+| lsquic     | `litespeedtech/lsquic` | `uwz/main`     | `85bd081c9103c077a7cc98271d09334d0f1043d4` |
+| h1spec     | `uNetworking/h1spec`   | `uwz/main`     | `999ba9e8f318b1c0ebbff1278b98bc5833f1af18` |
+
+Mọi thay đổi downstream có một ledger row với upstream reference, invariant, test
+evidence và retirement criterion. Ledger là câu trả lời bền vững cho việc vì sao
+một fork diverge, và nó sống lâu hơn commit đã tạo ra thay đổi.
+
+## Mirror và integration branch
+
+| Ref                        | Vai trò                                       | Quy tắc                                           |
+| -------------------------- | --------------------------------------------- | ------------------------------------------------- |
+| Fork mirror branch         | Mirror read-only của default branch upstream  | Chỉ fast-forward; không bao giờ build hay pin     |
+| `uwz/zig-0.16`, `uwz/main` | Integration branch cho toolchain đã pin       | Append-only; không force-push hay rewrite history |
+| `uwz/zig-0.17` (tương lai) | Integration branch cho toolchain line kế tiếp | Tạo trong lần upgrade đó, không sớm hơn           |
+
+Repository upstream là fetch-only. Project không push, không mở issue hay pull
+request, không comment và không submit downstream patch lên upstream, kể cả khi
+fix đó có vẻ hữu ích chung. Fix buộc phải tách khỏi upstream thì ở lại trong fork
+cùng ledger của nó.
+
+## Bốn manifest view
+
+`build.zig.zon`, `build.zig.zon.json`, `build.zig.zon.nix` và
+`build.zig.zon.txt` phải khớp nhau về URL, revision, Zig package hash và Nix
+hash. Cập nhật cả bốn trong cùng một change. Chạy
+`sh scripts/update_zon_files.sh` không tự nó là bằng chứng, vì script có thể bỏ
+qua công việc khi thiếu zon2nix hoặc Nix.
+
+Rebuild từ Zig và vendor cache rỗng sau khi đổi pin, để artifact cũ không che một
+vấn đề dependency.
+
+## Submodule h1spec
+
+`vendor/h1spec` là một git submodule dùng làm compliance input, không phải library
+được đóng gói. `.gitmodules` phải trỏ tới
+`https://github.com/farbenbuilds/h1spec`, gitlink trong parent tree phải là full
+commit 40 hex, và HEAD của submodule đã checkout phải khớp gitlink đó. Không
+workflow nào apply local patch lên submodule.
+
+## Provenance check
+
+| Script                              | Kiểm tra                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `scripts/check_libxev_fork.sh`      | Full commit, bốn view, remote reachability, ancestry, mirror equality           |
+| `scripts/check_lsquic_fork.sh`      | Như trên, thêm việc không có `patches/` và `vendor/lsquic_overlay`              |
+| `scripts/check_h1spec_fork.sh`      | Fork URL, gitlink, HEAD submodule, ancestry, mirror equality, không local patch |
+| `scripts/check_dependency_forks.sh` | Cả ba check trên, cho lint và release gate                                      |
+| `scripts/check_mirror_state.sh`     | Phép so mirror nền mà các fork check dùng                                       |
+| `scripts/dependency_mirrors.env`    | Commit đã review của từng mirror branch                                         |
+
+`check_dependency_forks.sh --exact-mirrors` yêu cầu thêm rằng mỗi branch upstream
+đang sống khớp record đã review. Release workflow và workflow
+`Dependency Mirrors` hằng tuần dùng dạng đó. Lint của pull request giữ một code
+change xanh khi upstream tiến lên, mà không che một commit chỉ có ở fork hay một
+mirror bị rewrite.
+
+## Audit và rollback
+
+Một lần mirror sync hoặc integration merge là một supply-chain review:
+
+1. Chứng minh mirror và default branch upstream resolve về cùng commit.
+2. Soát đúng range đó cho build script, workflow, submodule, binary checked-in,
+   thay đổi license và mọi thay đổi về networking, TLS, quyền sở hữu memory hay
+   platform backend.
+3. Ghi mirror range, integration range, finding, test và pin kết quả vào pull
+   request.
+4. Giữ một archive hoặc bare mirror local của mọi integration commit đã pin, và
+   resolve từng pin từ máy thứ hai trước release.
+
+Rollback đi theo đúng các record đó. Revert commit set migration dependency; nếu
+không được thì khôi phục pin upstream tốt nhất gần nhất cùng overlay cũ từ commit
+trước migration hoặc archive đã giữ, rồi cập nhật cả bốn view và notices trong
+một change. Sau khi một release đã pin fork, publish một patch release mới thay vì
+rewrite commit đã pin. Một `uwz` patch sai sẽ có commit revert với cùng ledger ID.
+
+## Hành động bị cấm
+
+- Sửa `zig-pkg`, global package cache hay một dependency đã fetch tại chỗ.
+- Pin branch, tag, short SHA hay local path cho một maintained dependency.
+- Build hoặc pin một fork mirror branch.
+- Thêm commit downstream vào mirror hoặc rewrite nó ngoài quy trình repair đã
+  ghi.
+- Giữ một fork private, không ghi lại, hoặc một patch không có ledger.
+- Push, mở issue hay pull request, comment hoặc submit patch lên repository
+  upstream.
+- Đưa `patches/`, `vendor/lsquic_overlay` hay bước `patch` trong CI trở lại.
+- Làm yếu một provenance, Windows runtime, HTTP/3 hay release gate để một pin
+  pass.
+
+## Liên quan
+
+- [Production checklist](/docs/deployment/checklist) biến các pin này thành
+  release evidence.
+- [Security reporting](/docs/security/reporting) trình bày đường báo cáo cho một
+  lỗi dependency hoặc runtime.

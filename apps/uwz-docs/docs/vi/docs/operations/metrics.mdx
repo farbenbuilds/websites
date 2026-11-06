@@ -1,0 +1,107 @@
+---
+title: Metrics
+description: Bật Prometheus registry có bound, scrape hidden endpoint, và đọc counter theo worker cùng eBPF histogram khi được pin.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, metrics, operations]
+---
+
+`with_observability(true)` bật một counter registry với capacity cố định và một
+hidden Prometheus endpoint. Rendering không cấp phát gì, nên một lần scrape tốn
+một stack buffer thay vì heap allocation trong worker.
+
+## Bật observability
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_observability(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Endpoint mặc định là `/metrics`. Đổi bằng
+`.with_metrics_path("/internal/metrics")` khi proxy đã dùng path đó. Cả hai option
+là builder setting comptime. Route được cài một lần, trước khi route bị lock, nên
+nó không thể đụng một application route đăng ký sau startup.
+
+## Counter
+
+| Counter trong registry | Tên khi render                   | Tăng khi                                 | Khoảng trống                  |
+| ---------------------- | -------------------------------- | ---------------------------------------- | ----------------------------- |
+| `connections_accepted` | `uwz_connections_accepted_total` | Một TCP connection được worker accept    | Không đếm QUIC connection     |
+| `connections_closed`   | `uwz_connections_closed_total`   | Một TCP connection được worker release   | Không đếm QUIC connection     |
+| `http_requests`        | `uwz_http_requests_total`        | Một exchange HTTP/1.1 hoặc HTTP/2 xong   | HTTP/3 không làm tăng counter |
+| `ws_messages`          | `uwz_ws_messages_total`          | Một WebSocket message trên TCP transport | Không đếm WebSocket HTTP/3    |
+
+Registry còn có các slot cho rejection, compressed message, datagram và XDP. Bốn
+counter trên là nhóm request-path mà một alert thường bắt đầu; phần còn lại giữ
+giá trị 0 trừ khi path tương ứng chạy.
+
+## Đọc hidden endpoint
+
+```sh
+curl -sS http://127.0.0.1:3000/metrics
+```
+
+Response có kiểu `text/plain; version=0.0.4`. Body được render vào stack buffer
+4096 byte; registry không vừa sẽ trả `500` thay vì một document bị cắt.
+
+```console
+# TYPE uwz_http_requests_total counter
+uwz_http_requests_total 42
+```
+
+Endpoint không có authentication. Bind nó vào một interface private, hoặc chặn
+path ở reverse proxy, khi listener là public.
+
+## Registry theo worker
+
+Mỗi worker sở hữu một registry được carve trong slab của nó. Một lần scrape báo
+cáo worker đã accept request, không phải tổng của cả process, nên cluster phải
+cộng kết quả hoặc scrape từng worker. `server.log_metrics()` ghi snapshot của
+worker này thành một batch development log khi log đang bật; gọi nó từ một route
+hoặc timer trên cùng worker.
+
+## Khoảng trống HTTP/3
+
+HTTP/3 phát một record `http_request` cho mỗi exchange hoàn tất qua sink của
+thread sở hữu, nhưng QUIC path không có registry handle, nên nó không bao giờ làm
+tăng `uwz_http_requests`. Deployment phục vụ HTTP/3 và scrape endpoint này sẽ báo
+thiếu request volume. Dùng development log cho traffic HTTP/3 cho tới khi counter
+parity hoàn tất.
+
+## eBPF latency histogram
+
+Build của framework phát `uwz_latency.o` cho histogram packet-length theo từng
+CPU. Khi map đó được pin tại `/sys/fs/bpf/uwz_latency` và đọc được, cùng response
+`/metrics` sẽ nối thêm histogram cumulative
+`uwz_latency_packets_bucket{le="..."}`, cộng dồn qua các CPU, tối đa 16 bucket
+cùng `+Inf`. Một lần đọc kernel fail để counter vẫn dùng được và bỏ histogram.
+
+Pin map cần quyền network-administration trên Linux. Server data path vẫn đi qua
+network stack chuẩn: yêu cầu `ServerConfig.transport = .kernel_bypass` báo
+`.standard` với reason `.data_path_unwired`, và application muốn AF_XDP thì tự
+điều khiển `uz.xdp_transport`.
+
+## Gợi ý alert
+
+| Tín hiệu                                    | Ý nghĩa thường gặp                                     | Kiểm tra trước                   |
+| ------------------------------------------- | ------------------------------------------------------ | -------------------------------- |
+| Tốc độ accept sụp trong khi listener vẫn mở | Accept bị stall hoặc port đang do process khác trả lời | Bind address và startup log      |
+| Accepted trừ closed cứ tăng                 | Connection không drain                                 | Idle timeout và shutdown path    |
+| Request đứng yên trong khi traffic vẫn chạy | Observability tắt, hoặc traffic chuyển sang HTTP/3     | Builder option và request line   |
+| WebSocket message đứng yên dưới tải chat    | Không có TCP upgrade, hoặc counter chưa bật            | Upgrade handler và `ws_messages` |
+
+## Verify
+
+Scrape một lần, gửi một request rồi scrape lại. `uwz_http_requests_total` phải
+tăng thêm một trên worker đã phục vụ request đó. Lần scrape thứ hai từ worker
+khác có thể hợp lệ khi hiển thị giá trị khác.
+
+## Liên quan
+
+- [Development log](/docs/operations/logging) giải thích sink theo worker mà
+  `log_metrics` ghi qua.
+- [Production checklist](/docs/deployment/checklist) trình bày các tín hiệu này
+  thuộc đâu trong một launch review.

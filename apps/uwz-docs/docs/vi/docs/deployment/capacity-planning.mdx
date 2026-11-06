@@ -1,0 +1,139 @@
+---
+title: Capacity planning
+description: Biến preset thành ngân sách bộ nhớ mỗi worker, tính cả inbox và TLS context, rồi verify slab chính xác trước khi cấp phát.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, deployment, capacity]
+---
+
+Mọi pool của µWebZockets cố định khi application được build. Không có tăng động
+và không có resize muộn, nên capacity là quyết định lúc launch. Bắt đầu từ
+workload, chọn preset, chỉ override những gì biện minh được, và đo slab trước khi
+cấp phát.
+
+Phép tính suy ra từ `ServerConfig`. Đây không phải quy tắc kinh nghiệm. Để có
+worksheet đầy đủ, đọc [Capacity sizing](/docs/performance/capacity-sizing); trang
+này là ngân sách deployment quanh nó.
+
+## Bắt đầu từ preset
+
+| Preset                      | Connection | WebSocket message | Write queue | Request body |
+| --------------------------- | ---------: | ----------------: | ----------: | -----------: |
+| `uz.Presets.microservice`   |        256 |             8 KiB |      16 KiB |       64 KiB |
+| `uz.Presets.websocket_chat` |        512 |            32 KiB |      32 KiB |        4 KiB |
+| `uz.Presets.file_server`    |        128 |             4 KiB |     512 KiB |        8 KiB |
+
+Mỗi preset dồn byte vào chiều mà workload của nó dùng. Chat server cần inbound
+message lớn hơn; file server cần response ring lớn hơn và giới hạn request body
+nhỏ. Dùng `Server.builder(...).preset(...)` rồi override từng limit.
+
+## Slab math
+
+Một application slab liền mạch được cấp phát cho mỗi active worker. Ba region
+thường chi phối phép tính:
+
+| Region               | Công thức                                                                        | Preset microservice         |
+| -------------------- | -------------------------------------------------------------------------------- | --------------------------- |
+| Request stride       | request line `8 KiB` + header `16 KiB` + framing slack `1 KiB` + `max_body_size` | 91,136 byte                 |
+| Region kiểm soát     | request stride + `write_queue_size` + `max_ws_message_size`                      | 115,712 byte                |
+| Tổng theo connection | region kiểm soát × `max_connections`                                             | 29,622,272 byte (28.25 MiB) |
+
+Stride được làm tròn lên theo biên 16 byte; mọi giá trị ở trên đã aligned. Phép
+tính tương tự cho các preset còn lại:
+
+| Preset           | Request stride | Region kiểm soát | Connection | Tổng region slab |
+| ---------------- | -------------: | ---------------: | ---------: | ---------------- |
+| `microservice`   |       91,136 B |        115,712 B |        256 | 28.25 MiB        |
+| `websocket_chat` |       29,696 B |         95,232 B |        512 | 46.5 MiB         |
+| `file_server`    |       33,792 B |        562,176 B |        128 | 68.6 MiB         |
+
+Đây là con số chính xác cho ba region kể trên, nhưng chưa phải toàn bộ slab.
+Connection pool, freelist, HTTP/2 session nhúng, router storage và metrics
+registry là phần cộng thêm. HTTP/2 session là phần bị bỏ sót lớn nhất: đọc
+`h2_session_bytes()` cho một connection rồi nhân với `max_connections`.
+
+## Bộ nhớ mỗi worker
+
+| Item                | Phạm vi                                 | Nằm trong `slab_bytes()` |
+| ------------------- | --------------------------------------- | ------------------------ |
+| Application slab    | Một mỗi active worker                   | Có                       |
+| Cluster inbox       | Một mỗi active worker                   | Không                    |
+| TLS `SSL_CTX`       | Một mỗi active worker khi bật TLS       | Không                    |
+| Bảng backend libxev | Một mỗi worker loop                     | Không                    |
+| HTTP gzip codec     | Một mỗi worker khi bật HTTP compression | Không                    |
+| QUIC engine pool    | Do `listen_udp` tạo                     | Không                    |
+
+Chỉ active worker mới cấp phát slab, inbox và thread handle. Compiled worker
+capacity lớn không giữ chỗ cho worker không bao giờ khởi động. Nhân tổng mỗi
+worker với active count, rồi so với ngân sách bộ nhớ của host và phần headroom
+cho allocator cùng các C dependency.
+
+## Body, message và write queue
+
+| Limit                 | Tăng                                           | Không tăng                                  |
+| --------------------- | ---------------------------------------------- | ------------------------------------------- |
+| `max_body_size`       | HTTP/1.1 request buffer và body cap của HTTP/2 | Upload không giới hạn; body vẫn được buffer |
+| `max_ws_message_size` | Một inbound WebSocket message mỗi connection   | Pending outbound byte, do queue giới hạn    |
+| `write_queue_size`    | Pending response byte mỗi connection           | Tổng kích thước của một streamed body       |
+
+Đặt `max_body_size` bằng upload hợp lệ lớn nhất, không phải một con số tròn hy
+vọng phủ hết mọi thứ. Body quá lớn trả `413` với limit document có cấu trúc, và
+header quá lớn trả `431`. Đặt write queue theo burst mà một reader chậm phải hấp
+thụ. `Response.begin_stream` cho phép response lớn vượt queue mà không cần nâng
+nó, vì queue giới hạn một bước của response chứ không phải tổng kích thước.
+
+## Cluster inbox
+
+Mỗi active worker giữ `(64 + 1) * max_ws_message_size` cho cluster inbox cùng một
+scratch buffer cỡ một message. Phần này nằm ngoài slab.
+
+| Preset           | Message | Inbox mỗi worker          |
+| ---------------- | ------: | ------------------------- |
+| `microservice`   |   8 KiB | 532,480 byte (520 KiB)    |
+| `websocket_chat` |  32 KiB | 2,129,920 byte (2.03 MiB) |
+| `file_server`    |   4 KiB | 266,240 byte (260 KiB)    |
+
+Inbox đầy sẽ drop message. `publish_report()` báo `queued`, `dropped`,
+`notify_failed` và worker đầu tiên drop, nên ngân sách cluster phải gồm inbox và
+một alert cho drop.
+
+## Ví dụ preset file
+
+Với `file_server`, write queue cũng quyết định static file body lớn nhất:
+
+| Bước             | Giá trị                    | Cách tính                      |
+| ---------------- | -------------------------- | ------------------------------ |
+| Request stride   | 33,792 byte                | 8,192 + 16,384 + 1,024 + 8,192 |
+| Region kiểm soát | 562,176 byte               | 33,792 + 524,288 + 4,096       |
+| 128 connection   | 71,958,528 byte (68.6 MiB) | 562,176 × 128                  |
+| Static file body | 520,192 byte (508 KiB)     | 524,288 − 4,096                |
+
+Static file lớn hơn `write_queue_size - 4 KiB` cần write queue lớn hơn hoặc một
+delivery path khác. Tăng `max_body_size` không thay đổi giới hạn này.
+
+## Kiểm tra trước khi cấp phát
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+    .max_body_size = 4 * 1024,
+    .max_ws_message_size = 32 * 1024,
+};
+const per_worker = try config.slab_bytes();
+std.debug.print("per worker: {d} bytes\n", .{per_worker});
+```
+
+`Server.builder(...).slab_bytes()` trả về đúng layout có kiểm tra mà `carve`
+dùng, nên gọi nó trước `build` khi footprint phải vừa ngân sách host. Con số là
+theo từng worker; bạn tự nhân với active count.
+
+## Liên quan
+
+- [Capacity sizing](/docs/performance/capacity-sizing) cho worksheet đầy đủ.
+- [Capacity model](/docs/concepts/capacity-model) cho cách limit gắn vào request
+  path.
+- [Cost model](/docs/performance/cost-model) cho cấp phát lúc startup.
+- [Production checklist](/docs/deployment/checklist) cho gate capacity.
+- [Backpressure](/docs/concepts/backpressure) cho write-queue contract.

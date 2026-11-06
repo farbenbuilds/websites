@@ -1,0 +1,153 @@
+---
+title: Serve HTTP/3
+description: Bind a QUIC listener with an in-memory or PEM certificate, verify it with curl --http3, and account for the single-application boundaries.
+sidebar:
+  order: 20
+search:
+  tags: [guide, http3, quic, udp]
+---
+
+HTTP/3 is a UDP listener with its own TLS context. The request and response API
+is unchanged; transport policy, capacity, and clustering boundaries are not.
+
+## Problem
+
+You need a QUIC endpoint that serves the same routes as your HTTP server, and
+you need to know which guarantees do not carry over from TCP.
+
+## Assumptions
+
+- Zig 0.16.0 and a `curl` built with HTTP/3 support.
+- The server owns UDP port 8443 and nothing else binds it.
+- QUIC stays single-application. There is no HTTP/3 cluster.
+- HTTP/3 early data is rejected; every request waits for the handshake.
+
+## Write the program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.end_with_headers(
+        "200 OK",
+        "Content-Type: text/plain\r\n",
+        "Hello from bounded HTTP/3",
+    ) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init_http3_ephemeral(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    try app.listen_udp("0.0.0.0", 8443);
+    try app.catch_shutdown_signals();
+    try app.run();
+}
+```
+
+`init_http3_ephemeral` creates two contexts: TCP advertises `h2` and
+`http/1.1`, while QUIC advertises only `h3`. This program binds only the UDP
+transport. The certificate is generated in memory and is not trusted by a
+client.
+
+## Verify it
+
+```sh
+zig build run
+```
+
+```sh
+curl --http3 -k https://127.0.0.1:8443/
+```
+
+```console
+Hello from bounded HTTP/3
+```
+
+`-k` is required for the generated certificate. If `curl` lacks HTTP/3 support,
+the command fails before it reaches the server; check `curl --version` for
+`HTTP3` in the features list. Use a QUIC client such as ngtcp2 or quiche when
+your `curl` build cannot negotiate `h3`.
+
+## Boundaries
+
+| Surface            | HTTP/3 behavior                                          |
+| ------------------ | -------------------------------------------------------- |
+| Clustering         | Not supported; `listen_udp` is single-application        |
+| 0-RTT              | Rejected on the live listener                            |
+| WebTransport       | Extended CONNECT answers `501 Not Implemented`           |
+| Metrics registry   | Emits request records, does not advance counters         |
+| Request headers    | `max_header_size` bounded to 65535 bytes or less         |
+| Request body       | `max_h3_body_size`                                       |
+| Congestion control | BBRv1 with per-connection pacing, not configurable       |
+| Receive batching   | `UDP_GRO` disabled; transmit batching is per packet size |
+
+The QPACK decoder, packet buffers, stream state, and bodies come from pools
+allocated at startup. The listener validates pseudo-field order and rejects
+connection-specific fields with a stream-scoped `H3_MESSAGE_ERROR`.
+
+## Capacity assumptions
+
+| Resource         | Bound                                  | Consequence                            |
+| ---------------- | -------------------------------------- | -------------------------------------- |
+| QUIC connections | Configured connection capacity         | Excess handshakes are dropped          |
+| Active streams   | Bounded per connection                 | A refused write reports `WouldBlock`   |
+| Header block     | `max_header_size`, at most 65535 bytes | Larger blocks are rejected             |
+| UDP payload      | 2 KiB                                  | Large responses are split into packets |
+| Pools            | Allocated by `listen_udp`              | They live until `deinit`               |
+
+One `App` owns the QUIC pools. Reusing a process for a second UDP listener is
+not supported, so size the single transport for the peak connection count.
+
+## Failure behavior
+
+| Condition                    | Result                           |
+| ---------------------------- | -------------------------------- |
+| UDP port already bound       | `listen_udp` returns an IO error |
+| Client without `h3`          | Handshake fails, no request      |
+| 0-RTT request                | Rejected before a handler runs   |
+| WebTransport CONNECT         | `501 Not Implemented`            |
+| Header block above the limit | Request rejected                 |
+| Certificate mismatch         | `init_http3` fails at startup    |
+
+## Variations
+
+### Production certificates
+
+```zig
+var app = try uz.App(128).init_http3(
+    init.io,
+    "certs/fullchain.pem",
+    "certs/privkey.pem",
+);
+defer app.deinit();
+```
+
+`init_http3` loads the same pair into the TCP and QUIC contexts. The QUIC
+context still advertises `h3` only and keeps early data disabled. The pair is
+checked while loading, so a mismatch fails before the listener starts.
+
+### Keep the listener UDP-only
+
+QUIC needs a UDP path end to end. A TCP reverse proxy in front of the process
+cannot forward QUIC unless it also relays UDP, so either pass UDP through or
+terminate HTTP/3 at the edge and forward HTTP/1.1 or HTTP/2 to the application:
+
+```sh
+ss -lunp | grep 8443
+```
+
+```console
+UNCONN 0 0 0.0.0.0:8443 0.0.0.0:* users:(("your-app",pid=4242,fd=7))
+```
+
+No TCP socket appears for that port. Keep health checks and metrics on the TCP
+listener or the edge, because a UDP-only process has no HTTP/1.1 probe surface.
+
+## Related
+
+- [HTTP/3](/docs/http3) is the protocol section index.
+- [QUIC transport](/docs/http3/quic-transport) covers packets, pacing, and limits.
+- [TLS 1.3 and ALPN](/docs/security/tls) explains the separate QUIC context.

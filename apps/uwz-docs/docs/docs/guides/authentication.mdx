@@ -1,0 +1,178 @@
+---
+title: Add authentication
+description: Protect a route prefix with bearer credentials, answer the 401 challenge, and resolve a per-route identity without breaking the trust boundary.
+sidebar:
+  order: 3
+search:
+  tags: [guide, auth, security]
+---
+
+This guide adds bearer authentication to one route prefix and leaves the health
+route open. The framework middleware performs the credential check; the
+application owns the prefix decision and any identity that follows it.
+
+## Problem
+
+You need to reject unauthenticated requests before the handler runs, keep a
+readiness route reachable, and know which caller a request belongs to without
+trusting a request header.
+
+## Assumptions
+
+- Zig 0.16.0 and µWebZockets 2.1.6 installed with `zig fetch --save`; one worker
+  on `127.0.0.1:3000`, plaintext in development and TLS in production.
+- Credentials are provisioned at startup. There is no token store and no session.
+
+## Program
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Guard = struct {
+    auth: *uz.middleware.Auth,
+    prefix: []const u8,
+};
+
+fn guard(context: *anyopaque, req: *uz.Request, res: *uz.Response) uz.MiddlewareResult {
+    const self: *const Guard = @ptrCast(@alignCast(context));
+    if (!std.mem.startsWith(u8, req.path, self.prefix)) return .continue_dispatch;
+    return uz.middleware.Auth.handler(self.auth, req, res);
+}
+
+fn dashboard(_: *uz.Request, res: *uz.Response) void {
+    res.text("dashboard") catch {};
+}
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var auth = uz.middleware.auth(.{
+        .realm = "api",
+        .bearer = &.{.{ .token = "service-token-rotate-me" }},
+    });
+    var guard_state: Guard = .{ .auth = &auth, .prefix = "/api" };
+    _ = try app.use(&guard_state, guard);
+
+    _ = try app.get("/api/dashboard", dashboard);
+    _ = try app.get("/health", health);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+The middleware is global, so the guard decides per request whether to delegate.
+Credentials, `Auth`, and `Guard` must outlive `app.deinit()`.
+
+## What the credential check does
+
+| Step         | Behavior                                                                     |
+| ------------ | ---------------------------------------------------------------------------- |
+| Field lookup | `get_unique_header("authorization")`; missing or duplicated fails closed     |
+| Scheme       | `Basic` or `Bearer`, matched case-insensitively, followed by a space or tab  |
+| Comparison   | `std.crypto.timing_safe.eql` over fixed 64-byte blocks, every entry compared |
+| Rejection    | `401 Unauthorized`, empty body, `WWW-Authenticate` lists configured schemes  |
+
+The middleware answers "accepted" or "rejected"; authorization stays in your handler.
+
+## Trust boundary
+
+- `Authorization` is cleartext on the wire. Terminate TLS before this middleware
+  sees a production credential, and never log or echo the field.
+- The check compares plaintext values; it does not hash, sign, or encrypt them,
+  so protect the process environment or secret store that supplies the list.
+- Rotating a credential rebuilds the borrowed options, which means a restart.
+  Plan rotation as a rolling restart.
+- In a cluster, register one `Auth` per worker. The options are immutable, but
+  each worker app needs its own middleware entry.
+
+## Verification
+
+```sh
+zig build run
+```
+
+```sh
+curl -i http://127.0.0.1:3000/api/dashboard
+curl -i -H 'Authorization: Bearer service-token-rotate-me' http://127.0.0.1:3000/api/dashboard
+curl -i http://127.0.0.1:3000/health
+```
+
+The first request returns `401 Unauthorized` with `WWW-Authenticate: Bearer`.
+The second returns `200 OK` with `dashboard`, and the third returns `200 OK`
+without credentials.
+
+## Capacity assumptions
+
+| Bound               | Value     | Source                  |
+| ------------------- | --------- | ----------------------- |
+| Basic decoded value | 512 bytes | Middleware stack buffer |
+
+## Failure behavior
+
+| Condition                                | Result                                             |
+| ---------------------------------------- | -------------------------------------------------- |
+| Missing, duplicate, malformed credential | `401 Unauthorized` with the configured challenge   |
+| Realm contains `"`, CR, or LF            | `500 Internal Server Error` on the first rejection |
+
+## Variations
+
+### Basic auth instead of bearer
+
+Point the same guard at Basic credentials. Basic is only acceptable over TLS:
+
+```zig
+var auth = uz.middleware.auth(.{
+    .realm = "api",
+    .basic = &.{.{ .username = "admin", .password = "rotate-me" }},
+});
+```
+
+Send credentials with `curl -i -u admin:rotate-me`; Basic needs TLS.
+
+### Per-route identity
+
+Resolve an identity after the middleware accepted the token. The comparison keeps
+the same fixed-block shape, so the token content is not compared byte by byte:
+
+```zig
+const Actor = struct { token: []const u8, name: []const u8 };
+const actors = [_]Actor{
+    .{ .token = "service-token-rotate-me", .name = "deploy" },
+    .{ .token = "reader-token", .name = "reader" },
+};
+
+fn token_matches(expected: []const u8, presented: []const u8) bool {
+    if (expected.len != presented.len or expected.len > 64) return false;
+    var left: [64]u8 = [_]u8{0} ** 64;
+    var right: [64]u8 = [_]u8{0} ** 64;
+    @memcpy(left[0..expected.len], expected);
+    @memcpy(right[0..presented.len], presented);
+    return std.crypto.timing_safe.eql([64]u8, left, right);
+}
+
+fn actor_for(req: *const uz.Request) ?Actor {
+    const header = req.get_unique_header("authorization") orelse return null;
+    if (header.len <= 7 or !std.ascii.eqlIgnoreCase(header[0..7], "Bearer ")) return null;
+    const presented = std.mem.trim(u8, header[7..], " \t");
+    for (actors) |actor| {
+        if (token_matches(actor.token, presented)) return actor;
+    }
+    return null;
+}
+```
+
+Call `actor_for` inside the protected handler and return `403 Forbidden` when the
+token has no actor. Never read identity from `X-User` or a query parameter.
+
+## Related
+
+- [Authentication](/docs/http/authentication)
+- [Authentication boundary](/docs/security/authentication)

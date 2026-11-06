@@ -1,0 +1,135 @@
+---
+title: Sanitizer
+description: Chạy gate ASan, UBSan và LSan kết hợp hoặc smoke MSan cho ranh giới C/C++, với runtime path mà mỗi mode cần để chạy.
+sidebar:
+  order: 5
+search:
+  tags: [operations, sanitizers, memory]
+---
+
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application test không chạy các gate này. Với kiểm tra ở mức application, xem
+[Testing an HTTP server](/docs/http/testing).
+:::
+
+Sanitizer đặt instrumentation vào dependency C và C++ đã pin, C shim cục bộ và
+chương trình C ABI. Chúng không thay safety check của Zig: các lần chạy có
+instrumentation cũng dùng `ReleaseSafe` và giữ frame pointer. Có hai mode và
+chúng loại trừ nhau.
+
+## Address, undefined và leak sanitizer
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Mode này chạy toàn bộ test graph với:
+
+| Check                      | Phạm vi                                                              |
+| -------------------------- | -------------------------------------------------------------------- |
+| AddressSanitizer           | Truy cập ngoài biên, use-after-free và free không hợp lệ trong C/C++ |
+| UndefinedBehaviorSanitizer | Undefined behavior của C và C++, tắt recovery                        |
+| LeakSanitizer              | Allocation còn sống sau khi chương trình kết thúc                    |
+| Zig C-UB check             | Ranh giới C interop compile với `sanitize_c = .full`                 |
+| Frame pointer              | Được giữ để stack dễ đọc                                             |
+
+Lần chạy dùng vendor cache riêng, nên chuyển giữa build thường và build có
+instrumentation không dùng nhầm object.
+
+## MemorySanitizer
+
+```sh
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Step `msan` không có `-Dmemory-sanitize=true` sẽ fail theo thiết kế. Mode này là
+smoke cho ranh giới dependency trên Linux `x86_64`, có origin tracking. Nó build
+lại dependency C và C++ đã pin và chạy một chương trình C tập trung với chúng. Nó
+không đặt instrumentation vào load và store do Zig sinh ra, và không chạy toàn bộ
+C ABI suite.
+
+## Chọn một mode
+
+| Thuộc tính      | ASan, UBSan, LSan               | MSan                           |
+| --------------- | ------------------------------- | ------------------------------ |
+| Build step      | `test`                          | `msan`                         |
+| Flag            | `-Dsanitize=true`               | `-Dmemory-sanitize=true`       |
+| Platform        | Native Linux                    | Linux `x86_64`                 |
+| Phạm vi         | Dependency C/C++, C shim, C ABI | Chỉ ranh giới dependency C/C++ |
+| Chạy Zig test   | Có                              | Không                          |
+| Origin tracking | Không áp dụng                   | Bật                            |
+| Kết hợp         | Không trộn với MSan             | Không trộn với ASan hoặc UBSan |
+
+Cả hai mode chạy thành CI job riêng với cache riêng. Trộn chúng tạo ra tổ hợp
+runtime và instrumentation không được hỗ trợ.
+
+## Nix và Zig thuần
+
+Bên trong development shell, compile path và run path đến từ shell:
+
+```sh
+nix develop "path:." -c \
+  zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Ngoài Nix, truyền thư mục compiler runtime:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe \
+  -Dsanitizer-lib-dir=/path/to/compiler/runtime/lib --summary all
+```
+
+| Tình huống                         | Flag                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| Nix shell, glibc khớp              | Không; biến `UWEBZOCKETS_SANITIZER_*` cung cấp path                   |
+| Zig thuần, glibc host khớp runtime | `-Dsanitizer-lib-dir=/path/to/compiler-rt/lib`                        |
+| Zig thuần, runtime cần glibc khác  | Thêm `-Dsanitizer-libc-dir` và `-Dsanitizer-dynamic-linker` cùng nhau |
+| Cross target                       | Không hỗ trợ; build native trên Linux                                 |
+
+Sanitizer build chỉ chạy native Linux. Chúng đặt runtime RPATH đồng bộ, nên copy
+binary sang host khác không phải cách chạy gate được hỗ trợ.
+
+## Workaround sigaltstack
+
+Threaded test, gồm cluster TLS lifecycle test, chạy dưới ASan với
+`use_sigaltstack=0`. ASan cài alternate signal stack cho mỗi thread và unmap stack
+mà nó tìm thấy khi thread teardown, trong khi thread-local stack của Zig 0.16
+không page aligned. Sự lệch này sẽ báo false failure lúc teardown.
+
+Workaround này hẹp. Leak detection, `halt_on_error` và mọi check khác vẫn bật;
+chỉ đường báo deep-stack-overflow thay đổi. Không mở rộng nó thành ASan option
+toàn project và không tắt leak detection để một lần chạy xanh.
+
+## MSan không bao phủ gì
+
+| Không bao phủ                            | Lý do                                                     |
+| ---------------------------------------- | --------------------------------------------------------- |
+| Load và store của Zig                    | Clang sanitizer flag không instrument code do Zig sinh ra |
+| Toàn bộ C ABI suite                      | Target MSan là smoke tập trung cho ranh giới dependency   |
+| Đường HTTP, WebSocket và QUIC end to end | Những đường đó cần test graph đầy đủ có instrumentation   |
+| macOS, Windows và BSD                    | Runtime chỉ hỗ trợ Linux `x86_64`                         |
+| Application code                         | Gate thuộc framework repository                           |
+
+Một lần MSan pass là evidence rằng ranh giới dependency sạch với chương trình
+smoke. Nó không phải evidence rằng toàn bộ server memory-safe.
+
+## Kiểm tra
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Chạy command đầu trên bất kỳ host Linux được hỗ trợ trong Nix shell. Chỉ chạy
+command thứ hai trên Linux `x86_64`. Giữ hai báo cáo riêng khi gắn evidence vào
+một thay đổi.
+
+## Liên quan
+
+- [Test](/docs/operations/testing) trình bày các lớp test thường và có instrumentation.
+- [Nix development shell](/docs/operations/nix) cung cấp sanitizer runtime.
+- [Memory model](/docs/architecture/memory-model) giải thích các allocation mà những lần chạy này kiểm tra.

@@ -1,0 +1,172 @@
+---
+title: Stream event bằng SSE
+description: Phát một Server-Sent Events stream hữu hạn, frame field đúng cách và giữ proxy cùng reconnect không phá stream.
+sidebar:
+  order: 9
+search:
+  tags: [guide, sse, how-to]
+---
+
+Server-Sent Events cho bạn một event stream một chiều trên HTTP thường. `res.sse()`
+đặt các header mà browser `EventSource` cần, và bạn ghi event đã frame vào
+response.
+
+## Bài toán
+
+Một dashboard hoặc build log phải đẩy update tới browser mà không cần WebSocket
+handshake hay vòng polling. Stream có thể kết thúc, và client phải reconnect sạch.
+
+## Giả định
+
+- Event được sinh bên trong handler. Helper SSE là đồng bộ; nó không có timer và
+  không có producer callback.
+- Mỗi stream đang mở giữ một connection slot trong suốt vòng đời.
+- Có proxy nằm giữa browser và server, hoặc sẽ có sau này.
+
+## Gửi một stream hữu hạn
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn events(_: *uz.Request, res: *uz.Response) void {
+    var stream = res.sse() catch |err| {
+        std.log.err("sse start failed: {}", .{err});
+        return;
+    };
+
+    stream.send_event("tick", "one") catch return;
+    stream.heartbeat() catch return;
+    stream.send_event("tick", "two\nthree") catch return;
+    stream.close() catch return;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/events", events);
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Handler ghi hết chuỗi event và close trước khi trả về. Nếu nó trả về khi stream còn
+mở, transport flush phần đã có rồi đóng connection.
+
+## Framing
+
+| Input                  | Được ghi                           |
+| ---------------------- | ---------------------------------- |
+| `event` khác rỗng      | Một dòng `event: NAME`             |
+| Mỗi dòng tách bởi `\n` | Một dòng `data: LINE`              |
+| Luôn luôn              | Một dòng trống sau data field cuối |
+| `heartbeat()`          | `: keep-alive` và một dòng trống   |
+
+`\r` ở cuối dòng bị bỏ trước khi frame, nên input CRLF cho ra field giống input
+LF. CR hoặc LF trong event name trả `error.InvalidEventName` trước khi field nào
+của event đó được ghi.
+
+```console
+event: tick
+data: two
+data: three
+
+: keep-alive
+
+```
+
+## Hành vi qua proxy
+
+`sse()` gửi `Content-Type: text/event-stream`, `Cache-Control: no-cache` và
+`X-Accel-Buffering: no`. Field cuối đề nghị các proxy kiểu nginx không buffer; đó
+là đề nghị, không phải bảo đảm.
+
+- Tắt response buffering cho route này trong cấu hình proxy.
+- Đặt proxy read timeout dài hơn heartbeat interval.
+- Gửi heartbeat thường xuyên hơn idle timeout ngắn nhất trên đường đi.
+- Giữ compression tắt cho event stream; proxy có nén có thể giữ byte lại.
+
+## Giả định capacity
+
+| Tài nguyên         | Giới hạn                                                      |
+| ------------------ | ------------------------------------------------------------- |
+| Write queue        | 64 KiB mỗi connection; field không vừa trả `error.WouldBlock` |
+| Tổng stream size   | Không cap; queue giới hạn một lần ghi, không giới hạn stream  |
+| Connection         | Mỗi stream mở giữ một slot của `max_clients`                  |
+| Heartbeat interval | Ngắn hơn mọi idle timeout của proxy và client                 |
+
+SSE trên HTTP/1.1 dùng chunked transfer coding. HTTP/2 và HTTP/3 chở cùng các byte
+field trong `DATA` frame, không có chunk framing.
+
+## Hành vi khi lỗi
+
+| Điều kiện                         | Kết quả                                      |
+| --------------------------------- | -------------------------------------------- |
+| Event name chứa CR hoặc LF        | `error.InvalidEventName`; field trước đó còn |
+| Write queue đầy                   | `error.WouldBlock`; event bị dở              |
+| Ghi sau `close()`                 | `error.ResponseNotStreaming`                 |
+| `sse()` sau helper khác đã start  | `error.ResponseAlreadyStarted`               |
+| Method hoặc status không cho body | `error.BodyNotAllowed`                       |
+| Peer hoặc transport đang đóng     | `error.ConnectionClosed`                     |
+
+Write error không thể đổi thành status khác vì response head đã gửi. Trả về khỏi
+handler và để transport đóng stream.
+
+## Kiểm chứng
+
+```sh
+curl -N -i http://127.0.0.1:3000/events
+curl -sN http://127.0.0.1:3000/events | grep -c '^event: tick'
+```
+
+`-N` tắt curl buffering. Kỳ vọng `200 OK`, `Content-Type: text/event-stream`,
+`Cache-Control: no-cache` và `X-Accel-Buffering: no`, rồi cả hai event và heartbeat
+comment. Count là `2`, dùng được như check pass/fail.
+
+## Biến thể: periodic producer
+
+Helper không thể chờ giữa các lần ghi, nên period phải đến từ client. Phát một
+window có bound cho mỗi request và để client hỏi window tiếp theo.
+
+```zig
+fn window(req: *uz.Request, res: *uz.Response) void {
+    const query = req.query_params() catch {
+        res.end("400 Bad Request", "") catch {};
+        return;
+    };
+    const from = (query.get_int(u64, "from") catch null) orelse 0;
+    var stream = res.sse() catch return;
+
+    var seq = from;
+    while (seq < from + 3) : (seq += 1) {
+        var buffer: [48]u8 = undefined;
+        const payload = std.fmt.bufPrint(&buffer, "{{\"seq\":{d}}}", .{seq}) catch return;
+        stream.send_event("tick", payload) catch return;
+        if (seq + 1 < from + 3) stream.heartbeat() catch return;
+    }
+    stream.close() catch return;
+}
+```
+
+Cursor đi qua query string. Khi stream đóng, client mở `/events?from=<next>`; một
+`EventSource` reconnect thuần sẽ lặp lại đúng URL cũ và phát lại cùng window. Helper
+không ghi field `retry:`, nên client cũng tự quyết định delay.
+
+## Biến thể: tính trước reconnect
+
+`EventSource` tự reconnect, nhưng helper không ghi field `id:`, nên client không có
+`Last-Event-ID` để resume. Xem mọi connection là một subscription mới:
+
+- Đặt application sequence trong `data` và để client gửi vị trí cuối.
+- Fetch lại snapshot khi sequence bị thiếu.
+- Deduplicate event mà application có thể giao hai lần.
+- Không tự phát minh SSE field mà helper không ghi.
+
+## Tiếp theo
+
+- [Server-Sent Events](/docs/http/server-sent-events) liệt kê framing và error
+  contract chính xác.
+- [Streaming responses](/docs/http/streaming) trình bày producer do transport kéo.
+- [Backpressure](/docs/concepts/backpressure) giải thích quy tắc `WouldBlock`.

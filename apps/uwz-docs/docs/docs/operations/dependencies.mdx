@@ -1,0 +1,143 @@
+---
+title: Dependencies
+description: Audit the immutable pins, maintained forks, provenance checks, and rollback rules behind a µWebZockets dependency.
+sidebar:
+  order: 10
+search:
+  tags: [explanation, dependencies, operations]
+---
+
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Your application pins the package in its own `build.zig.zon`; see
+[Installation](/docs/getting-started/installation). This page covers the framework dependency graph.
+:::
+
+µWebZockets builds its event loop, TLS, QUIC, and compression from pinned
+packages. Every pin is an immutable URL or a full commit plus a Zig package
+hash, so a changed archive fails dependency resolution instead of silently
+replacing reviewed source. This page covers the pins, the fork branch model,
+the provenance checks, and the rollback rules.
+
+## Immutable pins
+
+| Dependency         | Role                       | Pin form                            |
+| ------------------ | -------------------------- | ----------------------------------- |
+| zslay              | WebSocket framing          | Release archive URL and hash        |
+| libxev             | Event loop and completions | Maintained fork, full 40-hex commit |
+| BoringSSL          | TLS 1.3 and cryptography   | Upstream commit and hash            |
+| lsquic             | QUIC and HTTP/3 engine     | Maintained fork, full 40-hex commit |
+| ls-qpack, ls-hpack | QPACK and HPACK            | Upstream commits, synced to lsquic  |
+| libdeflate         | Deflate and gzip codecs    | Upstream commit and hash            |
+| zlib               | gzip backing store         | Release archive and hash            |
+
+The pinned revision and the Zig package hash are both part of resolution. A
+branch, a tag, a short SHA, or a local path is not a valid pin for a maintained
+dependency.
+
+## Maintained forks
+
+Three dependencies diverge deliberately. Each divergence exists to keep
+downstream behavior reproducible on the pinned Zig toolchain.
+
+| Dependency | Upstream               | Fork branch    | Pinned commit                              |
+| ---------- | ---------------------- | -------------- | ------------------------------------------ |
+| libxev     | `mitchellh/libxev`     | `uwz/zig-0.16` | `c49f6dfb83038c146232472c063e4b2681d098d8` |
+| lsquic     | `litespeedtech/lsquic` | `uwz/main`     | `85bd081c9103c077a7cc98271d09334d0f1043d4` |
+| h1spec     | `uNetworking/h1spec`   | `uwz/main`     | `999ba9e8f318b1c0ebbff1278b98bc5833f1af18` |
+
+Every downstream change has a ledger row with its upstream reference, invariant,
+test evidence, and retirement criterion. The ledger is the durable answer to why
+a fork diverges, and it outlives the commit that introduced the change.
+
+## Mirror and integration branches
+
+| Ref                        | Role                                            | Rule                                          |
+| -------------------------- | ----------------------------------------------- | --------------------------------------------- |
+| Fork mirror branch         | Read-only mirror of the upstream default branch | Fast-forward only; never built or pinned      |
+| `uwz/zig-0.16`, `uwz/main` | Integration branch for the pinned toolchain     | Append-only; no force-push or history rewrite |
+| `uwz/zig-0.17` (future)    | Integration branch for the next toolchain line  | Created during that upgrade, not before       |
+
+Upstream repositories are fetch-only. The project does not push, open issues or
+pull requests, comment, or submit a downstream patch upstream, even when the fix
+looks generally useful. A fix that must diverge stays in the fork and its
+ledger.
+
+## Four manifest views
+
+`build.zig.zon`, `build.zig.zon.json`, `build.zig.zon.nix`, and
+`build.zig.zon.txt` must agree on URL, revision, Zig package hash, and Nix hash.
+Update all four in the same change. Running `sh scripts/update_zon_files.sh` is
+not proof by itself, because it can skip its work when zon2nix or Nix is absent.
+
+Rebuild from an empty Zig and vendor cache after a pin change, so a stale
+artifact cannot hide a dependency problem.
+
+## h1spec submodule
+
+`vendor/h1spec` is a git submodule used as a compliance input, not a packaged
+library. `.gitmodules` must name `https://github.com/farbenbuilds/h1spec`, the
+gitlink in the parent tree must be a full 40-hex commit, and the checked-out
+submodule HEAD must match that gitlink. No workflow applies a local patch to the
+submodule.
+
+## Provenance checks
+
+| Script                              | Verifies                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `scripts/check_libxev_fork.sh`      | Full commit, four views, remote reachability, ancestry, mirror equality      |
+| `scripts/check_lsquic_fork.sh`      | The same, plus the absence of `patches/` and `vendor/lsquic_overlay`         |
+| `scripts/check_h1spec_fork.sh`      | Fork URL, gitlink, submodule HEAD, ancestry, mirror equality, no local patch |
+| `scripts/check_dependency_forks.sh` | All three checks, for lint and release gates                                 |
+| `scripts/check_mirror_state.sh`     | The underlying mirror comparison used by the fork checks                     |
+| `scripts/dependency_mirrors.env`    | The reviewed commit of every mirror branch                                   |
+
+`check_dependency_forks.sh --exact-mirrors` additionally requires each live
+upstream branch to match the reviewed record. The release workflow and the
+weekly `Dependency Mirrors` workflow use that form. Plain pull-request lint keeps
+a code change green when upstream advances, without hiding a fork-only commit or
+a rewritten mirror.
+
+## Audit and rollback
+
+A mirror sync or integration merge is a supply-chain review:
+
+1. Prove the mirror and upstream default branch resolve to the same commit.
+2. Inspect the exact range for build scripts, workflows, submodules, checked-in
+   binaries, license changes, and any change to networking, TLS, memory
+   ownership, or platform backends.
+3. Record the mirror range, integration range, findings, tests, and resulting
+   pin in the pull request.
+4. Retain an archive or local bare mirror of every pinned integration commit,
+   and resolve each pin from a second machine before a release.
+
+Rollback follows the same records. Revert the dependency migration commit set;
+if that is not possible, restore the last known-good upstream pin with the
+former overlay from the pre-migration commit or the retained archive, and update
+all four views and the notices in one change. After a release pins a fork,
+publish a new patch release rather than rewriting the pinned commit. A `uwz`
+patch that proves wrong gets a revert commit with the same ledger ID.
+
+## Prohibited actions
+
+- Editing `zig-pkg`, a global package cache, or a fetched dependency in place.
+- Pinning a branch, tag, short SHA, or local path for a maintained dependency.
+- Building or pinning a fork mirror branch.
+- Adding downstream commits to a mirror or rewriting it outside the documented
+  repair.
+- Carrying a private, undocumented fork or an unledgered patch.
+- Pushing, opening issues or pull requests, commenting, or submitting patches
+  to the upstream repositories.
+- Reintroducing `patches/`, `vendor/lsquic_overlay`, or a CI `patch` step.
+- Weakening a provenance, Windows runtime, HTTP/3, or release gate to make a pin
+  pass.
+
+## Related
+
+- [Production checklist](/docs/deployment/checklist) turns these pins into
+  release evidence.
+- [Security reporting](/docs/security/reporting) covers the advisory path for a
+  dependency or runtime defect.

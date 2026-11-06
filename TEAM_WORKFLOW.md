@@ -119,6 +119,12 @@ another framework is an architecture decision with its own stack specialist and
 verification plan; do not route it through `astro-blume` or `svelte-engineer` by
 default.
 
+Documentation has two surfaces. An application page starts from `zig fetch
+--save` and the reader's own `build.zig`. A contributor page under
+`/docs/operations` declares its framework-repository scope, links `CONTRIBUTE.md`,
+and keeps maintainer commands out of the application path. The reviewer checks
+both declarations.
+
 ## 4. Parallelism
 
 - Read-only exploration and specialist reviews may run in parallel.

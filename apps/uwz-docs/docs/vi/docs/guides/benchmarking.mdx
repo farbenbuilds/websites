@@ -1,0 +1,151 @@
+---
+title: Benchmark deployment của bạn
+description: Chạy throughput và latency trên quiet host, ghi đầy đủ provenance, và dùng relative guard thay vì công bố requests-per-second phổ quát.
+sidebar:
+  order: 23
+search:
+  tags: [guide, benchmarking, performance, wrk]
+---
+
+Benchmark là evidence về một host, một build và một workload. Ghi cả ba, so
+sánh cùng loại với nhau, và coi relative regression guard là claim, không phải
+con số headline.
+
+## Vấn đề
+
+Bạn đổi handler hoặc capacity và cần biết throughput hay tail latency có đổi
+không. Bạn cũng cần record để reviewer tái lập và một rule bắt regression thật
+mà không tạo ra con số portable.
+
+## Giả định
+
+- Một host riêng chạy không gì khác trong lúc đo.
+- `wrk` đã cài và target HTTP/1.1 với keep-alive.
+- Baseline và candidate dùng cùng Zig version, dependency pin, build mode,
+  kernel và generator.
+- Workload vừa `max_clients`; connection dư bị đóng, không được queue.
+
+## Viết target
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a benchmark target") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.Server.builder(init.io)
+        .with_max_clients(256)
+        .with_write_queue_size(16 * 1024)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+    _ = try app.get("/", index);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Handler không allocation, không I/O và body cố định. Giữ target đơn giản như
+vậy khi câu hỏi là cost của framework hoặc handler; chỉ thêm dependency thật khi
+câu hỏi bao gồm nó.
+
+## Chạy
+
+```sh
+zig build -Doptimize=ReleaseFast
+./zig-out/bin/your-app &
+wrk -t2 -c64 -d10s http://127.0.0.1:3000/ | tee sample-1.txt
+```
+
+Lặp cho `sample-2.txt` và `sample-3.txt` trên cùng host, không build, test hay
+benchmark nào chạy giữa các sample. Lấy median requests per second:
+
+```sh
+awk '/Requests\/sec/ {print $2}' sample-*.txt | sort -n | sed -n 2p
+```
+
+## Ghi provenance
+
+| Trường             | Ví dụ                                |
+| ------------------ | ------------------------------------ |
+| Commit hoặc tag    | Source revision đang test            |
+| Ngày và giờ        | Lúc sample chạy                      |
+| Hardware           | CPU model, core count, quota, memory |
+| Kernel và governor | Host record; pin governor            |
+| Toolchain          | Zig version và dependency pin        |
+| Generator          | `wrk` version và flag                |
+| Command            | Lệnh chạy server và generator        |
+| Artifact           | File sample thô và counter đã parse  |
+
+Thiếu một dòng thì con số chỉ là giai thoại. Giữ số trên shared runner tách
+khỏi dedicated host; chúng không so sánh được.
+
+## Áp guard
+
+| Rule                | Giá trị                                      |
+| ------------------- | -------------------------------------------- |
+| Sample mỗi revision | 3                                            |
+| Statistic           | Median requests per second                   |
+| Guard               | `candidate_median >= baseline_median * 0.90` |
+| Phạm vi             | Cùng host, kernel, toolchain và generator    |
+
+Contract `http-throughput-v1` của project dùng dạng này với hai thread, 64
+connection và 10 giây. Đó là relative regression guarantee, không phải claim
+requests-per-second tuyệt đối. Không trình bày median cục bộ như capacity phổ
+quát.
+
+## Giả định capacity
+
+| Tài nguyên   | Giới hạn                   | Ảnh hưởng lên run             |
+| ------------ | -------------------------- | ----------------------------- |
+| Connection   | `max_clients`, 256         | Vượt mức, socket mới bị đóng  |
+| Write queue  | `write_queue_size`, 16 KiB | Reader chậm backpressure loop |
+| Keep-alive   | Bật mặc định               | Connect mỗi request đo thêm   |
+| Idle timeout | 120 s; dài hơn run         | Connection được tái sử dụng   |
+
+## Hành vi khi lỗi
+
+| Tín hiệu                       | Ý nghĩa                              |
+| ------------------------------ | ------------------------------------ |
+| Socket error trong `wrk`       | Server hoặc generator hết tài nguyên |
+| Response non-2xx               | Workload không phải loại đang đo     |
+| Requests/sec bằng 0 hoặc thiếu | Sample không hợp lệ                  |
+| Median dưới 90 phần trăm       | Coi là regression và điều tra        |
+| Tail latency tăng trước        | Queueing, không phải lỗi parser      |
+
+Loại sample không hợp lệ và chạy lại; không average một failure vào median.
+
+## Biến thể
+
+### Chạy latency
+
+```sh
+wrk -t2 -c64 -d30s --latency http://127.0.0.1:3000/ > latency.txt
+```
+
+`--latency` thêm percentile bucket. So p50 và p99 giữa các revision; thay đổi
+không đổi throughput vẫn có thể làm tail latency xê dịch. Chạy đủ lâu để bỏ qua
+startup và warmup, và giữ duration giống nhau giữa các cohort.
+
+### Capacity headroom
+
+Chạy ở các tỉ lệ tăng dần của `max_clients`:
+
+```sh
+for connections in 128 192 230; do
+  wrk -t2 -c"$connections" -d20s http://127.0.0.1:3000/ | tee "headroom-$connections.txt"
+done
+```
+
+Chỉ claim headroom khi mọi sample có zero socket error, zero response non-2xx và
+latency trong target. Nếu 230 bắt đầu lỗi, giới hạn là workload, không chỉ
+connection count: nâng capacity liên quan hoặc giảm tải rồi lặp lại.
+
+## Liên quan
+
+- [Benchmark contract](/docs/performance/benchmarking) định nghĩa các run có version.
+- [Load testing](/docs/performance/load-testing) định hình workload.
+- [Regression policy](/docs/performance/regression-policy) đặt guard.

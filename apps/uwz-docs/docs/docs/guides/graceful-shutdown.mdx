@@ -1,0 +1,164 @@
+---
+title: Add graceful shutdown
+description: Catch SIGTERM, stop accepting, drain active connections, and release a single application or a worker cluster without losing the exit status.
+sidebar:
+  order: 17
+search:
+  tags: [guide, shutdown, signals, operations]
+---
+
+A graceful shutdown is a signal handler, a drain, and a release in that order.
+The listener stops first, in-flight work finishes, and the process exits with a
+status a supervisor can read.
+
+## Problem
+
+A deploy sends `SIGTERM`. Connections still hold keep-alive sockets, async
+responses are pending, and a worker cluster owns several event loops. You need
+the process to stop accepting, finish bounded work, release memory, and exit
+with status 0.
+
+## Assumptions
+
+- The application runs on Linux or macOS and the supervisor sends `SIGTERM`.
+- One process installs one signal watcher. A second install is an error, not a
+  silent replacement.
+- Active requests are bounded by the connection idle timeout and your handler
+  work. There is no separate in-flight request deadline.
+
+## Write the program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("still serving") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`catch_shutdown_signals` must run before `run`. It installs one process-wide
+SIGINT/SIGTERM watcher and routes both signals into the same drain path as
+`App.shutdown`: stop accepting, cancel pending completions, drain connections,
+release the slab, then let `run` return.
+
+`deinit` asserts the drained state. Keep `defer app.deinit()` and never call it
+from inside a callback.
+
+## Verify it
+
+```sh
+zig build
+./zig-out/bin/your-app & pid=$!
+sleep 1
+curl -s http://127.0.0.1:3000/
+kill -TERM "$pid"
+wait "$pid"; echo "exit $?"
+```
+
+Replace `your-app` with your executable name.
+
+```console
+still serving
+exit 0
+```
+
+Send `SIGTERM` while a request is in flight to see the drain: the running
+handler finishes, the listener stops accepting, and the process exits after the
+write queue empties. A second `SIGTERM` coalesces into the same request.
+
+## What drains
+
+| Item                  | Behavior on shutdown                              |
+| --------------------- | ------------------------------------------------- |
+| Listener              | Stops accepting immediately                       |
+| Keep-alive connection | Closes when idle or when the idle timeout expires |
+| Active request        | Finishes unless its peer disconnects              |
+| Async token           | Completes or fails closed before release          |
+| Write queue           | Flushes bounded pending bytes                     |
+| Slab                  | Released by `deinit` after the loop stops         |
+
+The default idle timeout is 120 seconds. A keep-alive client that never sends
+another request can hold a connection for that long, so a supervisor grace
+period must exceed your worst drain, not just your average request.
+
+## Supervisor wait
+
+```yaml
+terminationGracePeriodSeconds: 30
+```
+
+The supervisor sends `SIGTERM`, waits, then sends `SIGKILL`. `SIGKILL` skips the
+drain, so the grace period must cover the idle timeout or the connections must
+close sooner. There is no in-flight request deadline beyond the idle timeout:
+bound long handlers yourself, or raise the idle timeout only when you also raise
+the grace period. systemd `TimeoutStopSec` follows the same rule.
+
+## Capacity assumptions
+
+| Resource         | Bound                            | Consequence                       |
+| ---------------- | -------------------------------- | --------------------------------- |
+| Connection slots | `max_clients` at startup         | New connections stop at the bound |
+| Idle keep-alive  | `idle_timeout_ms`, 120 s default | Drain can last that long          |
+| Pending writes   | `write_queue_size`               | A slow peer delays the drain      |
+| Signal watcher   | One per process                  | A second install returns an error |
+
+## Failure behavior
+
+| Condition                       | Result                                |
+| ------------------------------- | ------------------------------------- |
+| Second `catch_shutdown_signals` | `error.SignalWatcherAlreadyInstalled` |
+| Call after shutdown started     | `error.ApplicationUnavailable`        |
+| `deinit` from the event loop    | Panic: drained-state assertion        |
+| Peer stops reading              | Write queue backpressures the drain   |
+| Grace period shorter than drain | `SIGKILL`, connections reset          |
+
+## Variations
+
+### Shut down from an admin route
+
+A controller can request the same drain without a signal:
+
+```zig
+fn stop(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const app: *uz.App(128) = @ptrCast(@alignCast(context));
+    res.end("202 Accepted", "shutting down") catch {};
+    app.request_shutdown();
+}
+```
+
+Register it with `app.route_context(.post, "/admin/shutdown", &app, stop)`.
+`request_shutdown` stores the request and wakes the owning loop, so it is safe
+from another thread. Finish the response before requesting shutdown.
+
+### Release a cluster with `deinit_checked`
+
+A cluster installs one watcher for every worker:
+
+```zig
+try group.catch_shutdown_signals();
+try group.listen("0.0.0.0", 3000);
+group.run() catch |err| std.log.err("cluster failed: {}", .{err});
+try group.deinit_checked();
+```
+
+`deinit_checked` is the supervisor-safe release path: it returns
+`error.ClusterRunning` while `run` is active instead of panicking. Keep one
+`Cluster` owner, do not move it after `run` starts, and inspect `state()`,
+`first_failure()`, and `failure_count()` before release.
+
+## Related
+
+- [Signal handling](/docs/operations/graceful-shutdown) covers the watcher internals.
+- [Shutdown and draining](/docs/deployment/shutdown) places the grace period.
+- [Cluster internals](/docs/architecture/cluster-internals) explains worker teardown.

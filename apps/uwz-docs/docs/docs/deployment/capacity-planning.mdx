@@ -1,0 +1,142 @@
+---
+title: Capacity planning
+description: Turn a preset into a per-worker memory budget, account for the inbox and TLS context, and verify the exact slab before allocation.
+sidebar:
+  order: 4
+search:
+  tags: [how-to, deployment, capacity]
+---
+
+Every µWebZockets pool is fixed when the application is built. There is no
+dynamic growth and no late resize, so capacity is a launch decision. Start from
+the workload, choose a preset, override only what you can justify, and measure
+the slab before you allocate it.
+
+The arithmetic is derived from `ServerConfig`. It is not a rule of thumb. For
+the full worksheet, read [Capacity sizing](/docs/performance/capacity-sizing);
+this page is the deployment budget around it.
+
+## Start from a preset
+
+| Preset                      | Connections | WebSocket message | Write queue | Request body |
+| --------------------------- | ----------: | ----------------: | ----------: | -----------: |
+| `uz.Presets.microservice`   |         256 |             8 KiB |      16 KiB |       64 KiB |
+| `uz.Presets.websocket_chat` |         512 |            32 KiB |      32 KiB |        4 KiB |
+| `uz.Presets.file_server`    |         128 |             4 KiB |     512 KiB |        8 KiB |
+
+Each preset spends bytes on the dimension its workload exercises. A chat server
+needs a larger inbound message; a file server needs a larger response ring and
+limits request bodies. Use `Server.builder(...).preset(...)` and then override
+individual limits.
+
+## Slab math
+
+One contiguous application slab is allocated per active worker. Three regions
+usually dominate the calculation:
+
+| Region             | Formula                                                                           | Microservice preset          |
+| ------------------ | --------------------------------------------------------------------------------- | ---------------------------- |
+| Request stride     | request line `8 KiB` + headers `16 KiB` + framing slack `1 KiB` + `max_body_size` | 91,136 bytes                 |
+| Controlled regions | request stride + `write_queue_size` + `max_ws_message_size`                       | 115,712 bytes                |
+| Connection total   | controlled regions × `max_connections`                                            | 29,622,272 bytes (28.25 MiB) |
+
+The stride rounds up to a 16-byte boundary; every value above is already
+aligned. The same computation for the other presets:
+
+| Preset           | Request stride | Controlled regions | Connections | Slab region total |
+| ---------------- | -------------: | -----------------: | ----------: | ----------------- |
+| `microservice`   |       91,136 B |          115,712 B |         256 | 28.25 MiB         |
+| `websocket_chat` |       29,696 B |           95,232 B |         512 | 46.5 MiB          |
+| `file_server`    |       33,792 B |          562,176 B |         128 | 68.6 MiB          |
+
+These are exact for the three named regions, but they are not the whole slab.
+The connection pool, the freelist, the embedded HTTP/2 session, router storage,
+and the metrics registry are additional. The HTTP/2 session is the largest
+omitted term: read `h2_session_bytes()` for one connection and multiply by
+`max_connections`.
+
+## Per-worker memory
+
+| Item                 | Scope                                      | Inside `slab_bytes()` |
+| -------------------- | ------------------------------------------ | --------------------- |
+| Application slab     | One per active worker                      | Yes                   |
+| Cluster inbox        | One per active worker                      | No                    |
+| TLS `SSL_CTX`        | One per active worker when TLS is enabled  | No                    |
+| libxev backend table | One per worker loop                        | No                    |
+| HTTP gzip codec      | One per worker when HTTP compression is on | No                    |
+| QUIC engine pools    | Created by `listen_udp`                    | No                    |
+
+Only active workers allocate slabs, inboxes, and thread handles. A large
+compiled worker capacity does not reserve memory for workers that never start.
+Multiply the per-worker total by the active count, then compare it with the
+host's memory budget and its headroom for the allocator and the C dependencies.
+
+## Body, message, and write queue
+
+| Limit                 | Raises                                              | Does not raise                                 |
+| --------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| `max_body_size`       | The HTTP/1.1 request buffer and the HTTP/2 body cap | An unbounded upload path; bodies stay buffered |
+| `max_ws_message_size` | One inbound WebSocket message per connection        | Pending outbound bytes, which the queue bounds |
+| `write_queue_size`    | Pending response bytes per connection               | The total size of a streamed body              |
+
+Set `max_body_size` to the largest legitimate upload, not to a round number you
+hope will cover everything. An oversized body returns `413` with a structured
+limit document, and an oversized header returns `431`. Set the write queue to
+the burst a slow reader must absorb. `Response.begin_stream` lets a large
+response exceed the queue without raising it, because the queue bounds one step
+of the response rather than its total size.
+
+## Cluster inbox
+
+Each active worker reserves `(64 + 1) * max_ws_message_size` for its cluster
+inbox plus one message-sized scratch buffer. This is outside the slab.
+
+| Preset           | Message | Inbox per worker           |
+| ---------------- | ------: | -------------------------- |
+| `microservice`   |   8 KiB | 532,480 bytes (520 KiB)    |
+| `websocket_chat` |  32 KiB | 2,129,920 bytes (2.03 MiB) |
+| `file_server`    |   4 KiB | 266,240 bytes (260 KiB)    |
+
+A full inbox drops messages. `publish_report()` reports `queued`, `dropped`,
+`notify_failed`, and the first worker that dropped, so a cluster budget must
+include the inbox and an alert on drops.
+
+## File preset worked example
+
+For `file_server`, the write queue also sets the largest static file body:
+
+| Step               | Value                       | Derivation                     |
+| ------------------ | --------------------------- | ------------------------------ |
+| Request stride     | 33,792 bytes                | 8,192 + 16,384 + 1,024 + 8,192 |
+| Controlled regions | 562,176 bytes               | 33,792 + 524,288 + 4,096       |
+| 128 connections    | 71,958,528 bytes (68.6 MiB) | 562,176 × 128                  |
+| Static file body   | 520,192 bytes (508 KiB)     | 524,288 − 4,096                |
+
+A static file larger than `write_queue_size - 4 KiB` needs a larger write queue
+or a different delivery path. Raising `max_body_size` does not change it.
+
+## Verify before allocation
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+    .max_body_size = 4 * 1024,
+    .max_ws_message_size = 32 * 1024,
+};
+const per_worker = try config.slab_bytes();
+std.debug.print("per worker: {d} bytes\n", .{per_worker});
+```
+
+`Server.builder(...).slab_bytes()` reports the same checked layout that `carve`
+uses, so call it before `build` when the footprint must fit a host budget. The
+number is per worker; multiply it yourself.
+
+## Related
+
+- [Capacity sizing](/docs/performance/capacity-sizing) for the full worksheet.
+- [Capacity model](/docs/concepts/capacity-model) for how limits attach to the
+  request path.
+- [Cost model](/docs/performance/cost-model) for the startup allocation.
+- [Production checklist](/docs/deployment/checklist) for the capacity gate.
+- [Backpressure](/docs/concepts/backpressure) for the write-queue contract.

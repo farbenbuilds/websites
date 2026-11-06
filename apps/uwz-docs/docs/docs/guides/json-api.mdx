@@ -1,0 +1,180 @@
+---
+title: Build a JSON API
+description: Accept a bounded JSON body, validate it in a fixed buffer, and answer with a status code and an escaped JSON document.
+sidebar:
+  order: 2
+search:
+  tags: [guide, json, http]
+---
+
+This guide builds a two-route JSON API. One route parses a typed body and answers
+`201 Created`; the other renders a path parameter. Client text is escaped with
+`std.json.fmt`.
+
+## Problem
+
+You need a route that accepts a JSON document, rejects bad input with the right
+status, and returns JSON that reflects the outcome. The body must stay bounded,
+the parse must use a fixed request-local buffer, and client text must never reach
+JSON unescaped.
+
+## Assumptions
+
+- Zig 0.16.0 and µWebZockets 2.1.6 with `zig fetch --save`; one worker on
+  `127.0.0.1:3000`, no database. The id is derived from the body.
+
+## Program
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Note = struct {
+    text: []const u8,
+};
+
+fn is_json(req: *const uz.Request) bool {
+    const content_type = req.get_unique_header("content-type") orelse return false;
+    return std.mem.startsWith(u8, content_type, "application/json");
+}
+
+fn fail(res: *uz.Response, status: []const u8, code: []const u8) void {
+    var body: [64]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"error\":{f}}}", .{std.json.fmt(code, .{})}) catch return;
+    res.end_with_headers(status, "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+fn create_note(req: *uz.Request, res: *uz.Response) void {
+    if (!is_json(req)) return fail(res, "415 Unsupported Media Type", "json_required");
+
+    var parse_buffer: [16 * 1024]u8 = undefined;
+    var parse_allocator = std.heap.FixedBufferAllocator.init(&parse_buffer);
+    const parsed = req.json(Note, parse_allocator.allocator()) catch |err| switch (err) {
+        error.OutOfMemory => return fail(res, "500 Internal Server Error", "out_of_memory"),
+        else => return fail(res, "400 Bad Request", "invalid_json"),
+    };
+    defer parsed.deinit();
+
+    if (parsed.value.text.len == 0 or parsed.value.text.len > 256) {
+        return fail(res, "422 Unprocessable Entity", "invalid_text");
+    }
+
+    var body: [2048]u8 = undefined;
+    const rendered = std.fmt.bufPrint(
+        &body,
+        "{{\"id\":{d},\"text\":{f}}}",
+        .{ std.hash.Wyhash.hash(0, parsed.value.text), std.json.fmt(parsed.value.text, .{}) },
+    ) catch return fail(res, "500 Internal Server Error", "render");
+    res.end_with_headers("201 Created", "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+fn show_note(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse return fail(res, "404 Not Found", "not_found");
+    var body: [128]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"id\":{f}}}", .{std.json.fmt(id, .{})}) catch return;
+    res.end_with_headers("200 OK", "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.Server.builder(init.io)
+        .with_max_clients(128)
+        .with_max_body_size(8 * 1024)
+        .build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.post("/notes", create_note);
+    _ = try server.get("/notes/:id", show_note);
+
+    try server.catch_shutdown_signals();
+    try server.listen("127.0.0.1", 3000);
+    try server.run();
+}
+```
+
+`req.json` parses bytes whatever the media type says, so the handler checks
+`Content-Type` first. `res.json` and `res.json_buf` always send `200`, so a
+`201 Created` response uses `end_with_headers`. Every client string is rendered
+with `std.json.fmt`, which escapes quotes and control bytes.
+
+## Verification
+
+```sh
+zig build run
+```
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"slab"}'
+```
+
+Expect `201 Created` and a body of `{"id":<number>,"text":"slab"}`. Then check
+each rejection with the same media type prefix:
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: text/plain' -d '{"text":"slab"}'
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: application/json' -d '{'
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: application/json' -d '{"text":""}'
+curl -i http://127.0.0.1:3000/notes/42
+```
+
+The commands print `415`, `400`, `422`, and `200`. A body above 8 KiB returns the
+structured `413` document before `create_note` runs.
+
+## Capacity assumptions
+
+| Bound        | Value        | Source               |
+| ------------ | ------------ | -------------------- |
+| Request body | 8 KiB        | `with_max_body_size` |
+| Parse buffer | 16 KiB stack | `parse_buffer`       |
+
+## Failure behavior
+
+| Condition                         | Result                                      |
+| --------------------------------- | ------------------------------------------- |
+| Missing or non-JSON media type    | `415 Unsupported Media Type`                |
+| Body above 8 KiB                  | `413 Payload Too Large`, handler not called |
+| Malformed JSON or a missing field | `400 Bad Request`                           |
+| `text` empty or above 256 bytes   | `422 Unprocessable Entity`                  |
+
+## Variations
+
+### Error envelope
+
+Replace `fail` so every error shares one shape. It still renders into a stack
+buffer, so the allocation contract does not change:
+
+```zig
+fn fail(res: *uz.Response, status: []const u8, code: []const u8) void {
+    var body: [96]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"error\":{{\"code\":{f}}}}}", .{std.json.fmt(code, .{})}) catch return;
+    res.end_with_headers(status, "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+```
+
+### Schema validation
+
+Declare rules on the type and let the validator report the first failing field:
+
+```zig
+const CreateNote = struct {
+    text: []const u8,
+    pub const validation = .{
+        .text = uz.schema.Rule{ .min_length = 1, .max_length = 256 },
+    };
+};
+var issue = uz.schema.Issue{};
+var validate_buffer: [16 * 1024]u8 = undefined;
+var validate_allocator = std.heap.FixedBufferAllocator.init(&validate_buffer);
+const parsed = req.validate_json_detailed(CreateNote, validate_allocator.allocator(), &issue) catch |err| switch (err) {
+    error.ConstraintViolation => return fail(res, "422 Unprocessable Entity", @tagName(issue.kind)),
+    error.MalformedJson => return fail(res, "400 Bad Request", "invalid_json"),
+    else => return fail(res, "500 Internal Server Error", "validate"),
+};
+defer parsed.deinit();
+```
+
+The full rule set and issue kinds are on
+[Schema validation](/docs/type-safety/schema-validation). The helper contract is
+on [JSON responses](/docs/http/json); loopback checks are in
+[Test a µWebZockets app](/docs/guides/testing).

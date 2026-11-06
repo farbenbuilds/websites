@@ -1,0 +1,180 @@
+---
+title: Configure CORS
+description: List exact origins, answer preflights before authentication, and keep a browser read policy separate from access control.
+sidebar:
+  order: 13
+search:
+  tags: [guide, cors, security]
+---
+
+CORS is a browser read policy your server opts into. The middleware adds response
+fields for listed origins; every other origin gets no CORS fields at all.
+
+## Problem
+
+A browser app on one origin calls an API on another. Preflights must succeed
+without a credential check, real requests must still require one, and no other
+origin may read the response.
+
+## Assumptions
+
+- Origins are known at build time; the middleware matches bytes.
+- CORS runs before `Auth` and `RateLimit`.
+- CORS does not authenticate anyone; a non-browser client ignores it.
+
+## Build the middleware stack
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn list_items(_: *uz.Request, res: *uz.Response) void {
+    res.text("[]") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_item(_: *uz.Request, res: *uz.Response) void {
+    res.end("201 Created", "") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var cors = uz.middleware.cors(.{
+        .origins = &.{ "https://app.example.com", "https://admin.example.com" },
+        .methods = &.{ .get, .post },
+        .allow_headers = &.{ "content-type", "x-request-id" },
+        .expose_headers = &.{"x-request-id"},
+        .allow_credentials = true,
+        .max_age = 600,
+    });
+    _ = try app.use(&cors, uz.middleware.Cors.handler);
+
+    var auth = uz.middleware.auth(.{
+        .realm = "api",
+        .bearer = &.{.{ .token = "service-token" }},
+    });
+    _ = try app.use(&auth, uz.middleware.Auth.handler);
+
+    _ = try app.get("/api/items", list_items);
+    _ = try app.post("/api/items", create_item);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.use` stores a pointer to each middleware value, so keep both alive until
+`app.deinit()`; load credentials from configuration.
+
+## Exact origin matching
+
+| Request `Origin`               | Listed entry              | Result   |
+| ------------------------------ | ------------------------- | -------- |
+| `https://app.example.com`      | `https://app.example.com` | Match    |
+| `https://app.example.com/`     | `https://app.example.com` | No match |
+| `https://app.example.com:8443` | `https://app.example.com` | No match |
+
+There is no wildcard reflection and no prefix match: `*` matches only the literal
+string `*`, which browsers never send. A request without `Origin`, or with two
+`Origin` fields, continues dispatch with no CORS fields.
+
+## Preflight order
+
+The middleware checks the origin, appends `Access-Control-Allow-Origin` and
+`Vary: Origin`, then validates the requested method and headers. A valid preflight
+ends `204`; an invalid one ends `403`. The checks run before route dispatch, so a
+preflight needs no `OPTIONS` route and an unknown path still receives `204`.
+
+## Ordering before authentication
+
+A preflight carries no `Authorization` field, so if `Auth` runs first it answers
+`401` and the browser never sends the real request.
+
+| Order                     | Preflight result                        |
+| ------------------------- | --------------------------------------- |
+| `Cors` then `Auth`        | `204` from CORS; auth never runs        |
+| `Auth` then `Cors`        | `401`; the browser blocks the real call |
+| `RateLimit` before `Cors` | The preflight consumes a token          |
+
+`allow_credentials` adds `Access-Control-Allow-Credentials: true` for a listed
+origin, but the server still validates the cookie or token. Never pair credentials
+with a wildcard origin.
+
+## Capacity assumptions
+
+| Resource               | Bound                                                       |
+| ---------------------- | ----------------------------------------------------------- |
+| Middleware per app     | 32 total; CORS uses one                                     |
+| Methods in a preflight | 10 entries maximum; more returns `error.TooManyCorsMethods` |
+
+## Failure behavior
+
+| Condition                               | Result                             |
+| --------------------------------------- | ---------------------------------- |
+| Origin not listed                       | No CORS fields; dispatch continues |
+| Requested method not in `methods`       | `403 Forbidden`, empty body        |
+| Requested header not in `allow_headers` | `403 Forbidden`, empty body        |
+| Header list over 1024 bytes             | `500` via `error.BufferTooSmall`   |
+
+The last failure is a configuration defect; test a preflight at startup.
+
+## Verification
+
+```sh
+curl -i -X OPTIONS http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://app.example.com' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+
+curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS \
+  http://127.0.0.1:3000/api/items \
+  -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST'
+```
+
+The first returns `204` with `Access-Control-Allow-Origin`, `Vary: Origin`, and the
+credentials field, without any `Authorization` field. The second returns `401`: the
+unlisted origin gets no CORS fields and `Auth` rejects the request.
+
+## Variation: a browser application
+
+A first-party app that sends cookies needs credentials, an exposed request id, and
+a `SameSite` policy that allows the cross-site call.
+
+```zig
+var cors = uz.middleware.cors(.{
+    .origins = &.{"https://app.example.com"},
+    .methods = &.{ .get, .post, .delete },
+    .allow_headers = &.{ "content-type", "x-csrf-token" },
+    .expose_headers = &.{ "x-request-id", "retry-after" },
+    .allow_credentials = true,
+    .max_age = 300,
+});
+```
+
+The cookie needs `SameSite=None` and `Secure`, weaker than `Lax`. Prefer a
+same-site deployment when the cookie is the credential.
+
+## Variation: a service API
+
+A token-only API does not need credentials. Tighten the method list and omit
+`max_age` when browsers should ask every time.
+
+```zig
+var cors = uz.middleware.cors(.{
+    .origins = &.{"https://console.example.com"},
+    .methods = &.{.get},
+    .allow_headers = &.{"authorization"},
+    .allow_credentials = false,
+});
+```
+
+A machine client sends no `Origin` and receives no CORS fields; the bearer token is
+the access control.
+
+## Next
+
+- [CORS](/docs/http/cors) is the reference for matching and every error.
+- [Security headers](/docs/http/security-headers) covers response fields for every
+  page.

@@ -1,0 +1,153 @@
+---
+title: Benchmark your deployment
+description: Run a quiet-host throughput and latency test, record full provenance, and use a relative guard instead of publishing a universal requests-per-second number.
+sidebar:
+  order: 23
+search:
+  tags: [guide, benchmarking, performance, wrk]
+---
+
+A benchmark is evidence about one host, one build, and one workload. Record all
+three, compare like with like, and treat a relative regression guard as the
+claim, not a headline rate.
+
+## Problem
+
+You changed a handler or a capacity and need to know whether throughput or tail
+latency moved. You also need a record that a reviewer can reproduce and a rule
+that catches a real regression without inventing a portable number.
+
+## Assumptions
+
+- A dedicated host runs nothing else during the measurement.
+- `wrk` is installed and targets HTTP/1.1 with keep-alive.
+- The baseline and candidate use the same Zig version, dependency pins, build
+  mode, kernel, and generator.
+- The workload fits `max_clients`; an excess connection is closed, not queued.
+
+## Write the target
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a benchmark target") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.Server.builder(init.io)
+        .with_max_clients(256)
+        .with_write_queue_size(16 * 1024)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+    _ = try app.get("/", index);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+The handler has no allocation, no I/O, and a fixed body. Keep the target that
+simple when the question is framework or handler cost; add the real dependency
+only when the question includes it.
+
+## Run it
+
+```sh
+zig build -Doptimize=ReleaseFast
+./zig-out/bin/your-app &
+wrk -t2 -c64 -d10s http://127.0.0.1:3000/ | tee sample-1.txt
+```
+
+Repeat for `sample-2.txt` and `sample-3.txt` on the same host, with no build,
+test, or benchmark running between samples. Take the median requests per second:
+
+```sh
+awk '/Requests\/sec/ {print $2}' sample-*.txt | sort -n | sed -n 2p
+```
+
+## Record provenance
+
+| Field               | Example                                  |
+| ------------------- | ---------------------------------------- |
+| Commit or tag       | The source revision under test           |
+| Date and time       | When the samples ran                     |
+| Hardware            | CPU model, core count, quota, memory     |
+| Kernel and governor | Host record; pin the governor            |
+| Toolchain           | Zig version and dependency pins          |
+| Generator           | `wrk` version and flags                  |
+| Command             | Server and generator invocations         |
+| Artifact            | Raw sample files and the parsed counters |
+
+Without every row, the number is an anecdote. Keep shared-runner numbers in a
+separate cohort from dedicated-host numbers; they are not comparable.
+
+## Apply the guard
+
+| Rule                 | Value                                        |
+| -------------------- | -------------------------------------------- |
+| Samples per revision | 3                                            |
+| Statistic            | Median requests per second                   |
+| Guard                | `candidate_median >= baseline_median * 0.90` |
+| Scope                | Same host, kernel, toolchain, and generator  |
+
+The project's `http-throughput-v1` contract uses this shape with two threads,
+64 connections, and 10 seconds. It is a relative regression guarantee, not an
+absolute requests-per-second claim. Never present a local median as a universal
+capacity statement.
+
+## Capacity assumptions
+
+| Resource     | Bound                      | Effect on the run                  |
+| ------------ | -------------------------- | ---------------------------------- |
+| Connections  | `max_clients`, 256         | Above it, new sockets are closed   |
+| Write queue  | `write_queue_size`, 16 KiB | Slow readers backpressure the loop |
+| Keep-alive   | On by default              | Per-request connects measure more  |
+| Idle timeout | 120 s; longer than the run | Connections are reused             |
+
+## Failure behavior
+
+| Signal                         | Meaning                               |
+| ------------------------------ | ------------------------------------- |
+| Socket errors in `wrk`         | The server or generator ran out       |
+| Non-2xx responses              | The workload is not the one measured  |
+| Zeroed or missing requests/sec | The sample is invalid                 |
+| Median falls below 90 percent  | Treat as a regression and investigate |
+| Tail latency rises first       | Queueing, not a parser defect         |
+
+Discard an invalid sample and rerun; do not average a failure into the median.
+
+## Variations
+
+### Latency run
+
+```sh
+wrk -t2 -c64 -d30s --latency http://127.0.0.1:3000/ > latency.txt
+```
+
+`--latency` adds percentile buckets. Compare p50 and p99 across revisions; a
+throughput-neutral change can still move tail latency. Run long enough to leave
+startup and JIT-free warmup behind, and keep the duration identical between
+cohorts.
+
+### Capacity headroom
+
+Run at increasing fractions of `max_clients`:
+
+```sh
+for connections in 128 192 230; do
+  wrk -t2 -c"$connections" -d20s http://127.0.0.1:3000/ | tee "headroom-$connections.txt"
+done
+```
+
+Claim headroom only when every sample has zero socket errors, zero non-2xx
+responses, and latency inside your target. If failures appear at 230, the limit
+is the workload, not only the connection count: raise the relevant capacity or
+reduce the load, then repeat.
+
+## Related
+
+- [Benchmarking contracts](/docs/performance/benchmarking) defines the versioned runs.
+- [Load testing](/docs/performance/load-testing) shapes the workload.
+- [Regression policy](/docs/performance/regression-policy) sets the guard.

@@ -1,0 +1,131 @@
+---
+title: Hướng dẫn
+description: Làm theo recipe hoàn chỉnh cho JSON API, authentication, rate limiting, static file, chat và presence, mỗi guide có chương trình và bước verification.
+search:
+  tags: [guide, cookbook]
+---
+
+Mỗi guide là một recipe hoàn chỉnh cho một application shape. Guide đưa ra một
+chương trình nhỏ nhưng trọn vẹn, nêu capacity mà nó giả định, cho thấy request bị
+từ chối trông thế nào, và kết thúc bằng hai variation để bạn tuỳ biến. Guide không
+dạy lại framework: khi cần contract đầy đủ của một helper, guide link tới trang
+reference sở hữu helper đó.
+
+## Đọc một guide
+
+| Phần                 | Trả lời câu hỏi gì                                 |
+| -------------------- | -------------------------------------------------- |
+| Bài toán             | Behavior bạn đang muốn ship                        |
+| Giả định             | Toolchain, transport, số worker và trust boundary  |
+| Chương trình         | Chương trình hoàn chỉnh để copy vào `src/main.zig` |
+| Verification         | Command chứng minh cả success path và failure path |
+| Capacity assumptions | Các bound chương trình dựa vào và nguồn của chúng  |
+| Failure behavior     | Status code và error cho từng input bị từ chối     |
+| Variations           | Hai thay đổi giữ nguyên invariant                  |
+
+Mọi chương trình là application code bình thường. Không guide nào yêu cầu clone,
+build hay test framework repository, và không guide nào allocation không bound
+trên request path.
+
+## Request API
+
+<CardGroup cols={2}>
+  <Card title="Build một JSON API" href="/docs/guides/json-api" icon="braces">
+    Parse body có bound, validate, rồi trả status code và JSON document đã escape.
+  </Card>
+  <Card title="Serve file tĩnh" href="/docs/guides/file-server" icon="folder-open">
+    Mount một directory asset bị giới hạn, kèm ETag, range và cache policy.
+  </Card>
+  <Card title="Xử lý upload" href="/docs/guides/uploads" icon="upload">
+    Nhận multipart body có bound và từ chối request quá lớn trước handler.
+  </Card>
+  <Card title="Dùng cookie an toàn" href="/docs/guides/cookies" icon="cookie">
+    Set cookie đã ký, đọc lại, và giữ secret ra khỏi value.
+  </Card>
+  <Card title="Cấu hình CORS" href="/docs/guides/cors" icon="globe">
+    Trả lời preflight request và match origin chính xác.
+  </Card>
+  <Card title="Publish OpenAPI" href="/docs/guides/openapi" icon="file-text">
+    Serve document OpenAPI 3.1 được sinh cạnh các route mà nó mô tả.
+  </Card>
+  <Card title="Nhận webhook" href="/docs/guides/webhooks" icon="webhook">
+    Verify signature trước khi parse, bound body, và trả lời nhanh.
+  </Card>
+</CardGroup>
+
+## Realtime
+
+<CardGroup cols={2}>
+  <Card title="Build một chat server" href="/docs/guides/chat" icon="message-square">
+    Subscribe socket vào topic, publish từng message, và xử lý peer chậm.
+  </Card>
+  <Card title="Theo dõi presence" href="/docs/guides/presence" icon="users">
+    Giữ bảng presence có bound theo từng process với join, leave và heartbeat expiry.
+  </Card>
+  <Card title="Stream event bằng SSE" href="/docs/guides/sse" icon="radio">
+    Push server-sent event kèm heartbeat và close path có bound.
+  </Card>
+  <Card title="Stream một response lớn" href="/docs/guides/streaming" icon="waves">
+    Sinh chunk khi transport drain thay vì buffer toàn bộ body.
+  </Card>
+</CardGroup>
+
+## Protocol
+
+<CardGroup cols={2}>
+  <Card title="Build một RPC service" href="/docs/guides/rpc-service" icon="workflow">
+    Đăng ký procedure có type, map handler error, và mount service trên POST route.
+  </Card>
+  <Card title="Phục vụ HTTPS" href="/docs/guides/https" icon="lock">
+    Load certificate và key, chọn ALPN, và verify TLS handshake.
+  </Card>
+  <Card title="Phục vụ HTTP/3" href="/docs/guides/http3" icon="zap">
+    Thêm QUIC listener cạnh TCP listener và kiểm tra protocol được quảng bá.
+  </Card>
+  <Card title="Nhúng từ C hoặc C++" href="/docs/guides/c-abi" icon="plug">
+    Điều khiển C ABI capacity cố định từ build không phải Zig và link archive.
+  </Card>
+</CardGroup>
+
+## Security
+
+<CardGroup cols={2}>
+  <Card title="Thêm authentication" href="/docs/guides/authentication" icon="key-round">
+    Bảo vệ một route prefix bằng bearer credential và trả 401 challenge.
+  </Card>
+  <Card title="Thêm rate limiting" href="/docs/guides/rate-limiting" icon="gauge">
+    Charge token bucket do caller sở hữu theo key và trả 429 kèm Retry-After.
+  </Card>
+</CardGroup>
+
+## Vận hành
+
+<CardGroup cols={2}>
+  <Card title="Thêm health check" href="/docs/guides/health-checks" icon="heart-pulse">
+    Tách liveness khỏi readiness và báo cáo trạng thái listener.
+  </Card>
+  <Card title="Thêm graceful shutdown" href="/docs/guides/graceful-shutdown" icon="power">
+    Bắt signal, drain connection, và release cluster với teardown có kiểm tra.
+  </Card>
+  <Card title="Scale theo số core" href="/docs/guides/cluster" icon="cpu">
+    Build worker group, chia sẻ port, và publish qua worker inbox.
+  </Card>
+  <Card title="Test ứng dụng µWebZockets" href="/docs/guides/testing" icon="flask-conical">
+    Test quyết định thuần trong process và wire trên loopback.
+  </Card>
+  <Card title="Benchmark deployment của bạn" href="/docs/guides/benchmarking" icon="bar-chart">
+    Đo workload của bạn với baseline có version trên host yên tĩnh.
+  </Card>
+</CardGroup>
+
+## Guide không phải là gì
+
+Guide không phải reference cho một helper, bảng status code hay danh sách capacity.
+Những thứ đó nằm ở trang sở hữu symbol. Khi guide và reference page mâu thuẫn,
+reference page đúng và guide là defect.
+
+## Liên quan
+
+- [HTTP/1.1 và application API](/docs/http)
+- [Mô hình khái niệm](/docs/concepts)
+- [Capacity sizing](/docs/performance/capacity-sizing)

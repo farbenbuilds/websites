@@ -1,0 +1,98 @@
+---
+title: Production checklist
+description: Execute one ordered launch list with the evidence, owner, and rollback for credentials, capacity, hardening, observability, shutdown, and platform choices.
+sidebar:
+  order: 2
+search:
+  tags: [deployment, operations, reference]
+---
+
+Work down this list once per deployment, then keep it as the record for the next
+release. Each row names the action, the evidence that proves it, the role that
+owns it, and the rollback if the evidence fails. Do not start the next area
+while an earlier row has no evidence.
+
+The list assumes a service that is already built and serving loopback traffic.
+Framework compliance results are published upstream evidence; this list covers
+what your own deployment must prove.
+
+## Order
+
+The order is deliberate. Credentials and capacity fail at startup, so they are
+the cheapest gates to prove first. Hardening changes behavior, so it needs a
+running target. Observability must exist before the load test, or the test
+produces numbers nobody can interpret. Shutdown and platform checks need a real
+process and a real supervisor. Verification closes the loop with your own build
+and your own traffic.
+
+## Launch gates
+
+| Area          | Action                                                                                   | Evidence                                                          | Owner       | Rollback                                            |
+| ------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------- | --------------------------------------------------- |
+| Credentials   | Pin Zig 0.16.0 and a release tag or full commit in `build.zig.zon`                       | `zig version` and the resolved dependency hash                    | Release     | Restore the previous tag and rebuild                |
+| Credentials   | Install a PEM chain with the leaf first and a matching private key                       | Startup reaches `listen` without a credential error               | Platform    | Keep the previous files until the old process exits |
+| Credentials   | Decide the client-certificate mode, including a recorded `.none` decision                | Mode, CA bundle path, and reviewer recorded                       | Security    | Revert the mode and restart                         |
+| Credentials   | For a TLS cluster, call `enable_https` once after `configure` and before `listen`        | Startup order in the process log                                  | Platform    | Leave the previous process draining                 |
+| Capacity      | Choose a preset and every override from the measured workload                            | The numbers and their reason in the deployment record             | Application | Revert to the previous preset                       |
+| Capacity      | Call `slab_bytes()`, multiply by active workers, then add inbox and context memory       | Printed per-worker and total footprint                            | Platform    | Resize the host before restart                      |
+| Capacity      | Size `max_body_size` and the write queue to the largest expected body and slowest reader | Values documented with the request shapes that justify them       | Application | Restore the earlier limits                          |
+| Capacity      | Prove the rejection path with an oversized body and an oversized header                  | A `413` and a `431` with the structured limit document            | Application | Restore the earlier limits                          |
+| Hardening     | Put authentication in front of every sensitive route                                     | A `401` without credentials and a `200` with them                 | Security    | Remove the route from the public listener           |
+| Hardening     | Rate-limit with a server-derived key, not a client-controlled one                        | A `429` with `Retry-After` under a scripted burst                 | Security    | Raise the limit or disable the route                |
+| Hardening     | Apply CORS and security headers to browser-facing routes                                 | Preflight returns `204`; headers match the intended policy        | Security    | Remove the middleware from that scope               |
+| Hardening     | Set the idle timeout and header read timeout to match the client population              | Configured values and a stalled connection that closes            | Application | Restore the default `120` seconds                   |
+| Hardening     | Disable TRACE unless an operational requirement exists                                   | No TRACE route is registered, or the recorded exception           | Security    | Revert the route registration                       |
+| Hardening     | Keep credentials out of the repository, logs, and rejection bodies                       | Secret scan and a reviewed log sample                             | Security    | Rotate the exposed secret                           |
+| Observability | Enable the metrics registry and reach the hidden `/metrics` route                        | A scrape with nonzero connection and request counters             | SRE         | Keep `log_metrics` snapshots as the fallback        |
+| Observability | Bind a log destination or silence the development log                                    | The file grows, or redirected stderr stays quiet                  | SRE         | Re-enable the previous sink                         |
+| Observability | Add alerts for pool saturation, error rate, rejections, and queue growth                 | Alert rules reviewed with their thresholds                        | SRE         | Keep the dashboard and ticket queue                 |
+| Shutdown      | Install `catch_shutdown_signals` before `run`, once per process                          | SIGTERM stops accepts and drains connections                      | Platform    | Send SIGKILL after the grace period                 |
+| Shutdown      | Set the supervisor grace period longer than the drain                                    | Supervisor configuration reviewed against a timed drain           | Platform    | Extend the grace period and redeploy                |
+| Shutdown      | Use `deinit_checked` for a cluster and keep one `Cluster` owner                          | A clean exit code and no panic at release                         | Platform    | Restart the supervisor unit                         |
+| Platform      | Confirm the target is supported, or record the gated status                              | Release note or CI evidence for the exact commit                  | Release     | Stay on the last verified target                    |
+| Platform      | Confirm the worker count and, on Linux, the `SO_REUSEPORT` distribution                  | Per-worker connection counts during a soak test                   | Platform    | Reduce the worker count                             |
+| Verification  | Build and test the reader's own project in `ReleaseSafe`                                 | `zig build test` and `zig build -Doptimize=ReleaseSafe` exit zero | Release     | Restore the previous commit                         |
+| Verification  | Run a load test at the expected peak and count every failure                             | Throughput, latency, and error counts recorded with the host      | SRE         | Shift traffic back to the previous deployment       |
+
+## Verification commands
+
+Run these in the application repository, not in the framework checkout.
+`zig build test` assumes your `build.zig` defines a test step.
+
+```sh
+zig version
+zig build test
+zig build -Doptimize=ReleaseSafe
+```
+
+Then exercise the readiness route through the same listener the platform uses:
+
+```sh
+curl -sS -o /dev/null -w "%{http_code}\n" https://127.0.0.1:8443/readyz
+```
+
+The last check is the drain itself. Start a low-rate client loop, send SIGTERM
+to the server process, and watch the loop finish while the process exits. A
+process that exits while requests are still being accepted has failed the
+shutdown gate.
+
+## Record the result
+
+Keep the completed table with the release artifact. It answers the two
+questions that matter during an incident: what was verified, and what the
+previous working state was.
+
+## Related
+
+- [Deployment](/docs/deployment) for the path these gates follow.
+- [TLS deployment](/docs/deployment/tls) for credential and rotation detail.
+- [Capacity planning](/docs/deployment/capacity-planning) for the sizing
+  arithmetic behind the capacity rows.
+- [Hardening](/docs/deployment/hardening) for the controls behind the hardening
+  rows.
+- [Observability](/docs/deployment/observability) for the metrics and log
+  contract.
+- [Graceful shutdown](/docs/operations/graceful-shutdown) for the signal and
+  drain behavior.
+- [Platform support](/docs/operations/platforms) for the supported target
+  matrix.

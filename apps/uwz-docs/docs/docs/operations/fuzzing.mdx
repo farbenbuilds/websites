@@ -1,0 +1,139 @@
+---
+title: Fuzzing
+description: Run the Smith harness, build the five OSS-Fuzz libFuzzer targets, and understand the seeds, sancov shim, and ClusterFuzzLite gate.
+sidebar:
+  order: 6
+search:
+  tags: [operations, fuzzing, parsers]
+---
+
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application fuzzing uses your own harness. This page covers the framework Smith and OSS-Fuzz
+targets.
+:::
+
+Fuzzing has two layers. The Smith harness runs bounded parser and validator
+checks inside a normal Zig test build. The OSS-Fuzz objects export
+`LLVMFuzzerTestOneInput` so an external libFuzzer runtime can drive the same
+surfaces with sanitizer coverage.
+
+Neither layer replaces the unit suite. Fuzzing looks for crashes, hangs, and
+bounds violations on generated input; a unit test states the expected behavior.
+
+## Smith harness
+
+```sh
+zig build fuzz --fuzz=100K -Doptimize=ReleaseSafe
+```
+
+`--fuzz` sets the iteration budget. The CI job uses 100K so a pull request gets a
+bounded run that covers every parser surface. The harness retains coverage for:
+
+| Surface               | What it exercises                                           |
+| --------------------- | ----------------------------------------------------------- |
+| HTTP                  | Request framing, fragmented input, and parser bounds        |
+| Query and `Accept`    | Slicing, percent and form decoding, and content negotiation |
+| zslay                 | JSON decoding and error paths                               |
+| Extension negotiation | Protocol extension selection                                |
+| HPACK                 | Header compression and decompression                        |
+| Multipart             | Boundary parsing and part extraction                        |
+| HTTP/3 validation     | HTTP/3 validation paths                                     |
+
+The harness lives in the test graph, not in a production module. A failing case
+reports the same way as a failed unit test.
+
+## OSS-Fuzz objects
+
+```sh
+zig build oss-fuzz-objects -Doptimize=ReleaseSafe
+zig build oss-fuzz-smoke -Doptimize=ReleaseSafe
+```
+
+The first command compiles five independent libFuzzer entrypoints. The second
+runs deterministic seeds without libFuzzer, which makes a harness regression
+visible on a host that has no fuzzing runtime.
+
+| Target         | Boundary                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| `http_framing` | Fragmented HTTP/1 framing and parser bounds                            |
+| `ws_masking`   | Whole-buffer and fragmented masking, including reversibility           |
+| `quic_packets` | QUIC varints and WebTransport stream, datagram, and capsule boundaries |
+| `query_parse`  | Query slicing, percent and form decoding, and `Accept` negotiation     |
+| `cookie_parse` | Cookie slicing, vectorized jar versus scalar iterator                  |
+
+`oss-fuzz-objects` fails when an object lacks `__sancov_cntrs`. That guard
+catches a toolchain change that would silently produce objects the external
+runtime cannot use.
+
+## Why the sancov shim
+
+Zig's `-ffuzz` instrumentation emits inline-8bit-counter sections rather than
+the trace-pc-guard callbacks current libFuzzer runtimes expect.
+`oss-fuzz/zig_sancov_shim.c` registers those sections with libFuzzer at link
+time. Without the shim, libFuzzer cannot read the counters those sections carry.
+
+## Seeds, dictionaries, and options
+
+`oss-fuzz/build.sh` follows the OSS-Fuzz builder contract. It links each Zig
+object with `$CXXFLAGS` and `$LIB_FUZZING_ENGINE`, then installs the matching
+corpus, dictionary, and options file under `$OUT`.
+
+| Input            | Location                    | Purpose                                   |
+| ---------------- | --------------------------- | ----------------------------------------- |
+| Seed corpus      | `oss-fuzz/corpus/<target>/` | Starting inputs for each fuzzer           |
+| Dictionary       | `oss-fuzz/dictionaries/`    | HTTP and QUIC tokens that guide mutations |
+| Runtime options  | `oss-fuzz/options/`         | Per-target length and timeout limits      |
+| Builder contract | `oss-fuzz/build.sh`         | The external OSS-Fuzz build interface     |
+
+Add a seed when a parser has a syntax form that random mutation is unlikely to
+produce. Keep seeds small and repository-owned; do not copy third-party corpora
+without a license review.
+
+## ClusterFuzzLite
+
+`.clusterfuzzlite/` points at the same builder. The workflow builds all five
+targets with the OSS-Fuzz ASan/libFuzzer environment, requires zero broken
+targets, runs the bad-build check, and then executes a 60-second batch run per
+target on the exact revision under test.
+
+This is an OSS-Fuzz compatibility gate. It is not enrollment in the hosted
+OSS-Fuzz service, and it does not claim that the targets are continuously fuzzed
+upstream. The target metadata advertises AddressSanitizer compatibility only.
+Zig 0.16 emits coverage for these objects and `ReleaseSafe` keeps Zig safety
+checks, but Clang's sanitizer flags do not instrument Zig-generated loads and
+stores.
+
+## Duration guidance
+
+| Run                          | Duration              | Use it when                                         |
+| ---------------------------- | --------------------- | --------------------------------------------------- |
+| `oss-fuzz-smoke`             | Seconds               | You changed a harness, seed, or object layout       |
+| `zig build fuzz --fuzz=100K` | Minutes               | A parser, validator, or framing change is in review |
+| ClusterFuzzLite batch        | 60 seconds per target | You changed the OSS-Fuzz integration or CI workflow |
+| Local extended run           | Chosen by the change  | You are investigating a specific input or hang      |
+
+There is no duration that proves the absence of bugs. Choose a budget that fits
+the change, keep CI bounded, and record the command and revision with any
+finding. A crash found after a longer run is still valid evidence; a short green
+run is only a smoke result.
+
+## Verify
+
+```sh
+zig build oss-fuzz-smoke -Doptimize=ReleaseSafe
+zig build oss-fuzz-objects -Doptimize=ReleaseSafe
+```
+
+The smoke run proves the deterministic seeds execute. The object build proves
+all five targets link and carry the counter sections. Run the 100K harness when
+the change touches a parser or validator.
+
+## Related
+
+- [Tests](/docs/operations/testing) places fuzzing among the other gates.
+- [Sanitizers](/docs/operations/sanitizers) covers the instrumented dependency graph.
+- [HTTP limits](/docs/http/limits) describes the bounds these parsers enforce.

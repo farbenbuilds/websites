@@ -1,0 +1,133 @@
+---
+title: kTLS
+description: Use the standalone Linux kTLS helper on a socket you already own, and understand why the TLS connection path cannot hand keys to the kernel.
+sidebar:
+  order: 19
+search:
+  tags: [how-to, operations, ktls, tls]
+---
+
+`uz.ktls` is a standalone Linux helper. It programs kernel TLS record state on a
+socket the application already owns, and it offers zero-copy file and pipe sends.
+It is not part of the server's TLS connection path, and this build cannot make it
+part of that path.
+
+## Use it from an application
+
+`uz.ktls` is part of the public `uWebZockets` module. After
+[`zig fetch --save`](/docs/getting-started/installation), import the module and
+call the helper on a socket your process owns:
+
+```zig
+const uz = @import("uWebZockets");
+
+// `socket_fd` and `record` are application-owned; Surface defines the record struct.
+try uz.ktls.enable_aes_gcm_128(socket_fd, .transmit, record);
+```
+
+There is no extra framework build step. You do not add a `build.zig` step and you
+do not clone the repository. The module is Linux-only, so referencing it on
+another target is a compile error.
+
+## Why there is no handoff
+
+The server terminates TLS in BoringSSL with a per-worker `SSL_CTX` and one `SSL`
+per connection. Moving an established connection into kTLS requires the TLS
+library to export the negotiated traffic keys to the kernel. The pinned BoringSSL
+has no supported key-handoff interface, so the connection path never attempts the
+move and never silently claims one.
+
+| Layer                | Record processing                                        |
+| -------------------- | -------------------------------------------------------- |
+| Server TLS (default) | BoringSSL in userspace, TLS 1.3 only                     |
+| `uz.ktls`            | Linux kernel, TLS 1.2 AES-128-GCM state that you install |
+| Handoff between them | Not available in this build                              |
+
+The helper is therefore for an application that terminates or proxies its own
+record layer, for example a terminator that already holds the traffic secrets,
+and wants the kernel to encrypt, decrypt, and feed `sendfile` or `splice`.
+
+## Surface
+
+| Call                                                                           | Effect                                                           |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `enable(fd)`                                                                   | Sets the `tls` upper-layer protocol on an established TCP socket |
+| `configure_aes_gcm_128(fd, direction, crypto)`                                 | Installs AES-128-GCM record state for one direction              |
+| `enable_aes_gcm_128(fd, direction, crypto)`                                    | Enables kTLS and installs that direction in one call             |
+| `sendfile_once(socket_fd, file_fd, offset, length)`                            | Sends file bytes without a userspace payload copy                |
+| `splice_once(input_fd, input_offset, socket_fd, output_offset, length, flags)` | Splices pipe bytes without a userspace payload copy              |
+
+`direction` is `.transmit` or `.receive`. The record state is
+`AesGcm128`: TLS 1.2 version, cipher identifier 51, an eight-byte IV, a
+sixteen-byte key, a four-byte salt, and an eight-byte record sequence. Defaults
+fill the version and cipher fields, so only the key material and sequence need to
+be supplied.
+
+```zig
+const uz = @import("uWebZockets");
+
+var record: uz.ktls.AesGcm128 = .{
+    .iv = iv,
+    .key = key,
+    .salt = salt,
+    .record_sequence = sequence,
+};
+try uz.ktls.enable_aes_gcm_128(socket_fd, .transmit, record);
+```
+
+Your TLS stack exports those four values for each direction. The helper copies
+the struct into a local value and wipes that copy after the socket option call;
+the caller's struct is unchanged and still holds the key, so keep it out of logs,
+crash dumps, and snapshots.
+
+The module is Linux-only. Referencing it on another target is a compile error,
+not a runtime fallback.
+
+## Errors
+
+| Error                         | Cause                                                              |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `error.InvalidFileDescriptor` | The descriptor is not an open socket                               |
+| `error.KernelTlsUnavailable`  | The kernel or socket family rejects the `tls` upper-layer protocol |
+| `error.PermissionDenied`      | The process may not set the option on this socket                  |
+| `error.WouldBlock`            | A non-blocking `sendfile` or `splice` could not make progress      |
+| `error.SyscallFailed`         | Any other kernel failure                                           |
+
+A `WouldBlock` means the socket buffer is full, not that the record state is
+wrong. Retry after the socket becomes writable.
+
+## Verification boundary
+
+The helper can prove that the socket option calls succeeded. It cannot prove that
+the peer decrypts what the kernel wrote, because it performs no handshake and
+reads no alerts.
+
+1. Call `enable_aes_gcm_128` for both directions and check the returned error.
+2. Send a known plaintext through the socket and decrypt it with the peer.
+3. Send a known ciphertext from the peer and compare the plaintext.
+4. Exercise `sendfile_once` and confirm the file length and contents arrive.
+
+A failure at step 2 or 3 is a key, IV, sequence, or direction mismatch, not a
+server bug. Keep the helper out of a path you cannot test end to end.
+
+## Not a deployment default
+
+kTLS does not change the supported production TLS story:
+
+- The server's TLS policy stays TLS 1.3 with BoringSSL record processing. kTLS
+  here installs TLS 1.2 AES-128-GCM state, which does not match that policy.
+- Certificate loading, ALPN, mTLS, early data, and session tickets remain
+  BoringSSL concerns. The helper has no equivalent.
+- Record sequence numbers, rekeying, and alert handling stay with your code.
+
+Keep BoringSSL userspace records as the default. Reach for `uz.ktls` only when
+you already own the record layer and have measured that the kernel path helps.
+
+## Related
+
+- [kTLS and AF_XDP](/docs/architecture/ktls-and-xdp) places both helpers beside
+  the protocol core and states their boundaries.
+- [TLS 1.3 and ALPN](/docs/security/tls) describes the context policy that the
+  server actually uses.
+- [Transports](/docs/architecture/transports) covers the TCP and TLS path that
+  owns record processing today.

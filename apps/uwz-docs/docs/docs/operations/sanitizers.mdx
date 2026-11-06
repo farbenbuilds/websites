@@ -1,0 +1,137 @@
+---
+title: Sanitizers
+description: Run the combined ASan, UBSan, and LSan gate or the separate MSan C/C++ boundary smoke, with the runtime paths each mode needs.
+sidebar:
+  order: 5
+search:
+  tags: [operations, sanitizers, memory]
+---
+
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application tests do not run these gates. For application-level checks, see
+[Testing an HTTP server](/docs/http/testing).
+:::
+
+Sanitizers instrument the pinned C and C++ dependencies, the local C shim, and
+the C ABI program. They do not replace Zig's own safety checks: the instrumented
+runs also use `ReleaseSafe` and keep frame pointers. Two modes exist, and they
+are mutually exclusive.
+
+## Address, undefined, and leak sanitizers
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+This mode runs the complete test graph with:
+
+| Check                      | Scope                                                               |
+| -------------------------- | ------------------------------------------------------------------- |
+| AddressSanitizer           | Out-of-bounds access, use-after-free, and invalid free in C and C++ |
+| UndefinedBehaviorSanitizer | C and C++ undefined behavior, with recovery disabled                |
+| LeakSanitizer              | Allocations that outlive the program                                |
+| Zig C-UB checks            | C interop boundaries compiled with `sanitize_c = .full`             |
+| Frame pointers             | Retained for readable stacks                                        |
+
+The run uses an isolated vendor cache, so switching between plain and
+instrumented builds does not reuse the wrong objects.
+
+## MemorySanitizer
+
+```sh
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+The `msan` step without `-Dmemory-sanitize=true` fails by design. The mode is an
+`x86_64` Linux dependency-boundary smoke with origin tracking. It rebuilds the
+pinned C and C++ dependencies and runs a focused C program against them. It does
+not instrument Zig-generated loads and stores, and it does not run the complete C
+ABI suite.
+
+## Choose one mode
+
+| Property        | ASan, UBSan, LSan                 | MSan                              |
+| --------------- | --------------------------------- | --------------------------------- |
+| Build step      | `test`                            | `msan`                            |
+| Flag            | `-Dsanitize=true`                 | `-Dmemory-sanitize=true`          |
+| Platform        | Native Linux                      | `x86_64` Linux                    |
+| Coverage        | C/C++ dependencies, C shim, C ABI | C/C++ dependency boundary only    |
+| Runs Zig tests  | Yes                               | No                                |
+| Origin tracking | Not applicable                    | Enabled                           |
+| Combination     | Do not combine with MSan          | Do not combine with ASan or UBSan |
+
+Both modes run as separate CI jobs with separate caches. Combining them produces
+an unsupported mix of runtimes and instrumentation.
+
+## Nix and plain Zig
+
+Inside the development shell, the compile and run paths come from the shell:
+
+```sh
+nix develop "path:." -c \
+  zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Outside Nix, pass the compiler runtime directory:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe \
+  -Dsanitizer-lib-dir=/path/to/compiler/runtime/lib --summary all
+```
+
+| Situation                              | Flags                                                                |
+| -------------------------------------- | -------------------------------------------------------------------- |
+| Nix shell, matching glibc              | None; `UWEBZOCKETS_SANITIZER_*` variables supply the paths           |
+| Plain Zig, host glibc matches runtime  | `-Dsanitizer-lib-dir=/path/to/compiler-rt/lib`                       |
+| Plain Zig, runtime needs another glibc | Add `-Dsanitizer-libc-dir` and `-Dsanitizer-dynamic-linker` together |
+| Cross target                           | Not supported; build natively on Linux                               |
+
+Sanitizer builds are native Linux only. They set coherent runtime RPATHs, so a
+copied binary is not a supported way to run the gate on another host.
+
+## The sigaltstack workaround
+
+Threaded tests, including the cluster TLS lifecycle tests, run under ASan with
+`use_sigaltstack=0`. ASan installs an alternate signal stack per thread and
+unmaps whichever stack it finds during thread teardown, while Zig 0.16's
+thread-local stack is not page aligned. The mismatch would report a false
+failure at teardown.
+
+The workaround is narrow. Leak detection, `halt_on_error`, and every other check
+stay enabled; only the deep-stack-overflow reporting path changes. Do not
+generalize it to a project-wide ASan option or disable leak detection to make a
+run green.
+
+## What MSan does not cover
+
+| Not covered                                | Why                                                        |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| Zig loads and stores                       | Clang sanitizer flags do not instrument Zig-generated code |
+| The full C ABI suite                       | The MSan target is a focused dependency-boundary smoke     |
+| HTTP, WebSocket, and QUIC paths end to end | Those paths need the complete instrumented test graph      |
+| macOS, Windows, and BSD                    | Runtime support is restricted to `x86_64` Linux            |
+| Application code                           | The gate belongs to the framework repository               |
+
+An MSan pass is evidence that the dependency boundary is clean for the smoke
+program. It is not evidence that the whole server is memory-safe.
+
+## Verify
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Run the first command on any supported Linux host in the Nix shell. Run the
+second only on `x86_64` Linux. Keep the two reports separate when you attach
+evidence to a change.
+
+## Related
+
+- [Tests](/docs/operations/testing) shows the plain and instrumented test layers.
+- [Nix development shell](/docs/operations/nix) supplies the sanitizer runtime.
+- [Memory model](/docs/architecture/memory-model) explains the allocations these runs inspect.

@@ -1,0 +1,180 @@
+---
+title: Theo dõi presence
+description: Giữ bảng presence có bound theo từng process, áp dụng join và leave, và expire peer chết bằng heartbeat của route.
+sidebar:
+  order: 7
+search:
+  tags: [guide, websocket, presence]
+---
+
+Presence là application state: framework cung cấp socket, topic và heartbeat; bạn
+sở hữu bảng, capacity và frame format.
+
+## Bài toán
+
+Bạn cần danh sách peer đang kết nối, cập nhật khi join và leave, không thể tăng
+mà không có bound và không giữ peer chết mãi.
+
+## Giả định
+
+- Zig 0.16.0 và µWebZockets 2.1.6 cài bằng `zig fetch --save`; một application
+  instance và một worker trên `0.0.0.0:3000`, nên bảng là process-wide.
+
+## Chương trình
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const capacity = 256;
+
+const Peer = struct {
+    socket: ?*uz.WebSocket = null,
+    room: [32]u8 = undefined,
+    room_len: usize = 0,
+    name: [32]u8 = undefined,
+    name_len: usize = 0,
+    seq: u64 = 0,
+};
+
+var peers: [capacity]Peer = [_]Peer{.{}} ** capacity;
+var sequence: u64 = 0;
+
+fn copy_label(dest: *[32]u8, value: []const u8) ?usize {
+    if (value.len == 0 or value.len > dest.len) return null;
+    if (std.mem.indexOfAny(u8, value, " \t\r\n") != null) return null;
+    @memcpy(dest[0..value.len], value);
+    return value.len;
+}
+
+fn peer_for(ws: *uz.WebSocket) ?*Peer {
+    for (&peers) |*peer| if (peer.socket == ws) return peer;
+    return null;
+}
+
+fn announce(ws: *uz.WebSocket, event: []const u8, peer: *const Peer) void {
+    var frame: [96]u8 = undefined;
+    const line = std.fmt.bufPrint(&frame, "{s} {s} {s} {d}", .{ event, peer.room[0..peer.room_len], peer.name[0..peer.name_len], peer.seq }) catch return;
+    _ = ws.publish("presence", line, true);
+}
+
+fn on_open(ws: *uz.WebSocket) void {
+    for (&peers) |*peer| {
+        if (peer.socket != null) continue;
+        peer.socket = ws;
+        ws.subscribe("presence") catch return ws.terminate();
+        return;
+    }
+    ws.send_close(1013, "presence full") catch ws.terminate();
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    if (opcode != .text) return;
+    const peer = peer_for(ws) orelse return;
+    const joining = peer.name_len == 0;
+    if (joining) {
+        var parts = std.mem.tokenizeScalar(u8, message, ' ');
+        if (!std.mem.eql(u8, parts.next() orelse return, "join")) return;
+        peer.room_len = copy_label(&peer.room, parts.next() orelse return) orelse return;
+        peer.name_len = copy_label(&peer.name, parts.next() orelse return) orelse return;
+        if (parts.next() != null) return;
+    }
+    sequence += 1;
+    peer.seq = sequence;
+    announce(ws, if (joining) "join" else "seen", peer);
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    const peer = peer_for(ws) orelse return;
+    if (peer.name_len != 0) announce(ws, "leave", peer);
+    peer.* = .{};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+    _ = try app.ws("/presence", .{
+        .open = on_open, .message = on_message, .close = on_close,
+        .ping_interval_ms = 30_000, .pong_timeout_ms = 10_000,
+    });
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Ví dụ này chạy một worker. Mảng `peers` là module state, nên cluster sẽ chia sẻ
+nó giữa các thread mà không có lock; cấp bảng riêng cho từng worker.
+
+## Event và thứ tự
+
+| Event   | Khi nào                                       | Frame                 |
+| ------- | --------------------------------------------- | --------------------- |
+| `join`  | Text message đầu tiên là `join <room> <name>` | `join room name seq`  |
+| `seen`  | Mọi text message sau đó                       | `seen room name seq`  |
+| `leave` | `on_close` chạy                               | `leave room name seq` |
+
+`seq` là counter process-local. Snapshot có `seq` thấp hơn cho cùng name là stale,
+nên chỉ áp dụng khi `seq` lớn hơn: last-writer semantics.
+
+## Capacity assumptions
+
+Bảng giữ 256 row; open vượt giới hạn nhận close `1013` và không lưu row.
+
+## Verification
+
+```sh
+zig build run
+npx wscat -c ws://127.0.0.1:3000/presence
+```
+
+```console
+> join lobby alice
+< join lobby alice 1
+> hello
+< seen lobby alice 2
+```
+
+Mở client thứ hai, join với `bob`, và xác nhận cả hai nhận join thứ hai. Close
+`bob`: cả hai thấy `leave` với `seq` mới; ngừng trả lời ping ở client thứ ba để
+thấy heartbeat xoá row.
+
+## Failure behavior
+
+| Điều kiện               | Kết quả                                |
+| ----------------------- | -------------------------------------- |
+| Peer ngừng trả lời ping | Heartbeat close nó, `on_close` xoá row |
+
+## Variations
+
+### Heartbeat làm TTL
+
+Heartbeat là cơ chế expiry: peer ngừng trả lời bị route close, nên row của nó
+không thể sống lâu hơn connection. Chỉ đổi hai field:
+
+```zig
+.ping_interval_ms = 15_000,
+.pong_timeout_ms = 5_000,
+```
+
+Giữ `pong_timeout_ms` nhỏ hơn `idle_timeout_ms`, và set cả hai hoặc không set gì.
+Xem [Heartbeats and idle peers](/docs/websocket/heartbeats).
+
+### Đếm theo room
+
+Đếm row của một room trước khi announce thay đổi:
+
+```zig
+fn room_count(room: []const u8) usize {
+    var total: usize = 0;
+    for (peers) |peer| {
+        if (peer.name_len == 0) continue;
+        if (std.mem.eql(u8, peer.room[0..peer.room_len], room)) total += 1;
+    }
+    return total;
+}
+```
+
+Publish count thành event riêng, hoặc đưa vào join frame. Count là theo process:
+sau `Cluster.publish`, mỗi worker báo một partial view. Đọc
+[Shared-nothing workers](/docs/concepts/shared-nothing).

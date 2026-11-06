@@ -1,0 +1,135 @@
+---
+title: Fuzzing
+description: Chạy Smith harness, build năm target OSS-Fuzz libFuzzer và hiểu seed, sancov shim cùng gate ClusterFuzzLite trong CI.
+sidebar:
+  order: 6
+search:
+  tags: [operations, fuzzing, parsers]
+---
+
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application fuzzing dùng harness của bạn. Trang này nói về Smith và OSS-Fuzz target của
+framework.
+:::
+
+Fuzzing có hai lớp. Smith harness chạy các check parser và validator có giới hạn
+bên trong một Zig test build bình thường. OSS-Fuzz object export
+`LLVMFuzzerTestOneInput` để libFuzzer runtime bên ngoài điều khiển cùng các
+surface đó với sanitizer coverage.
+
+Không lớp nào thay thế unit suite. Fuzzing tìm crash, treo và vi phạm biên trên
+input được sinh ra; unit test phát biểu hành vi mong đợi.
+
+## Smith harness
+
+```sh
+zig build fuzz --fuzz=100K -Doptimize=ReleaseSafe
+```
+
+`--fuzz` đặt ngân sách iteration. CI dùng 100K để pull request có một lần chạy có
+giới hạn nhưng vẫn bao phủ mọi parser surface. Harness giữ coverage cho:
+
+| Surface               | Nội dung kiểm tra                                      |
+| --------------------- | ------------------------------------------------------ |
+| HTTP                  | Request framing, input bị fragment và biên parser      |
+| Query và `Accept`     | Slicing, percent và form decoding, content negotiation |
+| zslay                 | JSON decoding và error path                            |
+| Extension negotiation | Chọn protocol extension                                |
+| HPACK                 | Nén và giải nén header                                 |
+| Multipart             | Parse boundary và tách part                            |
+| HTTP/3 validation     | Các đường validation của HTTP/3                        |
+
+Harness nằm trong test graph, không nằm trong production module. Một case fail
+báo cáo giống unit test fail.
+
+## OSS-Fuzz object
+
+```sh
+zig build oss-fuzz-objects -Doptimize=ReleaseSafe
+zig build oss-fuzz-smoke -Doptimize=ReleaseSafe
+```
+
+Command đầu compile năm entrypoint libFuzzer độc lập. Command thứ hai chạy seed
+deterministic mà không cần libFuzzer, giúp regression của harness hiện ra trên host
+không có fuzzing runtime.
+
+| Target         | Ranh giới                                                           |
+| -------------- | ------------------------------------------------------------------- |
+| `http_framing` | HTTP/1 framing bị fragment và biên parser                           |
+| `ws_masking`   | Masking toàn buffer và bị fragment, gồm tính thuận nghịch           |
+| `quic_packets` | QUIC varint và ranh giới stream, datagram, capsule của WebTransport |
+| `query_parse`  | Query slicing, percent và form decoding, `Accept` negotiation       |
+| `cookie_parse` | Cookie slicing, vectorized jar so với scalar iterator               |
+
+`oss-fuzz-objects` fail khi một object thiếu `__sancov_cntrs`. Guard này bắt thay
+đổi toolchain mà có thể âm thầm tạo object mà runtime bên ngoài không dùng được.
+
+## Vì sao cần sancov shim
+
+Instrumentation `-ffuzz` của Zig phát ra section inline-8bit-counter thay vì
+trace-pc-guard callback mà libFuzzer runtime hiện tại mong đợi.
+`oss-fuzz/zig_sancov_shim.c` đăng ký các section đó với libFuzzer lúc link.
+Không có shim, libFuzzer không đọc được counter mà các section đó mang.
+
+## Seed, dictionary và option
+
+`oss-fuzz/build.sh` theo contract của OSS-Fuzz builder. Nó link từng object Zig với
+`$CXXFLAGS` và `$LIB_FUZZING_ENGINE`, rồi cài corpus, dictionary và option khớp
+dưới `$OUT`.
+
+| Input            | Vị trí                      | Mục đích                               |
+| ---------------- | --------------------------- | -------------------------------------- |
+| Seed corpus      | `oss-fuzz/corpus/<target>/` | Input khởi đầu cho mỗi fuzzer          |
+| Dictionary       | `oss-fuzz/dictionaries/`    | Token HTTP và QUIC dẫn hướng mutation  |
+| Runtime option   | `oss-fuzz/options/`         | Giới hạn độ dài và timeout theo target |
+| Builder contract | `oss-fuzz/build.sh`         | Interface build bên ngoài của OSS-Fuzz |
+
+Thêm seed khi parser có dạng cú pháp mà random mutation khó tạo ra. Giữ seed nhỏ
+và thuộc repository; không copy corpus của bên thứ ba khi chưa review license.
+
+## ClusterFuzzLite
+
+`.clusterfuzzlite/` trỏ tới cùng builder. Workflow build cả năm target với môi
+trường OSS-Fuzz ASan/libFuzzer, yêu cầu zero broken target, chạy bad-build check,
+rồi chạy batch 60 giây cho mỗi target trên đúng revision đang test.
+
+Đây là gate tương thích OSS-Fuzz. Nó không phải enrollment vào dịch vụ OSS-Fuzz
+hosted và không tuyên bố các target được fuzz liên tục upstream. Metadata của
+target chỉ quảng bá tương thích AddressSanitizer. Zig 0.16 phát coverage cho các
+object này và `ReleaseSafe` giữ safety check của Zig, nhưng Clang sanitizer flag
+không instrument load và store do Zig sinh ra.
+
+## Hướng dẫn về thời lượng
+
+| Lần chạy                     | Thời lượng         | Dùng khi                                             |
+| ---------------------------- | ------------------ | ---------------------------------------------------- |
+| `oss-fuzz-smoke`             | Vài giây           | Bạn đổi harness, seed hoặc object layout             |
+| `zig build fuzz --fuzz=100K` | Vài phút           | Thay đổi parser, validator hoặc framing đang review  |
+| ClusterFuzzLite batch        | 60 giây mỗi target | Bạn đổi tích hợp OSS-Fuzz hoặc CI workflow           |
+| Lần chạy mở rộng cục bộ      | Tùy thay đổi       | Bạn đang điều tra một input hoặc một lần treo cụ thể |
+
+Không có thời lượng nào chứng minh không còn bug. Chọn ngân sách phù hợp thay
+đổi, giữ CI có giới hạn và ghi lại command cùng revision với mọi finding. Crash
+tìm thấy sau lần chạy dài vẫn là evidence hợp lệ; một lần chạy ngắn xanh chỉ là
+kết quả smoke.
+
+## Kiểm tra
+
+```sh
+zig build oss-fuzz-smoke -Doptimize=ReleaseSafe
+zig build oss-fuzz-objects -Doptimize=ReleaseSafe
+```
+
+Smoke run chứng minh seed deterministic chạy được. Object build chứng minh cả năm
+target link được và mang counter section. Chạy harness 100K khi thay đổi chạm
+parser hoặc validator.
+
+## Liên quan
+
+- [Test](/docs/operations/testing) đặt fuzzing trong các gate khác.
+- [Sanitizer](/docs/operations/sanitizers) đi qua dependency graph có instrumentation.
+- [HTTP limits](/docs/http/limits) mô tả các biên mà những parser này thực thi.

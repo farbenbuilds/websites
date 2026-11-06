@@ -1,0 +1,180 @@
+---
+title: Use cookies safely
+description: Read and set cookies with correct attributes, sign session state without mistaking signing for encryption, and rotate keys without logging users out.
+sidebar:
+  order: 12
+search:
+  tags: [guide, cookies, security]
+---
+
+A cookie is attacker-visible state: attributes decide where it is sent, and a
+signature decides whether you trust the value.
+
+## Problem
+
+You need a session cookie that the browser sends only to your origin, that
+JavaScript cannot read, and that other clients cannot forge. You also need a way
+to replace the signing key without logging everyone out.
+
+## Assumptions
+
+- The site is served over TLS, so `Secure` cookies come back.
+- The session payload fits the 1024-byte `Set-Cookie` buffer, and the signing
+  secret comes from configuration.
+
+## Build the session endpoints
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Sessions = struct { secret: []const u8 };
+const cookie_options: uz.cookie.Options = .{
+    .secure = true,
+    .http_only = true,
+    .same_site = .lax,
+    .enforce_prefixes = true,
+};
+
+fn login(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const sessions: *Sessions = @ptrCast(@alignCast(context));
+    res.set_signed_cookie("__Host-session", "user=42", sessions.secret, cookie_options) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.end("204 No Content", "") catch {};
+}
+
+fn profile(context: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const sessions: *Sessions = @ptrCast(@alignCast(context));
+    const payload = uz.cookie.verify_signed(
+        req.cookie("__Host-session") orelse "",
+        sessions.secret,
+    ) catch {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(payload) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    const secret = init.environ_map.get("SESSION_SECRET") orelse
+        return error.MissingSessionSecret;
+    if (secret.len < 32) return error.SessionSecretTooShort;
+
+    var sessions = Sessions{ .secret = secret };
+    var app = try uz.App(128).init_https_ephemeral(init.io);
+    defer app.deinit();
+
+    _ = try app.route_context(.get, "/login", &sessions, login);
+    _ = try app.route_context(.get, "/profile", &sessions, profile);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3443);
+    try app.run();
+}
+```
+
+`set_signed_cookie` signs and then formats one field; `verify_signed` compares in
+constant time and returns a slice borrowed from the request buffer.
+
+## Set-Cookie attributes
+
+| Attribute  | Value here | Effect                               |
+| ---------- | ---------- | ------------------------------------ |
+| `Path`     | `/`        | Sent to every path                   |
+| `Secure`   | on         | Sent only over HTTPS                 |
+| `HttpOnly` | on         | Hidden from `document.cookie`        |
+| `SameSite` | `Lax`      | Not sent on most cross-site requests |
+
+`SameSite=None` requires `Secure`, or the formatter returns `error.InsecureSameSiteNone`.
+
+## The `__Host-` prefix
+
+With `enforce_prefixes = true`, the formatter rejects a `__Host-` cookie unless it
+has `Secure`, no `Domain`, and `Path=/`. Browsers drop a field that breaks the same
+rules, so the check turns a silent loss into an error.
+
+## Signing is not encryption
+
+A signed value is `payload.signature`. The payload stays readable: `user=42` is
+visible in the cookie and in any log that records the header. Use `sign` and
+`verify_signed` to detect modification, `sign_versioned` and `verify_versioned` to
+name the key, and a server-side store to revoke a session.
+
+## Capacity assumptions
+
+| Resource            | Bound                                                           |
+| ------------------- | --------------------------------------------------------------- |
+| `Set-Cookie` field  | 1024-byte stack buffer; `error.BufferOverflow` when exceeded    |
+| Signed value buffer | `payload.len + 1 + 64` bytes for the hex tag                    |
+| Secret length       | At least 32 bytes; shorter returns `error.CookieSecretTooShort` |
+
+## Failure behavior
+
+| Condition                     | Result                                        |
+| ----------------------------- | --------------------------------------------- |
+| Secret shorter than 32 bytes  | `error.CookieSecretTooShort`                  |
+| Modified payload or signature | `error.InvalidCookieSignature`, respond `401` |
+| Unknown versioned key id      | `error.UnknownKeyId`, respond `401`           |
+| `__Host-` rules violated      | `error.InsecureCookiePrefix`                  |
+
+## Verification
+
+```sh
+curl -sk -c jar.txt https://127.0.0.1:3443/login
+curl -sk -b jar.txt https://127.0.0.1:3443/profile
+sed -i 's/user=42/user=43/' jar.txt
+curl -sk -o /dev/null -w '%{http_code}\n' -b jar.txt https://127.0.0.1:3443/profile
+```
+
+The first carries `__Host-session=user=42.<hex>` with `Secure`, `HttpOnly`,
+`SameSite=Lax`, and `Path=/`; the second prints `user=42`; the last prints `401`.
+
+## Variation: a versioned session
+
+Add a key id so verification can choose the right secret before comparing.
+
+```zig
+const KeyRing = struct { keys: []const uz.cookie.Key };
+
+fn issue(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const ring: *KeyRing = @ptrCast(@alignCast(context));
+    var buffer: [1024]u8 = undefined;
+    const signed = uz.cookie.sign_versioned(&buffer, "user=42", ring.keys[0]) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.set_cookie("__Host-session", signed, cookie_options) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.end("204 No Content", "") catch {};
+}
+```
+
+## Variation: rotate keys
+
+Keep the new key first and the previous key in the list. New cookies use the new
+key; old cookies still verify until the previous key is removed.
+
+```zig
+const current = uz.cookie.Key{ .id = "2026-11", .secret = "0123456789abcdef0123456789abcdef" };
+const previous = uz.cookie.Key{ .id = "2026-10", .secret = "fedcba9876543210fedcba9876543210" };
+
+fn read(_: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const payload = uz.cookie.verify_versioned(
+        req.cookie("__Host-session") orelse "",
+        &.{ current, previous },
+    ) catch {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(payload) catch {};
+}
+```
+
+Load both secrets from configuration, and remove the previous key only after its
+longest-lived cookie has expired.
+
+## Next
+
+- [Cookies and signed cookies](/docs/http/helpers/cookies) lists every option.
+- [Threat model](/docs/security/threat-model) covers the session boundary.

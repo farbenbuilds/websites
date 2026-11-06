@@ -1,0 +1,149 @@
+---
+title: systemd
+description: Run the binary under Type=exec, add an HTTP readiness gate, harden the unit, and stop it with SIGTERM inside TimeoutStopSec.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, deployment, systemd]
+---
+
+µWebZockets has no `sd_notify` integration and no socket-activation path. Do not
+write `Type=notify`: the process never sends `READY=1`, so systemd would wait for a
+notification that never arrives and then fail the unit. Use `Type=exec` or
+`Type=simple`, and prove readiness with an HTTP request instead.
+
+Socket activation is also unsupported. The application creates its own listeners
+inside `listen` or `listen_udp`, and there is no inherited-descriptor path for
+systemd to pass a pre-opened socket. Cross-process socket handoff is carried work
+in the roadmap.
+
+## Unit file
+
+```ini
+[Unit]
+Description=uWebZockets application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=uz
+Group=uz
+WorkingDirectory=/opt/uz
+EnvironmentFile=/etc/uz/app.env
+ExecStart=/opt/uz/bin/uz-app
+ExecStartPost=/usr/bin/curl --fail --silent --show-error \
+  --retry 15 --retry-connrefused --retry-delay 1 \
+  http://127.0.0.1:3000/readyz
+Restart=on-failure
+RestartSec=2s
+KillSignal=SIGTERM
+TimeoutStopSec=140
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+ReadWritePaths=/var/log/uz
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`Type=exec` marks the service active when the binary is executed, not when it is
+listening. `ExecStartPost` closes that gap: the curl loop waits for `/readyz`, and
+a failure marks the unit failed. It is a start gate, not a continuous readiness
+signal; use an external monitor or the load balancer for ongoing checks.
+
+`ExecStart` is the binary itself, not a shell. That keeps the process as the unit's
+main process, so `KillSignal=SIGTERM` reaches the handler installed by
+`catch_shutdown_signals` and the drain path runs.
+
+## Environment
+
+```sh
+UWEBZOCKETS_WORKERS=4
+```
+
+`build_cluster_from_environment` reads that variable when no explicit
+`ClusterOptions.worker_count` is set, and falls back to the platform CPU count
+without it. Keep the file readable by the service user only, because it is the
+usual place for tokens and paths to private keys.
+
+Paths to certificates belong in the environment file or in the binary's
+configuration, not in `ExecStart` arguments, where any local user can read them
+from the process list.
+
+## Hardening directives
+
+| Directive                    | Effect                                                 | Remove it when                                      |
+| ---------------------------- | ------------------------------------------------------ | --------------------------------------------------- |
+| `NoNewPrivileges`            | Blocks setuid and capability escalation                | Never; the server needs neither                     |
+| `ProtectSystem=strict`       | Mounts the filesystem read-only except listed paths    | The app must write outside `ReadWritePaths`         |
+| `ReadWritePaths=/var/log/uz` | Allows the log file sink                               | The app logs only to stderr                         |
+| `PrivateTmp`                 | Gives the unit a private `/tmp`                        | Nothing in the app shares `/tmp` with another unit  |
+| `CapabilityBoundingSet=`     | Drops every capability                                 | Binding a port below 1024                           |
+| `RestrictAddressFamilies`    | Limits sockets to IPv4, IPv6, and local sockets        | The app needs another address family                |
+| `LimitNOFILE`                | Raises the descriptor limit above the connection count | Never; the default is too low for 1,024 connections |
+
+A unit that binds port 80 or 443 needs `AmbientCapabilities=CAP_NET_BIND_SERVICE`
+and a non-empty `CapabilityBoundingSet`; prefer a high port and a reverse proxy so
+the service needs no capability at all. Create `/var/log/uz` before the first
+start, or the `ReadWritePaths` mount fails the unit with `226/NAMESPACE`.
+
+## Logs
+
+systemd captures stdout and stderr into the journal. The default development log
+sink stays quiet when stderr is not a terminal, so the journal shows `std.log`
+records such as startup and errors, but not the per-request development log. Bind
+`App.set_dev_log_file` to a path under `ReadWritePaths` when you need the request
+log, and rotate it outside systemd.
+
+## Stop and restart
+
+`TimeoutStopSec=140` covers the default 120-second idle timeout with a margin. If
+the service is still draining when the timeout expires, systemd sends SIGKILL and
+the in-flight connections reset. Set `Restart=on-failure` rather than `always`, so
+an intentional `systemctl stop` does not look like a crash.
+
+`RestartSec=2s` is intentionally short because the process rebuilds no state on
+start: the slab is allocated once and the listeners bind immediately.
+
+## Verify
+
+```sh
+sudo install -Dm0644 uz-app.service /etc/systemd/system/uz-app.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now uz-app
+systemctl status uz-app
+curl -fsS http://127.0.0.1:3000/readyz
+sudo systemctl stop uz-app
+systemctl show -p ExecMainStatus uz-app
+```
+
+Expect `active (running)`, a `200` from the readiness route, and `ExecMainStatus=0`
+after the stop. Follow the drain with `journalctl -u uz-app -f` in another terminal;
+there should be no `ShutdownIncomplete` and no kernel OOM message.
+
+## Failures
+
+| Symptom                          | Cause                                         | Fix                                                      |
+| -------------------------------- | --------------------------------------------- | -------------------------------------------------------- |
+| Unit times out at start          | `Type=notify` with no `sd_notify` call        | Use `Type=exec` and an HTTP readiness gate               |
+| Unit fails after `ExecStartPost` | Readiness route never answered                | Check the port, the bind address, and the route          |
+| `status=226/NAMESPACE`           | A hardening directive blocks a required path  | Remove the directive or add the path to `ReadWritePaths` |
+| `status=203/EXEC`                | Wrong `ExecStart` path or missing execute bit | Point at the binary and check its mode                   |
+| Service killed at stop           | `TimeoutStopSec` shorter than the drain       | Raise it or lower `idle_timeout_ms`                      |
+| Restart loop after a clean stop  | `Restart=always`                              | Use `Restart=on-failure`                                 |
+| Journal has no request lines     | Non-terminal stderr keeps the dev log quiet   | Bind `set_dev_log_file` to a writable path               |

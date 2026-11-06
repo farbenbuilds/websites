@@ -1,0 +1,180 @@
+---
+title: Publish OpenAPI
+description: Serve the generated OpenAPI 3.1 document from registered routes, read its exact shape, and gate the output in CI.
+sidebar:
+  order: 14
+search:
+  tags: [guide, openapi, how-to]
+---
+
+`app.openapi(path)` turns the route table into an OpenAPI 3.1 document. The
+document is generated from registration metadata, so it costs no per-request
+allocation and cannot drift from the routes the server actually registered.
+
+## Problem
+
+Clients and code generators need a machine-readable API description you do not have
+to maintain by hand.
+
+## Assumptions
+
+- Routes are registered before `listen`, which is already required.
+- The document answers routing questions only, not schemas.
+- The route table stays well below the generated document's buffer size.
+
+## Publish the document
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(_: *uz.Request, res: *uz.Response) void {
+    res.text("user") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_report(_: *uz.Request, res: *uz.Response) void {
+    res.text("report") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/reports/:year/:month", show_report);
+    _ = try app.openapi("/openapi.json");
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.openapi` is itself a route registration: it must run before `listen`, consumes
+a route record, and the path it serves appears in its own document.
+
+## Generated shape
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": { "title": "uWebZockets API", "version": "2.1.6" },
+  "paths": {
+    "/users/{id}": { "get": { "responses": { "200": { "description": "Success" } } } },
+    "/openapi.json": { "get": { "responses": { "200": { "description": "Success" } } } }
+  }
+}
+```
+
+| Element        | Value                                                           |
+| -------------- | --------------------------------------------------------------- |
+| `openapi`      | Always `3.1.0`                                                  |
+| `info.title`   | `uWebZockets API` unless you use `uz.openapi.generate` yourself |
+| `info.version` | The framework release version, not your application version     |
+| `paths`        | One entry per distinct path, in registration order              |
+| Operation key  | Lowercase method name, except the `x-` extensions               |
+| Responses      | Exactly one `200` with description `Success`                    |
+| `x-websocket`  | `true` on a WebSocket route, recorded as `GET`                  |
+
+The `x-any`, `x-query`, and `x-connect` keys are not OpenAPI operation keys, so a
+strict validator may reject a document that contains them.
+
+## Path parameters
+
+| Registered path         | Emitted path              |
+| ----------------------- | ------------------------- |
+| `/users/:id`            | `/users/{id}`             |
+| `/assets/*path`         | `/assets/{path}`          |
+| `/reports/:year/:month` | `/reports/{year}/{month}` |
+
+Only a `:` or `*` at the start of a segment starts a parameter; a `:` inside a
+segment stays literal. The router validates names first, so a duplicate capture
+fails registration before it can reach the document.
+
+## Capacity assumptions
+
+| Resource             | Default                                | Failure                             |
+| -------------------- | -------------------------------------- | ----------------------------------- |
+| Route records        | 320: 256 nodes plus 64 pattern routes  | `error.RouteCapacityReached`        |
+| Retained route paths | 64 KiB `max_route_registry_size`       | `error.RouteStorageCapacityReached` |
+| Generated document   | 64 KiB buffer in the built-in endpoint | `500 Internal Server Error`         |
+
+The document buffer also holds a temporary route snapshot, so the JSON budget is
+below 64 KiB. Keep paths short and the route count well under the record limit.
+
+## Failure behavior
+
+| Condition                        | Result                                          |
+| -------------------------------- | ----------------------------------------------- |
+| Route count at the limit         | `error.RouteCapacityReached`                    |
+| Path storage exhausted           | `error.RouteStorageCapacityReached`             |
+| Document does not fit the buffer | `500`, body `OpenAPI document exceeds capacity` |
+
+## What it omits
+
+The document describes routing only. It contains no request or response schemas,
+no `parameters`, `requestBody`, `components`, `tags`, `servers`, or `security`, and
+no operation summary or description. There is no router API to attach that
+metadata to, and the implicit `HEAD` fallback and automatic `OPTIONS` answer are
+not operations because neither is a registered route.
+
+For a fuller document, `uz.openapi.generate(buffer, routes, options)` is public. You
+build the route list and metadata yourself, so the document is no longer derived
+from the router table.
+
+## Verification
+
+```sh
+curl -s http://127.0.0.1:3000/openapi.json | jq -e '.openapi == "3.1.0"'
+curl -s http://127.0.0.1:3000/openapi.json | jq -e '.paths["/users/{id}"].get'
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/openapi.json
+```
+
+`jq -e` exits non-zero when the expression is false or null, so both are usable
+checks; the last command prints `200`.
+
+## Variation: a public docs route
+
+Publish the document at a stable, versioned path and link it from your API docs.
+Keep it unauthenticated so generators can read it, and keep the route table small
+so the document stays inside the buffer.
+
+```zig
+_ = try app.get("/v1/items", list_items);
+_ = try app.get("/v1/items/:id", show_item);
+_ = try app.openapi("/v1/openapi.json");
+```
+
+A versioned path lets you publish a new document without breaking an existing
+client; every path in it still comes from the same router.
+
+## Variation: a CI schema check
+
+Start the server, assert the shape, and fail the job when a route disappears.
+
+```sh
+set -eu
+zig build run &
+server_pid=$!
+trap 'kill "$server_pid"' EXIT
+
+curl -sS --retry 10 --retry-connrefused -o openapi.json \
+  http://127.0.0.1:3000/openapi.json
+
+jq -e '.openapi == "3.1.0"' openapi.json > /dev/null
+jq -e '.paths["/users/{id}"].get.responses["200"]' openapi.json > /dev/null
+```
+
+The second assertion proves the route still resolves; add one `jq -e` line per route
+you cannot afford to drop.
+
+## Next
+
+- [OpenAPI output](/docs/http/openapi) is the reference for the document shape,
+  extensions, and limits.
+- [Routing](/docs/http/routing) covers route limits and `{name}` conversion.

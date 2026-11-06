@@ -77,11 +77,14 @@ rules agents most often break:
   Keep the `tests/` root to category directories and `tests/README.md`.
 - Do not weaken lint rules, type checks, tests, builds, accessibility, or CI to
   make a change pass.
-- Consumer documentation treats µWebZockets as an installed dependency. Never
-  tell a reader to clone, build, test, or enter a development shell for the
-  framework repository, and never present a maintainer compliance command as an
-  application step. Demonstrate behavior with application code and the public
-  API. See `uWZ-TODO.md` section 8.12.
+- Documentation has two surfaces. Application pages treat µWebZockets as an
+  installed dependency: start from `zig fetch --save`, show the reader's own
+  `build.zig`, and never require a framework clone. Contributor pages under
+  `/docs/operations` that describe the framework repository must say so in a
+  leading note, link `CONTRIBUTE.md`, and keep maintainer commands out of
+  application pages. Advanced application surfaces such as WASM, eBPF, kTLS, and
+  AF_XDP show the consumer build wiring after `zig fetch --save`. See
+  `uWZ-TODO.md` section 8.12.
 - Do not commit `dist/`, `.blume/`, `node_modules/`, local env files, or secrets.
 
 ## Commands

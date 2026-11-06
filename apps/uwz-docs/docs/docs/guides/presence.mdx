@@ -1,0 +1,180 @@
+---
+title: Track presence
+description: Keep a bounded presence table per process, apply join and leave events, and expire dead peers with the route heartbeat.
+sidebar:
+  order: 7
+search:
+  tags: [guide, websocket, presence]
+---
+
+Presence is application state: the framework supplies the socket, the topic, and
+the heartbeat; you own the table, capacity, and frame format.
+
+## Problem
+
+You need a live list of connected peers, updated on join and leave, that cannot
+grow without a bound and cannot keep a dead peer forever.
+
+## Assumptions
+
+- Zig 0.16.0 and µWebZockets 2.1.6 installed with `zig fetch --save`; one
+  application instance and one worker on `0.0.0.0:3000`, so the table is
+  process-wide.
+
+## Program
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const capacity = 256;
+
+const Peer = struct {
+    socket: ?*uz.WebSocket = null,
+    room: [32]u8 = undefined,
+    room_len: usize = 0,
+    name: [32]u8 = undefined,
+    name_len: usize = 0,
+    seq: u64 = 0,
+};
+var peers: [capacity]Peer = [_]Peer{.{}} ** capacity;
+var sequence: u64 = 0;
+
+fn copy_label(dest: *[32]u8, value: []const u8) ?usize {
+    if (value.len == 0 or value.len > dest.len) return null;
+    if (std.mem.indexOfAny(u8, value, " \t\r\n") != null) return null;
+    @memcpy(dest[0..value.len], value);
+    return value.len;
+}
+
+fn peer_for(ws: *uz.WebSocket) ?*Peer {
+    for (&peers) |*peer| if (peer.socket == ws) return peer;
+    return null;
+}
+
+fn announce(ws: *uz.WebSocket, event: []const u8, peer: *const Peer) void {
+    var frame: [96]u8 = undefined;
+    const line = std.fmt.bufPrint(&frame, "{s} {s} {s} {d}", .{ event, peer.room[0..peer.room_len], peer.name[0..peer.name_len], peer.seq }) catch return;
+    _ = ws.publish("presence", line, true);
+}
+fn on_open(ws: *uz.WebSocket) void {
+    for (&peers) |*peer| {
+        if (peer.socket != null) continue;
+        peer.socket = ws;
+        ws.subscribe("presence") catch return ws.terminate();
+        return;
+    }
+    ws.send_close(1013, "presence full") catch ws.terminate();
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    if (opcode != .text) return;
+    const peer = peer_for(ws) orelse return;
+    const joining = peer.name_len == 0;
+    if (joining) {
+        var parts = std.mem.tokenizeScalar(u8, message, ' ');
+        if (!std.mem.eql(u8, parts.next() orelse return, "join")) return;
+        peer.room_len = copy_label(&peer.room, parts.next() orelse return) orelse return;
+        peer.name_len = copy_label(&peer.name, parts.next() orelse return) orelse return;
+        if (parts.next() != null) return;
+    }
+    sequence += 1;
+    peer.seq = sequence;
+    announce(ws, if (joining) "join" else "seen", peer);
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    const peer = peer_for(ws) orelse return;
+    if (peer.name_len != 0) announce(ws, "leave", peer);
+    peer.* = .{};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+    _ = try app.ws("/presence", .{
+        .open = on_open, .message = on_message, .close = on_close,
+        .ping_interval_ms = 30_000, .pong_timeout_ms = 10_000,
+    });
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+This example is single-worker. The `peers` array is module state, so a cluster
+would share it across threads without a lock; give each worker its own table.
+
+## Events and ordering
+
+| Event   | When                                       | Frame                 |
+| ------- | ------------------------------------------ | --------------------- |
+| `join`  | First text message is `join <room> <name>` | `join room name seq`  |
+| `seen`  | Any later text message                     | `seen room name seq`  |
+| `leave` | `on_close` runs                            | `leave room name seq` |
+
+`seq` is a process-local counter. A snapshot with a lower `seq` for the same name
+is stale, so apply it only when `seq` is greater: last-writer semantics.
+
+## Capacity assumptions
+
+| Bound         | Value | Behavior when exceeded                |
+| ------------- | ----- | ------------------------------------- |
+| Presence rows | 256   | Open gets `1013` close, no row stored |
+
+## Verification
+
+```sh
+zig build run
+npx wscat -c ws://127.0.0.1:3000/presence
+```
+
+```console
+> join lobby alice
+< join lobby alice 1
+> hello
+< seen lobby alice 2
+```
+
+Join as `bob` from a second client: both see the join. Close it and both see
+`leave`. Stop answering pings on a third client to watch the heartbeat expire it.
+
+## Failure behavior
+
+| Condition                  | Result                                     |
+| -------------------------- | ------------------------------------------ |
+| Peer stops answering pings | Heartbeat closes it, `on_close` removes it |
+
+## Variations
+
+### Heartbeat as the TTL
+
+The heartbeat is the expiry mechanism. A peer that stops answering is closed by
+the route, so its row cannot outlive the connection. Change only two fields:
+
+```zig
+.ping_interval_ms = 15_000,
+.pong_timeout_ms = 5_000,
+```
+
+Keep `pong_timeout_ms` below `idle_timeout_ms`, and set both values or neither.
+See [Heartbeats and idle peers](/docs/websocket/heartbeats).
+
+### Room counts
+
+Count rows for one room before announcing a change:
+
+```zig
+fn room_count(room: []const u8) usize {
+    var total: usize = 0;
+    for (peers) |peer| {
+        if (peer.name_len == 0) continue;
+        if (std.mem.eql(u8, peer.room[0..peer.room_len], room)) total += 1;
+    }
+    return total;
+}
+```
+
+Publish the count as its own event, or include it in the join frame. It is per
+process: behind `Cluster.publish`, each worker reports a partial view. See
+[Shared-nothing workers](/docs/concepts/shared-nothing).

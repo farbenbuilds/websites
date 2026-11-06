@@ -1,0 +1,147 @@
+---
+title: Nix development shell
+description: Enter the pinned Nixpkgs 26.05 shell for Zig 0.16.0, wrk, and a coherent sanitizer runtime on supported Linux hosts.
+sidebar:
+  order: 3
+search:
+  tags: [operations, nix, toolchain]
+---
+
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+It is not an application build step. If you installed the package with `zig fetch --save`, see
+[Installation](/docs/getting-started/installation) instead.
+:::
+
+The flake pins the compiler, the support tools, and the sanitizer runtime that
+the CI gates use. Enter the shell when you want the same toolchain as CI, or
+when a sanitizer build needs a matching compiler-rt, glibc, and dynamic linker.
+The shell does not change the build: the same Zig commands run inside and
+outside it.
+
+## Enter the shell
+
+From the repository root:
+
+```sh
+nix develop
+```
+
+For a dirty working tree, or before you have committed a new file, build the
+flake from the working directory instead of the git revision:
+
+```sh
+nix develop path:.
+```
+
+`path:.` copies the current tree, including untracked files, into the Nix store.
+CI uses this form so a pull request is tested from its actual contents. Run a
+single command without an interactive shell with `-c`:
+
+```sh
+nix develop "path:." -c zig build test --summary all
+```
+
+## What is pinned
+
+| Input          | Pin                                      |
+| -------------- | ---------------------------------------- |
+| Nixpkgs        | `nixos-26.05`                            |
+| Zig            | `0.16.0` through `zig-overlay`           |
+| Flake plumbing | `flake-parts`                            |
+| Dependency set | `zon2nix` where the host platform has it |
+
+The flake exposes four systems: `x86_64-linux`, `aarch64-linux`,
+`x86_64-darwin`, and `aarch64-darwin`. The `nix build` output is a local native
+build. The project publishes source tags, not per-platform binary packages, so
+consumers still fetch a tag with `zig fetch`.
+
+## What the shell provides
+
+| Provided item      | Purpose                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| Zig 0.16.0         | The only compiler needed; it builds the C and C++ dependencies |
+| `zls`              | Language server for editor integration                         |
+| `ripgrep`          | Search across the checkout                                     |
+| `wrk`              | Load generator for the benchmark and load-test workflows       |
+| `zon2nix`          | Package-set generation where the platform publishes it         |
+| LLVM `compiler-rt` | Sanitizer runtime on Linux GNU hosts                           |
+
+The shell sets `UWEBZOCKETS_DEFAULT_TARGET` to the host target triple. On Linux
+it also exports `UWEBZOCKETS_RUNTIME_DYNAMIC_LINKER` and
+`UWEBZOCKETS_RUNTIME_LIBRARY_PATH` so a debug or release run uses the shell's
+glibc rather than the host loader.
+
+On Linux GNU hosts, the sanitizer variables are set as well:
+`UWEBZOCKETS_SANITIZER_LIB_DIR` points at `compiler-rt`, while
+`UWEBZOCKETS_SANITIZER_LIBC_DIR` and `UWEBZOCKETS_SANITIZER_DYNAMIC_LINKER`
+point at the matching libc and loader. That combination is what lets
+`-Dsanitize=true` run without extra flags.
+
+## Sanitizers
+
+The complete instrumented run needs no path arguments inside the shell:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+The MemorySanitizer smoke is separate and only runs on `x86_64` Linux:
+
+```sh
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+The two modes are mutually exclusive. [Sanitizers](/docs/operations/sanitizers)
+explains the flags, the C/C++ boundary they cover, and the ASan
+`use_sigaltstack=0` workaround for threaded tests.
+
+## Musl shell
+
+On Linux, the flake also exposes a musl development shell:
+
+```sh
+nix develop .#musl
+```
+
+Use it when you want the default target and runtime paths to match a musl build.
+For a one-off cross build, the target flag is enough:
+
+```sh
+zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
+```
+
+## When plain Zig is enough
+
+| Situation                                     | Use Nix  | Use plain Zig 0.16.0                  |
+| --------------------------------------------- | -------- | ------------------------------------- |
+| Matching the CI unit and release gates        | Yes      | Yes                                   |
+| Running ASan, UBSan, or LSan                  | Yes      | Needs runtime paths                   |
+| Running the MSan dependency-boundary smoke    | Yes      | x86_64 Linux only, with runtime paths |
+| Building musl, Windows, or BSD targets        | Optional | Yes                                   |
+| Editing on macOS without a Linux runtime gate | Optional | Yes                                   |
+
+Outside Nix, pass `-Dsanitizer-lib-dir=/path/to/compiler-rt/lib`. If that
+runtime expects a different glibc than the host, pass the matching
+`-Dsanitizer-libc-dir` and `-Dsanitizer-dynamic-linker` together. Sanitizer
+builds are native Linux only.
+
+## Verify
+
+```sh
+nix develop "path:." -c zig build test --summary all
+```
+
+Expect the unit suite, the C ABI smoke, the C++ header check, and the archive
+check to pass. A shell that cannot resolve the flake is a Nix input or network
+problem, not a compiler problem; keep the failing command and its output when
+you report it.
+
+## Related
+
+- [Build from source](/docs/operations/build) covers the build graph and caches.
+- [Tests](/docs/operations/testing) maps each gate to the command that runs it.
+- [Cross-compilation](/docs/operations/cross-compilation) covers non-host targets.

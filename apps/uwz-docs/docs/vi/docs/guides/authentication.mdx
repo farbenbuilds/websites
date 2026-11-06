@@ -1,0 +1,177 @@
+---
+title: Thêm authentication
+description: Bảo vệ một route prefix bằng bearer credential, trả 401 challenge, và resolve identity theo route mà không phá trust boundary.
+sidebar:
+  order: 3
+search:
+  tags: [guide, auth, security]
+---
+
+Guide này thêm bearer authentication cho một route prefix và để health route mở.
+Middleware của framework thực hiện credential check; application sở hữu quyết
+định prefix và identity đi kèm.
+
+## Bài toán
+
+Bạn cần từ chối request chưa xác thực trước khi handler chạy, giữ readiness route
+cho supervisor, và biết request thuộc caller nào mà không tin một header do
+request gửi lên.
+
+## Giả định
+
+- Zig 0.16.0 và µWebZockets 2.1.6 cài bằng `zig fetch --save`; một worker trên
+  `127.0.0.1:3000`, plaintext khi phát triển và TLS khi production.
+- Credential được cấp lúc startup. Không có token store và không có session.
+
+## Chương trình
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Guard = struct {
+    auth: *uz.middleware.Auth,
+    prefix: []const u8,
+};
+
+fn guard(context: *anyopaque, req: *uz.Request, res: *uz.Response) uz.MiddlewareResult {
+    const self: *const Guard = @ptrCast(@alignCast(context));
+    if (!std.mem.startsWith(u8, req.path, self.prefix)) return .continue_dispatch;
+    return uz.middleware.Auth.handler(self.auth, req, res);
+}
+
+fn dashboard(_: *uz.Request, res: *uz.Response) void {
+    res.text("dashboard") catch {};
+}
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var auth = uz.middleware.auth(.{
+        .realm = "api",
+        .bearer = &.{.{ .token = "service-token-rotate-me" }},
+    });
+    var guard_state: Guard = .{ .auth = &auth, .prefix = "/api" };
+    _ = try app.use(&guard_state, guard);
+
+    _ = try app.get("/api/dashboard", dashboard);
+    _ = try app.get("/health", health);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+Middleware là global, nên guard quyết định theo từng request có delegate hay
+không. Credential, `Auth` và `Guard` phải sống lâu hơn `app.deinit()`.
+
+## Credential check làm gì
+
+| Bước         | Behavior                                                                         |
+| ------------ | -------------------------------------------------------------------------------- |
+| Field lookup | `get_unique_header("authorization")`; thiếu hoặc trùng thì fail closed           |
+| Scheme       | `Basic` hoặc `Bearer`, so khớp không phân biệt hoa thường, sau đó là space/tab   |
+| Comparison   | `std.crypto.timing_safe.eql` trên block 64 byte, mọi entry đều được so sánh      |
+| Rejection    | `401 Unauthorized`, body rỗng, `WWW-Authenticate` chỉ liệt kê scheme đã cấu hình |
+
+Middleware trả lời "chấp nhận" hoặc "từ chối"; authorization nằm trong handler.
+
+## Trust boundary
+
+- `Authorization` là cleartext trên đường truyền. Kết thúc TLS trước khi middleware
+  thấy credential production, và không log hay echo field này.
+- Check so sánh plaintext; nó không hash, ký hay mã hoá, nên bảo vệ process
+  environment hoặc secret store cung cấp danh sách.
+- Rotate credential nghĩa là dựng lại các option được mượn, tức là restart. Hãy
+  lên kế hoạch rotation như rolling restart.
+- Trong cluster, đăng ký một `Auth` cho mỗi worker. Option là immutable nhưng mỗi
+  worker app cần entry middleware riêng.
+
+## Verification
+
+```sh
+zig build run
+```
+
+```sh
+curl -i http://127.0.0.1:3000/api/dashboard
+curl -i -H 'Authorization: Bearer service-token-rotate-me' http://127.0.0.1:3000/api/dashboard
+curl -i http://127.0.0.1:3000/health
+```
+
+Request đầu trả `401 Unauthorized` với `WWW-Authenticate: Bearer`. Request thứ hai
+trả `200 OK` với `dashboard`, request thứ ba trả `200 OK` không cần credential.
+
+## Capacity assumptions
+
+| Bound               | Value    | Nguồn                   |
+| ------------------- | -------- | ----------------------- |
+| Basic decoded value | 512 byte | buffer stack middleware |
+
+## Failure behavior
+
+| Điều kiện                        | Kết quả                                            |
+| -------------------------------- | -------------------------------------------------- |
+| Credential thiếu, trùng hoặc sai | `401 Unauthorized` với challenge đã cấu hình       |
+| Realm chứa `"`, CR hoặc LF       | `500 Internal Server Error` ở lần từ chối đầu tiên |
+
+## Variations
+
+### Basic auth thay cho bearer
+
+Trỏ cùng guard vào Basic credential. Basic chỉ chấp nhận được qua TLS:
+
+```zig
+var auth = uz.middleware.auth(.{
+    .realm = "api",
+    .basic = &.{.{ .username = "admin", .password = "rotate-me" }},
+});
+```
+
+Gửi credential bằng `curl -i -u admin:rotate-me` tới cùng route.
+
+### Identity theo route
+
+Resolve identity sau khi middleware đã chấp nhận token. Phép so sánh giữ cùng
+shape block cố định nên nội dung token không bị so từng byte:
+
+```zig
+const Actor = struct { token: []const u8, name: []const u8 };
+const actors = [_]Actor{
+    .{ .token = "service-token-rotate-me", .name = "deploy" },
+    .{ .token = "reader-token", .name = "reader" },
+};
+
+fn token_matches(expected: []const u8, presented: []const u8) bool {
+    if (expected.len != presented.len or expected.len > 64) return false;
+    var left: [64]u8 = [_]u8{0} ** 64;
+    var right: [64]u8 = [_]u8{0} ** 64;
+    @memcpy(left[0..expected.len], expected);
+    @memcpy(right[0..presented.len], presented);
+    return std.crypto.timing_safe.eql([64]u8, left, right);
+}
+
+fn actor_for(req: *const uz.Request) ?Actor {
+    const header = req.get_unique_header("authorization") orelse return null;
+    if (header.len <= 7 or !std.ascii.eqlIgnoreCase(header[0..7], "Bearer ")) return null;
+    const presented = std.mem.trim(u8, header[7..], " \t");
+    for (actors) |actor| {
+        if (token_matches(actor.token, presented)) return actor;
+    }
+    return null;
+}
+```
+
+Gọi `actor_for` trong handler được bảo vệ và trả `403 Forbidden` khi token không
+có actor. Không bao giờ đọc identity từ `X-User` hay query parameter.
+
+## Liên quan
+
+- [Authentication](/docs/http/authentication)
+- [Authentication boundary](/docs/security/authentication)

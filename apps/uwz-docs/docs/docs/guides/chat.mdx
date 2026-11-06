@@ -1,0 +1,180 @@
+---
+title: Build a chat server
+description: Subscribe sockets to a bounded topic, publish every message, and keep one slow peer from delaying the rest of the room.
+sidebar:
+  order: 6
+search:
+  tags: [guide, websocket, pub-sub]
+---
+
+This guide builds one public room over WebSocket. Each socket subscribes on open,
+publishes every message, and leaves on close; a slow peer is skipped.
+
+## Problem
+
+You need every connected peer to see each message without server-side room state,
+unbounded buffering, or one slow client stalling fan-out for everyone.
+
+## Assumptions
+
+- Zig 0.16.0 and µWebZockets 2.1.6 installed with `zig fetch --save`; one worker
+  on `0.0.0.0:3000` with the default 16 KiB WebSocket message capacity.
+- `wscat` through `npx` for verification. Browsers work the same way.
+
+## Program
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.subscribe("lobby") catch |err| {
+        std.log.warn("subscribe failed: {}", .{err});
+        ws.terminate();
+        return;
+    };
+    _ = ws.publish("lobby", "system: a peer joined", true);
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    const delivered = ws.publish("lobby", message, opcode == .text);
+    if (delivered == 0) std.log.info("no subscriber accepted the message", .{});
+}
+
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("drained: {} bytes queued", .{ws.buffered_amount()});
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    _ = ws.publish("lobby", "system: a peer left", true);
+    _ = ws.unsubscribe("lobby");
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/chat", .{
+        .open = on_open,
+        .message = on_message,
+        .drain = on_drain,
+        .close = on_close,
+        .ping_interval_ms = 30_000,
+        .pong_timeout_ms = 10_000,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Delivery contract
+
+`publish` frames one message per subscriber into that connection's write queue
+and returns the number of queues that accepted it. The message slice is borrowed
+for the callback only; `send` copies it before returning, so echoing it
+immediately is safe.
+
+| Fact         | Meaning                                                           |
+| ------------ | ----------------------------------------------------------------- |
+| Return value | Subscribers whose write queue accepted the frame                  |
+| Full queue   | That subscriber is skipped; the publish still succeeds for others |
+
+## Capacity assumptions
+
+| Bound                         | Value  | Exceeded behavior                      |
+| ----------------------------- | ------ | -------------------------------------- |
+| Active topics                 | 1024   | `error.TopicCapacityReached`           |
+| Socket-to-topic subscriptions | 8192   | `error.SubscriptionCapacityReached`    |
+| Subscribers per topic         | 65535  | `error.TopicSubscriberCapacityReached` |
+| Write queue per connection    | 64 KiB | `send` returns `error.WouldBlock`      |
+
+These are per worker. Four workers can each hold 8192 subscriptions, and a
+cluster broadcast consumes one inbox slot per worker, not one per connection.
+
+## Verification
+
+```sh
+zig build run
+```
+
+Open two terminals and run the following in each:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/chat
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< system: a peer joined
+< hello
+```
+
+The second client prints the join notice and the message. Close it and send once
+more: the count drops from two to one and the leave notice arrives.
+
+## Failure behavior
+
+| Condition                        | Result                                          |
+| -------------------------------- | ----------------------------------------------- |
+| Subscriber write queue full      | Frame skipped for that peer, count excludes it  |
+| Topic or subscription table full | `subscribe` returns an error; this guide closes |
+| Peer stops answering pings       | Heartbeat closes it, then `on_close` runs       |
+
+## Variations
+
+### Separate rooms
+
+Register one route per room and share the callbacks through a topic parameter:
+
+```zig
+fn join(ws: *uz.WebSocket, topic: []const u8) void {
+    ws.subscribe(topic) catch return ws.terminate();
+    _ = ws.publish(topic, "system: a peer joined", true);
+}
+
+fn on_lobby_open(ws: *uz.WebSocket) void {
+    join(ws, "room:lobby");
+}
+
+fn on_lobby_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room:lobby", message, opcode == .text);
+}
+```
+
+Repeat the pair for each room and register them as `/chat/lobby` and
+`/chat/ops`. Keep the room list in code so topic names stay literals.
+
+### Add a history buffer
+
+Keep a fixed ring of copied messages and replay it on open. Copy into fixed
+storage; retaining the callback slice would read freed memory:
+
+```zig
+const Entry = struct { len: usize = 0, bytes: [128]u8 = undefined };
+var history: [50]Entry = undefined;
+var history_len: usize = 0;
+var history_next: usize = 0;
+
+fn remember(message: []const u8) void {
+    if (message.len > 128) return;
+    const entry = &history[history_next];
+    @memcpy(entry.bytes[0..message.len], message);
+    entry.len = message.len;
+    history_next = (history_next + 1) % history.len;
+    history_len = @min(history_len + 1, history.len);
+}
+```
+
+Call `remember` from `on_message` before publishing, then replay from the oldest
+entry with `ws.send`. This ring is process-wide. A `Cluster` runs workers as
+threads in one address space, so a module-level ring would be shared without a
+lock. Keep history in the client or an external store when you cluster, or run
+one process per worker.
+
+## Related
+
+- [Pub/sub](/docs/websocket/pub-sub)
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub)

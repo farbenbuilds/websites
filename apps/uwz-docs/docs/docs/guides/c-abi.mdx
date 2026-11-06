@@ -1,0 +1,180 @@
+---
+title: Embed from C or C++
+description: Build a complete C server against the installed header, link the release archives, and respect fixed capacities, borrowed views, and async-token lifetimes.
+sidebar:
+  order: 21
+search:
+  tags: [guide, c-abi, c, cpp, ffi]
+---
+
+The C ABI is a fixed-capacity server binding. One opaque application handle owns
+the router, listener, loop, and storage; C callbacks borrow views for one call.
+
+## Problem
+
+A C or C++ host wants HTTP without embedding Zig source. It needs the header, the
+link graph, a complete program, and the rules that stop a callback from
+retaining borrowed memory.
+
+## Assumptions
+
+- Zig 0.16.0 builds the library and your C program.
+- The host compiles C11 or C++17.
+- The deployment fits the fixed capacities; the ABI has no `ServerConfig`,
+  schema, JSON-RPC, client, HTTP/2, HTTP/3, or mTLS.
+
+## Build the program
+
+Add the package with
+`zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag>'`. The
+consumer project owns `build.zig`, `build.zig.zon`, and `src/main.c`:
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{ .target = target, .optimize = optimize });
+    const exe = b.addExecutable(.{ .name = "c_server", .root_module = b.createModule(.{
+        .target = target, .optimize = optimize, .link_libc = true, .link_libcpp = true,
+    }) });
+    exe.root_module.addIncludePath(uz.path("include"));
+    exe.root_module.addCSourceFile(.{ .file = b.path("src/main.c"), .flags = &.{"-std=c11"} });
+    exe.root_module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        exe.root_module.linkLibrary(uz.artifact(name));
+    }
+    b.installArtifact(exe);
+}
+```
+
+```c src/main.c
+#include "uWebZockets.h"
+#include <stdio.h>
+#include <string.h>
+
+static uwz_slice slice_of(const char *text) {
+    uwz_slice value = { (const uint8_t *) text, strlen(text) };
+    return value;
+}
+
+static void hello(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) request;
+    (void) user_data;
+    uwz_error err = uwz_response_end(response, slice_of("200 OK"), slice_of("hello from C"));
+    if (err != UWZ_OK) fprintf(stderr, "response: %s\n", uwz_error_name(err));
+}
+
+static int fail(uwz_app **app, uwz_error code, const char *step) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(code));
+    if (*app != NULL) uwz_app_destroy(app);
+    return 1;
+}
+
+int main(void) {
+    uwz_app *app = NULL;
+    static const char path[] = "/";
+    static const char address[] = "0.0.0.0";
+    uwz_error err = uwz_app_create(&app);
+    if (err != UWZ_OK) return fail(&app, err, "create");
+    err = uwz_app_route(app, UWZ_HTTP_GET, path, sizeof(path) - 1, hello, NULL);
+    if (err != UWZ_OK) return fail(&app, err, "route");
+    err = uwz_app_listen(app, address, sizeof(address) - 1, 3000);
+    if (err != UWZ_OK) return fail(&app, err, "listen");
+    err = uwz_app_run(app);
+    uwz_error released = uwz_app_destroy(&app);
+    if (err != UWZ_OK) return fail(&app, err, "run");
+    return released == UWZ_OK ? 0 : fail(&app, released, "destroy");
+}
+```
+
+```sh
+zig build
+./zig-out/bin/c_server
+```
+
+`uwz_app_create` requires `*out_app` to be `NULL`; destroy nulls the handle.
+Every fallible call returns a versioned negative `uwz_error`, printable with
+`uwz_error_name`.
+
+## Verify it
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+Expect `hello from C`. Stop with Ctrl+C. The ABI exposes `uwz_app_shutdown`, not a signal watcher, so a
+supervisor calls shutdown from application code, not from the signal context.
+
+## Fixed capacities
+
+| Macro                | Value | Meaning                      |
+| -------------------- | ----: | ---------------------------- |
+| Connection slots     | 1,024 | Compile-time C application   |
+| `UWZ_MAX_ROUTES`     |    64 | Copied route paths           |
+| `UWZ_MAX_MIDDLEWARE` |    32 | Ordered middleware callbacks |
+
+Registration fails with `UWZ_ERROR_CAPACITY` after the table is full. There is
+no Zig-style slab sizing from C; use the Zig API when 1,024 connections is
+wrong.
+
+## Lifetimes and tokens
+
+| Value                | Valid until                                |
+| -------------------- | ------------------------------------------ |
+| Request field        | The callback returns, or token completion  |
+| Route parameter      | The callback returns                       |
+| WebSocket message    | The receiving callback returns             |
+| `user_data`          | `uwz_app_destroy` after the drain          |
+| `uwz_async_response` | Completion or shutdown; copy it to keep it |
+
+An async callback returning `UWZ_HANDLER_PENDING` copies the whole
+`uwz_async_response` struct into caller-owned storage and completes it once on
+the owning loop. A stale token returns `UWZ_ERROR_INVALID_STATE`. Destroying
+from a callback returns the same error; destroy after `uwz_app_run` returns.
+
+## Failure behavior
+
+| Condition                | Result                       |
+| ------------------------ | ---------------------------- |
+| `*out_app` is not `NULL` | `UWZ_ERROR_INVALID_ARGUMENT` |
+| Route table full         | `UWZ_ERROR_CAPACITY`         |
+| Invalid listen address   | `UWZ_ERROR_INVALID_ARGUMENT` |
+
+## Variations
+
+### C++ ownership wrapper
+
+```cpp
+uwz_app *raw = nullptr;
+if (uwz_app_create(&raw) != UWZ_OK) return 1;
+auto deleter = [](uwz_app *app) { uwz_app_destroy(&app); };
+std::unique_ptr<uwz_app, decltype(deleter)> app(raw, deleter);
+```
+
+The deleter runs after `uwz_app_run` returns; keep the wrapper alive.
+
+### Async response
+
+```c
+struct pending { uwz_async_response token; };
+
+static uwz_handler_result defer(const uwz_request *request, uwz_async_response *response, void *user_data) {
+    struct pending *slot = user_data;
+    (void) request;
+    slot->token = *response;
+    return UWZ_HANDLER_PENDING;
+}
+
+static void finish(struct pending *slot) {
+    uwz_async_response_end(&slot->token, slice_of("200 OK"), slice_of("later"));
+}
+```
+
+`finish` runs on the owning event loop; there is no cross-thread wake.
+
+## Related
+
+- [C ABI reference](/docs/operations/c-abi) lists every function and enum.
+- [C ABI architecture](/docs/architecture/c-abi) explains the handle model.

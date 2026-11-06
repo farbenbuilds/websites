@@ -1,0 +1,180 @@
+---
+title: Kubernetes
+description: Run a µWebZockets Deployment with HTTP probes, a drain-aware grace period, slab-sized requests, and a pod disruption budget.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, deployment, kubernetes]
+---
+
+µWebZockets ships no operator, no Helm chart, and no custom resource. A
+Deployment of ordinary pods is the supported shape: the framework owns the worker
+group inside one container, and Kubernetes owns replicas and endpoint removal.
+This page shows the parts that need a decision, not a platform blueprint.
+
+## Probes
+
+The framework has no built-in health endpoint, so register two routes:
+
+| Probe     | Path       | Answers                                                   |
+| --------- | ---------- | --------------------------------------------------------- |
+| Liveness  | `/healthz` | The process can still serve a request                     |
+| Readiness | `/readyz`  | The listener exists and the worker has capacity to accept |
+
+Readiness must reflect listener state and capacity, not just process liveness. A
+pod that is alive but has exhausted its connection slots should leave the
+Service instead of returning errors to clients. Keep both handlers allocation-free
+and free of shared mutable state, because each worker calls them independently.
+
+## Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uz-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: uz-app
+  template:
+    metadata:
+      labels:
+        app: uz-app
+    spec:
+      terminationGracePeriodSeconds: 140
+      containers:
+        - name: app
+          image: registry.example.com/uz-app:2.1.6
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "4"
+              memory: "1Gi"
+            limits:
+              memory: "1Gi"
+```
+
+Set `UWEBZOCKETS_WORKERS` in the container environment:
+`build_cluster_from_environment` reads it, and without it the group defaults to
+the platform CPU count. Add a `preStop` sleep of a few seconds:
+it is not a drain, but it gives the endpoint controller time to remove the pod from
+the Service before the app sees SIGTERM, so new connections stop arriving first.
+
+## Service and disruption budget
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: uz-app
+spec:
+  selector:
+    app: uz-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: uz-app
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: uz-app
+```
+
+The budget covers voluntary disruptions such as node drains and cluster upgrades.
+It does not cover a node that dies, so keep more than `minAvailable` replicas when
+a single-node loss matters. Set `minAvailable` from the traffic floor, not from
+the replica count, and leave room for one surge pod during a rollout.
+
+## Grace period and drain
+
+`terminationGracePeriodSeconds` must exceed the drain bound. The drain waits for
+keep-alive connections to idle out, and `idle_timeout_ms` defaults to 120 seconds,
+so 140 seconds leaves a small margin for release. A shorter grace period sends
+SIGKILL while `run` is still draining, and clients see reset connections.
+
+| Value                           | Meaning                                            |
+| ------------------------------- | -------------------------------------------------- |
+| `idle_timeout_ms`               | Upper bound on a drained keep-alive connection     |
+| `terminationGracePeriodSeconds` | Must be greater than that bound plus release time  |
+| `preStop`                       | Endpoint removal delay before SIGTERM, not a drain |
+
+The full sequence is documented in
+[Shutdown and draining](/docs/deployment/shutdown). Lower `idle_timeout_ms` if you
+cannot raise the grace period; an idle WebSocket has to reconnect either way.
+
+## Sizing requests from the slab
+
+Every active worker allocates one slab at startup and keeps it for the process
+lifetime, so the memory request is a calculation, not a guess:
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+    .max_body_size = 16 * 1024,
+    .max_ws_message_size = 8 * 1024,
+};
+const slab = try config.slab_bytes();
+const inbox = 65 * config.max_ws_message_size;
+const workers = 4;
+std.debug.print("per worker: {d} bytes\n", .{slab});
+std.debug.print("four workers plus inbox: {d} bytes\n", .{(slab + inbox) * workers});
+```
+
+Add the TLS contexts, QUIC pools, and loop tables that `slab_bytes()` excludes,
+then set the request above the total and the limit not far above the request. A
+limit below the slab becomes `OOMKilled` during startup, which looks like a crash
+loop rather than a capacity error. The worksheet is in
+[Capacity sizing](/docs/performance/capacity-sizing).
+
+## Ports and `SO_REUSEPORT`
+
+| Scope              | Behavior                                                                         |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Workers in one pod | Each worker binds the port with `SO_REUSEPORT` on Linux; one process owns them   |
+| Separate pods      | Each pod has its own network namespace, so there is no port sharing to configure |
+| Windows nodes      | The cluster falls back to `SO_REUSEADDR`; distribution is unspecified            |
+
+Do not add a second application container that binds the same port in one pod.
+Run one process per pod and scale with replicas. CPU requests should cover whole
+physical cores, because the worker group pins one loop per core and a fractional
+request leaves workers competing for the same core.
+
+## HTTP/3 has no cluster
+
+`init_http3` and `listen_udp` are single-application APIs. A clustered worker
+group is TCP and TLS only, so a pod that runs `build_cluster` cannot also serve
+QUIC. HTTP/3 in Kubernetes therefore needs a separate single-process Deployment,
+a UDP `Service`, and a UDP-capable load balancer, with no in-pod clustering.
+
+## Rollout
+
+`maxUnavailable: 0` with `maxSurge: 1` replaces pods one at a time and keeps the
+old pod serving until the new one is ready. Readiness fails until the listener is
+bound, the grace period covers the drain, and the disruption budget leaves one
+replica serving during a node drain.

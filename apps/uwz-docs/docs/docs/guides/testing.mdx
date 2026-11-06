@@ -1,0 +1,180 @@
+---
+title: Test a µWebZockets app
+description: Test handler decisions in process, assert parser and router rejections on loopback, and keep compatibility gates out of your application suite.
+sidebar:
+  order: 22
+search:
+  tags: [guide, testing, ci, loops]
+---
+
+Test the decision without a socket and the wire with a real one. The framework
+ships no test client; `uz.client` is a bounded production HTTP/1.1 client, not a
+harness.
+
+## Problem
+
+You need a fast unit test for request classification, a wire test for statuses
+the router and parser produce, and a CI job without a compliance suite.
+
+## Assumptions
+
+- Zig 0.16.0 and `curl` are available in CI.
+- Pure decisions live in `src/policy.zig`; `src/main.zig` wires them.
+- The default 16 KiB body limit is under test.
+- h1spec and Autobahn remain maintainer gates, not project dependencies.
+
+## Write the testable module
+
+Keep the decision pure so the test needs no listener:
+
+```zig src/policy.zig
+const std = @import("std");
+
+pub const RequestClass = enum { json, form, unsupported };
+
+pub fn classify(content_type: []const u8) RequestClass {
+    const end = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media = std.mem.trim(u8, content_type[0..end], " \t");
+    if (std.ascii.eqlIgnoreCase(media, "application/json")) return .json;
+    if (std.ascii.eqlIgnoreCase(media, "application/x-www-form-urlencoded")) return .form;
+    return .unsupported;
+}
+
+test "media type ignores parameters" {
+    try std.testing.expectEqual(RequestClass.json, classify("application/json; charset=utf-8"));
+    try std.testing.expectEqual(RequestClass.unsupported, classify("text/plain"));
+}
+```
+
+## Wire the handler
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+const policy = @import("policy.zig");
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_header("content-type") orelse "";
+    if (policy.classify(content_type) == .unsupported) {
+        res.end("415 Unsupported Media Type", "unsupported") catch {};
+        return;
+    }
+    res.end("201 Created", "") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+    _ = try app.post("/items", create);
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Run the unit test
+
+```sh
+zig test src/policy.zig
+```
+
+The test compiles without the framework module, so it stays fast. A unit test
+cannot prove which layer answered a rejection; only the wire can.
+
+## Verify on loopback
+
+Start the server in one terminal:
+
+```sh
+zig build run
+```
+
+Assert the pre-handler rejections:
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  --data-binary @body.bin -H 'Content-Type: application/json' \
+  http://127.0.0.1:3000/items)
+test "$status" = "413"
+
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  http://127.0.0.1:3000/items)
+test "$status" = "431"
+
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X DELETE http://127.0.0.1:3000/items)
+test "$status" = "405"
+```
+
+A `413` or `431` proves the parser answered before the route. A `405` proves the
+router answered before dispatch. None of the three exercises your handler.
+
+## CI shape
+
+```yaml
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - run: zig test src/policy.zig
+      - run: zig build
+```
+
+Keep compatibility suites out of this job. h1spec and the 517-case Autobahn run
+are framework-release evidence, not evidence about your routes or proxy.
+
+## Capacity assumptions
+
+| Resource        | Bound                   | Test consequence                 |
+| --------------- | ----------------------- | -------------------------------- |
+| Request body    | `max_body_size`, 16 KiB | The 20 KB fixture must get `413` |
+| Request headers | `max_header_size`       | The 20 KB header must get `431`  |
+
+## Failure behavior
+
+| Symptom                    | Meaning                                     |
+| -------------------------- | ------------------------------------------- |
+| `000` from curl            | The connection failed; check the listener   |
+| `405` on a registered path | The method is not registered for that route |
+
+## Variations
+
+### Handler decision table
+
+Put the cases in one table so a new rule adds a row, not a test:
+
+```zig
+test "handler decision table" {
+    const cases = [_]struct { content_type: []const u8, want: RequestClass }{
+        .{ .content_type = "application/json", .want = .json },
+        .{ .content_type = "text/plain", .want = .unsupported },
+    };
+    for (cases) |case| try std.testing.expectEqual(case.want, classify(case.content_type));
+}
+```
+
+### Acceptance script
+
+Wrap the loopback checks in one script and let CI run it after the build:
+
+```sh
+#!/usr/bin/env sh
+set -eu
+test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE http://127.0.0.1:3000/items)" = "405"
+```
+
+The script assumes a running server; start it, run the script, then send
+`SIGTERM` and require exit status 0.
+
+## Related
+
+- [Testing an HTTP server](/docs/http/testing) covers the same layers in detail.
+- [HTTP limits](/docs/http/limits) lists the defaults behind `413` and `431`.

@@ -1,0 +1,131 @@
+---
+title: Hardening
+description: Decide authentication, rate limits, CORS, headers, timeouts, TRACE, and request limits before a public listener accepts traffic.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, deployment, security]
+---
+
+Hardening is a set of decisions, not a switch. µWebZockets bounds every parser
+and ships four middleware primitives, but it does not choose your identity
+model, your thresholds, or your browser policy. This page lists the decisions a
+public deployment must record.
+
+Each control has a dedicated recipe. Follow the link instead of copying a
+configuration from here; the recipes carry the ownership and failure detail.
+
+## Trust boundaries
+
+| Boundary       | Framework enforces                                         | Deployment owns                                      |
+| -------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| TLS            | TLS 1.3 only, ALPN policy, client-certificate verification | Certificate issuance, CA bundles, rotation, pinning  |
+| HTTP parsing   | Fixed buffers, strict framing, structured rejection        | Capacity sizing and OS resource limits               |
+| Authentication | Constant-time credential compare, fail-closed middleware   | User store, token issuance, per-route authorization  |
+| Rate limiting  | Fixed token buckets and per-worker tables                  | Key choice, thresholds, shared-state policy          |
+| WebSocket      | Message-size limits, heartbeat-driven idle close           | Origin checks, session identity, topic authorization |
+
+The framework does not ship a web application firewall, DDoS protection, a user
+directory, a session store, or secret management. Those are deployment
+components. Read [Threat model](/docs/security/threat-model) for the assets and
+attacker capabilities this page assumes.
+
+## Authentication
+
+`uz.middleware.Auth` validates Basic and Bearer credentials in constant time and
+returns a `401` challenge. Register it on the application that carries sensitive
+routes.
+
+Middleware applies to every request on that application. If one listener mixes
+public and private routes, the middleware cannot select a subset. Split the
+surfaces into separate applications, or perform the check inside the handler
+for the routes that need it. Authentication proves a credential; authorization
+still belongs to the handler.
+
+Read [Authentication](/docs/http/authentication) for credential registration and
+the challenge format.
+
+## Rate limiting
+
+Rate limiting is a fixed token bucket keyed by a value you choose. Derive the key
+from something the client cannot rotate freely:
+
+| Key source     | Use when                                                  |
+| -------------- | --------------------------------------------------------- |
+| `key_fn`       | You have an authenticated identity or a derived bucket id |
+| `key_header`   | A trusted proxy sets the header                           |
+| `key_constant` | Every request maps to one bucket per worker               |
+
+Never key on a raw client-supplied header unless a trusted proxy overwrites it.
+The bucket arrays are caller-owned and each worker keeps its own limiter, so a
+four-worker cluster admits roughly four times the per-worker rate unless you
+divide the budget or share state outside the framework.
+
+Read [Rate limiting](/docs/http/rate-limiting) for the array sizing and the
+`429` plus `Retry-After` contract.
+
+## CORS and headers
+
+| Control                      | Behavior                                    | Do not assume                                   |
+| ---------------------------- | ------------------------------------------- | ----------------------------------------------- |
+| `middleware.Cors`            | Exact origin match; preflight returns `204` | That CORS is authentication                     |
+| `middleware.SecurityHeaders` | Five default response headers               | That the defaults are a complete browser policy |
+
+Apply both deliberately. A service-to-service listener may need neither, and a
+browser-facing listener needs a reviewed origin list rather than a wildcard.
+Read [CORS](/docs/http/cors) and [Security headers](/docs/http/security-headers)
+for the exact defaults and overrides.
+
+## Timeouts and request limits
+
+| Limit               | Default      | Deployment decision                                      |
+| ------------------- | ------------ | -------------------------------------------------------- |
+| Idle timeout        | 120 seconds  | Lower it for short-lived clients; raise it for slow ones |
+| Header read timeout | Configurable | Bound an incomplete HTTP/1 request head or body          |
+| Request body        | 16 KiB       | Raise only to the largest legitimate upload              |
+| Request line        | 8 KiB        | Keep unless a client legitimately sends longer targets   |
+| Header block        | 16 KiB       | Raise with the header count when a proxy adds fields     |
+
+Every limit is enforced with a structured rejection: `413` for a body, `431` for
+headers, and `503` when a capacity limit such as WebSocket tunnels is exhausted.
+A rejection names the limit and its value, so clients can correct the request.
+Read [HTTP limits](/docs/http/limits) for the full table.
+
+## TRACE policy
+
+TRACE is opt-in. The framework does not register a route and does not synthesize
+the RFC 9110 echo response, so the default public surface has no TRACE handler.
+Disable it on public deployments unless an operational requirement exists.
+
+If you enable it, a reflecting handler must redact `Authorization`, `Cookie`,
+`Proxy-Authorization`, and application secrets, and must keep the reflected
+bytes within the response capacity. An unredacted echo turns the endpoint into a
+credential leak. Read [TRACE](/docs/http/trace) for the handler rules.
+
+## Secrets
+
+- Keep signing keys at least 32 bytes, and keep every secret out of the
+  repository, the image, and the logs.
+- Cookie signing proves integrity; it is not encryption. Do not put confidential
+  data in a signed cookie.
+- Compare secrets in constant time. The built-in authentication middleware does
+  this; a custom check must not use a short-circuiting string comparison.
+- Do not place secrets in rejection documents, metric labels, or route paths.
+
+## Early data
+
+The TCP context admits only `GET`, `HEAD`, `OPTIONS`, and `TRACE` before the
+handshake confirms. Everything else receives `425 Too Early`. Keep `GET`
+handlers idempotent, because early data is replayable. Configuring client
+certificates disables early data entirely. Read [Early data and 0-RTT](/docs/security/early-data)
+for the replay model.
+
+## Related
+
+- [Authentication](/docs/http/authentication)
+- [Rate limiting](/docs/http/rate-limiting)
+- [CORS](/docs/http/cors)
+- [Security headers](/docs/http/security-headers)
+- [HTTP limits](/docs/http/limits)
+- [Threat model](/docs/security/threat-model)
+- [TLS deployment](/docs/deployment/tls)

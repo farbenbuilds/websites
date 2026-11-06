@@ -32,11 +32,13 @@ app's `docs/` folder before writing.
 - Localize documentation as mirrored `docs/` and `docs/vi/` MDX. Do not add
   page prose, frontmatter, or docs routes to x18n resources or locale JSON.
 - Do not document a command that was not run or a behavior that was not checked.
-- Write for a consumer, not a framework contributor. Never require a clone,
-  build, test, or Nix shell of the framework repository. Use application build
-  steps, public API code adapted from `examples/*.zig`, and client tools. Present
-  framework compliance results as dated evidence, not instructions. See
-  `uWZ-TODO.md` section 8.12.
+- Separate application pages from contributor pages. Application pages start
+  from `zig fetch --save` and the reader's own `build.zig`. Contributor pages
+  under `/docs/operations` open with a "Contributing to µWebZockets" note, link
+  `CONTRIBUTE.md`, and may use clone, Nix, test, sanitizer, fuzz, and release
+  commands. Advanced application surfaces such as WASM, eBPF, kTLS, and AF_XDP
+  show consumer build wiring after `zig fetch --save`. See `uWZ-TODO.md` section
+  8.12.
 
 ## Output
 

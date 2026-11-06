@@ -1,0 +1,105 @@
+---
+title: Nền tảng hỗ trợ
+description: Đọc platform nào build được, platform nào chạy trong hosted CI, và mỗi support claim còn phụ thuộc vào điều gì trước khi deploy.
+sidebar:
+  order: 11
+search:
+  tags: [reference, platforms, operations]
+---
+
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Target triển khai application nằm trong [Deployment](/docs/deployment). Trang này nói về support
+claim của framework và CI evidence tương ứng.
+:::
+
+Một support claim đi theo evidence, không đi theo ý định. Trang này tách các
+target mà build graph compile được khỏi các target mà hosted CI thực thi, để một
+tính năng thiếu dễ được phân loại là defect, quyết định có scope hay việc còn
+chờ.
+
+## Bảng hỗ trợ
+
+| Platform                               | Build target         | Runtime CI                                                     | Support claim                                  | Caveat                                                               |
+| -------------------------------------- | -------------------- | -------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| Linux x86_64 và aarch64                | Native               | Hosted runtime và sanitizer matrix                             | Được hỗ trợ                                    | Sanitizer build chỉ trên native Linux                                |
+| macOS x86_64 và aarch64                | Native và cross      | Không có hosted kqueue job; test graph cross-compile khi cần   | Được hỗ trợ                                    | Cluster worker không pin vì platform không có affinity API           |
+| Windows x86_64                         | `x86_64-windows-gnu` | Job runtime `windows-2025` cùng compile và ReleaseFast library | Gate theo một lần chạy xanh cho release commit | Không có Windows binary; ADR 0004 sở hữu IOCP accept và queued close |
+| FreeBSD, NetBSD, OpenBSD, DragonFlyBSD | Build graph chung    | Không có                                                       | Community build target                         | Compile được nhưng không chạy trong CI                               |
+
+Chỉ Linux có runtime matrix hosted đầy đủ. macOS có claim mạnh hơn ở vai trò
+platform phát triển native, nhưng độ phủ runtime kqueue là evidence đã ghi từ máy
+của maintainer chứ không phải một hosted job.
+
+## Mỗi claim dựa trên gì
+
+- **Linux.** Các job runtime và sanitizer hosted chạy test graph và C ABI graph.
+  Đây là platform mà một production claim nên gọi tên.
+- **macOS.** Test graph cross-compile khi cần. Các fix kqueue của libxev được ghi
+  là XEV-003 tới XEV-005 đã được đo trên macOS arm64 trước khi pin; release 2.1.6
+  ghi 65/65 test macOS ở Debug và ReleaseSafe trên đúng tree đã pin. Đó là
+  evidence, không phải hosted job.
+- **Windows.** Compile gate phủ test graph, C ABI graph và các ReleaseFast
+  library. Một workflow tái sử dụng chạy suite trên `windows-2025`, và hỗ trợ
+  chính thức bắt đầu khi job đó xanh cho release commit. Trước đó compile gate là
+  claim.
+- **BSD.** Bốn hệ BSD dùng chung build graph nhưng không có CI riêng. Có kết quả
+  build; không có bảo đảm runtime.
+
+## Không có binary release
+
+Release là source tag. Không archive theo platform nào được build hay upload, và
+không binary Windows hay macOS nào được publish. Consumer fetch tag rồi build tại
+chỗ:
+
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'
+```
+
+Zig sau đó compile BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib cho
+target đã chọn. Package zlib đi kèm compile theo target, nên cross build cho musl
+hay Windows không cần zlib prefix bên ngoài và không cần MinGW zlib.
+
+## Giới hạn sanitizer theo platform
+
+| Mode                                                      | Phạm vi                                                                | Giới hạn host    |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------- |
+| ASan, UBSan, LeakSanitizer, Zig C-UB check, frame pointer | Toàn bộ test graph và C ABI graph, thư viện C/C++ đã pin, C shim local | Chỉ native Linux |
+| MemorySanitizer với origin tracking                       | Smoke ở biên dependency C và C++; Zig code không được instrument       | Chỉ x86_64 Linux |
+
+Hai mode loại trừ nhau và chạy thành các CI step riêng. Ngoài Nix, đường dẫn
+sanitizer runtime được cấp rõ ràng, và runtime cần glibc khác cũng cần libc cùng
+dynamic-linker path khớp đi kèm. Test có thread chạy dưới ASan với
+`use_sigaltstack=0` vì thread-local stack của Zig 0.16 không page aligned; leak
+detection và `halt_on_error` vẫn bật.
+
+## Affinity và cluster
+
+| Platform | Đặt worker                                               | Hành vi shared port                               |
+| -------- | -------------------------------------------------------- | ------------------------------------------------- |
+| Linux    | Hard affinity; shared-nothing cluster được hỗ trợ đầy đủ | `SO_REUSEPORT`                                    |
+| macOS    | Không hard pin; worker chạy không pin                    | `SO_REUSEPORT`                                    |
+| Windows  | Không bảo đảm affinity                                   | Fallback `SO_REUSEADDR`; phân phối không xác định |
+
+Cluster behavior đi theo platform, không theo một build flag riêng. Deployment
+phụ thuộc mapping worker-to-core ổn định nên chạy trên Linux. Deployment phụ
+thuộc phân phối connection đều giữa các process không nên dựa vào fallback của
+Windows.
+
+## Cross-target build
+
+Cross build là compile check, không phải bảo đảm runtime. Build graph compile cho
+`aarch64-linux-musl` từ cùng tree và cùng source list như native build. Với
+Windows, test graph và ABI graph được compile riêng khỏi các ReleaseFast library
+ở `x86_64-windows-gnu`. Một compile xanh trên target nào cũng không đưa target đó
+vào hàng được hỗ trợ cho tới khi runtime job phủ release commit.
+
+## Liên quan
+
+- [Phát hành](/docs/operations/releases) giải thích cách một tag trở thành release
+  và vì sao không có binary đi kèm.
+- [C ABI](/docs/operations/c-abi) liệt kê các archive mà consumer C link trên
+  từng platform.

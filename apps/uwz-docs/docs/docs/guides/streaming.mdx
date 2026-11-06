@@ -1,0 +1,180 @@
+---
+title: Stream a large response
+description: Drive a response body from a producer callback, keep a per-response cursor, and handle backpressure without buffering the whole payload.
+sidebar:
+  order: 10
+search:
+  tags: [guide, streaming, how-to]
+---
+
+`begin_stream` gives the transport a producer instead of a body, called only when
+there is room for another chunk. A response can thus exceed the write queue.
+
+## Problem
+
+You must return a payload you do not want to buffer, such as a generated report or
+a long log export. Buffering costs memory per connection.
+
+## Assumptions
+
+- The producer produces the next chunk synchronously, not on a timer or an
+  application event.
+- Each concurrent response owns its cursor; status and headers are final before
+  the first byte leaves.
+
+## Build the route
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const chunks = [_][]const u8{ "alpha\n", "beta\n", "gamma\n" };
+
+const Slot = struct {
+    active: bool = false,
+    index: usize = 0,
+};
+
+const Pool = struct {
+    slots: [128]Slot = [_]Slot{.{}} ** 128,
+};
+
+fn produce(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const slot: *Slot = @ptrCast(@alignCast(context));
+    errdefer slot.* = .{};
+    while (slot.index < chunks.len) {
+        res.write_chunk(chunks[slot.index]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        slot.index += 1;
+    }
+    try res.end_chunks();
+    slot.* = .{};
+    return .done;
+}
+
+fn start(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const pool: *Pool = @ptrCast(@alignCast(context));
+    for (&pool.slots) |*slot| {
+        if (slot.active) continue;
+        slot.* = .{ .active = true };
+        res.begin_stream("200 OK", "Content-Type: text/plain; charset=utf-8\r\n", slot, produce) catch |err| {
+            slot.* = .{};
+            std.log.err("stream start failed: {}", .{err});
+        };
+        return;
+    }
+    res.end("503 Service Unavailable", "") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var pool = Pool{};
+    _ = try app.route_context(.get, "/download", &pool, start);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`Pool` is application-owned storage. One slot per concurrent stream keeps the
+cursor explicit and avoids an allocation in the request path.
+
+## Capacity assumptions
+
+| Resource       | Bound                                                            |
+| -------------- | ---------------------------------------------------------------- |
+| Write queue    | 64 KiB per connection by default (`with_write_queue_size`)       |
+| One chunk      | Must fit the queue, or the HTTP/2 and HTTP/3 flow-control window |
+| Total body     | No cap; the queue bounds one invocation, not the response        |
+| Cursor storage | One slot per concurrent stream; claim before `begin_stream`      |
+
+A chunk that never fits cannot be retried into progress; split it into smaller
+pieces instead.
+
+## Failure behavior
+
+| Condition                                    | Result                                    |
+| -------------------------------------------- | ----------------------------------------- |
+| Producer error after the head                | HTTP/1.1 closes; HTTP/2 resets the stream |
+| Unhandled `error.WouldBlock`                 | The producer ends with an error           |
+| Status forbids a body, or `HEAD` on HTTP/1.1 | `error.BodyNotAllowed`                    |
+
+Choose the status before `begin_stream`; a producer failure is a truncated body.
+
+## Transport differences
+
+| Transport | Body framing                 | Producer resumes on        |
+| --------- | ---------------------------- | -------------------------- |
+| HTTP/1.1  | `Transfer-Encoding: chunked` | Write-ring drain           |
+| HTTP/2    | `DATA` frames                | Stream flow-control window |
+| HTTP/3    | `DATA` frames                | Stream flow-control window |
+
+## Verification
+
+```sh
+curl --raw -i http://127.0.0.1:3000/download
+curl -s http://127.0.0.1:3000/download | wc -c
+```
+
+Expect `200 OK`, `Transfer-Encoding: chunked`, and no `Content-Length`; `--raw`
+also shows each chunk size. The byte count is stable across runs.
+
+## Variation: file-like chunks
+
+Slice one application-owned buffer when the payload already exists in memory.
+
+```zig
+const Blob = struct { bytes: []const u8, offset: usize = 0 };
+
+fn produce_blob(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const state: *Blob = @ptrCast(@alignCast(context));
+    while (state.offset < state.bytes.len) {
+        const end = @min(state.offset + 8 * 1024, state.bytes.len);
+        res.write_chunk(state.bytes[state.offset..end]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        state.offset = end;
+    }
+    try res.end_chunks();
+    return .done;
+}
+```
+
+Eight KiB chunks fit the default 64 KiB queue. Do not read a disk file inside a
+producer: a blocking read stalls every connection on that worker. Serve files with
+`res.send_file` or `App.static`.
+
+## Variation: a bounded generator
+
+```zig
+const Generator = struct { remaining: usize, buffer: [4096]u8 = undefined };
+
+fn produce_generated(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const state: *Generator = @ptrCast(@alignCast(context));
+    while (state.remaining > 0) {
+        const length = @min(state.remaining, state.buffer.len);
+        @memset(state.buffer[0..length], 'x');
+        res.write_chunk(state.buffer[0..length]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        state.remaining -= length;
+    }
+    try res.end_chunks();
+    return .done;
+}
+```
+
+Each chunk is generated into producer-owned storage. `write_chunk` copies, so
+reusing the buffer is safe, but a `WouldBlock` retry must produce the same bytes.
+
+## Next
+
+- [Streaming responses](/docs/http/streaming) is the producer contract reference.
+- [Backpressure](/docs/concepts/backpressure) explains the `WouldBlock` rule.

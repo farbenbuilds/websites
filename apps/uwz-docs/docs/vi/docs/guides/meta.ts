@@ -1,0 +1,32 @@
+import { defineMeta } from "blume";
+
+export default defineMeta({
+  title: "Hướng dẫn",
+  icon: "compass",
+  order: 18,
+  directory: "none",
+  pages: [
+    "json-api",
+    "authentication",
+    "rate-limiting",
+    "file-server",
+    "chat",
+    "presence",
+    "rpc-service",
+    "sse",
+    "streaming",
+    "uploads",
+    "cookies",
+    "cors",
+    "openapi",
+    "webhooks",
+    "health-checks",
+    "graceful-shutdown",
+    "cluster",
+    "https",
+    "http3",
+    "c-abi",
+    "testing",
+    "benchmarking",
+  ],
+});
