@@ -2962,27 +2962,27 @@ These tasks are not page-specific. Assign one owner and one reviewer per task.
 
 ## 15. Open decisions
 
-| Decision             | Recommended default                                       | Why                                 | Owner         | Needed by |
-| -------------------- | --------------------------------------------------------- | ----------------------------------- | ------------- | --------- |
-| Production origin    | Applied: `https://uwz.farben.dev`; confirm before launch  | Required for sitemap, canonical, OG | Product owner | M0        |
-| Hosting              | Cloudflare Pages or Vercel static                         | Static, fast, previews, redirects   | `astro-blume` | M0        |
-| Analytics            | Cookie-free Plausible/Fathom/Umami                        | Privacy, no consent banner          | Product owner | M6        |
-| MCP/assistant        | Defer until a server host is approved                     | Static build cannot serve `/mcp`    | `architect`   | M6        |
-| Reference generation | Zig docs output if usable; otherwise generated JSON index | Avoid hand-maintained signatures    | `docs-writer` | M3        |
-| Versioning           | Launch unversioned; cut `v2.1.6` when 2.2.0 ships         | Avoid empty version noise at launch | `docs-writer` | M7        |
-| Translation depth    | P0 fully mirrored; P1 within one milestone                | Balances quality and speed          | `docs-writer` | M1        |
-| Changelog source     | `CHANGELOG.md` as canonical, site renders a summary       | One source of truth                 | `docs-writer` | M5        |
-| Docs owner           | `docs-writer` with `integrator` product review            | Clear accountability                | `architect`   | M0        |
-| Launch scope         | All P0 rows plus P1 rows needed for navigation            | Prevents a hollow site              | `integrator`  | M6        |
+| Decision             | Recommended default                                                  | Why                                 | Owner         | Needed by |
+| -------------------- | -------------------------------------------------------------------- | ----------------------------------- | ------------- | --------- |
+| Production origin    | Deferred until the project buys a domain; set `deployment.site` then | Required for sitemap, canonical, OG | Product owner | M0        |
+| Hosting              | Cloudflare Pages or Vercel static                                    | Static, fast, previews, redirects   | `astro-blume` | M0        |
+| Analytics            | Cookie-free Plausible/Fathom/Umami                                   | Privacy, no consent banner          | Product owner | M6        |
+| MCP/assistant        | Defer until a server host is approved                                | Static build cannot serve `/mcp`    | `architect`   | M6        |
+| Reference generation | Zig docs output if usable; otherwise generated JSON index            | Avoid hand-maintained signatures    | `docs-writer` | M3        |
+| Versioning           | Launch unversioned; cut `v2.1.6` when 2.2.0 ships                    | Avoid empty version noise at launch | `docs-writer` | M7        |
+| Translation depth    | P0 fully mirrored; P1 within one milestone                           | Balances quality and speed          | `docs-writer` | M1        |
+| Changelog source     | `CHANGELOG.md` as canonical, site renders a summary                  | One source of truth                 | `docs-writer` | M5        |
+| Docs owner           | `docs-writer` with `integrator` product review                       | Clear accountability                | `architect`   | M0        |
+| Launch scope         | All P0 rows plus P1 rows needed for navigation                       | Prevents a hollow site              | `integrator`  | M6        |
 
 If a decision is not made by its needed-by milestone, record the blocker in the
 milestone dashboard and continue with the recommended default. Do not silently
 ship a different assumption.
 
-Production origin applied on 2026-10-31: `https://uwz.farben.dev`, the
-recommended default. If the final project domain differs, change
+Production origin is not configured yet. When the project owns a domain, set
 `deployment.site` in `blume.config.ts` and rebuild; canonical URLs, the sitemap,
-Open Graph metadata, and the agent files follow that value.
+Open Graph metadata, and the agent files follow that value. Until then Blume
+reports the site as unset and skips sitemap generation.
 
 ## 16. Governance and ownership
 
