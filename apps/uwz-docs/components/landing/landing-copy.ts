@@ -3,13 +3,8 @@ import { parseInlineMarkdown } from "@farben/docs-components/inline-markdown.ts"
 import type { InlinePart } from "@farben/docs-components/inline-text.ts";
 
 import { siteMessages } from "../../messages.ts";
-import {
-  FACEBOOK_URL,
-  PRODUCT_REPOSITORY_URL,
-  X_URL,
-  localizeHref,
-  type SiteLocale,
-} from "../../site-links.ts";
+import { localizeHref, type SiteLocale } from "../../site-links.ts";
+import { FACEBOOK_URL, PRODUCT_REPOSITORY_URL, SPONSOR_URL, X_URL } from "../../site-urls.ts";
 
 export type LandingLocale = SiteLocale;
 
@@ -50,7 +45,7 @@ export type LandingCopy = {
       readonly lines: readonly string[];
       readonly status: string;
     };
-    readonly butterflySeed?: number;
+    readonly butterflySeed: number;
   };
   readonly server: {
     readonly label: string;
@@ -91,6 +86,11 @@ const SOCIAL_HREFS: Record<(typeof SOCIAL_KEYS)[number], string> = {
   x: X_URL,
 };
 
+const BUTTERFLY_SEEDS: Readonly<Record<LandingLocale, number>> = {
+  en: 20261029,
+  vi: 20261030,
+};
+
 export function landingCopy(locale: string | undefined): LandingCopy {
   const resolvedLocale: LandingLocale = resolveDocsLocale(locale);
   const messages = siteMessages(resolvedLocale);
@@ -100,6 +100,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
     eyebrow: landing.hero.eyebrow,
     title: landing.hero.title,
     markSrc: "/icon.svg",
+    butterflySeed: BUTTERFLY_SEEDS[resolvedLocale],
     summary: parseInlineMarkdown(landing.hero.summary),
     primaryAction: {
       label: landing.hero.primaryAction,
@@ -118,7 +119,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
 
   return {
     butterfly: messages.butterfly,
-    hero: resolvedLocale === "vi" ? { ...hero, butterflySeed: 20261030 } : hero,
+    hero,
     server: {
       label: landing.server.label,
       heading: landing.server.heading,
@@ -147,7 +148,7 @@ export function landingCopy(locale: string | undefined): LandingCopy {
       body: landing.sponsor.body,
       action: {
         label: landing.sponsor.action,
-        href: "https://github.com/sponsors/farbenbuilds",
+        href: SPONSOR_URL,
       },
     },
   };

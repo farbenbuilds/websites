@@ -14,7 +14,7 @@
       readonly resumeLabel: string;
       readonly scrollLabel: string;
     };
-    seed?: number;
+    seed: number;
     specimenCount?: number;
     scrollHref?: string;
     scrollLabel?: string;
@@ -25,7 +25,7 @@
 
   let {
     labels,
-    seed = 20261029,
+    seed,
     specimenCount = DEFAULT_SPECIMEN_COUNT,
     scrollHref = "#docs-home-main",
     scrollLabel,

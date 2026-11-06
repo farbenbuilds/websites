@@ -17,6 +17,8 @@ describe("docs home benchmark section", () => {
       expect(copy.bars.every(({ share }) => share > 0 && share <= 100)).toBe(true);
       expect(copy.arenaMetrics).toHaveLength(5);
       expect(copy.arenaMetrics[0]?.value).toBe("3,736,192");
+      expect(copy.benchLabel).toBe("bench.zig.bd");
+      expect(copy.arenaLink).toBe("http-arena.com");
     }
   });
 

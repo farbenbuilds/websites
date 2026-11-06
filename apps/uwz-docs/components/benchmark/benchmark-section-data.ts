@@ -2,6 +2,7 @@ import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
 import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 
 import { siteMessages, type SiteMessages } from "../../messages.ts";
+import { BENCHMARK_URL, HTTP_ARENA_FRAMEWORK_URL } from "../../site-urls.ts";
 
 export type BenchmarkLocale = DocsLocale;
 
@@ -39,6 +40,9 @@ export type BenchmarkCopy = {
 
 type ArenaMetricKey = keyof SiteMessages["benchmark"]["metrics"];
 
+const BENCHMARK_HOST = new URL(BENCHMARK_URL).host;
+const ARENA_HOST = new URL(HTTP_ARENA_FRAMEWORK_URL).host;
+
 const BARS: readonly BenchmarkBar[] = [
   { name: "µWebZockets", value: "148,237", share: 100, leader: true },
   { name: "httpz", value: "109,571", share: 73.9 },
@@ -71,7 +75,7 @@ export function benchmarkCopy(locale: string | undefined): BenchmarkCopy {
     label: messages.label,
     heading: messages.heading,
     intro: messages.intro,
-    benchLabel: "bench.zig.bd",
+    benchLabel: BENCHMARK_HOST,
     benchHeading: messages.benchHeading,
     benchMeta: messages.benchMeta,
     benchAria: messages.benchAria,
@@ -81,7 +85,7 @@ export function benchmarkCopy(locale: string | undefined): BenchmarkCopy {
     arenaHeading: messages.arenaHeading,
     arenaMeta: messages.arenaMeta,
     arenaSource: messages.arenaSource,
-    arenaLink: "http-arena.com",
+    arenaLink: ARENA_HOST,
     arenaMetrics: ARENA_METRICS.map(({ key, label, value, unit }) => ({
       label,
       value,

@@ -1,4 +1,5 @@
 import { speciesAt, WING_RAMP } from "./butterfly-data.ts";
+import { clampSpecimenCount, DEFAULT_SPECIMEN_COUNT } from "./butterfly-density.ts";
 import { createRng, nextRandom, randomBetween } from "./butterfly-math.ts";
 import { glyphFor } from "./butterfly-glyphs.ts";
 import {
@@ -18,28 +19,36 @@ type StillCell = {
   rank: number;
 };
 
-export function generateStill(seed: number, specimenCount = 8): string {
+type StillPlacement = {
+  readonly x: number;
+  readonly y: number;
+  readonly scale: number;
+};
+
+const STILL_PLACEMENTS: readonly StillPlacement[] = [
+  { x: 0.7, y: 0.38, scale: 7.4 },
+  { x: 0.28, y: 0.58, scale: 6.4 },
+  { x: 0.5, y: 0.82, scale: 5.6 },
+  { x: 0.18, y: 0.26, scale: 5.2 },
+  { x: 0.82, y: 0.72, scale: 4.9 },
+  { x: 0.82, y: 0.24, scale: 4.6 },
+  { x: 0.12, y: 0.66, scale: 4.4 },
+  { x: 0.5, y: 0.48, scale: 3.2 },
+];
+
+export function generateStill(seed: number, specimenCount = DEFAULT_SPECIMEN_COUNT): string {
   const grid: StillCell[][] = Array.from({ length: STILL_ROWS }, () =>
     Array.from({ length: STILL_COLS }, () => ({ glyph: " ", rank: 0 })),
   );
 
   const rng = createRng(seed);
   const scratch = createAnatomyScratch();
-  const count = Math.max(1, Math.min(8, Math.round(specimenCount)));
-
-  const placements = [
-    { x: 0.7, y: 0.38, scale: 7.4 },
-    { x: 0.28, y: 0.58, scale: 6.4 },
-    { x: 0.5, y: 0.82, scale: 5.6 },
-    { x: 0.18, y: 0.26, scale: 5.2 },
-    { x: 0.82, y: 0.72, scale: 4.9 },
-    { x: 0.82, y: 0.24, scale: 4.6 },
-    { x: 0.12, y: 0.66, scale: 4.4 },
-    { x: 0.5, y: 0.48, scale: 3.2 },
-  ] as const;
+  const count = Math.min(clampSpecimenCount(specimenCount), STILL_PLACEMENTS.length);
 
   for (let index = 0; index < count; index++) {
-    const placement = placements[index] ?? placements[0];
+    const placement = STILL_PLACEMENTS[index];
+
+    if (!placement) break;
 
     drawSpecimen(
       grid,

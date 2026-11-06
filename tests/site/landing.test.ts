@@ -10,6 +10,7 @@ import {
   renderLandingSponsorMarkdown,
 } from "../../apps/uwz-docs/components/landing/landing-markdown.ts";
 import { renderSupportMarkdown } from "../../apps/uwz-docs/components/support/support-section-data.ts";
+import { SPONSOR_URL } from "../../apps/uwz-docs/site-urls.ts";
 
 describe("uwz landing page", () => {
   it("keeps localized hero and section copy", () => {
@@ -25,6 +26,8 @@ describe("uwz landing page", () => {
       expect(copy.hero.primaryAction.href).toBe(
         locale === "vi" ? "/vi/docs/getting-started" : "/docs/getting-started",
       );
+      expect(copy.hero.butterflySeed).toBe(locale === "vi" ? 20261030 : 20261029);
+      expect(copy.sponsor.action.href).toBe(SPONSOR_URL);
     }
   });
 

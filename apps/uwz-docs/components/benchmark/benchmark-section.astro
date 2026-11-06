@@ -1,6 +1,6 @@
 ---
 import SectionHeader from "../section-header/section-header.astro";
-import { BENCHMARK_URL, HTTP_ARENA_FRAMEWORK_URL } from "../../site-links.ts";
+import { BENCHMARK_URL, HTTP_ARENA_FRAMEWORK_URL } from "../../site-urls.ts";
 import { benchmarkCopy, type BenchmarkLocale } from "./benchmark-section-data";
 
 type Props = {
@@ -31,8 +31,7 @@ const copy = benchmarkCopy(locale);
         rel="noreferrer"
         aria-describedby="blume-new-tab-hint"
       >
-        {"bench.zig.bd "}
-        <span aria-hidden="true">{"->"}</span>
+        {copy.benchLabel} <span aria-hidden="true">{"->"}</span>
       </a>
     </div>
     <p class="docs-home-benchmark-meta">{copy.benchMeta}</p>
