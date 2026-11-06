@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  AUTHOR_URL,
-  PRODUCT_LICENSE_URL,
-  PRODUCT_REPOSITORY_URL,
   SITE_LINKS,
   localizeHref,
   resolveLocale,
   siteFooterNote,
 } from "../../apps/uwz-docs/site-links.ts";
+import {
+  AUTHOR_URL,
+  PRODUCT_LICENSE_URL,
+  PRODUCT_REPOSITORY_URL,
+} from "../../apps/uwz-docs/site-urls.ts";
 
 describe("site links", () => {
   it("localizes internal links and leaves HTTPS destinations absolute", () => {
@@ -25,6 +27,7 @@ describe("site links", () => {
     expect(localizeHref("javascript:alert(1)", "en")).toBe("/");
     expect(localizeHref("//example.com", "en")).toBe("/");
     expect(localizeHref("http://example.com", "en")).toBe("/");
+    expect(localizeHref("/\\evil.example", "en")).toBe("/");
   });
 
   it("reads the Vietnamese route prefix", () => {

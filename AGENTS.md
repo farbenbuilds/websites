@@ -186,6 +186,10 @@ planning, implementing, reviewing, or verifying. Third-party skills are pinned
 by `skills-lock.json`; update them with the `skills` CLI instead of editing
 vendored copies.
 
+`untangle-codebase` is the whole-codebase refactor workflow. Load it when a task
+restructures more than one module, record the decision log, and prove behavior
+parity before delivery.
+
 ### Project Skills
 
 | Skill                      | Use                                                                  |
@@ -199,15 +203,15 @@ vendored copies.
 
 ### Installed Skills
 
-| Area       | Skills                                                                               |
-| ---------- | ------------------------------------------------------------------------------------ |
-| Process    | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming` |
-| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`                    |
-| TypeScript | `typescript-advanced-types`, `install-anti-slop`                                     |
-| Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`               |
-| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`                 |
-| Docs       | `technical-documentation`, `blume`, `astro`, `context7`                              |
-| Build      | `vite`, `vitest`, `chrome-devtools`, `nix-best-practices`                            |
+| Area       | Skills                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------- |
+| Process    | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming`, `untangle-codebase` |
+| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`                                         |
+| TypeScript | `typescript-advanced-types`, `install-anti-slop`                                                          |
+| Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`                                    |
+| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`                                      |
+| Docs       | `technical-documentation`, `blume`, `astro`, `context7`                                                   |
+| Build      | `vite`, `vitest`, `chrome-devtools`, `nix-best-practices`                                                 |
 
 ## Agent Team
 

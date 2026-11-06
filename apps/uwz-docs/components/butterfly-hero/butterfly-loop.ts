@@ -325,6 +325,7 @@ export function createButterflyLoop(options: ButterflyLoopOptions): ButterflyLoo
 
         applyFont();
       })
+      // The timeout below still applies the fallback, so a rejected load is safe to ignore.
       .catch(() => undefined);
 
     const timeout = new Promise<void>((resolve) => {

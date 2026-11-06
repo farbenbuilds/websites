@@ -1,6 +1,8 @@
 import svelte from "@astrojs/svelte";
 import { defineConfig, type ComponentMarkdown } from "blume";
 
+import { accessibleScrollRegions } from "./blume-accessible-scroll-regions.ts";
+import { createRedirects } from "./blume-redirects.ts";
 import { renderBenchmarkMarkdown } from "./components/benchmark/benchmark-section-data.ts";
 import { renderSiteColophonMarkdown } from "./components/colophon/site-colophon-markdown.ts";
 import { renderIndexCardsMarkdown } from "./components/index-cards/index-cards-data.ts";
@@ -22,62 +24,6 @@ const landingShellMarkdown: ComponentMarkdown = ({ childBlocks }) =>
   childBlocks()
     .map(({ markdown }) => markdown)
     .join("\n\n");
-
-type AstroIntegration = NonNullable<Parameters<typeof defineConfig>[0]["integrations"]>[number];
-
-// Wide tables and diagrams become horizontal scroll regions; they need a tab
-// stop so keyboard users can reach the overflow. Mermaid renders after load, so
-// a mutation observer rechecks the wrappers when the SVG arrives.
-const accessibleScrollRegions: AstroIntegration = {
-  name: "uwz-accessible-scroll-regions",
-  hooks: {
-    "astro:config:setup": ({ injectScript }) => {
-      injectScript(
-        "head-inline",
-        `{
-          let queued = false;
-          const update = () => {
-            queued = false;
-            for (const region of document.querySelectorAll(".prose table, .prose blume-mermaid")) {
-              if (region.scrollWidth > region.clientWidth + 1) {
-                region.setAttribute("tabindex", "0");
-              } else {
-                region.removeAttribute("tabindex");
-              }
-            }
-          };
-          const schedule = () => {
-            if (queued) return;
-            queued = true;
-            requestAnimationFrame(update);
-          };
-          const start = () => {
-            update();
-            const main = document.querySelector("main");
-            if (main) {
-              if ("ResizeObserver" in window) {
-                new ResizeObserver(schedule).observe(main);
-              }
-              if ("MutationObserver" in window) {
-                new MutationObserver(schedule).observe(main, {
-                  childList: true,
-                  subtree: true,
-                });
-              }
-            }
-            window.addEventListener("resize", schedule, { passive: true });
-            document.fonts?.ready.then(schedule);
-          };
-          if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", start, { once: true });
-          } else {
-            start();
-          }
-        }`,
-      );
-    },
-  },
-};
 
 export default defineConfig({
   title: "µWebZockets",
@@ -104,75 +50,7 @@ export default defineConfig({
       display: "group",
     },
   },
-  redirects: [
-    { from: "/getting-started", to: "/docs/getting-started", status: 301 },
-    { from: "/getting-started/:slug*", to: "/docs/getting-started/:slug*", status: 301 },
-    { from: "/vi/getting-started", to: "/vi/docs/getting-started", status: 301 },
-    { from: "/vi/getting-started/:slug*", to: "/vi/docs/getting-started/:slug*", status: 301 },
-    {
-      from: "/docs/getting-started/first-http-server",
-      to: "/docs/examples/first-http-server",
-      status: 301,
-    },
-    {
-      from: "/docs/getting-started/first-websocket",
-      to: "/docs/examples/first-websocket",
-      status: 301,
-    },
-    {
-      from: "/docs/getting-started/first-json-rpc-service",
-      to: "/docs/examples/first-json-rpc-service",
-      status: 301,
-    },
-    {
-      from: "/docs/getting-started/first-tls-server",
-      to: "/docs/examples/first-tls-server",
-      status: 301,
-    },
-    {
-      from: "/docs/getting-started/first-cluster",
-      to: "/docs/examples/first-cluster",
-      status: 301,
-    },
-    {
-      from: "/docs/getting-started/first-http3-server",
-      to: "/docs/examples/first-http3-server",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-http-server",
-      to: "/vi/docs/examples/first-http-server",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-websocket",
-      to: "/vi/docs/examples/first-websocket",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-json-rpc-service",
-      to: "/vi/docs/examples/first-json-rpc-service",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-tls-server",
-      to: "/vi/docs/examples/first-tls-server",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-cluster",
-      to: "/vi/docs/examples/first-cluster",
-      status: 301,
-    },
-    {
-      from: "/vi/docs/getting-started/first-http3-server",
-      to: "/vi/docs/examples/first-http3-server",
-      status: 301,
-    },
-  ],
-  deployment: {
-    site: "https://uwz.farben.dev",
-  },
+  redirects: createRedirects(),
   markdown: {
     code: {
       theme: {

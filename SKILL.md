@@ -126,6 +126,13 @@ requirements.
 6. Add labels, focus states, keyboard behavior, and reduced-motion handling.
 7. Verify the shared package type check and every consuming app build.
 
+## Refactor Workflow
+
+For a behavior-preserving refactor, load `untangle-codebase` and keep a decision
+log of hidden links, needless links, surplus, and special cases. Refactor in
+reversible slices, add behavior-level tests for extracted contracts, and run
+`pnpm ready`. Do not remove tests or restyle comments unless the user opts in.
+
 ## Agent Team
 
 The canonical workflow is [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md).

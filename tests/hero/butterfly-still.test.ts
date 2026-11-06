@@ -27,4 +27,12 @@ describe("server-rendered butterfly still", () => {
   it("changes composition when the seed changes", () => {
     expect(generateStill(11)).not.toBe(generateStill(12));
   });
+
+  it("clamps specimen counts at the same boundaries as the field", () => {
+    for (const seed of [11, 20261029]) {
+      expect(generateStill(seed, 0)).toBe(generateStill(seed, 1));
+      expect(generateStill(seed, 4.6)).toBe(generateStill(seed, 5));
+      expect(generateStill(seed, 99)).toBe(generateStill(seed, 8));
+    }
+  });
 });

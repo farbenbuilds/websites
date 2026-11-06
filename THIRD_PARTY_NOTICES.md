@@ -16,6 +16,15 @@
   512px Farben logo is vendored unchanged and resized to 256px WebP at build
   time for the sponsor avatar.
 
+## Untangle Codebase skill
+
+- Source: https://github.com/caldoai/skills
+- Source path: `skills/untangle-codebase/SKILL.md`
+- License: MIT
+- License text: [LICENSES/untangle-codebase-LICENSE-MIT.txt](LICENSES/untangle-codebase-LICENSE-MIT.txt)
+- Vendored path: `.agents/skills/untangle-codebase/`
+- Local changes: none. The body is upstream content.
+
 ## Graphify
 
 - Source: https://github.com/Graphify-Labs/graphify
