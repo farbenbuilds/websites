@@ -1,0 +1,130 @@
+---
+title: Observability
+description: Enable the bounded metrics registry, route the development log, and alert on the signals a µWebZockets process can actually prove.
+sidebar:
+  order: 6
+search:
+  tags: [how-to, deployment, observability]
+---
+
+A production process needs two evidence streams: bounded counters from the
+metrics registry and a log destination you control. µWebZockets provides both
+without allocating on the request path. It does not provide tracing, a log
+shipper, or a dashboard.
+
+Enable only what you will read. A silent metrics endpoint and an unread log file
+are cost without signal.
+
+## Metrics
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_observability(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Observability installs a hidden `/metrics` route that renders the bounded
+Prometheus registry. Use `with_metrics_path` to move it. The route is hidden from
+navigation, not protected: it is an ordinary HTTP route with no authentication.
+Expose it only on an internal listener or protect it at the proxy.
+
+| Counter                    | Advances on                            |
+| -------------------------- | -------------------------------------- |
+| `uwz_connections_accepted` | A TCP connection accepted              |
+| `uwz_connections_closed`   | A TCP connection released              |
+| `uwz_http_requests`        | A completed HTTP/1.1 or HTTP/2 request |
+| `uwz_ws_messages`          | A WebSocket message handled            |
+
+HTTP/3 connections and requests never advance this registry. The QUIC path emits
+request records instead.
+
+The registry is bounded and renders into a fixed 4 KiB buffer. A registry that
+outgrows the buffer returns `500 metrics buffer exhausted`; reduce label churn
+or read the counters another way. `App.log_metrics()` writes the same snapshot
+through the development log, which is the fallback when a scrape is unavailable.
+
+## HTTP/3 gap
+
+HTTP/3 emits one `http_request` record per completed exchange through the owning
+worker's log sink, but the QUIC path never advances the counter registry. A
+dashboard built only on `uwz_http_requests` will show zero HTTP/3 traffic.
+
+Alert on the absence of HTTP/3 request records, or terminate QUIC at a proxy
+that exports its own counters. Do not infer HTTP/3 health from the TCP
+connection counters.
+
+## Development log policy
+
+| Setting                  | Behavior                                                               |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `with_dev_log(true)`     | Default; wordmark, request lines, and metric snapshots                 |
+| stderr is not a terminal | The default sink stays quiet so redirected runs are not slowed         |
+| `with_dev_log(false)`    | Silences the wordmark, request lines, snapshots, and every other write |
+| `set_dev_log_file(file)` | Always records, including when stderr is redirected                    |
+| `flush_dev_log()`        | Writes pending bytes before exit                                       |
+
+Every worker owns one sink with a fixed 4096-byte record buffer. Rendering and
+writing are allocation-free, and a failed or short write is dropped and counted
+rather than retried, so a slow terminal cannot block the loop.
+
+For production, bind a file with `set_dev_log_file` or disable the development
+log with `with_dev_log(false)`. Leaving the default on with redirected stderr is
+safe but produces no evidence. Read
+[Development log](/docs/operations/logging) for the record format.
+
+## eBPF is optional
+
+The eBPF latency histogram is an optional observability layer. When its map is
+pinned at `/sys/fs/bpf/uwz_latency`, the hidden `/metrics` route appends the
+histogram buckets to the same response. Attaching the redirect and pinning the
+map require Linux network-administration privileges.
+
+The server data path never attaches the XSK redirect. Requesting
+`ServerConfig.transport = .kernel_bypass` reports `.standard` with reason
+`.data_path_unwired`, and applications that want AF_XDP drive the transport
+directly. Treat the histogram as an optional measurement aid, not a production
+dependency. Read [eBPF latency histogram](/docs/operations/ebpf) for the setup
+boundary.
+
+## Startup checks
+
+Run these after a deploy, before shifting user traffic:
+
+```sh
+curl -fsS http://127.0.0.1:3000/metrics | head -n 5
+```
+
+```console
+$ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/readyz
+200
+```
+
+1. Confirm `/metrics` returns `200` and a Prometheus content type.
+2. Send one request, then confirm `uwz_http_requests` increased.
+3. Confirm the log destination exists and received the startup summary.
+4. Confirm the readiness route reflects listener state and capacity, not just
+   process liveness.
+
+## Alert ideas
+
+The registry has counters, not gauges. Derive what you need from deltas and pair
+it with proxy and operating-system metrics.
+
+| Signal                          | Derivation                                               | Action                                            |
+| ------------------------------- | -------------------------------------------------------- | ------------------------------------------------- |
+| Accept rate collapsed           | `rate(uwz_connections_accepted[5m])` near zero           | Check the listener and the upstream               |
+| Connection pool near capacity   | `accepted - closed` close to `max_connections`           | Add workers or raise capacity                     |
+| Request rate dropped            | `rate(uwz_http_requests[5m])` falls while traffic holds  | Check worker failures and the proxy               |
+| WebSocket traffic stopped       | `rate(uwz_ws_messages[5m])` falls with clients connected | Check heartbeats and the drain path               |
+| Rejection spike                 | Sustained `413` or `431` documents in the log            | Revisit the request limit or the client           |
+| Drain exceeded the grace period | Process still alive after `SIGTERM` and the grace period | Inspect the shutdown path and the supervisor      |
+| HTTP/3 request records absent   | No `http_request` records from the QUIC listener         | Read the QUIC listener logs; counters cannot help |
+
+## Related
+
+- [Metrics](/docs/operations/metrics) for the registry and scrape contract.
+- [Development log](/docs/operations/logging) for record fields and sinks.
+- [eBPF latency histogram](/docs/operations/ebpf) for the optional kernel layer.
+- [Production checklist](/docs/deployment/checklist) for the observability gate.
+- [Hardening](/docs/deployment/hardening) for the request-path controls.

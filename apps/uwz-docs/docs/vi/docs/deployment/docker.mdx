@@ -1,0 +1,159 @@
+---
+title: Docker
+description: Build image hai stage nhỏ với Zig 0.16.0, chạy non-root trên read-only filesystem và chuyển SIGTERM tới app đúng cách.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, deployment, docker]
+---
+
+µWebZockets không publish container image và không ship Dockerfile. Repository chỉ
+release source tag, nên image là việc của bạn, gồm cả việc build và sign. Trang này
+đưa một template hai stage: build stage với Zig toolchain được pin, và runtime
+stage chỉ chứa binary, certificate và những gì cần để chạy, không có gì có thể
+compile.
+
+Các lệnh build của Zig và hành vi signal có trong tài liệu framework và đã được
+kiểm chứng. Dockerfile, base image và health-check wiring là template mà
+repository này không build trong CI. Hãy coi template là điểm bắt đầu, rồi chạy
+image scan và smoke test của riêng bạn trước khi lên production.
+
+## Multi-stage build
+
+```dockerfile
+FROM debian:bookworm-slim AS build
+
+ARG ZIG_VERSION=0.16.0
+ARG ZIG_TARBALL=zig-x86_64-linux-0.16.0.tar.xz
+ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends ca-certificates curl xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSLo /tmp/zig.tar.xz \
+      "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_TARBALL}" \
+ && echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict \
+ && tar -xJf /tmp/zig.tar.xz -C /opt \
+ && ln -s "/opt/${ZIG_TARBALL%.tar.xz}/zig" /usr/local/bin/zig
+
+WORKDIR /src
+COPY build.zig build.zig.zon ./
+COPY src ./src
+RUN zig build -Doptimize=ReleaseSafe --prefix /out
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/bin/uz-app /usr/local/bin/uz-app
+
+USER 65532:65532
+EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=2s --start-period=5s --retries=3 \
+  CMD curl --fail --silent --show-error http://127.0.0.1:3000/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/uz-app"]
+```
+
+Hai chi tiết quyết định tính đúng đắn:
+
+- `ENTRYPOINT` ở exec form, nên binary là PID 1 và nhận `SIGTERM` trực tiếp. Nếu
+  dùng shell form, một `/bin/sh` sẽ nằm giữa daemon và signal. Khi
+  `catch_shutdown_signals` đã được arm, process drain rồi thoát thay vì bị kill.
+- `USER 65532:65532` là identity dạng số, không cần passwd entry. Cách này tránh
+  package `passwd` trong runtime image và giữ container non-root.
+
+Thay `uz-app` bằng tên executable mà `build.zig` của bạn cài đặt. Đường dẫn
+`COPY` và entrypoint phải trỏ cùng một file.
+
+Tên tarball và checksum ở trên là bản x86_64 Linux trong Zig download index. Với
+architecture khác, override cả hai build argument; với patch release khác, override
+`ZIG_VERSION`, `ZIG_TARBALL` và `ZIG_SHA256` cùng lúc.
+
+## Build và chạy
+
+```sh
+docker build --tag uz-app:2.1.6 .
+docker run --rm --read-only --name uz-app \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --publish 3000:3000 \
+  --mount type=bind,src="$PWD/certs",dst=/etc/uz/certs,readonly \
+  uz-app:2.1.6
+```
+
+`--read-only` chạy được vì server không ghi gì lúc runtime: slab nằm trong bộ nhớ
+và development log ghi ra stderr. Nếu gọi `App.set_dev_log_file`, mount riêng path
+đó với quyền ghi thay vì bỏ flag. Certificate là runtime mount, không bao giờ là
+image layer, nên private key không lọt vào image digest hay registry. Không có hot
+reload, nên certificate rotate nghĩa là container mới, không phải ghi lại file.
+
+Thêm `.dockerignore` chứa `.zig-cache`, `zig-out`, `.git` và mọi env file local.
+Nếu không, build context mang cache và secret vào daemon ở mỗi lần rebuild.
+
+## Signal và stop time
+
+Docker gửi SIGTERM khi `docker stop` và chờ mặc định mười giây. Con số đó ngắn hơn
+idle timeout mặc định 120 giây, nên container thường bị kill giữa lúc drain. Truyền
+stop timeout khớp với supervisor:
+
+```sh
+docker stop --time 140 uz-app
+```
+
+Grace period phải lớn hơn drain bound, như mô tả trong
+[Shutdown và draining](/vi/docs/deployment/shutdown). `terminationGracePeriodSeconds`
+của Kubernetes và `TimeoutStopSec` của systemd là cùng một con số với tên khác.
+
+## Health và readiness
+
+`HEALTHCHECK` là liveness probe: nó trả lời process có phục vụ `/healthz` hay
+không, chứ không nói process còn nhận thêm traffic được hay không. Readiness thuộc
+về orchestrator vì chỉ nó biết có bao nhiêu replica đang nằm sau service. Hãy phục
+vụ `/readyz` và để Kubernetes hoặc load balancer gọi route đó.
+
+Framework không có health endpoint sẵn. Tự đăng ký route và giữ readiness handler
+rẻ: không allocate theo từng request và không chạm vào cấu trúc dùng chung mà một
+worker không sở hữu.
+
+## Capacity và memory
+
+Memory limit phải phủ một slab cho mỗi active worker, cộng các vùng nằm ngoài slab:
+
+| Vùng              | Phạm vi                               | Trong `slab_bytes()` |
+| ----------------- | ------------------------------------- | -------------------- |
+| Application slab  | Một cho mỗi active worker             | Có                   |
+| Worker inbox      | `(64 + 1) * max_ws_message_size`      | Không                |
+| `SSL_CTX`         | Một cho mỗi active worker khi bật TLS | Không                |
+| QUIC engine pools | Tạo bởi `listen_udp`                  | Không                |
+
+Đo `slab_bytes()` với cấu hình của bạn, nhân với số active worker, cộng headroom
+rồi đặt `--memory` cao hơn tổng đó. Limit thấp hơn slab sẽ fail lúc startup thay vì
+lúc có tải. Xem [Capacity sizing](/vi/docs/performance/capacity-sizing) để có
+worksheet.
+
+## Những gì đã được kiểm chứng
+
+| Hạng mục                                    | Trạng thái                                         |
+| ------------------------------------------- | -------------------------------------------------- |
+| `zig build -Doptimize=ReleaseSafe`          | Lệnh build đã có trong tài liệu framework          |
+| Tên tarball và checksum của Zig 0.16.0      | Lấy từ Zig 0.16.0 download index                   |
+| SIGTERM drain qua `catch_shutdown_signals`  | Hành vi runtime đã có trong tài liệu               |
+| Không có image hay Dockerfile được publish  | Repository chỉ release source tag                  |
+| Base image, health command, image hardening | Template; repository này không build hay scan      |
+| Binary static musl trên `scratch`           | Có thể với `-Dtarget=x86_64-linux-musl`; chưa test |
+
+## Các lỗi thường gặp
+
+| Triệu chứng                            | Nguyên nhân                                      | Cách sửa                                                  |
+| -------------------------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| `exec format error`                    | Architecture của image khác target đã build      | Build cho platform của image, ví dụ `linux/arm64`         |
+| Container thoát ngay khi `docker stop` | Stop timeout ngắn hơn thời gian drain            | Tăng `--time` hoặc hạ `idle_timeout_ms`                   |
+| Permission denied với certificate      | File mount không đọc được bởi UID 65532          | Sửa ownership trên host hoặc dùng read-only secret mount  |
+| Health check không bao giờ pass        | Thiếu route `/healthz`, hoặc route nằm sau auth  | Đăng ký route trước middleware auth                       |
+| Ghi file thất bại lúc runtime          | `--read-only` nhưng không mount log              | Mount thư mục log hoặc giữ log trên stderr                |
+| Build không fetch được dependency      | Build stage không có network hoặc cache ghi được | Cho phép egress khi build, hoặc vendor các package đã pin |

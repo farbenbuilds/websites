@@ -1,0 +1,111 @@
+---
+title: Metrics
+description: Enable the bounded Prometheus registry, scrape the hidden endpoint, and read its per-worker counters and eBPF histogram.
+sidebar:
+  order: 13
+search:
+  tags: [how-to, metrics, operations]
+---
+
+`with_observability(true)` turns on a fixed-capacity counter registry and a
+hidden Prometheus endpoint. Rendering allocates nothing, so a scrape costs a
+stack buffer rather than a heap allocation in the worker.
+
+## Enable observability
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_observability(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+The endpoint defaults to `/metrics`. Move it with
+`.with_metrics_path("/internal/metrics")` when a proxy already owns that path.
+Both options are comptime builder settings. The route is installed once, before
+routes are locked, so it cannot collide with an application route registered
+after startup.
+
+## Counters
+
+| Registry counter       | Rendered name                    | Advances on                             | Gap                        |
+| ---------------------- | -------------------------------- | --------------------------------------- | -------------------------- |
+| `connections_accepted` | `uwz_connections_accepted_total` | A TCP connection accepted by a worker   | No QUIC connection count   |
+| `connections_closed`   | `uwz_connections_closed_total`   | A TCP connection released by a worker   | No QUIC connection count   |
+| `http_requests`        | `uwz_http_requests_total`        | A completed HTTP/1.1 or HTTP/2 exchange | HTTP/3 does not advance it |
+| `ws_messages`          | `uwz_ws_messages_total`          | A WebSocket message on a TCP transport  | No HTTP/3 WebSocket count  |
+
+The registry also carries rejection, compressed-message, datagram, and XDP
+slots. The four above are the request-path counters an alert usually starts
+from; the rest stay at zero unless their path runs.
+
+## Read the hidden endpoint
+
+```sh
+curl -sS http://127.0.0.1:3000/metrics
+```
+
+The response is `text/plain; version=0.0.4`. The body is rendered into a
+4096-byte stack buffer; a registry that cannot fit returns `500` instead of a
+truncated document.
+
+```console
+# TYPE uwz_http_requests_total counter
+uwz_http_requests_total 42
+```
+
+The endpoint has no authentication. Bind it to a private interface, or block the
+path at the reverse proxy, when the listener is public.
+
+## Per-worker registry
+
+Each worker owns one registry carved into its slab. A scrape reports the worker
+that accepted the request, not a process-wide total, so a cluster has to sum the
+results or scrape every worker. `server.log_metrics()` records this worker's
+snapshot as one development-log batch when the log is enabled; call it from a
+route or timer on the same worker.
+
+## HTTP/3 gap
+
+HTTP/3 emits one `http_request` record per completed exchange through the owning
+thread's sink, but the QUIC path has no registry handle, so it never advances
+`uwz_http_requests`. A deployment that serves HTTP/3 and scrapes this endpoint
+under-reports request volume. Use the development log for HTTP/3 traffic until
+counter parity lands.
+
+## eBPF latency histogram
+
+The framework build emits `uwz_latency.o` for a per-CPU packet-length histogram.
+When that map is pinned at `/sys/fs/bpf/uwz_latency` and readable, the same
+`/metrics` response appends a cumulative
+`uwz_latency_packets_bucket{le="..."}` histogram, summed across CPUs, with at
+most 16 buckets plus `+Inf`. A failed kernel read leaves the counters usable and
+omits the histogram.
+
+Pinning the map needs Linux network-administration privileges. The server data
+path stays on the standard network stack regardless: requesting
+`ServerConfig.transport = .kernel_bypass` reports `.standard` with reason
+`.data_path_unwired`, and applications that want AF_XDP drive `uz.xdp_transport`
+directly.
+
+## Alert ideas
+
+| Signal                                           | Likely meaning                                            | First check                       |
+| ------------------------------------------------ | --------------------------------------------------------- | --------------------------------- |
+| Accepted rate collapses while the listener is up | Accept stalled or the port is answered by another process | Bind address and startup log      |
+| Accepted minus closed keeps climbing             | Connections are not draining                              | Idle timeout and shutdown path    |
+| Requests stay flat while traffic continues       | Observability is off, or traffic moved to HTTP/3          | Builder options and request lines |
+| WebSocket messages stay flat during chat load    | No TCP upgrades, or the counter is not enabled            | Upgrade handler and `ws_messages` |
+
+## Verify
+
+Scrape once, send one request, and scrape again. `uwz_http_requests_total` must
+increase by one on the worker that served the request. A second scrape from a
+different worker can legitimately show a different value.
+
+## Related
+
+- [Development log](/docs/operations/logging) explains the per-worker sink that
+  `log_metrics` writes through.
+- [Production checklist](/docs/deployment/checklist) covers where these signals
+  belong in a launch review.

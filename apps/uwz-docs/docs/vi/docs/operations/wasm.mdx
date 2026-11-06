@@ -1,0 +1,127 @@
+---
+title: WASM edge target
+description: Build module freestanding và WASI, gọi đúng các export alloc và handle bounded, và quyết định khi nào edge host nên sở hữu network.
+sidebar:
+  order: 18
+search:
+  tags: [how-to, operations, wasm, edge]
+---
+
+Hai build step biên dịch protocol core độc lập platform sang WebAssembly.
+Artifact freestanding nhắm tới V8 isolate host sở hữu socket và shared memory;
+artifact WASI nhắm tới WASI host. Không artifact nào accept network connection:
+chúng parse và tạo byte protocol rồi host di chuyển các byte đó.
+
+## Build
+
+```sh
+zig build wasm-freestanding -Doptimize=ReleaseSafe
+zig build wasm-wasi -Doptimize=ReleaseSafe
+```
+
+`zig build wasm` build cả hai. Artifact nằm dưới `zig-out/wasm`:
+
+| Artifact                        | Target                                        | Memory                                         |
+| ------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| `uWebZockets-freestanding.wasm` | `wasm32-freestanding`, atomics và bulk memory | Shared, 32 MiB ban đầu, tối đa 64 MiB          |
+| `uWebZockets-wasi.wasm`         | `wasm32-wasi`                                 | Single-threaded, 32 MiB ban đầu, tối đa 64 MiB |
+
+Cả hai module được build không có entry point và export linear memory.
+Freestanding build thêm shared memory vì host bridge dùng atomics.
+
+## Export của host bridge
+
+```zig
+export fn alloc(length: u32) usize;
+export fn free(pointer: usize, length: u32) void;
+export fn shared_acquire(length: u32) u64;
+export fn shared_pointer(encoded_handle: u64) usize;
+export fn shared_commit(encoded_handle: u64, length: u32) u64;
+export fn shared_release(encoded_handle: u64) i32;
+```
+
+Bridge là vùng cố định 64 block, mỗi block 64 KiB, căn 64 byte, nên tối đa 4 MiB
+buffer host nhìn thấy tồn tại cùng lúc. Mọi accessor đều bounded:
+
+| Call             | Hành vi                                                                         |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `alloc`          | Lease một block cho `length` byte; trả `0` khi không block nào vừa              |
+| `free`           | Chỉ release block khi pointer và length khớp một lease còn sống                 |
+| `shared_acquire` | Trả handle đóng gói, hoặc `0` khi vùng đã đầy                                   |
+| `shared_pointer` | Trả địa chỉ block cho handle còn sống, hoặc `0`                                 |
+| `shared_commit`  | Ghi độ dài đã dùng và trả handle đã commit, hoặc `0`                            |
+| `shared_release` | Release một lần; trả `0` khi thành công và `-1` với handle cũ hoặc không hợp lệ |
+
+Handle đóng gói block index, generation counter và độ dài đã commit. Generation
+là phần từ chối một release cũ hoặc một use-after-free: handle từ lease trước của
+cùng block không còn khớp generation hiện tại.
+
+## Vòng đời handle
+
+```mermaid
+%%{init: {"flowchart":{"useMaxWidth":false}} }%%
+flowchart LR
+  accTitle: Vòng đời handle
+  accDescr: Host acquire một block, ghi qua pointer, commit độ dài, đọc khi view còn sống, rồi release đúng một lần.
+  A["shared_acquire(length)"] --> B["shared_pointer(handle)"]
+  B --> C["ghi byte vào view"]
+  C --> D["shared_commit(handle, length)"]
+  D --> E["đọc khi view còn sống"]
+  E --> F["shared_release(handle)"]
+```
+
+Giữ mỗi handle trong suốt thời gian view shared-memory của nó còn sống, và
+release đúng một lần. Release lần thứ hai cùng handle sẽ lỗi thay vì free block
+mà một lease khác có thể đã sở hữu. `alloc` và `free` là cặp đơn giản hơn: `free`
+kiểm tra base pointer và length trước khi release, và bỏ qua cặp không mô tả một
+block đã acquire.
+
+## Không có listener trên edge target
+
+Module export protocol core, không export server. Nó chứa HTTP parser và request
+type, xử lý abort và stream, WebSocket framing cùng backpressure, SIMD helper,
+shared memory và JSON-RPC. Nó không có socket, không có accept loop và không có
+listener.
+
+| Phần việc                                         | Chủ sở hữu                       |
+| ------------------------------------------------- | -------------------------------- |
+| Accept connection, TLS và timer                   | Isolate hoặc WASI host           |
+| Parse HTTP, quyết định route và tạo response byte | Module                           |
+| Vòng đời buffer qua boundary                      | Host, qua handle                 |
+| Tăng shared memory quá 64 MiB                     | Không hỗ trợ; module fail closed |
+
+## Khi nào dùng
+
+Dùng WASM target khi network edge vốn là việc của host: CDN worker, proxy plugin,
+hoặc isolate runtime muốn cùng một HTTP và WebSocket state machine chặt chẽ như
+native server. Lợi ích là một parser và một bộ limit ở cả hai nơi, không phải
+server thứ hai.
+
+Không dùng khi bạn cần listener, TLS termination, cluster worker, client, hoặc
+static file dựa trên filesystem. Những thứ đó chỉ có trong native application, và
+edge artifact không export tương đương.
+
+## Kiểm tra
+
+```sh
+zig build wasm-freestanding -Doptimize=ReleaseSafe
+ls zig-out/wasm
+```
+
+```console
+uWebZockets-freestanding.wasm
+uWebZockets-wasi.wasm
+```
+
+Instantiate module trong host với memory limit nằm trong biên đã ghi, gọi
+`shared_acquire`, ghi, commit, đọc, rồi release. Một handle release hai lần phải
+lỗi, và handle từ lease đã release không được resolve qua `shared_pointer`.
+
+## Liên quan
+
+- [Edge và WASM](/docs/architecture/edge-and-wasm) giải thích protocol core độc
+  lập transport nằm ở đâu so với các transport.
+- [Application model](/docs/concepts/application-model) mô tả lifecycle native mà
+  edge module cố ý bỏ qua.
+- [Ownership và lifetime](/docs/concepts/ownership-and-lifetimes) trình bày quy
+  tắc borrowed view mà handle protocol phản chiếu.

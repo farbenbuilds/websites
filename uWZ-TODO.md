@@ -756,76 +756,76 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.14 Operations
 
-| ID      | Route                                | Page                      | Type            | Priority | Milestone | Source                          | Status  |
-| ------- | ------------------------------------ | ------------------------- | --------------- | -------- | --------- | ------------------------------- | ------- |
-| UWZ-230 | `/docs/operations`                   | Operations                | Index           | P0       | M4        | `docs/operations.md`            | Planned |
-| UWZ-231 | `/docs/operations/build`             | Build from source         | How-to          | P0       | M4        | `docs/operations.md`            | Planned |
-| UWZ-232 | `/docs/operations/nix`               | Nix development shell     | How-to          | P1       | M4        | `flake.nix`                     | Planned |
-| UWZ-233 | `/docs/operations/testing`           | Tests                     | How-to          | P0       | M4        | `docs/operations.md`            | Planned |
-| UWZ-234 | `/docs/operations/sanitizers`        | Sanitizers                | How-to          | P1       | M4        | `docs/operations.md`            | Planned |
-| UWZ-235 | `/docs/operations/fuzzing`           | Fuzzing                   | How-to          | P1       | M4        | `docs/operations.md`            | Planned |
-| UWZ-236 | `/docs/operations/cross-compilation` | Cross-compilation         | How-to          | P1       | M4        | `docs/operations.md`            | Planned |
-| UWZ-237 | `/docs/operations/c-abi`             | C ABI                     | Reference       | P0       | M4        | `include/uWebZockets.h`         | Planned |
-| UWZ-238 | `/docs/operations/releases`          | Releases                  | Explanation     | P1       | M5        | `CHANGELOG.md`                  | Planned |
-| UWZ-239 | `/docs/operations/dependencies`      | Dependencies              | Explanation     | P1       | M5        | `docs/dependency_forks.md`      | Planned |
-| UWZ-240 | `/docs/operations/platforms`         | Platform support          | Reference       | P0       | M4        | README, roadmap                 | Planned |
-| UWZ-241 | `/docs/operations/logging`           | Development log           | How-to          | P1       | M4        | `docs/operations.md`            | Planned |
-| UWZ-242 | `/docs/operations/metrics`           | Metrics                   | How-to          | P0       | M4        | `docs/deployment.md`            | Planned |
-| UWZ-243 | `/docs/operations/graceful-shutdown` | Graceful shutdown         | How-to          | P0       | M4        | `docs/api.md`                   | Planned |
-| UWZ-244 | `/docs/operations/troubleshooting`   | Troubleshooting           | Troubleshooting | P0       | M4        | `docs/troubleshooting.md`       | Planned |
-| UWZ-245 | `/docs/operations/development-log`   | Development log reference | Reference       | P2       | M5        | `src/observability/dev_log.zig` | Planned |
-| UWZ-246 | `/docs/operations/ebpf`              | eBPF latency histogram    | How-to          | P2       | M5        | `docs/operations.md`            | Planned |
-| UWZ-247 | `/docs/operations/wasm`              | WASM edge targets         | How-to          | P2       | M5        | `docs/operations.md`            | Planned |
-| UWZ-248 | `/docs/operations/ktls`              | kTLS                      | How-to          | P2       | M5        | `docs/operations.md`            | Planned |
-| UWZ-249 | `/docs/operations/af-xdp`            | AF_XDP                    | How-to          | P2       | M5        | `docs/operations.md`            | Planned |
+| ID      | Route                                | Page                      | Type            | Priority | Milestone | Source                          | Status |
+| ------- | ------------------------------------ | ------------------------- | --------------- | -------- | --------- | ------------------------------- | ------ |
+| UWZ-230 | `/docs/operations`                   | Operations                | Index           | P0       | M4        | `docs/operations.md`            | Live   |
+| UWZ-231 | `/docs/operations/build`             | Build from source         | How-to          | P0       | M4        | `docs/operations.md`            | Live   |
+| UWZ-232 | `/docs/operations/nix`               | Nix development shell     | How-to          | P1       | M4        | `flake.nix`                     | Live   |
+| UWZ-233 | `/docs/operations/testing`           | Tests                     | How-to          | P0       | M4        | `docs/operations.md`            | Live   |
+| UWZ-234 | `/docs/operations/sanitizers`        | Sanitizers                | How-to          | P1       | M4        | `docs/operations.md`            | Live   |
+| UWZ-235 | `/docs/operations/fuzzing`           | Fuzzing                   | How-to          | P1       | M4        | `docs/operations.md`            | Live   |
+| UWZ-236 | `/docs/operations/cross-compilation` | Cross-compilation         | How-to          | P1       | M4        | `docs/operations.md`            | Live   |
+| UWZ-237 | `/docs/operations/c-abi`             | C ABI                     | Reference       | P0       | M4        | `include/uWebZockets.h`         | Live   |
+| UWZ-238 | `/docs/operations/releases`          | Releases                  | Explanation     | P1       | M5        | `CHANGELOG.md`                  | Live   |
+| UWZ-239 | `/docs/operations/dependencies`      | Dependencies              | Explanation     | P1       | M5        | `docs/dependency_forks.md`      | Live   |
+| UWZ-240 | `/docs/operations/platforms`         | Platform support          | Reference       | P0       | M4        | README, roadmap                 | Live   |
+| UWZ-241 | `/docs/operations/logging`           | Development log           | How-to          | P1       | M4        | `docs/operations.md`            | Live   |
+| UWZ-242 | `/docs/operations/metrics`           | Metrics                   | How-to          | P0       | M4        | `docs/deployment.md`            | Live   |
+| UWZ-243 | `/docs/operations/graceful-shutdown` | Graceful shutdown         | How-to          | P0       | M4        | `docs/api.md`                   | Live   |
+| UWZ-244 | `/docs/operations/troubleshooting`   | Troubleshooting           | Troubleshooting | P0       | M4        | `docs/troubleshooting.md`       | Live   |
+| UWZ-245 | `/docs/operations/development-log`   | Development log reference | Reference       | P2       | M5        | `src/observability/dev_log.zig` | Live   |
+| UWZ-246 | `/docs/operations/ebpf`              | eBPF latency histogram    | How-to          | P2       | M5        | `docs/operations.md`            | Live   |
+| UWZ-247 | `/docs/operations/wasm`              | WASM edge targets         | How-to          | P2       | M5        | `docs/operations.md`            | Live   |
+| UWZ-248 | `/docs/operations/ktls`              | kTLS                      | How-to          | P2       | M5        | `docs/operations.md`            | Live   |
+| UWZ-249 | `/docs/operations/af-xdp`            | AF_XDP                    | How-to          | P2       | M5        | `docs/operations.md`            | Live   |
 
 ### 5.15 Deployment
 
-| ID      | Route                                | Page                  | Type      | Priority | Milestone | Source                  | Status  |
-| ------- | ------------------------------------ | --------------------- | --------- | -------- | --------- | ----------------------- | ------- |
-| UWZ-250 | `/docs/deployment`                   | Deployment            | Index     | P0       | M4        | `docs/deployment.md`    | Planned |
-| UWZ-251 | `/docs/deployment/checklist`         | Production checklist  | Reference | P0       | M4        | `docs/deployment.md`    | Planned |
-| UWZ-252 | `/docs/deployment/tls`               | TLS deployment        | How-to    | P0       | M4        | `docs/tls.md`           | Planned |
-| UWZ-253 | `/docs/deployment/capacity-planning` | Capacity planning     | How-to    | P0       | M4        | `docs/memory_model.md`  | Planned |
-| UWZ-254 | `/docs/deployment/hardening`         | Hardening             | How-to    | P0       | M4        | `docs/deployment.md`    | Planned |
-| UWZ-255 | `/docs/deployment/observability`     | Observability         | How-to    | P0       | M4        | `docs/deployment.md`    | Planned |
-| UWZ-256 | `/docs/deployment/shutdown`          | Shutdown and draining | How-to    | P0       | M4        | `docs/deployment.md`    | Planned |
-| UWZ-257 | `/docs/deployment/docker`            | Docker                | How-to    | P1       | M5        | `flake.nix`, build docs | Planned |
-| UWZ-258 | `/docs/deployment/kubernetes`        | Kubernetes            | How-to    | P1       | M5        | This file               | Planned |
-| UWZ-259 | `/docs/deployment/systemd`           | systemd               | How-to    | P1       | M5        | This file               | Planned |
-| UWZ-260 | `/docs/deployment/reverse-proxy`     | Reverse proxy         | How-to    | P1       | M5        | This file               | Planned |
-| UWZ-261 | `/docs/deployment/http3`             | HTTP/3 deployment     | How-to    | P1       | M5        | `docs/quic.md`          | Planned |
-| UWZ-262 | `/docs/deployment/zero-downtime`     | Zero-downtime rollout | How-to    | P1       | M5        | ADR 0003                | Planned |
-| UWZ-263 | `/docs/deployment/windows`           | Windows               | Reference | P1       | M5        | roadmap, ADR 0004       | Planned |
-| UWZ-264 | `/docs/deployment/bsd`               | BSD targets           | Reference | P2       | M5        | roadmap                 | Planned |
+| ID      | Route                                | Page                  | Type      | Priority | Milestone | Source                  | Status |
+| ------- | ------------------------------------ | --------------------- | --------- | -------- | --------- | ----------------------- | ------ |
+| UWZ-250 | `/docs/deployment`                   | Deployment            | Index     | P0       | M4        | `docs/deployment.md`    | Live   |
+| UWZ-251 | `/docs/deployment/checklist`         | Production checklist  | Reference | P0       | M4        | `docs/deployment.md`    | Live   |
+| UWZ-252 | `/docs/deployment/tls`               | TLS deployment        | How-to    | P0       | M4        | `docs/tls.md`           | Live   |
+| UWZ-253 | `/docs/deployment/capacity-planning` | Capacity planning     | How-to    | P0       | M4        | `docs/memory_model.md`  | Live   |
+| UWZ-254 | `/docs/deployment/hardening`         | Hardening             | How-to    | P0       | M4        | `docs/deployment.md`    | Live   |
+| UWZ-255 | `/docs/deployment/observability`     | Observability         | How-to    | P0       | M4        | `docs/deployment.md`    | Live   |
+| UWZ-256 | `/docs/deployment/shutdown`          | Shutdown and draining | How-to    | P0       | M4        | `docs/deployment.md`    | Live   |
+| UWZ-257 | `/docs/deployment/docker`            | Docker                | How-to    | P1       | M5        | `flake.nix`, build docs | Live   |
+| UWZ-258 | `/docs/deployment/kubernetes`        | Kubernetes            | How-to    | P1       | M5        | This file               | Live   |
+| UWZ-259 | `/docs/deployment/systemd`           | systemd               | How-to    | P1       | M5        | This file               | Live   |
+| UWZ-260 | `/docs/deployment/reverse-proxy`     | Reverse proxy         | How-to    | P1       | M5        | This file               | Live   |
+| UWZ-261 | `/docs/deployment/http3`             | HTTP/3 deployment     | How-to    | P1       | M5        | `docs/quic.md`          | Live   |
+| UWZ-262 | `/docs/deployment/zero-downtime`     | Zero-downtime rollout | How-to    | P1       | M5        | ADR 0003                | Live   |
+| UWZ-263 | `/docs/deployment/windows`           | Windows               | Reference | P1       | M5        | roadmap, ADR 0004       | Live   |
+| UWZ-264 | `/docs/deployment/bsd`               | BSD targets           | Reference | P2       | M5        | roadmap                 | Live   |
 
 ### 5.16 Guides and cookbook
 
-| ID      | Route                            | Page                      | Type   | Priority | Milestone | Source                                | Status  |
-| ------- | -------------------------------- | ------------------------- | ------ | -------- | --------- | ------------------------------------- | ------- |
-| UWZ-270 | `/docs/guides`                   | Guides                    | Index  | P1       | M5        | This file                             | Planned |
-| UWZ-271 | `/docs/guides/json-api`          | Build a JSON API          | Recipe | P1       | M5        | `docs/http.md`                        | Planned |
-| UWZ-272 | `/docs/guides/authentication`    | Add authentication        | Recipe | P1       | M5        | `docs/http.md`                        | Planned |
-| UWZ-273 | `/docs/guides/rate-limiting`     | Add rate limiting         | Recipe | P1       | M5        | `docs/http.md`                        | Planned |
-| UWZ-274 | `/docs/guides/file-server`       | Serve files               | Recipe | P1       | M5        | `docs/http.md`                        | Planned |
-| UWZ-275 | `/docs/guides/chat`              | Build a chat server       | Recipe | P1       | M5        | `examples/chat_server.zig`            | Planned |
-| UWZ-276 | `/docs/guides/presence`          | Track presence            | Recipe | P2       | M5        | `docs/websocket.md`                   | Planned |
-| UWZ-277 | `/docs/guides/rpc-service`       | Build an RPC service      | Recipe | P1       | M5        | `examples/rpc_server.zig`             | Planned |
-| UWZ-278 | `/docs/guides/sse`               | Stream events with SSE    | Recipe | P1       | M5        | `src/http/response.zig`               | Planned |
-| UWZ-279 | `/docs/guides/streaming`         | Stream a large response   | Recipe | P1       | M5        | `docs/http.md`                        | Planned |
-| UWZ-280 | `/docs/guides/uploads`           | Handle uploads            | Recipe | P2       | M5        | `docs/http.md`                        | Planned |
-| UWZ-281 | `/docs/guides/cookies`           | Use cookies safely        | Recipe | P1       | M5        | `src/http/cookie.zig`                 | Planned |
-| UWZ-282 | `/docs/guides/cors`              | Configure CORS            | Recipe | P1       | M5        | `src/http/middleware.zig`             | Planned |
-| UWZ-283 | `/docs/guides/openapi`           | Publish OpenAPI           | Recipe | P2       | M5        | `src/http/openapi.zig`                | Planned |
-| UWZ-284 | `/docs/guides/webhooks`          | Receive webhooks          | Recipe | P2       | M5        | `docs/http.md`                        | Planned |
-| UWZ-285 | `/docs/guides/health-checks`     | Add health checks         | Recipe | P1       | M5        | This file                             | Planned |
-| UWZ-286 | `/docs/guides/graceful-shutdown` | Graceful shutdown         | Recipe | P1       | M5        | `docs/operations.md`                  | Planned |
-| UWZ-287 | `/docs/guides/cluster`           | Scale across cores        | Recipe | P1       | M5        | `examples/shared_nothing_cluster.zig` | Planned |
-| UWZ-288 | `/docs/guides/https`             | Serve HTTPS               | Recipe | P1       | M5        | `examples/https_server.zig`           | Planned |
-| UWZ-289 | `/docs/guides/http3`             | Serve HTTP/3              | Recipe | P1       | M5        | `examples/http3_server.zig`           | Planned |
-| UWZ-290 | `/docs/guides/c-abi`             | Embed from C or C++       | Recipe | P2       | M5        | `include/uWebZockets.h`               | Planned |
-| UWZ-291 | `/docs/guides/testing`           | Test a µWebZockets app    | Recipe | P1       | M5        | `tests/`                              | Planned |
-| UWZ-292 | `/docs/guides/benchmarking`      | Benchmark your deployment | Recipe | P2       | M5        | `benchmarks/`                         | Planned |
+| ID      | Route                            | Page                      | Type   | Priority | Milestone | Source                                | Status |
+| ------- | -------------------------------- | ------------------------- | ------ | -------- | --------- | ------------------------------------- | ------ |
+| UWZ-270 | `/docs/guides`                   | Guides                    | Index  | P1       | M5        | This file                             | Live   |
+| UWZ-271 | `/docs/guides/json-api`          | Build a JSON API          | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
+| UWZ-272 | `/docs/guides/authentication`    | Add authentication        | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
+| UWZ-273 | `/docs/guides/rate-limiting`     | Add rate limiting         | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
+| UWZ-274 | `/docs/guides/file-server`       | Serve files               | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
+| UWZ-275 | `/docs/guides/chat`              | Build a chat server       | Recipe | P1       | M5        | `examples/chat_server.zig`            | Live   |
+| UWZ-276 | `/docs/guides/presence`          | Track presence            | Recipe | P2       | M5        | `docs/websocket.md`                   | Live   |
+| UWZ-277 | `/docs/guides/rpc-service`       | Build an RPC service      | Recipe | P1       | M5        | `examples/rpc_server.zig`             | Live   |
+| UWZ-278 | `/docs/guides/sse`               | Stream events with SSE    | Recipe | P1       | M5        | `src/http/response.zig`               | Live   |
+| UWZ-279 | `/docs/guides/streaming`         | Stream a large response   | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
+| UWZ-280 | `/docs/guides/uploads`           | Handle uploads            | Recipe | P2       | M5        | `docs/http.md`                        | Live   |
+| UWZ-281 | `/docs/guides/cookies`           | Use cookies safely        | Recipe | P1       | M5        | `src/http/cookie.zig`                 | Live   |
+| UWZ-282 | `/docs/guides/cors`              | Configure CORS            | Recipe | P1       | M5        | `src/http/middleware.zig`             | Live   |
+| UWZ-283 | `/docs/guides/openapi`           | Publish OpenAPI           | Recipe | P2       | M5        | `src/http/openapi.zig`                | Live   |
+| UWZ-284 | `/docs/guides/webhooks`          | Receive webhooks          | Recipe | P2       | M5        | `docs/http.md`                        | Live   |
+| UWZ-285 | `/docs/guides/health-checks`     | Add health checks         | Recipe | P1       | M5        | This file                             | Live   |
+| UWZ-286 | `/docs/guides/graceful-shutdown` | Add graceful shutdown     | Recipe | P1       | M5        | `docs/operations.md`                  | Live   |
+| UWZ-287 | `/docs/guides/cluster`           | Scale across cores        | Recipe | P1       | M5        | `examples/shared_nothing_cluster.zig` | Live   |
+| UWZ-288 | `/docs/guides/https`             | Serve HTTPS               | Recipe | P1       | M5        | `examples/https_server.zig`           | Live   |
+| UWZ-289 | `/docs/guides/http3`             | Serve HTTP/3              | Recipe | P1       | M5        | `examples/http3_server.zig`           | Live   |
+| UWZ-290 | `/docs/guides/c-abi`             | Embed from C or C++       | Recipe | P2       | M5        | `include/uWebZockets.h`               | Live   |
+| UWZ-291 | `/docs/guides/testing`           | Test a µWebZockets app    | Recipe | P1       | M5        | `tests/`                              | Live   |
+| UWZ-292 | `/docs/guides/benchmarking`      | Benchmark your deployment | Recipe | P2       | M5        | `benchmarks/`                         | Live   |
 
 ### 5.17 Migration
 
@@ -906,14 +906,14 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | TLS and security      |      16 |      6 |       9 |      1 |      16 |
 | Architecture          |      14 |      4 |       4 |      6 |      14 |
 | Performance           |       8 |      1 |       3 |      4 |       8 |
-| Operations            |      20 |      8 |       7 |      5 |       0 |
-| Deployment            |      15 |      7 |       7 |      1 |       0 |
-| Guides                |      23 |      0 |      17 |      6 |       0 |
+| Operations            |      20 |      8 |       7 |      5 |      20 |
+| Deployment            |      15 |      7 |       7 |      1 |      15 |
+| Guides                |      23 |      0 |      17 |      6 |      23 |
 | Migration             |       8 |      0 |       6 |      2 |       0 |
 | Reference             |      11 |      7 |       4 |      0 |       0 |
 | Examples              |      11 |      1 |       8 |      2 |       0 |
 | Project               |       9 |      1 |       5 |      3 |       0 |
-| **Total**             | **268** | **96** | **125** | **47** | **171** |
+| **Total**             | **268** | **96** | **125** | **47** | **229** |
 
 The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
 2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
@@ -941,6 +941,20 @@ pages. `pnpm ready`, `pnpm format:check`, and `pnpm check:size` passed, and the
 root Vitest suite passed 24 files and 66 tests. Browser viewport, axe, keyboard, reduced-motion, and search QA
 for the 76 new routes were not run in this environment; the next review should
 repeat the 320/768/1280 pass before the section is treated as launch-verified.
+
+On 2026-11-06 the operations, deployment, and guides sections added 58 English
+and 58 Vietnamese pages, bringing the site to 456 documentation pages plus the
+two landing pages (458 pages total). `blume check` type-checked 458 pages with 0
+errors, 0 warnings, and 0 hints; `blume validate --strict` found no broken links;
+`blume build` built 495 pages including generated `.md` mirrors; and `blume
+audit --fail-on warning` reported 0 errors, 0 warnings, and 0 notes across 459
+audited pages. The audit also confirmed that every new page has a distinct title
+and a meta description in the 110 to 160 column range. `pnpm ready` passed lint,
+format, typecheck, file-size, root and workspace tests, strict link validation,
+and both docs builds; the root Vitest suite passed 26 files and 74 tests. Browser
+viewport, axe, keyboard, reduced-motion, and search QA for the 116 new routes were
+not run in this environment; the next review should repeat the 320/768/1280 pass
+before the section is treated as launch-verified.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain

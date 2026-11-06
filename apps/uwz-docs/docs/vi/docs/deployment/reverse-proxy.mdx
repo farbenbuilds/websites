@@ -1,0 +1,150 @@
+---
+title: Reverse proxy
+description: Chọn nơi TLS terminate, truyền client address an toàn, giữ WebSocket và streaming hop sống, và biết cái giá của proxy với HTTP/3.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, deployment, proxy]
+---
+
+Reverse proxy là tùy chọn. Framework tự terminate TLS và phục vụ HTTP/1.1, HTTP/2
+và HTTP/3 trên cùng một application, nên proxy là quyết định về certificate, shared
+edge policy và topology, không phải yêu cầu bắt buộc. Điều không thể bỏ qua là ai
+ghi `X-Forwarded-For` và proxy giữ một idle connection trong bao lâu.
+
+## Nơi TLS terminate
+
+| Vị trí      | Hop được mã hóa           | Backend hop                   | Tradeoff                                                   |
+| ----------- | ------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| Tại proxy   | Client tới proxy          | Proxy tới app, plain hoặc TLS | Một certificate store, nhưng proxy phải forward trung thực |
+| Passthrough | Client tới app            | Không, proxy forward byte     | App sở hữu certificate; proxy không thêm được client IP    |
+| Cả hai      | Client tới proxy, rồi TLS | Proxy tới app qua TLS         | Cô lập tối đa, hai certificate lifecycle                   |
+
+Passthrough không cung cấp được client address: framework không parse PROXY
+protocol, và `Request` không mang peer address. Nếu application cần client IP, hãy
+terminate TLS tại proxy và ghi forwarding header ở đó.
+
+## Client address
+
+`Request` expose header, không expose socket address, nên sau proxy identity duy nhất
+của client là header do edge của bạn ghi:
+
+```zig
+fn clientAddress(request: *const uz.Request) []const u8 {
+    // Field trùng nghĩa là một hop đã append thay vì overwrite.
+    return request.get_unique_header("x-forwarded-for") orelse "unknown";
+}
+```
+
+Proxy phải overwrite header, không append. Với nginx, đặt
+`proxy_set_header X-Forwarded-For $remote_addr`. Với Caddy, `reverse_proxy` mặc định
+ghi địa chỉ peer trực tiếp và bỏ qua `X-Forwarded-*` đi vào trừ khi bạn cấu hình
+trusted proxy.
+
+| Quy tắc                                    | Lý do                                                          |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Overwrite, không append                    | Chain bị append cho phép client chọn entry đầu tiên của mình   |
+| Chỉ tin header đến từ proxy                | Bất cứ thứ gì tới được app trực tiếp đều có thể giả header     |
+| Bind app vào loopback hoặc interface riêng | Không có peer-address check nào để fallback                    |
+| Dùng `get_unique_header` cho limiter key   | Field trùng trả `null` thay vì chọn giá trị do kẻ tấn công đặt |
+
+`middleware.RateLimit` key theo đúng giá trị application truyền vào. Một header
+client tự đặt sẽ rotate bucket và evict client khác khỏi bảng đầy, nên hãy hash
+header đáng tin hoặc một identity do server tạo. Xem
+[Rate limiting](/vi/docs/http/rate-limiting) để hiểu hành vi của bảng.
+
+## WebSocket upgrade
+
+| Yêu cầu            | nginx                                                                        | Caddy                             |
+| ------------------ | ---------------------------------------------------------------------------- | --------------------------------- |
+| Backend protocol   | `proxy_http_version 1.1`                                                     | Tự động                           |
+| Upgrade header     | `proxy_set_header Upgrade $http_upgrade` và `Connection $connection_upgrade` | Tự động                           |
+| Read timeout       | `proxy_read_timeout` lớn hơn `idle_timeout_ms`                               | Read timeout của `transport http` |
+| Response buffering | `proxy_buffering off` ở location của socket                                  | `flush_interval -1`               |
+
+`$connection_upgrade` là `map` quen thuộc từ `$http_upgrade` sang `upgrade` hoặc
+`close`; nếu thiếu, một location dùng chung sẽ gửi `Connection: upgrade` cho cả
+request thường. Hầu hết proxy hoàn tất handshake qua HTTP/1.1. Framework cũng hỗ
+trợ RFC 8441 tunnelling qua HTTP/2, nhưng cần proxy hỗ trợ extended CONNECT, điều
+không phổ biến.
+
+WebSocket idle sống tới `idle_timeout_ms`, mặc định 120 giây. Proxy read timeout
+thấp hơn sẽ đóng socket trước, và client reconnect theo timer trông như lỗi proxy.
+Tăng timeout của proxy hoặc hạ timeout của framework cho khớp.
+
+## HTTP/2 tới backend
+
+| Hop                              | Cơ chế                         | Hỗ trợ |
+| -------------------------------- | ------------------------------ | ------ |
+| Client tới proxy                 | TLS ALPN hoặc cleartext        | Có     |
+| Proxy tới app qua TLS            | ALPN chọn `h2`, rồi `http/1.1` | Có     |
+| Proxy tới app dạng cleartext     | HTTP/2 prior knowledge         | Có     |
+| Proxy tới app bằng `h2c` Upgrade | RFC 7540 Upgrade               | Không  |
+
+HTTP/2 cleartext dùng prior knowledge, không dùng handshake `Upgrade: h2c`. Proxy
+chỉ hỗ trợ h2c Upgrade phải giữ backend hop ở HTTP/1.1, hoặc bật TLS để ALPN chọn
+`h2`.
+
+## Limit và timeout
+
+| Thiết lập proxy      | Phải                                            | Nếu không                                         |
+| -------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| Request body limit   | Ít nhất `max_body_size`                         | Proxy trả `413` của nó, không phải bản structured |
+| Header size và count | Lớn hơn `max_header_size` và `max_header_count` | Proxy từ chối trước bằng lỗi của nó               |
+| Read timeout         | Lớn hơn `idle_timeout_ms`                       | Keep-alive và WebSocket idle bị đóng sớm          |
+| Connect timeout      | Ngắn                                            | App pod chết giữ slot của client ở edge           |
+| Response buffering   | Tắt cho route streaming và SSE                  | Event đến thành từng cụm khi buffer đầy           |
+| Response compression | Tắt ở chỗ app đã gzip                           | Nén hai lần tốn CPU và làm body to hơn            |
+
+Giữ limit của proxy cao hơn của framework một chút. Limit proxy thấp hơn limit
+application sẽ che mất structured rejection nêu đúng bound, và operator mất error
+hữu ích.
+
+## Streaming và SSE
+
+`res.begin_stream` và `res.sse()` ghi tăng dần, nên mọi buffer giữa handler và
+client phải bị tắt hoặc bị chặn bởi latency. Đặt nginx `proxy_buffering off` và
+`proxy_cache off` ở các location đó, hoặc Caddy `flush_interval -1`. Không bật
+response compression ở proxy cho các route này: streaming path của framework không
+đặt content length, và proxy nén sẽ buffer để tìm length.
+
+## HTTP/3
+
+HTTP/3 end to end nghĩa là UDP tới được listener của application. Proxy terminate
+QUIC rồi mở TCP tới app chỉ cho HTTP/3 ở edge; backend vẫn chạy HTTP/2 hoặc
+HTTP/1.1. Framework không phát `Alt-Svc`, nên việc khám phá protocol là của client
+hoặc của edge.
+
+| Topology                         | Kết quả                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| UDP passthrough tới `listen_udp` | HTTP/3 end to end; proxy phải route UDP theo từng connection |
+| QUIC ở edge, TCP tới app         | HTTP/3 cho client, HTTP/2 hoặc HTTP/1.1 tới app              |
+| Load balancer chỉ TCP            | Không có HTTP/3; QUIC listener không tới được                |
+
+Một UDP load balancer stateless vẫn phải giữ datagram của một QUIC connection trên
+một backend. Address migration phá mapping đó, nên pin đường đi hoặc tắt migration.
+
+## Kiểm tra
+
+```sh
+curl -sS -o /dev/null -w '%{http_version}\n' --http2 https://app.example.com/
+curl -sS -N https://app.example.com/events
+curl -i -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  https://app.example.com/chat
+```
+
+Kỳ vọng `2` cho request HTTP/2, các dòng tăng dần từ route SSE và
+`101 Switching Protocols` từ route WebSocket. Gửi một `X-Forwarded-For` giả tới
+route echo và xác nhận proxy đã thay nó.
+
+## Các lỗi thường gặp
+
+| Triệu chứng                         | Nguyên nhân                               | Cách sửa                                           |
+| ----------------------------------- | ----------------------------------------- | -------------------------------------------------- |
+| WebSocket đóng sau một phút         | Proxy read timeout thấp hơn idle timeout  | Tăng timeout hoặc hạ `idle_timeout_ms`             |
+| Mọi client chung một rate-limit key | Proxy append header do client gửi         | Overwrite `X-Forwarded-For` ở edge                 |
+| `413` không kèm tên limit           | Proxy body limit thấp hơn `max_body_size` | Nâng limit proxy cao hơn limit framework           |
+| SSE event đến thành từng cụm        | Response buffering đang bật               | Tắt buffering ở location đó                        |
+| `400` cho mọi request WebSocket     | HTTP/1.0 hoặc thiếu header `Connection`   | Ép HTTP/1.1 và forward header Upgrade              |
+| HTTP/3 chỉ chạy ở edge              | Proxy terminate QUIC rồi dùng TCP tới app | Cho UDP đi xuyên, hoặc chấp nhận HTTP/3 chỉ ở edge |

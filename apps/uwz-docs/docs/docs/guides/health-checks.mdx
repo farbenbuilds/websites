@@ -1,0 +1,180 @@
+---
+title: Add health checks
+description: Serve liveness and readiness routes that separate process, listener, and capacity state, then wire them to a supervisor or Kubernetes probe.
+sidebar:
+  order: 16
+search:
+  tags: [guide, health, kubernetes, operations]
+---
+
+A health check is an HTTP route you own. µWebZockets ships no built-in endpoint,
+and the framework cannot decide what "ready" means for your dependencies.
+
+## Problem
+
+A supervisor must know when to restart the process and when to send it traffic.
+A process that is alive but draining fails readiness while answering liveness.
+
+## Assumptions
+
+- The application serves plaintext HTTP on port 3000 behind a probe.
+- Liveness is constant. Readiness follows application state and a dependency
+  flag your own code updates.
+- A cluster gives each worker its own state copy.
+
+## Write the program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Readiness = struct {
+    draining: bool = false,
+    dependency_ok: bool = true,
+};
+
+fn healthz(_: *uz.Request, res: *uz.Response) void {
+    res.end("200 OK", "ok") catch {};
+}
+
+fn readyz(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *Readiness = @ptrCast(@alignCast(context));
+    if (state.draining or !state.dependency_ok) {
+        res.end("503 Service Unavailable", "not ready") catch {};
+        return;
+    }
+    res.end("200 OK", "ready") catch {};
+}
+
+fn drain(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *Readiness = @ptrCast(@alignCast(context));
+    state.draining = true;
+    res.end("202 Accepted", "draining") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var state = Readiness{};
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/healthz", healthz);
+    _ = try app.get_context("/readyz", &state, readyz);
+    _ = try app.route_context(.post, "/admin/drain", &state, drain);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`/healthz` touches no dependency. `/readyz` reads caller-owned state, so a slow
+database cannot make the probe time out. Set `dependency_ok` from a bounded
+background check, never inline.
+
+## Verify it
+
+```sh
+zig build run
+```
+
+```sh
+curl -s -o /dev/null -w 'healthz %{http_code}\n' http://127.0.0.1:3000/healthz
+curl -s -o /dev/null -w 'readyz  %{http_code}\n' http://127.0.0.1:3000/readyz
+curl -s -X POST http://127.0.0.1:3000/admin/drain
+curl -s -o /dev/null -w 'readyz  %{http_code}\n' http://127.0.0.1:3000/readyz
+```
+
+Expect `200`, `200`, `202`, then `503`. The last probe fails while the process
+still serves requests. That is the difference between liveness and readiness.
+
+The drain route is a control surface. Put it on an internal listener or protect it
+with authentication; do not expose it on a public interface.
+
+## Process, listener, and capacity
+
+| Signal         | What a 200 proves                                   | What it cannot prove     |
+| -------------- | --------------------------------------------------- | ------------------------ |
+| Process alive  | The event loop runs and a handler executed          | That it accepts new work |
+| Listener bound | A socket accepted the probe and routed it           | That a dependency works  |
+| Capacity spare | Nothing; the probe is one request on one connection | Room for the next burst  |
+
+A handler runs only after a listener bound and accepted the connection, so a
+response proves process and listener together. Startup and drain break that
+pairing: the probe cannot connect, which a supervisor treats as not ready.
+
+Capacity is different. Exhaustion is explicit and local: excess TCP connections
+are closed, an oversized body gets `413`, and an oversized header block gets
+`431`. A readiness handler cannot observe a connection it never receives, so do
+not claim spare capacity from it. Use the `uwz_connections_accepted` and
+`uwz_connections_closed` counters plus a load test.
+
+## Supervisor wiring
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 3000 }
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: { path: /readyz, port: 3000 }
+  periodSeconds: 5
+  failureThreshold: 2
+```
+
+Point both probes at a route that does no I/O. A liveness probe that calls a
+dependency restarts a healthy process when that dependency is down. Set
+`terminationGracePeriodSeconds` above the drain time; systemd uses `Type=exec`.
+
+## Capacity assumptions
+
+| Resource          | Bound                            | Consequence                        |
+| ----------------- | -------------------------------- | ---------------------------------- |
+| Probe connections | Part of `max_clients`            | Probes consume connection slots    |
+| Dependency check  | Bounded timeout in your own task | A hung check cannot block the loop |
+
+## Failure behavior
+
+| Condition             | Probe result    |
+| --------------------- | --------------- |
+| Draining flag set     | Readiness `503` |
+| Dependency flag false | Readiness `503` |
+
+## Variations
+
+### Dependency check with a truth table
+
+Keep the decision pure and test it without a socket:
+
+```zig
+fn ready(state: Readiness) bool {
+    return !state.draining and state.dependency_ok;
+}
+
+test "readiness truth table" {
+    try std.testing.expect(ready(.{}));
+    try std.testing.expect(!ready(.{ .draining = true }));
+}
+```
+
+`zig test` on the module that holds `ready` proves the table.
+
+### Drain before the signal
+
+Call `/admin/drain` from a pre-stop hook, wait one probe interval, then send
+`SIGTERM`. The load balancer removes the instance while the process still
+answers; `catch_shutdown_signals` then stops accepting and drains.
+
+```sh
+curl -fsS -X POST http://127.0.0.1:3000/admin/drain
+sleep 5
+kill -TERM "$(pgrep -f 'zig-out/bin/your-app')"
+```
+
+Without the first step, traffic can arrive after the listener closed and before
+the endpoint is removed.
+
+## Related
+
+- [Production checklist](/docs/deployment/checklist) covers probes and rollout.
+- [Kubernetes](/docs/deployment/kubernetes) sets grace periods and budgets.
+- [Graceful shutdown](/docs/guides/graceful-shutdown) drains on the signal.

@@ -1,0 +1,121 @@
+---
+title: Troubleshooting
+description: Match a symptom to its cause, apply the smallest fix, and prevent the same failure from returning to production.
+sidebar:
+  order: 15
+search:
+  tags: [troubleshooting, operations, errors]
+---
+
+Each section below follows the same order: the symptom you observe, the cause
+that produces it, the smallest fix, and the check that keeps it from returning.
+Start with the status code or error name, not with the configuration file. Two
+channels report failures separately, and
+[Errors and failure modes](/docs/concepts/errors) explains how to read both.
+
+## Build and cache
+
+| Symptom                                                          | Cause                                                                          | Fix                                                                     | Prevention                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| `ld.lld: cannot open .../crt1.o` or `libc++.a`                   | The Zig global cache index references object files that were removed           | Delete the global cache directory and rebuild; the cache is regenerated | Do not prune object files by hand inside the cache        |
+| A build succeeds with one cache and fails with the default cache | An earlier run used `ZIG_GLOBAL_CACHE_DIR`, so the default cache is incomplete | Use one cache consistently, or clear the stale one before switching     | Keep the cache selection in the shell, not per invocation |
+| `zig build` rejects the compiler                                 | The toolchain is not Zig 0.16.0                                                | Install 0.16.0 and rerun                                                | Pin the compiler version in your project notes and CI     |
+
+Deleting a cache is a repair for a file-not-found symptom, not a way to hide a
+compile error. Rerun the build after clearing it so the failure is reproducible.
+
+## Capacity rejections
+
+| Status                                   | Cause                                                                                      | Fix                                                                                    | Prevention                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `413 Payload Too Large`                  | The body exceeded `max_body_size`                                                          | Raise `with_max_body_size` with a measured size, or stream output with `begin_stream`  | Size bodies from the largest legitimate upload, not from a round number |
+| `431 Request Header Fields Too Large`    | The request line, header block, or header count exceeded its limit                         | Raise `with_max_request_line_size`, `with_max_header_size`, or `with_max_header_count` | Test the request at the header size your proxy also permits             |
+| `503 Service Unavailable`                | A bounded resource is exhausted, such as a second RFC 8441 tunnel on one HTTP/2 connection | Size the matching capacity; retry the tunnel on a new connection                       | Alert on the rejection counter instead of waiting for a client report   |
+| `error.WouldBlock` from WebSocket `send` | The bounded write queue is full                                                            | Resume the producer from the `drain` callback using `buffered_amount()`                | Treat `WouldBlock` as normal backpressure, never as a retry loop        |
+
+Rejection bodies name the limit and its value. The defaults and every builder
+override are listed on [HTTP limits](/docs/http/limits).
+
+## Requests that fail before the handler
+
+| Status                   | Cause                                                        | Fix                                                                                         | Prevention                                                                       |
+| ------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `404 Not Found`          | No route matched                                             | Register the path without the query string; the query is already split into `Request.query` | Assert the route table in a startup test                                         |
+| `405 Method Not Allowed` | A route exists for another method                            | Read the `Allow` header and register the method the client sends                            | Test every advertised method on the route                                        |
+| `425 Too Early`          | A non-safe method arrived in TLS 0-RTT early data            | Let the client retry after the handshake                                                    | Keep replayable work off early data; see [Early data](/docs/security/early-data) |
+| `426 Upgrade Required`   | A WebSocket route was called without `Upgrade: websocket`    | Send the upgrade handshake from the client                                                  | Cover the handshake in a loopback test                                           |
+| `501 Not Implemented`    | HTTP/2 or HTTP/3 `CONNECT` outside RFC 8441 extended CONNECT | Use extended CONNECT, or a regular route                                                    | Document the tunnel contract next to the route                                   |
+
+## TLS
+
+| Symptom                          | Cause                                                     | Fix                                                                     | Prevention                                                    |
+| -------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `curl` rejects the certificate   | An ephemeral certificate is self-signed                   | Use `curl -k` for local work, or load a trusted chain with `init_https` | Keep ephemeral certificates out of staging and production     |
+| `error.PrivateKeyLoadFailed`     | The PEM certificate and key do not belong together        | Load the matching pair; BoringSSL rejects the key during load           | Generate the pair together and store the key beside the chain |
+| `error.CertificateLoadFailed`    | The certificate path is unreadable or malformed           | Pass a PEM chain with the leaf first                                    | Validate the chain in the deploy pipeline                     |
+| `error.TrustStoreLoadFailed`     | The mTLS client CA bundle is unreadable or malformed      | Pass a readable PEM bundle                                              | Ship the bundle as a mounted secret, not as a build artifact  |
+| `error.InvalidClientAuthConfig`  | A mode other than `.none` was set with an empty `ca_path` | Supply `ca_path` for `.optional` or `.required`                         | Fail the config check before the listener binds               |
+| Handshakes fail for some clients | TLS 1.3 is the only supported version                     | Upgrade the client or terminate TLS at a proxy                          | Record the minimum client version in the API contract         |
+
+## Client failures
+
+`uz.client` reports a `.kind` on every failure. It is a bounded HTTP/1.1 client
+with numeric addresses only.
+
+| Kind        | Cause                                                                        | Fix                                                                                        | Prevention                                         |
+| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `.connect`  | Connect refused, unreachable, or a host that is not a numeric IP             | Pass a numeric address and check the listener                                              | Resolve names in your own code before the call     |
+| `.tls`      | Verification or handshake failure                                            | Set `ca_path` when `verify = true`, and do not reuse one client with different trust rules | Build one client per trust policy                  |
+| `.protocol` | Malformed or conflicting response framing                                    | Check the peer and any intermediary                                                        | Keep a raw response capture for the failing host   |
+| `.timeout`  | `connect_timeout_ms` or `read_timeout_ms` expired                            | Raise the deadline that expired; zero expires immediately                                  | Set deadlines from the slowest healthy dependency  |
+| `.closed`   | The peer closed or the socket failed                                         | Retry on a new request slot                                                                | Distinguish a close from a timeout in your metrics |
+| `.capacity` | The response exceeded `response_body_capacity`, or no inflight slot was free | Raise the capacity or reduce concurrency                                                   | Bound responses at the producer                    |
+
+## Signals and shutdown
+
+| Symptom                                               | Cause                                                 | Fix                                                                                  | Prevention                                     |
+| ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `error.SignalWatcherAlreadyInstalled`                 | `catch_shutdown_signals` ran twice                    | Install one watcher per process, or use `Cluster.catch_shutdown_signals` for a group | Install it in one place during startup         |
+| `error.ApplicationUnavailable` from `run` or `listen` | Shutdown started or the application was deinitialized | Check the call order                                                                 | Keep `deinit` in `defer` at the creation scope |
+| A panic from `deinit`                                 | `deinit` ran on the event loop thread                 | Release from outside the loop, or use `request_shutdown` from a callback             | Never call lifecycle calls from a handler      |
+| SIGTERM during startup appears lost                   | The signal arrived before the loop ran                | No fix is needed; the request is coalesced and drained on the first iteration        | Send SIGTERM once and wait                     |
+
+## Cluster
+
+| Symptom                                               | Cause                                                                     | Fix                                                            | Prevention                                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------- |
+| Workers do not share load evenly                      | Windows binds with `SO_REUSEADDR`, and kernel distribution is unspecified | Treat the Windows cluster as a fallback, not a balancer        | Target Linux for shared-nothing clusters              |
+| Workers start unpinned                                | Affinity is unavailable or a restricted cpuset rejected it                | No fix is needed; the worker logs once and runs unpinned       | Budget for SMT oversubscription                       |
+| `error.TlsAlreadyEnabled` or `error.AlreadyListening` | `enable_https` ran twice or after `listen`                                | Call it once after `configure` and before `listen`             | Keep the lifecycle in one function                    |
+| `publish` returns `error.ClusterStopped`              | The group's loops are gone                                                | Rebuild the cluster instead of publishing into it              | Check `state()` before publishing                     |
+| An inbox dropped messages                             | A worker's bounded inbox was full                                         | Read `publish_report` for `dropped` and `first_dropped_worker` | Size the inbox from the publish rate and message size |
+
+## kqueue timers
+
+| Symptom                                               | Cause                                                                   | Fix                                                     | Prevention                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------- |
+| Zero requests per second on macOS with idle deadlines | Versions before 2.1.6 returned `.rearm` for an expired absolute timeout | Upgrade to 2.1.6 or later before measuring              | Record the dependency version with every benchmark |
+| `libxev_kqueue: invalid state` in a 2.1.6 log         | A kqueue regression, not a configuration problem                        | Keep the raw log and report it with the release version | Archive logs beside benchmark artifacts            |
+
+## HTTP/3
+
+| Symptom                                         | Cause                                                               | Fix                                                              | Prevention                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| A client cannot connect over QUIC               | `listen_udp` was never called, or the `App` moved after binding     | Call `listen_udp` and keep the application at a stable address   | Bind before `run` and never move the value          |
+| Extended CONNECT or WebTransport is rejected    | The live listener rejects those features by design                  | Use a regular route or send datagrams through the supported path | Check the HTTP/3 limits before designing the client |
+| Request records appear without counter movement | The QUIC path emits records but never advances the counter registry | Use request records for HTTP/3 observability                     | Do not build HTTP/3 alerts on the shared counters   |
+
+## Getting help
+
+Collect the exact error name, the platform and toolchain version, the command,
+and the capacity configuration before asking. Report a security issue privately
+through [Security reporting](/docs/security/reporting); do not open a public
+issue for it.
+
+## Related
+
+- [Errors and failure modes](/docs/concepts/errors) separates Zig errors from
+  HTTP status codes and explains the structured rejection document.
+- [HTTP limits](/docs/http/limits) lists every default and builder override.
+- [Development log reference](/docs/operations/development-log) explains the log
+  records that help confirm a cause.

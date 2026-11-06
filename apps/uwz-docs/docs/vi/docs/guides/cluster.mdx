@@ -1,0 +1,178 @@
+---
+title: Scale theo số core
+description: Chạy một event loop mỗi core với port chia sẻ, đọc worker capacity và failure state, rồi publish qua inbox có bound của từng worker.
+sidebar:
+  order: 18
+search:
+  tags: [guide, cluster, workers, so-reuseport]
+---
+
+Cluster là nhiều application độc lập trên một port. Mỗi worker sở hữu loop,
+slab, connection slot và TLS context riêng; kernel phân phối connection được
+accept.
+
+## Vấn đề
+
+Một core để các core khác rảnh. Bạn cần scale thread-per-core mà không chia sẻ
+request state, và cần biết worker nào lỗi khi nhóm dừng.
+
+## Giả định
+
+- Host là Linux hoặc macOS; Linux pin worker vào physical core.
+- Có `SO_REUSEPORT`. Windows dùng `SO_REUSEADDR` với phân phối không xác định.
+- Worker count vừa với số physical core bạn định dùng.
+- HTTP/3 không nằm trong cluster; QUIC vẫn là single-application.
+
+## Viết chương trình
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a worker") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(256)
+        .with_write_queue_size(32 * 1024)
+        .build_cluster(std.heap.page_allocator, 4, .{});
+    defer group.deinit();
+
+    const Cluster = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Cluster.Worker, index: usize) !void {
+            _ = index;
+            _ = try worker.get("/", hello);
+        }
+    }.routes);
+
+    try group.catch_shutdown_signals();
+    try group.listen("0.0.0.0", 3000);
+    group.run() catch |err| {
+        if (group.first_failure()) |failure| {
+            std.log.err("worker {d} ({s}): {s}", .{
+                failure.index,
+                @tagName(failure.phase),
+                @errorName(failure.err),
+            });
+        }
+        return err;
+    };
+}
+```
+
+`build_cluster` nhận allocator, worker capacity lúc compile và `ClusterOptions`.
+Mọi active worker đăng ký cùng route qua `configure` trước khi thread nào chạy.
+Sau đó mỗi worker bind cùng port và accept độc lập.
+
+## Kiểm tra
+
+```sh
+zig build run
+```
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+Kỳ vọng `hello from a worker`. Lặp lại: kernel cân bằng connection mới trên các
+listening socket. Một TCP connection ở lại worker đã accept nó, nên keep-alive
+client chỉ đo một core, không đo cả nhóm.
+
+```sh
+kill -TERM "$(pgrep -f 'zig-out/bin/your-app')"
+```
+
+`catch_shutdown_signals` drain mọi worker; `run` join chúng và `deinit` giải
+phóng slab.
+
+## Worker capacity và active count
+
+| Lệnh gọi                      | Báo cáo                                      |
+| ----------------------------- | -------------------------------------------- |
+| `worker_capacity()`           | Capacity lúc compile từ `build_cluster`      |
+| `worker_count()`              | Active worker có loop và slab                |
+| `ClusterOptions.worker_count` | Active count tường minh dưới capacity        |
+| `UWEBZOCKETS_WORKERS`         | Override environment cho environment builder |
+
+Count lớn hơn physical core sẽ quấn vòng qua các core đã chọn.
+
+## Publish qua worker
+
+WebSocket pub/sub mặc định là per worker. `Cluster.publish` broadcast qua một
+inbox có bound mỗi worker và đánh thức từng loop:
+
+```zig
+const report = group.publish_report("chat", "hello workers", true) catch |err| {
+    std.log.err("publish failed: {}", .{err});
+    return;
+};
+if (!report.all_delivered()) {
+    std.log.warn("queued={d} dropped={d} notify_failed={d} first={?d}", .{
+        report.queued,
+        report.dropped,
+        report.notify_failed,
+        report.first_dropped_worker,
+    });
+}
+```
+
+`publish` trả số đã queue; `publish_report` nêu inbox bị drop và wakeup lỗi.
+Delivery là queue delivery, không phải application subscription. Nhóm đã dừng
+trả `error.ClusterStopped`.
+
+## Giả định capacity
+
+| Tài nguyên           | Giới hạn                  | Hệ quả                   |
+| -------------------- | ------------------------- | ------------------------ |
+| Cross-worker message | Inbox có bound mỗi worker | Inbox đầy tăng `dropped` |
+| Slab                 | Một mỗi active worker     | Worker count nhân memory |
+
+## Hành vi khi lỗi
+
+| Phase     | Nguyên nhân                        |
+| --------- | ---------------------------------- |
+| `spawn`   | Không khởi động được worker thread |
+| `run`     | Event loop của worker trả lỗi      |
+| `cleanup` | Drain sau run thất bại             |
+
+Lỗi đầu tiên thắng, nên shutdown cascade không thay thế nguyên nhân gốc.
+`first_failure()` báo index worker, phase và lỗi gốc; `failure_count()` đếm lỗi
+từ lần `run` trước.
+
+## Biến thể
+
+### Đọc worker count từ environment
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .build_cluster_from_environment(std.heap.page_allocator, 8, init.environ_map, .{});
+```
+
+Capacity lúc compile là 8, active count resolve theo thứ tự:
+`ClusterOptions.worker_count`, `UWEBZOCKETS_WORKERS`, rồi CPU count của nền
+tảng. Giá trị không hợp lệ, bằng 0 hoặc vượt capacity sẽ fail trước khi có slab.
+
+```sh
+UWEBZOCKETS_WORKERS=2 zig build run
+```
+
+### Terminate TLS trong từng worker
+
+```zig
+try group.enable_https("certs/fullchain.pem", "certs/privkey.pem");
+try group.catch_shutdown_signals();
+try group.listen("0.0.0.0", 8443);
+try group.run();
+```
+
+Gọi `enable_https` một lần sau `configure` và trước `listen`. Mỗi worker sở hữu
+một TLS 1.3 context và đọc PEM một lần, nên rotate là rolling restart. Nó không
+cấu hình client certificate.
+
+## Liên quan
+
+- [Cluster đầu tiên](/docs/examples/first-cluster) là tutorial ngắn hơn.
+- [Cluster model](/docs/concepts/cluster-model) giải thích shared-nothing worker.

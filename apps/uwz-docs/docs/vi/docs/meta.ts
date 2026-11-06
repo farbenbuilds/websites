@@ -21,5 +21,8 @@ export default defineMeta({
     "security",
     "architecture",
     "performance",
+    "operations",
+    "deployment",
+    "guides",
   ],
 });

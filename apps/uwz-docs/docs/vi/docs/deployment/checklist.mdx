@@ -1,0 +1,92 @@
+---
+title: Production checklist
+description: Chạy một danh sách launch có thứ tự với evidence, owner và rollback cho credential, capacity, hardening, observability, shutdown và platform.
+sidebar:
+  order: 2
+search:
+  tags: [deployment, operations, reference]
+---
+
+Đi hết danh sách này một lần cho mỗi deployment, rồi giữ nó làm hồ sơ cho release
+kế tiếp. Mỗi dòng ghi rõ hành động, evidence chứng minh, role sở hữu và rollback
+nếu evidence thất bại. Không chuyển sang area sau khi một dòng phía trước chưa có
+evidence.
+
+Danh sách giả định service đã build và đang serve traffic trên loopback. Kết quả
+compliance của framework là evidence đã publish upstream; danh sách này chỉ bao
+gồm những gì deployment của bạn phải tự chứng minh.
+
+## Thứ tự
+
+Thứ tự là có chủ đích. Credential và capacity fail lúc startup nên là những gate
+rẻ nhất để chứng minh trước. Hardening thay đổi hành vi nên cần một target đang
+chạy. Observability phải tồn tại trước load test, nếu không test chỉ tạo ra những
+con số không ai đọc được. Shutdown và platform cần một process thật cùng một
+supervisor thật. Verification đóng vòng lặp bằng build và traffic của chính bạn.
+
+## Launch gate
+
+| Area          | Hành động                                                                     | Evidence                                                             | Owner       | Rollback                                 |
+| ------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------- | ---------------------------------------- |
+| Credential    | Pin Zig 0.16.0 và một release tag hoặc full commit trong `build.zig.zon`      | `zig version` và dependency hash đã resolve                          | Release     | Khôi phục tag trước và build lại         |
+| Credential    | Cài PEM chain với leaf đứng đầu và private key khớp                           | Startup tới được `listen` mà không có lỗi credential                 | Platform    | Giữ file cũ tới khi process cũ thoát     |
+| Credential    | Chốt client-certificate mode, kể cả quyết định `.none` được ghi lại           | Mode, CA bundle path và người review được ghi lại                    | Security    | Revert mode rồi restart                  |
+| Credential    | Với TLS cluster, gọi `enable_https` một lần sau `configure` và trước `listen` | Thứ tự startup trong process log                                     | Platform    | Để process cũ tiếp tục drain             |
+| Capacity      | Chọn preset và mọi override từ workload đã đo                                 | Con số cùng lý do trong deployment record                            | Application | Quay lại preset trước                    |
+| Capacity      | Gọi `slab_bytes()`, nhân với active worker, rồi cộng bộ nhớ inbox và context  | Footprint mỗi worker và tổng được in ra                              | Platform    | Resize host trước khi restart            |
+| Capacity      | Định cỡ `max_body_size` và write queue theo body lớn nhất và reader chậm nhất | Giá trị được ghi cùng request shape biện minh cho chúng              | Application | Khôi phục limit trước                    |
+| Capacity      | Chứng minh rejection path bằng một body quá lớn và một header quá lớn         | Một `413` và một `431` với limit document có cấu trúc                | Application | Khôi phục limit trước                    |
+| Hardening     | Đặt authentication trước mọi route nhạy cảm                                   | `401` khi không có credential và `200` khi có                        | Security    | Bỏ route khỏi public listener            |
+| Hardening     | Rate limit bằng key do server suy ra, không phải key client kiểm soát         | `429` kèm `Retry-After` dưới một burst có script                     | Security    | Nâng limit hoặc tắt route                |
+| Hardening     | Áp CORS và security header cho route phục vụ browser                          | Preflight trả `204`; header khớp policy dự kiến                      | Security    | Bỏ middleware khỏi scope đó              |
+| Hardening     | Đặt idle timeout và header read timeout khớp với tập client                   | Giá trị đã cấu hình và một connection bị treo tự đóng                | Application | Khôi phục mặc định `120` giây            |
+| Hardening     | Tắt TRACE trừ khi có yêu cầu vận hành                                         | Không có TRACE route, hoặc ngoại lệ đã ghi lại                       | Security    | Revert route registration                |
+| Hardening     | Giữ credential ngoài repository, log và rejection body                        | Secret scan và một mẫu log đã review                                 | Security    | Rotate secret đã lộ                      |
+| Observability | Bật metrics registry và gọi được route `/metrics` ẩn                          | Một scrape có counter connection và request khác 0                   | SRE         | Dùng snapshot `log_metrics` làm fallback |
+| Observability | Bind một log destination hoặc tắt development log                             | File tăng kích thước, hoặc stderr bị redirect vẫn im lặng            | SRE         | Bật lại sink trước                       |
+| Observability | Thêm alert cho pool saturation, error rate, rejection và queue growth         | Alert rule được review cùng threshold                                | SRE         | Giữ dashboard và ticket queue            |
+| Shutdown      | Cài `catch_shutdown_signals` trước `run`, mỗi process một lần                 | SIGTERM dừng accept và drain connection                              | Platform    | Gửi SIGKILL sau grace period             |
+| Shutdown      | Đặt grace period của supervisor dài hơn thời gian drain                       | Cấu hình supervisor được đối chiếu với một lần drain có đo thời gian | Platform    | Tăng grace period rồi deploy lại         |
+| Shutdown      | Dùng `deinit_checked` cho cluster và giữ một owner của `Cluster`              | Exit code sạch và không panic lúc release                            | Platform    | Restart supervisor unit                  |
+| Platform      | Xác nhận target được hỗ trợ, hoặc ghi lại trạng thái bị gate                  | Release note hoặc CI evidence cho đúng commit                        | Release     | Ở lại target đã verify gần nhất          |
+| Platform      | Xác nhận số worker và, trên Linux, phân bố `SO_REUSEPORT`                     | Số connection mỗi worker trong soak test                             | Platform    | Giảm số worker                           |
+| Verification  | Build và test project của chính bạn ở `ReleaseSafe`                           | `zig build test` và `zig build -Doptimize=ReleaseSafe` exit 0        | Release     | Khôi phục commit trước                   |
+| Verification  | Chạy load test ở peak dự kiến và đếm mọi failure                              | Throughput, latency và error count được ghi cùng host                | SRE         | Đưa traffic về deployment trước          |
+
+## Lệnh verification
+
+Chạy trong repository ứng dụng, không phải trong framework checkout.
+`zig build test` giả định `build.zig` của bạn có định nghĩa test step.
+
+```sh
+zig version
+zig build test
+zig build -Doptimize=ReleaseSafe
+```
+
+Sau đó gọi readiness route qua đúng listener mà platform dùng:
+
+```sh
+curl -sS -o /dev/null -w "%{http_code}\n" https://127.0.0.1:8443/readyz
+```
+
+Check cuối là chính việc drain. Bắt đầu một client loop rate thấp, gửi SIGTERM
+tới server process, và xem loop kết thúc trong khi process thoát. Process thoát
+khi vẫn còn nhận request là đã trượt gate shutdown.
+
+## Ghi lại kết quả
+
+Giữ bảng đã hoàn thành cùng release artifact. Nó trả lời hai câu hỏi quan trọng
+nhất khi có incident: đã verify những gì, và trạng thái chạy được trước đó là gì.
+
+## Liên quan
+
+- [Deployment](/docs/deployment) cho đường đi mà các gate này tuân theo.
+- [TLS deployment](/docs/deployment/tls) cho credential và rotation.
+- [Capacity planning](/docs/deployment/capacity-planning) cho phép tính phía sau
+  các dòng capacity.
+- [Hardening](/docs/deployment/hardening) cho các control phía sau các dòng
+  hardening.
+- [Observability](/docs/deployment/observability) cho metric và log contract.
+- [Graceful shutdown](/docs/operations/graceful-shutdown) cho signal và drain.
+- [Platform support](/docs/operations/platforms) cho ma trận target.

@@ -1,0 +1,166 @@
+---
+title: Serve files
+description: Mount a confined asset directory with ETag, byte ranges, MIME detection, and a cache policy that matches the file's audience.
+sidebar:
+  order: 5
+search:
+  tags: [guide, static-files, http]
+---
+
+This guide mounts one directory and serves its files with validators, a byte
+range, and a cache directive. The mount is traversal-safe, rejects symlinks, and
+does not allocate on the request path.
+
+## Problem
+
+You need to serve static assets without writing a file handler, while keeping the
+served directory confined, answering conditional requests, and choosing a cache
+policy that is correct for public and private files.
+
+## Assumptions
+
+- Zig 0.16.0 and µWebZockets 2.1.6 installed with `zig fetch --save`.
+- `public/` exists relative to the working directory and contains `index.html`.
+- One worker on `0.0.0.0:3000`, plaintext for the sendfile path.
+
+## Program
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("assets live under /assets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.static("/assets", "public", .{
+        .index = "index.html",
+        .etag = true,
+        .max_age = 3600,
+    });
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`root` is opened once when the mount is created, relative to the working
+directory. Mount every directory before the first listener starts.
+
+## Mount contract
+
+| Item        | Rule                                                        | Failure                            |
+| ----------- | ----------------------------------------------------------- | ---------------------------------- |
+| Prefix      | Nonempty, starts with `/`, no `?`, `#`, CR, LF, `:`, or `*` | `error.InvalidRoutePath`           |
+| Route       | `GET {prefix}/*path`; `HEAD` falls back to `GET`            | Other methods get `405`            |
+| Mount count | 8 per application                                           | `error.StaticRouteCapacityReached` |
+| Index name  | Validated at mount time                                     | `error.InvalidStaticPath`          |
+| Root        | Opened with `follow_symlinks = false`                       | Startup error                      |
+
+The captured path is percent-decoded, then rejected if it contains NUL, a
+backslash, a `.` or `..` segment, or more than 1024 bytes. Every component and
+the final file are opened without following symlinks, so a link cannot escape
+the root.
+
+## Options and response fields
+
+| Field     | Default        | Effect                                                        |
+| --------- | -------------- | ------------------------------------------------------------- |
+| `index`   | `"index.html"` | Appended when the path ends in `/`; `null` disables the index |
+| `etag`    | `true`         | Strong `ETag` derived from size and modification time         |
+| `max_age` | `0`            | Nonzero emits `Cache-Control: public, max-age=N`              |
+
+Every response carries `Accept-Ranges: bytes`. `If-None-Match` wins over
+`If-Modified-Since` and a match returns `304 Not Modified` with the same
+validators and no body. One RFC 9110 range is supported: `bytes=start-end`,
+`bytes=start-`, and `bytes=-suffix`. A multiple-range field returns `416`, and
+`If-Range` must match the current strong validator or the range is ignored.
+
+## Capacity assumptions
+
+| Bound                         | Value                           | Source                       |
+| ----------------------------- | ------------------------------- | ---------------------------- |
+| Mounts                        | 8                               | Fixed route capacity         |
+| Plaintext `GET` and `HEAD`    | Kernel `sendfile`, not buffered | `Response.send_file`         |
+| TLS, HTTP/2, HTTP/3 file size | `write_queue_size - 4096`       | 60 KiB at the 64 KiB default |
+| Decoded path                  | 1024 bytes                      | Internal confinement buffer  |
+| Ranges per request            | 1                               | Multiple ranges rejected     |
+
+A file above the buffered limit on a TLS connection returns
+`413 Content Too Large`. Raise `write_queue_size` if your assets need it, and
+account for the memory per connection.
+
+## Verification
+
+```sh
+zig build run
+```
+
+```sh
+curl -i http://127.0.0.1:3000/assets/
+curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+curl -i -X POST http://127.0.0.1:3000/assets/index.html
+curl -i --path-as-is http://127.0.0.1:3000/assets/../src/main.zig
+```
+
+The first request returns `200 OK` with an `ETag`. The second returns
+`206 Partial Content` and `Content-Range` when the file is large enough. The
+third returns `405 Method Not Allowed` with `Allow`, and the fourth returns
+`403 Forbidden` instead of the source file.
+
+Repeat the first request with the returned validator to confirm the cache path:
+
+```sh
+curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
+```
+
+Replace `ETAG` with the exact value and expect `304 Not Modified` with no body.
+
+## Failure behavior
+
+| Condition                         | Result                                     |
+| --------------------------------- | ------------------------------------------ |
+| `..` segment, NUL, backslash      | `403 Forbidden`                            |
+| Symlink in any path component     | `403 Forbidden`                            |
+| Missing file or non-directory     | `404 Not Found`                            |
+| File above the buffered capacity  | `413 Content Too Large`                    |
+| Multiple or unsatisfiable range   | `416 Range Not Satisfiable`                |
+| Method other than `GET` or `HEAD` | `405 Method Not Allowed` with `Allow`      |
+| Ninth mount                       | Startup `error.StaticRouteCapacityReached` |
+
+## Variations
+
+### Mount a second directory
+
+Add a download mount with its own policy. The index is disabled and the files
+are not publicly cacheable:
+
+```zig
+_ = try app.static("/downloads", "downloads", .{
+    .index = null,
+    .etag = true,
+    .max_age = 0,
+});
+```
+
+Prefixes must differ, and the total stays within the eight-mount limit.
+
+### Serve private files
+
+Do not put private files behind a nonzero `max_age`: shared caches will keep
+them. Mount them under a separate prefix with `max_age = 0` and put an
+authentication guard in front of that prefix. Prefer a handler that checks
+authorization per file over a static mount when the file set is not public at
+all; a static mount answers before your handler can inspect the request.
+
+## Related
+
+- [Static files](/docs/http/static-files)
+- [HTTP limits](/docs/http/limits)
+- [Add authentication](/docs/guides/authentication)

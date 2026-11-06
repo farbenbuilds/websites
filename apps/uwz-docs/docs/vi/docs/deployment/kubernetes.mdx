@@ -1,0 +1,180 @@
+---
+title: Kubernetes
+description: Chạy Deployment µWebZockets với HTTP probe, grace period đủ cho drain, request size theo slab và pod disruption budget.
+sidebar:
+  order: 9
+search:
+  tags: [how-to, deployment, kubernetes]
+---
+
+µWebZockets không ship operator, không Helm chart và không custom resource. Một
+Deployment với pod bình thường là shape được hỗ trợ: framework sở hữu worker group
+trong một container, còn Kubernetes sở hữu replica, scheduling và việc remove
+endpoint. Trang này chỉ nói những chỗ cần quyết định, không phải blueprint cho cả
+platform.
+
+## Probe
+
+Framework không có health endpoint sẵn, nên đăng ký hai route:
+
+| Probe     | Path       | Trả lời                                                    |
+| --------- | ---------- | ---------------------------------------------------------- |
+| Liveness  | `/healthz` | Process vẫn phục vụ được một request                       |
+| Readiness | `/readyz`  | Listener tồn tại và worker còn capacity để nhận connection |
+
+Readiness phải phản ánh listener state và capacity, không chỉ process còn sống.
+Một pod còn sống nhưng đã hết connection slot nên rời Service thay vì trả lỗi cho
+client. Giữ cả hai handler không allocate và không dùng shared mutable state, vì
+mỗi worker gọi chúng độc lập.
+
+## Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uz-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: uz-app
+  template:
+    metadata:
+      labels:
+        app: uz-app
+    spec:
+      terminationGracePeriodSeconds: 140
+      containers:
+        - name: app
+          image: registry.example.com/uz-app:2.1.6
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "4"
+              memory: "1Gi"
+            limits:
+              memory: "1Gi"
+```
+
+Đặt `UWEBZOCKETS_WORKERS` trong environment của container:
+`build_cluster_from_environment` đọc biến đó, và nếu thiếu thì group lấy số CPU của
+platform làm mặc định. Thêm một `preStop` sleep vài giây: nó
+không phải drain, nhưng cho endpoint controller thời gian remove pod khỏi Service
+trước khi app nhận SIGTERM, để connection mới ngừng đến trước.
+
+## Service và disruption budget
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: uz-app
+spec:
+  selector:
+    app: uz-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: uz-app
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: uz-app
+```
+
+Budget này phủ voluntary disruption như node drain và cluster upgrade. Nó không
+phủ node chết, nên giữ nhiều replica hơn `minAvailable` khi mất một node là vấn đề.
+Đặt `minAvailable` theo traffic floor, không theo số replica, và chừa chỗ cho một
+surge pod trong lúc rollout.
+
+## Grace period và drain
+
+`terminationGracePeriodSeconds` phải lớn hơn drain bound. Drain chờ keep-alive
+connection idle hết hạn, và `idle_timeout_ms` mặc định là 120 giây, nên 140 giây
+để lại một margin nhỏ cho release. Grace period ngắn hơn sẽ gửi SIGKILL khi `run`
+còn draining, và client thấy connection bị reset.
+
+| Giá trị                         | Ý nghĩa                                               |
+| ------------------------------- | ----------------------------------------------------- |
+| `idle_timeout_ms`               | Bound trên của một keep-alive connection đang drain   |
+| `terminationGracePeriodSeconds` | Phải lớn hơn bound đó cộng thời gian release          |
+| `preStop`                       | Delay remove endpoint trước SIGTERM, không phải drain |
+
+Toàn bộ thứ tự nằm trong [Shutdown và draining](/vi/docs/deployment/shutdown). Hạ
+`idle_timeout_ms` nếu không thể tăng grace period; WebSocket idle vẫn phải
+reconnect.
+
+## Tính request size từ slab
+
+Mỗi active worker allocate một slab lúc startup và giữ nó suốt đời process, nên
+memory request là phép tính, không phải phỏng đoán:
+
+```zig
+const config: uz.ServerConfig = .{
+    .max_connections = 512,
+    .write_queue_size = 32 * 1024,
+    .max_body_size = 16 * 1024,
+    .max_ws_message_size = 8 * 1024,
+};
+const slab = try config.slab_bytes();
+const inbox = 65 * config.max_ws_message_size;
+const workers = 4;
+std.debug.print("per worker: {d} bytes\n", .{slab});
+std.debug.print("four workers plus inbox: {d} bytes\n", .{(slab + inbox) * workers});
+```
+
+Cộng thêm TLS context, QUIC pool và loop table mà `slab_bytes()` không tính, rồi
+đặt request cao hơn tổng và limit không cao hơn request quá xa. Limit thấp hơn slab
+sẽ thành `OOMKilled` lúc startup, trông như crash loop chứ không như capacity
+error. Worksheet nằm trong [Capacity sizing](/vi/docs/performance/capacity-sizing).
+
+## Port và `SO_REUSEPORT`
+
+| Phạm vi              | Hành vi                                                                       |
+| -------------------- | ----------------------------------------------------------------------------- |
+| Worker trong một pod | Mỗi worker bind port bằng `SO_REUSEPORT` trên Linux; một process sở hữu chúng |
+| Các pod riêng biệt   | Mỗi pod có network namespace riêng, nên không có port sharing để cấu hình     |
+| Node Windows         | Cluster fallback sang `SO_REUSEADDR`; phân phối không được bảo đảm            |
+
+Không thêm container application thứ hai bind cùng port trong một pod. Chạy một
+process cho mỗi pod và scale bằng replica. CPU request nên phủ nguyên physical
+core, vì worker group pin một loop cho mỗi core và request lẻ sẽ khiến các worker
+tranh cùng một core.
+
+## HTTP/3 không có cluster
+
+`init_http3` và `listen_udp` là single-application API. Một clustered worker group
+chỉ có TCP và TLS, nên pod chạy `build_cluster` không thể phục vụ QUIC. Vì vậy
+HTTP/3 trong Kubernetes cần một Deployment single-process riêng, một `Service`
+UDP và load balancer forward UDP. Workload đó không có in-pod clustering và không
+chia sẻ port giữa các replica.
+
+## Rollout
+
+`maxUnavailable: 0` với `maxSurge: 1` thay pod từng cái một và giữ pod cũ phục vụ
+tới khi pod mới ready. Readiness fail tới khi listener được bind, grace period phủ
+drain, và disruption budget còn ít nhất một replica phục vụ trong lúc node drain.

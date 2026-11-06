@@ -1,0 +1,120 @@
+---
+title: Xử lý sự cố
+description: Ghép symptom với nguyên nhân, áp dụng fix nhỏ nhất, và ngăn cùng lỗi đó quay lại production sau khi đã xác minh.
+sidebar:
+  order: 15
+search:
+  tags: [troubleshooting, operations, errors]
+---
+
+Mỗi mục dưới đây theo cùng một thứ tự: symptom bạn quan sát được, nguyên nhân tạo
+ra nó, fix nhỏ nhất, và phép kiểm tra để lỗi không quay lại. Hãy bắt đầu từ status
+code hoặc error name, không phải từ configuration file. Hai kênh báo lỗi tách
+biệt nhau, và [Errors và failure mode](/docs/concepts/errors) giải thích cách đọc
+cả hai.
+
+## Build và cache
+
+| Symptom                                                     | Nguyên nhân                                                               | Fix                                                               | Phòng ngừa                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| `ld.lld: cannot open .../crt1.o` hoặc `libc++.a`            | Cache index toàn cục của Zig vẫn trỏ tới object file đã bị xóa            | Xóa thư mục global cache rồi build lại; cache sẽ được tạo lại     | Không prune object file thủ công trong cache                |
+| Build thành công với một cache nhưng lỗi với cache mặc định | Lần chạy trước dùng `ZIG_GLOBAL_CACHE_DIR` nên cache mặc định chưa đầy đủ | Dùng một cache thống nhất, hoặc xóa cache cũ trước khi chuyển lại | Giữ lựa chọn cache trong shell, không đặt theo từng lần gọi |
+| `zig build` từ chối compiler                                | Toolchain không phải Zig 0.16.0                                           | Cài 0.16.0 rồi chạy lại                                           | Ghim compiler version trong ghi chú project và CI           |
+
+Xóa cache là cách sửa cho symptom file-not-found, không phải cách che compile
+error. Chạy lại build sau khi xóa để lỗi còn tái hiện được.
+
+## Capacity bị từ chối
+
+| Status                                 | Nguyên nhân                                                                                  | Fix                                                                                       | Phòng ngừa                                                          |
+| -------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `413 Payload Too Large`                | Body vượt `max_body_size`                                                                    | Tăng `with_max_body_size` theo kích thước đo được, hoặc stream output bằng `begin_stream` | Định cỡ body từ upload hợp lệ lớn nhất, không theo số tròn          |
+| `431 Request Header Fields Too Large`  | Request line, header block hoặc header count vượt limit                                      | Tăng `with_max_request_line_size`, `with_max_header_size` hoặc `with_max_header_count`    | Test request ở đúng header size mà proxy cũng cho phép              |
+| `503 Service Unavailable`              | Một tài nguyên bounded đã cạn, ví dụ tunnel RFC 8441 thứ hai trên cùng một HTTP/2 connection | Định cỡ capacity tương ứng; retry tunnel trên connection mới                              | Alert theo rejection counter thay vì chờ client báo                 |
+| `error.WouldBlock` từ WebSocket `send` | Write queue bounded đã đầy                                                                   | Tiếp tục producer từ `drain` callback bằng `buffered_amount()`                            | Coi `WouldBlock` là backpressure bình thường, không phải vòng retry |
+
+Body của rejection nêu tên limit và giá trị. Default và mọi builder override nằm
+ở [HTTP limits](/docs/http/limits).
+
+## Request lỗi trước handler
+
+| Status                   | Nguyên nhân                                                          | Fix                                                                         | Phòng ngừa                                                                             |
+| ------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `404 Not Found`          | Không route nào khớp                                                 | Đăng ký path không kèm query string; query đã được tách vào `Request.query` | Kiểm tra route table trong startup test                                                |
+| `405 Method Not Allowed` | Có route cho method khác                                             | Đọc header `Allow` rồi đăng ký method mà client gửi                         | Test mọi method đã công bố trên route                                                  |
+| `425 Too Early`          | Method không an toàn đến trong TLS 0-RTT early data                  | Để client retry sau handshake                                               | Giữ việc có thể replay ra khỏi early data; xem [Early data](/docs/security/early-data) |
+| `426 Upgrade Required`   | Route WebSocket bị gọi mà thiếu `Upgrade: websocket`                 | Gửi upgrade handshake từ client                                             | Test handshake trong loopback test                                                     |
+| `501 Not Implemented`    | `CONNECT` của HTTP/2 hoặc HTTP/3 nằm ngoài RFC 8441 extended CONNECT | Dùng extended CONNECT, hoặc dùng route thường                               | Ghi rõ contract của tunnel ngay cạnh route                                             |
+
+## TLS
+
+| Symptom                         | Nguyên nhân                                                 | Fix                                                                    | Phòng ngừa                                               |
+| ------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| `curl` từ chối certificate      | Ephemeral certificate là self-signed                        | Dùng `curl -k` khi làm local, hoặc nạp chain tin cậy bằng `init_https` | Không dùng ephemeral certificate ở staging và production |
+| `error.PrivateKeyLoadFailed`    | PEM certificate và key không khớp nhau                      | Nạp đúng cặp; BoringSSL từ chối key ngay khi load                      | Tạo cặp cùng lúc và lưu key cạnh chain                   |
+| `error.CertificateLoadFailed`   | Đường dẫn certificate không đọc được hoặc sai định dạng     | Truyền PEM chain với leaf đứng đầu                                     | Validate chain trong deploy pipeline                     |
+| `error.TrustStoreLoadFailed`    | Client CA bundle của mTLS không đọc được hoặc sai định dạng | Truyền bundle PEM đọc được                                             | Đưa bundle vào secret mount, không phải build artifact   |
+| `error.InvalidClientAuthConfig` | Mode khác `.none` nhưng `ca_path` rỗng                      | Cung cấp `ca_path` cho `.optional` hoặc `.required`                    | Kiểm tra config trước khi listener bind                  |
+| Handshake lỗi với một số client | TLS 1.3 là version duy nhất được hỗ trợ                     | Nâng client hoặc terminate TLS ở proxy                                 | Ghi minimum client version vào API contract              |
+
+## Client lỗi
+
+`uz.client` trả `.kind` cho mọi failure. Đây là HTTP/1.1 client bounded, chỉ dùng
+địa chỉ dạng số.
+
+| Kind        | Nguyên nhân                                                          | Fix                                                                                 | Phòng ngừa                                      |
+| ----------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `.connect`  | Connect bị từ chối, không tới được, hoặc host không phải IP dạng số  | Truyền địa chỉ dạng số và kiểm tra listener                                         | Resolve tên trong code của bạn trước khi gọi    |
+| `.tls`      | Verify hoặc handshake lỗi                                            | Đặt `ca_path` khi `verify = true`, và không dùng lại một client với trust rule khác | Tạo một client cho mỗi trust policy             |
+| `.protocol` | Response framing sai hoặc xung đột                                   | Kiểm tra peer và mọi intermediary                                                   | Giữ raw response capture cho host lỗi           |
+| `.timeout`  | `connect_timeout_ms` hoặc `read_timeout_ms` hết hạn                  | Tăng deadline đã hết hạn; giá trị 0 hết hạn ngay                                    | Đặt deadline theo dependency chậm nhất còn khỏe |
+| `.closed`   | Peer đóng hoặc socket lỗi                                            | Retry bằng request slot mới                                                         | Phân biệt close với timeout trong metrics       |
+| `.capacity` | Response vượt `response_body_capacity`, hoặc không còn inflight slot | Tăng capacity hoặc giảm concurrency                                                 | Bound response ngay tại producer                |
+
+## Signal và shutdown
+
+| Symptom                                               | Nguyên nhân                                    | Fix                                                                                   | Phòng ngừa                                           |
+| ----------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `error.SignalWatcherAlreadyInstalled`                 | `catch_shutdown_signals` chạy hai lần          | Cài một watcher cho mỗi process, hoặc dùng `Cluster.catch_shutdown_signals` cho group | Cài ở một chỗ duy nhất khi startup                   |
+| `error.ApplicationUnavailable` từ `run` hoặc `listen` | Shutdown đã bắt đầu hoặc application đã deinit | Kiểm tra thứ tự call                                                                  | Giữ `deinit` trong `defer` tại scope tạo application |
+| Panic từ `deinit`                                     | `deinit` chạy trên event loop thread           | Release từ ngoài loop, hoặc dùng `request_shutdown` từ callback                       | Không gọi lifecycle call từ handler                  |
+| SIGTERM lúc startup có vẻ bị mất                      | Signal đến trước khi loop chạy                 | Không cần fix; request được gộp và drain ở vòng lặp đầu                               | Gửi SIGTERM một lần rồi chờ                          |
+
+## Cluster
+
+| Symptom                                                 | Nguyên nhân                                                       | Fix                                                             | Phòng ngừa                                      |
+| ------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------- |
+| Worker không chia tải đều                               | Windows bind bằng `SO_REUSEADDR`, kernel phân phối không xác định | Coi cluster trên Windows là fallback, không phải load balancer  | Nhắm Linux cho cluster shared-nothing           |
+| Worker khởi động không được pin                         | Affinity không có hoặc cpuset bị giới hạn từ chối                 | Không cần fix; worker log một lần rồi chạy unpinned             | Tính dư cho SMT oversubscription                |
+| `error.TlsAlreadyEnabled` hoặc `error.AlreadyListening` | `enable_https` chạy hai lần hoặc sau `listen`                     | Gọi đúng một lần sau `configure` và trước `listen`              | Giữ lifecycle trong một function                |
+| `publish` trả `error.ClusterStopped`                    | Loop của group đã dừng                                            | Rebuild cluster thay vì publish vào đó                          | Kiểm tra `state()` trước khi publish            |
+| Inbox bị drop message                                   | Inbox bounded của một worker đã đầy                               | Đọc `publish_report` để lấy `dropped` và `first_dropped_worker` | Định cỡ inbox theo publish rate và message size |
+
+## kqueue timer
+
+| Symptom                                                        | Nguyên nhân                                                      | Fix                                        | Phòng ngừa                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
+| Không phục vụ được request nào trên macOS khi có idle deadline | Version trước 2.1.6 trả `.rearm` cho absolute timeout đã hết hạn | Nâng lên 2.1.6 hoặc mới hơn trước khi đo   | Ghi dependency version cùng mọi benchmark |
+| Log 2.1.6 có `libxev_kqueue: invalid state`                    | Đây là regression của kqueue, không phải lỗi cấu hình            | Giữ raw log và báo lại kèm release version | Lưu log cạnh benchmark artifact           |
+
+## HTTP/3
+
+| Symptom                                       | Nguyên nhân                                                 | Fix                                                       | Phòng ngừa                                     |
+| --------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| Client không kết nối được qua QUIC            | Chưa gọi `listen_udp`, hoặc `App` bị move sau khi bind      | Gọi `listen_udp` và giữ application ở địa chỉ ổn định     | Bind trước `run` và không move giá trị         |
+| Extended CONNECT hoặc WebTransport bị từ chối | Live listener từ chối các feature đó theo thiết kế          | Dùng route thường hoặc gửi datagram qua đường được hỗ trợ | Đọc HTTP/3 limit trước khi thiết kế client     |
+| Có request record nhưng counter không tăng    | Đường QUIC phát record nhưng không advance counter registry | Dùng request record cho observability của HTTP/3          | Không xây alert HTTP/3 trên counter dùng chung |
+
+## Cần trợ giúp
+
+Thu thập error name chính xác, platform và toolchain version, command, cùng cấu
+hình capacity trước khi hỏi. Báo security issue riêng tư qua
+[Security reporting](/docs/security/reporting); không mở public issue cho việc đó.
+
+## Liên quan
+
+- [Errors và failure mode](/docs/concepts/errors) tách Zig error khỏi HTTP status
+  code và giải thích structured rejection document.
+- [HTTP limits](/docs/http/limits) liệt kê mọi default và builder override.
+- [Development log reference](/docs/operations/development-log) giải thích các
+  record giúp xác nhận nguyên nhân.

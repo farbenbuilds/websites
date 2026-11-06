@@ -1,0 +1,128 @@
+---
+title: Observability
+description: Bật metrics registry có giới hạn, định tuyến development log và alert trên những signal mà process µWebZockets thực sự chứng minh được.
+sidebar:
+  order: 6
+search:
+  tags: [how-to, deployment, observability]
+---
+
+Một process production cần hai nguồn evidence: counter có giới hạn từ metrics
+registry và một log destination do bạn kiểm soát. µWebZockets cung cấp cả hai mà
+không cấp phát trên request path. Nó không cung cấp tracing, log shipper hay
+dashboard.
+
+Chỉ bật những gì bạn sẽ đọc. Một metrics endpoint im lặng và một log file không
+ai xem là chi phí không đổi lại được signal.
+
+## Metrics
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_observability(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+Observability cài một route `/metrics` ẩn để render Prometheus registry có giới
+hạn. Dùng `with_metrics_path` để đổi path. Route này ẩn khỏi navigation, không
+phải được bảo vệ: nó là HTTP route bình thường và không có authentication. Chỉ
+expose nó trên listener nội bộ hoặc bảo vệ ở proxy.
+
+| Counter                    | Tăng khi                                  |
+| -------------------------- | ----------------------------------------- |
+| `uwz_connections_accepted` | Một TCP connection được accept            |
+| `uwz_connections_closed`   | Một TCP connection được release           |
+| `uwz_http_requests`        | Một request HTTP/1.1 hoặc HTTP/2 hoàn tất |
+| `uwz_ws_messages`          | Một WebSocket message được xử lý          |
+
+Connection và request HTTP/3 không bao giờ tăng registry này. QUIC path phát
+record request thay vào đó.
+
+Registry có giới hạn và render vào buffer cố định 4 KiB. Registry vượt buffer trả
+`500 metrics buffer exhausted`; hãy giảm label hoặc đọc counter bằng cách khác.
+`App.log_metrics()` ghi cùng snapshot qua development log, là fallback khi không
+scrape được.
+
+## Khoảng trống HTTP/3
+
+HTTP/3 phát một record `http_request` cho mỗi exchange hoàn tất qua log sink của
+worker sở hữu, nhưng QUIC path không bao giờ tăng counter registry. Dashboard chỉ
+dựa trên `uwz_http_requests` sẽ hiển thị traffic HTTP/3 bằng không.
+
+Hãy alert trên việc thiếu record request HTTP/3, hoặc terminate QUIC ở một proxy
+tự export counter. Không suy ra sức khỏe HTTP/3 từ counter connection TCP.
+
+## Chính sách development log
+
+| Cấu hình                   | Hành vi                                                |
+| -------------------------- | ------------------------------------------------------ |
+| `with_dev_log(true)`       | Mặc định; wordmark, request line và metric snapshot    |
+| stderr không phải terminal | Sink mặc định im lặng để run bị redirect không bị chậm |
+| `with_dev_log(false)`      | Tắt wordmark, request line, snapshot và mọi write khác |
+| `set_dev_log_file(file)`   | Luôn ghi, kể cả khi stderr bị redirect                 |
+| `flush_dev_log()`          | Ghi byte còn pending trước khi thoát                   |
+
+Mỗi worker sở hữu một sink với record buffer cố định 4096 byte. Render và write
+không cấp phát, và write lỗi hoặc ghi thiếu bị drop rồi đếm thay vì retry, nên
+terminal chậm không chặn được loop.
+
+Với production, bind một file bằng `set_dev_log_file` hoặc tắt development log
+bằng `with_dev_log(false)`. Để default bật với stderr bị redirect thì an toàn
+nhưng không tạo evidence. Đọc [Development log](/docs/operations/logging) cho
+format record.
+
+## eBPF là tùy chọn
+
+eBPF latency histogram là một observability layer tùy chọn. Khi map của nó được
+pin tại `/sys/fs/bpf/uwz_latency`, route `/metrics` ẩn sẽ nối thêm histogram
+bucket vào cùng response. Attach redirect và pin map cần quyền network
+administration trên Linux.
+
+Server data path không bao giờ attach XSK redirect. Yêu cầu
+`ServerConfig.transport = .kernel_bypass` báo `.standard` với lý do
+`.data_path_unwired`, và application muốn AF_XDP phải tự drive transport. Hãy coi
+histogram là measurement aid tùy chọn, không phải dependency production. Đọc
+[eBPF latency histogram](/docs/operations/ebpf) cho ranh giới setup.
+
+## Kiểm tra lúc startup
+
+Chạy những lệnh này sau deploy, trước khi chuyển traffic người dùng:
+
+```sh
+curl -fsS http://127.0.0.1:3000/metrics | head -n 5
+```
+
+```console
+$ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/readyz
+200
+```
+
+1. Xác nhận `/metrics` trả `200` và content type Prometheus.
+2. Gửi một request, rồi xác nhận `uwz_http_requests` tăng.
+3. Xác nhận log destination tồn tại và đã nhận startup summary.
+4. Xác nhận readiness route phản ánh listener state và capacity, không chỉ
+   process liveness.
+
+## Gợi ý alert
+
+Registry có counter, không có gauge. Hãy suy ra thứ bạn cần từ delta và ghép với
+metric của proxy và operating system.
+
+| Signal                         | Cách suy ra                                             | Hành động                                      |
+| ------------------------------ | ------------------------------------------------------- | ---------------------------------------------- |
+| Accept rate sụp                | `rate(uwz_connections_accepted[5m])` gần 0              | Kiểm tra listener và upstream                  |
+| Connection pool gần capacity   | `accepted - closed` gần `max_connections`               | Thêm worker hoặc nâng capacity                 |
+| Request rate giảm              | `rate(uwz_http_requests[5m])` giảm khi traffic vẫn cao  | Kiểm tra worker failure và proxy               |
+| Traffic WebSocket dừng         | `rate(uwz_ws_messages[5m])` giảm khi client vẫn kết nối | Kiểm tra heartbeat và drain path               |
+| Rejection tăng vọt             | Document `413` hoặc `431` kéo dài trong log             | Xem lại request limit hoặc client              |
+| Drain vượt grace period        | Process vẫn sống sau `SIGTERM` và grace period          | Kiểm tra shutdown path và supervisor           |
+| Record request HTTP/3 không có | Không có record `http_request` từ QUIC listener         | Đọc log QUIC listener; counter không giúp được |
+
+## Liên quan
+
+- [Metrics](/docs/operations/metrics) cho registry và scrape contract.
+- [Development log](/docs/operations/logging) cho record field và sink.
+- [eBPF latency histogram](/docs/operations/ebpf) cho kernel layer tùy chọn.
+- [Production checklist](/docs/deployment/checklist) cho gate observability.
+- [Hardening](/docs/deployment/hardening) cho control trên request path.

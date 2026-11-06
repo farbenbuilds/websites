@@ -1,0 +1,97 @@
+---
+title: Platform support
+description: Read which platforms build, which run in hosted CI, and what each support claim still depends on before you deploy.
+sidebar:
+  order: 11
+search:
+  tags: [reference, platforms, operations]
+---
+
+A support claim follows evidence, not intent. This page separates the targets
+the build graph compiles from the targets hosted CI executes, so a missing
+feature is easy to classify as a defect, a scoped decision, or pending work.
+
+## Support matrix
+
+| Platform                               | Build target         | Runtime CI                                                        | Support claim                               | Caveat                                                                |
+| -------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| Linux x86_64 and aarch64               | Native               | Hosted runtime and sanitizer matrix                               | Supported                                   | Sanitizer builds are native Linux only                                |
+| macOS x86_64 and aarch64               | Native and cross     | No hosted kqueue job; the test graph cross-compiles on demand     | Supported                                   | Cluster workers are unpinned because the platform has no affinity API |
+| Windows x86_64                         | `x86_64-windows-gnu` | `windows-2025` runtime job plus compile and ReleaseFast libraries | Gated on a green run for the release commit | No Windows binaries; ADR 0004 owns IOCP accept and queued close       |
+| FreeBSD, NetBSD, OpenBSD, DragonFlyBSD | Shared build graph   | None                                                              | Community build target                      | Compiled but not executed in CI                                       |
+
+Only Linux has a complete hosted runtime matrix. macOS has the stronger claim of
+a native development platform, but its kqueue runtime coverage is recorded
+evidence from the maintainer host rather than a hosted job.
+
+## What each claim rests on
+
+- **Linux.** The hosted runtime and sanitizer jobs run the test and C ABI graph.
+  This is the platform a production claim should name.
+- **macOS.** The test graph cross-compiles on demand. The libxev kqueue fixes
+  recorded as XEV-003 through XEV-005 were measured on macOS arm64 before they
+  were pinned; the 2.1.6 release recorded 65/65 macOS tests in Debug and
+  ReleaseSafe on the exact pinned tree. That is evidence, not a hosted job.
+- **Windows.** Compile gates cover the test and C ABI graph and the ReleaseFast
+  libraries. A reusable workflow runs the suite on `windows-2025`, and official
+  support starts when that job is green for the release commit. Until then the
+  compile gate is the claim.
+- **BSD.** The four BSDs share the build graph but have no dedicated CI. A build
+  result is available; a runtime guarantee is not.
+
+## No binary releases
+
+Releases are source tags. No per-platform archive is built or uploaded, and no
+Windows or macOS binary is published. A consumer fetches the tag and builds
+locally:
+
+```sh
+zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag-or-commit>'
+```
+
+Zig then compiles BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib for
+the selected target. The bundled zlib package compiles per target, so a musl or
+Windows cross build needs no external zlib prefix and no MinGW zlib.
+
+## Sanitizer platform limits
+
+| Mode                                                        | Scope                                                             | Host limit        |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- | ----------------- |
+| ASan, UBSan, LeakSanitizer, Zig C-UB checks, frame pointers | Full test and C ABI graph, pinned C/C++ libraries, local C shim   | Native Linux only |
+| MemorySanitizer with origin tracking                        | C and C++ dependency-boundary smoke; Zig code is not instrumented | x86_64 Linux only |
+
+The two modes are mutually exclusive and run as separate CI steps. Outside Nix,
+the sanitizer runtime path is supplied explicitly, and a runtime that needs a
+different glibc also needs the matching libc and dynamic-linker paths together.
+Threaded tests run under ASan with `use_sigaltstack=0` because Zig 0.16's
+thread-local stack is not page aligned; leak detection and `halt_on_error` stay
+enabled.
+
+## Affinity and clustering
+
+| Platform | Worker placement                                      | Shared-port behavior                              |
+| -------- | ----------------------------------------------------- | ------------------------------------------------- |
+| Linux    | Hard affinity; fully supported shared-nothing cluster | `SO_REUSEPORT`                                    |
+| macOS    | No hard pinning; workers run unpinned                 | `SO_REUSEPORT`                                    |
+| Windows  | No affinity guarantee                                 | `SO_REUSEADDR` fallback; distribution unspecified |
+
+Cluster behavior follows the platform, not a separate build flag. A deployment
+that depends on a stable worker-to-core mapping should run on Linux. A
+deployment that depends on even connection distribution across processes should
+not rely on the Windows fallback.
+
+## Cross-target builds
+
+A cross build is a compile check, not a runtime guarantee. The build graph
+compiles for `aarch64-linux-musl` from the same tree and source list as the
+native build. For Windows, the test and ABI graph is compiled separately from the
+ReleaseFast libraries at `x86_64-windows-gnu`. A green compile on either target
+does not move it into the supported row until the runtime job covers the release
+commit.
+
+## Related
+
+- [Releases](/docs/operations/releases) explains how a tag becomes a release and
+  why no binaries are attached.
+- [C ABI](/docs/operations/c-abi) lists the archives a C consumer links on each
+  platform.

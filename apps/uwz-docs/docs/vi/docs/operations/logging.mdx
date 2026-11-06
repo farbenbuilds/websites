@@ -1,0 +1,126 @@
+---
+title: Development log
+description: Bật hoặc tắt development log trên terminal, bind file sink, theo dõi source path, và đọc record bị drop cùng request line.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, logging, operations]
+---
+
+Development log bật mặc định. Nó ghi wordmark lúc startup, ready summary và một
+dòng cho mỗi connection, request, WebSocket message, metric snapshot và thay đổi
+file được theo dõi. Log này allocation-free và theo từng worker, nên nó thuộc về
+môi trường phát triển và một file production có bound, không thuộc về hot path
+vốn đã log ở nơi khác. Tham chiếu từng field nằm ở
+[Tham chiếu development log](/docs/operations/development-log).
+
+## Bật hoặc tắt
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`.with_dev_log(false)` tắt wordmark, request line, metric snapshot và dòng thay
+đổi file. Đây là builder option comptime, nên nó cố định lúc build chứ không bật
+tắt theo từng request.
+
+Sink stderr mặc định im lặng khi stderr không phải terminal. Vì vậy một lần chạy
+bị redirect vẫn giữ log file và pipe sạch khỏi output phát triển, trừ khi bạn
+bind một file.
+
+## Nhận diện terminal
+
+| Trạng thái output          | Nội dung xuất hiện                            |
+| -------------------------- | --------------------------------------------- |
+| stderr là terminal         | Wordmark, ready summary và các dòng event     |
+| stderr bị redirect         | Sink im lặng mặc định                         |
+| Terminal hẹp hơn block art | Một dòng mark `µWebZockets` thay cho wordmark |
+| Development log bị tắt     | Dòng `server listening` thường từ `std.log`   |
+
+Phép đo width là best effort: output bị redirect giữ wordmark đầy đủ, và terminal
+không đo được coi như đủ rộng.
+
+## Ghi ra file
+
+```zig
+const log_file = try std.Io.Dir.cwd().createFile(
+    init.io,
+    "server.log",
+    .{ .truncate = false },
+);
+defer log_file.close(init.io);
+
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+server.set_dev_log_file(log_file);
+```
+
+Gọi `set_dev_log_file` trước `listen` hoặc `run`, để wordmark startup dùng file
+đó. Một file được bind rõ ràng luôn ghi, kể cả khi stderr không phải terminal và
+kể cả khi sink mặc định sẽ im lặng.
+
+## Flush byte còn chờ
+
+`server.flush_dev_log()` ghi mọi byte còn chờ của worker hiện tại. Mỗi record vốn
+đã ghi ngay, nên flush có ý nghĩa khi một short write còn giữ byte trong buffer
+hoặc khi bạn muốn file cuối cùng sạch trước khi exit. Nó không làm gì khi log bị
+tắt.
+
+## Theo dõi source path
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .with_watch_paths(&.{ "src" })
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`with_watch_paths` cần development log đang bật. Các path được borrow cho vòng đời
+application. Linux đọc một inotify descriptor qua event loop, nên file được save
+tạo ra dòng ngay lập tức và idle loop vẫn block. Các target khác đi qua root theo
+timer 500 ms và diff modification time cùng size. Cả hai backend bỏ qua thư mục
+build và VCS, và không cấp phát theo từng event.
+
+```console
+watch modified src/router/app.zig
+```
+
+## Sink theo worker và record bị drop
+
+Mỗi worker thread sở hữu một `dev_log.Sink`. Mỗi record được render vào buffer cố
+định 4096 byte của sink đó và ghi ngay, nên terminal phản ánh event khi nó xảy ra
+và event loop không cấp phát. Một metric snapshot render mọi counter rồi flush một
+lần, thay vì flush theo từng counter.
+
+Một dòng không vừa buffer, cùng một write fail hoặc write ngắn, bị drop và đếm vào
+dropped counter của sink thay vì retry. Việc ghi log không bao giờ block loop vì
+terminal chậm và không bao giờ spin chờ terminal.
+
+## Định dạng request line
+
+```console
+12:04:31 | [GET] /healthz : 200
+```
+
+Clock dùng màu dim, method màu cyan, status tô màu theo class. HTTP/1.1 và HTTP/2
+dispatch phát cùng loại request record. HTTP/3 phát một record `http_request` cho
+mỗi request hoàn tất qua sink của thread sở hữu, nên log là bản ghi của traffic
+HTTP/3.
+
+## Verify
+
+Chạy app trong terminal và request một route. Mỗi exchange hoàn tất sinh một
+request line, và một file được save dưới path đang theo dõi thêm một dòng `watch`.
+Redirect stderr và xác nhận không có dòng mới nào xuất hiện khi không bind file.
+
+## Liên quan
+
+- [Tham chiếu development log](/docs/operations/development-log) ghi lại từng
+  event, field và giới hạn của sink.
+- [Metrics](/docs/operations/metrics) giải thích các counter mà một snapshot ghi.

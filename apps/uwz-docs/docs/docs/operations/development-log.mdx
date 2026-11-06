@@ -1,0 +1,153 @@
+---
+title: Development log reference
+description: Read the record fields, event payloads, fixed 4096-byte buffer, sink counters, startup banner, and file sink behavior of the terminal development log.
+sidebar:
+  order: 16
+search:
+  tags: [reference, operations, logging]
+---
+
+The development log is one allocation-free record stream per worker. Every
+record is rendered into a fixed buffer and written immediately, so the terminal
+shows an event as it happens and the event loop never allocates. This page is the
+field reference; the day-to-day workflow is on
+[Logging](/docs/operations/logging).
+
+## Record
+
+```zig
+pub const Record = struct {
+    timestamp_ms: i64,
+    level: Level,
+    direction: Direction,
+    event: Event,
+};
+```
+
+| Field          | Type                           | Meaning                                                                          |
+| -------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `timestamp_ms` | `i64`                          | Wall-clock milliseconds; rendering derives `HH:MM:SS` and `HH:MM:SS.mmm` from it |
+| `level`        | `debug`, `info`, `warn`, `err` | Severity; the clock uses the level color                                         |
+| `direction`    | `data_in`, `data_out`          | Explicit traffic direction, rendered as an `IN` or `OUT` badge                   |
+| `event`        | `Event`                        | One named payload from the table below                                           |
+
+There is no ambient logger state. A caller builds a `Record` and hands it to the
+sink, so the direction and the payload are explicit at the call site.
+
+## Event payloads
+
+| Tag                 | Payload fields                        | Rendered as                                |
+| ------------------- | ------------------------------------- | ------------------------------------------ |
+| `connection_opened` | `index: usize`                        | `conn #3 accepted`                         |
+| `connection_closed` | `index: usize`                        | `conn #3 closed`                           |
+| `http_request`      | `method`, `path`, `status`            | `[GET] /path : 200`, prefixed by the clock |
+| `ws_message`        | `payload_len: usize`, `is_text: bool` | `ws text 128B`                             |
+| `metric`            | `slot: metrics.Slot`, `value: u64`    | `metric uwz_http_requests_total 42`        |
+| `file_changed`      | `path`, `kind`                        | `watch modified src/main.zig`              |
+
+`file_changed.kind` is `created`, `modified`, or `deleted`. Request lines are the
+only records without the direction badge and millisecond clock; they use the
+compact Vite-style shape with a status-class color. All other records use the
+millisecond clock, the direction badge, and a fixed-width tag.
+
+## Buffer and sink
+
+| Constant or field | Value               | Effect                                                 |
+| ----------------- | ------------------- | ------------------------------------------------------ |
+| `capacity`        | 4096 bytes          | One rendered line buffer per sink                      |
+| `max_line_bytes`  | 256 bytes           | Tail kept free so a batch can always take another line |
+| `Sink.enabled`    | `false` until bound | A sink records nothing before `enable`                 |
+| `Sink.written`    | `u64`               | Bytes accepted by the output file                      |
+| `Sink.dropped`    | `u64`               | Lines and pending buffers discarded instead of retried |
+
+When the buffer lacks room for another line, the sink flushes first. When the
+line still does not fit, or the write fails, or the write is short, the data is
+dropped and `dropped` increases with a saturating add. Nothing is retried and
+nothing is logged about the drop, so a very slow terminal can lose lines without
+stalling the loop. `flush` returns a `FlushOutcome` with `written` and `failed`,
+and recording never allocates and never spins.
+
+Each worker thread owns exactly one sink, reached through the thread-local
+`thread_sink()`. The buffer is never shared across threads, so no lock or atomic
+is involved.
+
+## Terminal width probe
+
+The startup wordmark is chosen from the output width, measured best effort:
+
+| Width                                             | Output                              |
+| ------------------------------------------------- | ----------------------------------- |
+| At least the block wordmark width                 | The full block wordmark, once       |
+| At least the one-line mark, below the block width | A single `µWebZockets` line         |
+| Narrower than the one-line mark                   | Nothing, rather than a wrapped line |
+| Unknown, redirected, or failed probe              | The full block wordmark             |
+
+POSIX queries the window size with `ioctl(TIOCGWINSZ)`; Windows issues the
+console screen-buffer request. A redirected log, an unsupported platform, or a
+failed query returns no width, and the probe never allocates or panics.
+
+## Startup output
+
+The first bytes written are the wordmark, followed by a ready summary: the
+version, the elapsed startup time in the coarsest readable unit, and a
+`→ Local:` line with the scheme, host, and port. Wildcard bind addresses are
+shown as `127.0.0.1`, and an IPv6 host keeps its URL brackets. The summary
+appears before the first accepting listener, so a ready summary in the log means
+the listener was bound.
+
+A build without the development log keeps the plain `server listening` line from
+`std.log` instead. `ServerConfig.enable_dev_log` defaults on, but the default
+stderr sink stays quiet when stderr is not a terminal so redirected runs and
+benchmarks are not slowed.
+
+## Metric snapshots
+
+One snapshot is one batch: the sink renders every registry slot in declaration
+order and flushes once. Each line carries the counter name and its current value,
+for example `uwz_connections_accepted_total` or `uwz_http_requests_total`.
+`App.log_metrics()` produces a snapshot for the calling worker, and `data_out`
+is the direction it records.
+
+## Watch events
+
+With `watch_paths` configured, the app arms a watcher before the loop starts and
+logs `created`, `modified`, and `deleted` lines. Linux reads an inotify
+descriptor through the event loop, so changes arrive in real time and the idle
+loop stays blocked. Other targets walk the roots on a 500 ms loop timer and diff
+modification time and size. Both backends are bounded, allocate nothing per
+event, and skip build and version-control directories.
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .with_watch_paths(&.{"src"})
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+## File sink
+
+`set_dev_log_file` overrides the output file and an explicitly bound file always
+records, even when stderr is not a terminal. Call it before `listen` or `run` so
+the startup wordmark uses the file. `flush_dev_log` writes any pending bytes from
+the calling worker.
+
+```zig
+const log_file = try std.Io.Dir.cwd().createFile(init.io, "server.log", .{});
+defer log_file.close(init.io);
+server.set_dev_log_file(log_file);
+server.flush_dev_log();
+```
+
+`with_dev_log(false)` silences the wordmark, request lines, metric snapshots, and
+every other write. A sink bound to a file is not silenced by a non-terminal
+stderr.
+
+## Related
+
+- [Logging](/docs/operations/logging) covers when to use the terminal log, a
+  file, and the hidden metrics endpoint.
+- [Metrics](/docs/operations/metrics) lists the registry counters and the
+  Prometheus output.
+- [Shutdown ordering](/docs/architecture/shutdown) explains why `deinit`
+  flushes the development log after the loop drains.

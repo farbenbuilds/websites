@@ -1,0 +1,180 @@
+---
+title: Test ứng dụng µWebZockets
+description: Test quyết định của handler trong process, assert parser và router từ chối trên loopback, và giữ compatibility gate ngoài application suite.
+sidebar:
+  order: 22
+search:
+  tags: [guide, testing, ci, loops]
+---
+
+Test quyết định không cần socket và test wire với socket thật. Framework không
+có test client; `uz.client` là HTTP/1.1 client production có bound, không phải
+harness.
+
+## Vấn đề
+
+Bạn cần unit test nhanh cho phân loại request, wire test cho status do router và
+parser tạo ra, và CI job chạy cả hai mà không phụ thuộc compliance suite.
+
+## Giả định
+
+- Có Zig 0.16.0 và `curl` trong CI.
+- Quyết định thuần nằm ở `src/policy.zig`; `src/main.zig` nối chúng.
+- Body limit mặc định 16 KiB là đối tượng test.
+- h1spec và Autobahn là gate của maintainer, không phải dependency project.
+
+## Viết module test được
+
+Giữ quyết định thuần để test không cần listener:
+
+```zig src/policy.zig
+const std = @import("std");
+
+pub const RequestClass = enum { json, form, unsupported };
+
+pub fn classify(content_type: []const u8) RequestClass {
+    const end = std.mem.indexOfScalar(u8, content_type, ';') orelse content_type.len;
+    const media = std.mem.trim(u8, content_type[0..end], " \t");
+    if (std.ascii.eqlIgnoreCase(media, "application/json")) return .json;
+    if (std.ascii.eqlIgnoreCase(media, "application/x-www-form-urlencoded")) return .form;
+    return .unsupported;
+}
+
+test "media type ignores parameters" {
+    try std.testing.expectEqual(RequestClass.json, classify("application/json; charset=utf-8"));
+    try std.testing.expectEqual(RequestClass.unsupported, classify("text/plain"));
+}
+```
+
+## Nối handler
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+const policy = @import("policy.zig");
+
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const content_type = req.get_header("content-type") orelse "";
+    if (policy.classify(content_type) == .unsupported) {
+        res.end("415 Unsupported Media Type", "unsupported") catch {};
+        return;
+    }
+    res.end("201 Created", "") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+    _ = try app.post("/items", create);
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+## Chạy unit test
+
+```sh
+zig test src/policy.zig
+```
+
+Test compile không cần framework module nên rất nhanh. Chỉ wire mới chứng minh
+được layer nào trả lời rejection.
+
+## Kiểm tra trên loopback
+
+Chạy server ở một terminal:
+
+```sh
+zig build run
+```
+
+Assert các rejection trước handler:
+
+```sh
+head -c 20000 /dev/zero | tr '\0' 'a' > body.bin
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  --data-binary @body.bin -H 'Content-Type: application/json' \
+  http://127.0.0.1:3000/items)
+test "$status" = "413"
+
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "X-Large: $(head -c 20000 /dev/zero | tr '\0' 'a')" \
+  http://127.0.0.1:3000/items)
+test "$status" = "431"
+
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X DELETE http://127.0.0.1:3000/items)
+test "$status" = "405"
+```
+
+`413` hoặc `431` chứng minh parser trả lời trước route. `405` chứng minh router
+trả lời trước dispatch. Cả ba không chạy handler của bạn.
+
+## CI shape
+
+```yaml
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - run: zig test src/policy.zig
+      - run: zig build
+```
+
+Giữ compatibility suite ngoài job này. h1spec và Autobahn 517 case là evidence
+cho framework release, không phải cho route hoặc proxy của bạn.
+
+## Giả định capacity
+
+| Tài nguyên     | Giới hạn                | Hệ quả test                   |
+| -------------- | ----------------------- | ----------------------------- |
+| Request body   | `max_body_size`, 16 KiB | Fixture 20 KB phải nhận `413` |
+| Request header | `max_header_size`       | Header 20 KB phải nhận `431`  |
+
+## Hành vi khi lỗi
+
+| Triệu chứng                | Ý nghĩa                            |
+| -------------------------- | ---------------------------------- |
+| curl trả `000`             | Connection fail; kiểm tra listener |
+| `405` trên path đã đăng ký | Method chưa đăng ký cho route đó   |
+
+## Biến thể
+
+### Bảng quyết định handler
+
+Đặt case vào một bảng để thêm rule là thêm dòng, không thêm test:
+
+```zig
+test "handler decision table" {
+    const cases = [_]struct { content_type: []const u8, want: RequestClass }{
+        .{ .content_type = "application/json", .want = .json },
+        .{ .content_type = "text/plain", .want = .unsupported },
+    };
+    for (cases) |case| try std.testing.expectEqual(case.want, classify(case.content_type));
+}
+```
+
+### Acceptance script
+
+Gói các check loopback vào một script và để CI chạy sau build:
+
+```sh
+#!/usr/bin/env sh
+set -eu
+test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE http://127.0.0.1:3000/items)" = "405"
+```
+
+Script giả định server đang chạy; start nó, chạy script, rồi gửi `SIGTERM` và
+yêu cầu exit status 0.
+
+## Liên quan
+
+- [Test HTTP server](/docs/http/testing) đi sâu cùng các layer.
+- [HTTP limit](/docs/http/limits) liệt kê default sau `413` và `431`.

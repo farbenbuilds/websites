@@ -1,0 +1,148 @@
+---
+title: Tham chiếu development log
+description: Đọc record field, event payload, buffer cố định 4096 byte, counter của sink, banner khởi động và cách sink ghi ra file.
+sidebar:
+  order: 16
+search:
+  tags: [reference, operations, logging]
+---
+
+Development log là một record stream không cấp phát cho mỗi worker. Mỗi record
+được render vào buffer cố định và ghi ngay, nên terminal hiện event đúng lúc nó
+xảy ra và event loop không bao giờ cấp phát. Trang này là tham chiếu field; quy
+trình sử dụng hằng ngày nằm ở [Logging](/docs/operations/logging).
+
+## Record
+
+```zig
+pub const Record = struct {
+    timestamp_ms: i64,
+    level: Level,
+    direction: Direction,
+    event: Event,
+};
+```
+
+| Field          | Kiểu                           | Ý nghĩa                                                                 |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------- |
+| `timestamp_ms` | `i64`                          | Wall-clock millisecond; phần render suy ra `HH:MM:SS` và `HH:MM:SS.mmm` |
+| `level`        | `debug`, `info`, `warn`, `err` | Severity; clock dùng màu của level                                      |
+| `direction`    | `data_in`, `data_out`          | Hướng traffic tường minh, render thành badge `IN` hoặc `OUT`            |
+| `event`        | `Event`                        | Một payload có tên trong bảng bên dưới                                  |
+
+Không có logger state ngầm. Caller tạo `Record` rồi đưa cho sink, nên direction
+và payload là tường minh ngay tại call site.
+
+## Event payload
+
+| Tag                 | Field của payload                     | Cách render                              |
+| ------------------- | ------------------------------------- | ---------------------------------------- |
+| `connection_opened` | `index: usize`                        | `conn #3 accepted`                       |
+| `connection_closed` | `index: usize`                        | `conn #3 closed`                         |
+| `http_request`      | `method`, `path`, `status`            | `[GET] /path : 200`, có clock phía trước |
+| `ws_message`        | `payload_len: usize`, `is_text: bool` | `ws text 128B`                           |
+| `metric`            | `slot: metrics.Slot`, `value: u64`    | `metric uwz_http_requests_total 42`      |
+| `file_changed`      | `path`, `kind`                        | `watch modified src/main.zig`            |
+
+`file_changed.kind` là `created`, `modified` hoặc `deleted`. Request line là
+record duy nhất không có direction badge và clock mili giây; nó dùng dạng Vite
+rút gọn với màu theo status class. Mọi record khác dùng clock mili giây,
+direction badge và tag có độ rộng cố định.
+
+## Buffer và sink
+
+| Hằng số hoặc field | Giá trị                   | Tác dụng                                            |
+| ------------------ | ------------------------- | --------------------------------------------------- |
+| `capacity`         | 4096 byte                 | Một buffer render cho mỗi sink                      |
+| `max_line_bytes`   | 256 byte                  | Phần đuôi luôn để trống để batch còn nhận thêm line |
+| `Sink.enabled`     | `false` đến khi được bind | Sink không ghi gì trước `enable`                    |
+| `Sink.written`     | `u64`                     | Số byte output file đã nhận                         |
+| `Sink.dropped`     | `u64`                     | Số line và buffer bị bỏ thay vì retry               |
+
+Khi buffer không còn chỗ cho line tiếp theo, sink flush trước. Nếu line vẫn
+không vừa, hoặc write lỗi, hoặc write bị ngắn, dữ liệu bị drop và `dropped` tăng
+bằng phép cộng bão hòa. Không có retry và không có log về việc drop, nên một
+terminal rất chậm có thể mất line mà không chặn loop. `flush` trả `FlushOutcome`
+gồm `written` và `failed`; việc ghi record không cấp phát và không spin.
+
+Mỗi worker thread sở hữu đúng một sink, truy cập qua `thread_sink()` dạng
+thread-local. Buffer không bao giờ chia sẻ giữa các thread, nên không cần lock
+hay atomic.
+
+## Dò độ rộng terminal
+
+Wordmark khởi động được chọn theo độ rộng output, đo theo best effort:
+
+| Độ rộng                                    | Output                                |
+| ------------------------------------------ | ------------------------------------- |
+| Ít nhất bằng block wordmark                | Block wordmark đầy đủ, ghi một lần    |
+| Đủ cho mark một dòng nhưng hẹp hơn block   | Một dòng `µWebZockets`                |
+| Hẹp hơn mark một dòng                      | Không ghi gì, thay vì để line bị wrap |
+| Không xác định, bị redirect hoặc probe lỗi | Block wordmark đầy đủ                 |
+
+POSIX truy vấn kích thước cửa sổ bằng `ioctl(TIOCGWINSZ)`; Windows gửi console
+screen-buffer request. Log bị redirect, platform không hỗ trợ hoặc truy vấn lỗi
+đều trả về không có width, và probe không cấp phát cũng không panic.
+
+## Output khởi động
+
+Những byte đầu tiên là wordmark, tiếp theo là ready summary: version, thời gian
+khởi động đã trôi qua theo đơn vị dễ đọc nhất, và dòng `→ Local:` với scheme,
+host và port. Địa chỉ bind dạng wildcard được hiển thị là `127.0.0.1`, và host
+IPv6 giữ bracket trong URL. Summary xuất hiện trước listener accept đầu tiên,
+nên một ready summary trong log nghĩa là listener đã bind.
+
+Build không bật development log giữ dòng `server listening` quen thuộc từ
+`std.log`. `ServerConfig.enable_dev_log` mặc định bật, nhưng sink stderr mặc định
+im lặng khi stderr không phải terminal, để các lần chạy bị redirect và benchmark
+không bị chậm.
+
+## Metric snapshot
+
+Một snapshot là một batch: sink render mọi registry slot theo thứ tự khai báo rồi
+flush một lần. Mỗi dòng mang tên counter và giá trị hiện tại, ví dụ
+`uwz_connections_accepted_total` hoặc `uwz_http_requests_total`.
+`App.log_metrics()` tạo snapshot cho worker đang gọi, và `data_out` là direction
+được ghi.
+
+## Watch event
+
+Khi cấu hình `watch_paths`, app arm watcher trước khi loop chạy và ghi các dòng
+`created`, `modified`, `deleted`. Linux đọc inotify descriptor qua event loop, nên
+thay đổi đến theo thời gian thực và loop rảnh vẫn block. Target khác đi qua các
+root theo loop timer 500 ms và so sánh modification time cùng size. Cả hai backend
+đều bounded, không cấp phát cho mỗi event, và bỏ qua thư mục build cùng thư mục
+version-control.
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .with_watch_paths(&.{"src"})
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+## Sink ghi file
+
+`set_dev_log_file` thay output file, và file được bind tường minh luôn ghi, kể cả
+khi stderr không phải terminal. Gọi nó trước `listen` hoặc `run` để wordmark khởi
+động dùng file đó. `flush_dev_log` ghi mọi byte còn chờ từ worker đang gọi.
+
+```zig
+const log_file = try std.Io.Dir.cwd().createFile(init.io, "server.log", .{});
+defer log_file.close(init.io);
+server.set_dev_log_file(log_file);
+server.flush_dev_log();
+```
+
+`with_dev_log(false)` tắt wordmark, request line, metric snapshot và mọi ghi
+khác. Sink đã bind vào file không bị tắt chỉ vì stderr không phải terminal.
+
+## Liên quan
+
+- [Logging](/docs/operations/logging) trình bày khi nào dùng terminal log, file
+  và hidden metrics endpoint.
+- [Metrics](/docs/operations/metrics) liệt kê counter trong registry và output
+  Prometheus.
+- [Thứ tự shutdown](/docs/architecture/shutdown) giải thích vì sao `deinit`
+  flush development log sau khi loop drain.

@@ -1,0 +1,180 @@
+---
+title: Dùng cookie an toàn
+description: Đọc và set cookie với attribute đúng, ký session state mà không nhầm chữ ký với mã hoá, và rotate key mà không đăng xuất mọi user.
+sidebar:
+  order: 12
+search:
+  tags: [guide, cookies, security]
+---
+
+Cookie là state mà attacker nhìn thấy được: attribute quyết định nó được gửi đi
+đâu, và chữ ký quyết định bạn có tin giá trị đó hay không.
+
+## Bài toán
+
+Bạn cần một session cookie mà browser chỉ gửi tới origin của bạn, mà JavaScript
+không đọc được, và client khác không thể forge. Bạn cũng cần cách thay signing key
+mà không đăng xuất tất cả mọi người.
+
+## Giả định
+
+- Site chạy qua TLS, nên cookie `Secure` được gửi lại.
+- Session payload vừa buffer `Set-Cookie` 1024 byte, và signing secret đến từ
+  configuration.
+
+## Build các endpoint session
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Sessions = struct { secret: []const u8 };
+const cookie_options: uz.cookie.Options = .{
+    .secure = true,
+    .http_only = true,
+    .same_site = .lax,
+    .enforce_prefixes = true,
+};
+
+fn login(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const sessions: *Sessions = @ptrCast(@alignCast(context));
+    res.set_signed_cookie("__Host-session", "user=42", sessions.secret, cookie_options) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.end("204 No Content", "") catch {};
+}
+
+fn profile(context: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const sessions: *Sessions = @ptrCast(@alignCast(context));
+    const payload = uz.cookie.verify_signed(
+        req.cookie("__Host-session") orelse "",
+        sessions.secret,
+    ) catch {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(payload) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    const secret = init.environ_map.get("SESSION_SECRET") orelse
+        return error.MissingSessionSecret;
+    if (secret.len < 32) return error.SessionSecretTooShort;
+
+    var sessions = Sessions{ .secret = secret };
+    var app = try uz.App(128).init_https_ephemeral(init.io);
+    defer app.deinit();
+
+    _ = try app.route_context(.get, "/login", &sessions, login);
+    _ = try app.route_context(.get, "/profile", &sessions, profile);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3443);
+    try app.run();
+}
+```
+
+`set_signed_cookie` ký rồi format một field; `verify_signed` so sánh constant-time
+và trả slice mượn từ buffer của request.
+
+## Attribute của Set-Cookie
+
+| Attribute  | Giá trị | Tác dụng                                   |
+| ---------- | ------- | ------------------------------------------ |
+| `Path`     | `/`     | Gửi tới mọi path                           |
+| `Secure`   | bật     | Chỉ gửi qua HTTPS                          |
+| `HttpOnly` | bật     | Ẩn khỏi `document.cookie`                  |
+| `SameSite` | `Lax`   | Không gửi trong hầu hết cross-site request |
+
+`SameSite=None` yêu cầu `Secure`, nếu không formatter trả `error.InsecureSameSiteNone`.
+
+## Prefix `__Host-`
+
+Với `enforce_prefixes = true`, formatter từ chối cookie `__Host-` trừ khi nó có
+`Secure`, không có `Domain` và `Path=/`. Browser bỏ field vi phạm đúng quy tắc đó,
+nên check này biến một mất mát âm thầm thành lỗi.
+
+## Chữ ký không phải mã hoá
+
+Value có chữ ký là `payload.signature`. Payload vẫn đọc được: `user=42` hiện rõ
+trong cookie và trong mọi log ghi header. Dùng `sign` và `verify_signed` để phát
+hiện sửa đổi, `sign_versioned` và `verify_versioned` để biết key nào đã ký, và một
+store phía server để revoke session.
+
+## Giả định capacity
+
+| Tài nguyên         | Giới hạn                                                   |
+| ------------------ | ---------------------------------------------------------- |
+| Field `Set-Cookie` | Buffer stack 1024 byte; vượt thì `error.BufferOverflow`    |
+| Buffer value ký    | `payload.len + 1 + 64` byte cho tag dạng hex               |
+| Độ dài secret      | Ít nhất 32 byte; ngắn hơn trả `error.CookieSecretTooShort` |
+
+## Hành vi khi lỗi
+
+| Điều kiện                       | Kết quả                                   |
+| ------------------------------- | ----------------------------------------- |
+| Secret ngắn hơn 32 byte         | `error.CookieSecretTooShort`              |
+| Payload hoặc chữ ký bị sửa      | `error.InvalidCookieSignature`, trả `401` |
+| Key id có version không tồn tại | `error.UnknownKeyId`, trả `401`           |
+| Vi phạm quy tắc `__Host-`       | `error.InsecureCookiePrefix`              |
+
+## Kiểm chứng
+
+```sh
+curl -sk -c jar.txt https://127.0.0.1:3443/login
+curl -sk -b jar.txt https://127.0.0.1:3443/profile
+sed -i 's/user=42/user=43/' jar.txt
+curl -sk -o /dev/null -w '%{http_code}\n' -b jar.txt https://127.0.0.1:3443/profile
+```
+
+Response đầu mang `__Host-session=user=42.<hex>` với `Secure`, `HttpOnly`,
+`SameSite=Lax` và `Path=/`; command thứ hai in `user=42`; command cuối in `401`.
+
+## Biến thể: session có version
+
+Thêm key id để verification chọn đúng secret trước khi so sánh.
+
+```zig
+const KeyRing = struct { keys: []const uz.cookie.Key };
+
+fn issue(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const ring: *KeyRing = @ptrCast(@alignCast(context));
+    var buffer: [1024]u8 = undefined;
+    const signed = uz.cookie.sign_versioned(&buffer, "user=42", ring.keys[0]) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.set_cookie("__Host-session", signed, cookie_options) catch |err| {
+        return res.end("500 Internal Server Error", @errorName(err)) catch {};
+    };
+    res.end("204 No Content", "") catch {};
+}
+```
+
+## Biến thể: rotate key
+
+Giữ key mới ở đầu và key cũ trong list. Cookie mới dùng key mới; cookie cũ vẫn
+verify được cho đến khi key cũ bị bỏ.
+
+```zig
+const current = uz.cookie.Key{ .id = "2026-11", .secret = "0123456789abcdef0123456789abcdef" };
+const previous = uz.cookie.Key{ .id = "2026-10", .secret = "fedcba9876543210fedcba9876543210" };
+
+fn read(_: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const payload = uz.cookie.verify_versioned(
+        req.cookie("__Host-session") orelse "",
+        &.{ current, previous },
+    ) catch {
+        res.end("401 Unauthorized", "") catch {};
+        return;
+    };
+    res.text(payload) catch {};
+}
+```
+
+Load cả hai secret từ configuration, và chỉ bỏ key cũ sau khi cookie sống lâu nhất
+của nó hết hạn.
+
+## Tiếp theo
+
+- [Cookie và cookie có chữ ký](/docs/http/helpers/cookies) liệt kê mọi option.
+- [Threat model](/docs/security/threat-model) trình bày session boundary.

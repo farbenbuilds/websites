@@ -1,0 +1,148 @@
+---
+title: systemd
+description: Chạy binary dưới Type=exec, thêm HTTP readiness gate, hardening unit và stop bằng SIGTERM trong TimeoutStopSec.
+sidebar:
+  order: 10
+search:
+  tags: [how-to, deployment, systemd]
+---
+
+µWebZockets không có `sd_notify` và không có socket activation. Đừng viết
+`Type=notify`: process không bao giờ gửi `READY=1`, nên systemd sẽ chờ một
+notification không đến rồi fail unit. Dùng `Type=exec` hoặc `Type=simple`, và
+chứng minh readiness bằng một HTTP request.
+
+Socket activation cũng không được hỗ trợ. Application tự tạo listener trong
+`listen` hoặc `listen_udp`, và không có inherited-descriptor path để systemd truyền
+socket đã mở sẵn. Cross-process socket handoff vẫn là carried work trong roadmap.
+
+## Unit file
+
+```ini
+[Unit]
+Description=uWebZockets application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=uz
+Group=uz
+WorkingDirectory=/opt/uz
+EnvironmentFile=/etc/uz/app.env
+ExecStart=/opt/uz/bin/uz-app
+ExecStartPost=/usr/bin/curl --fail --silent --show-error \
+  --retry 15 --retry-connrefused --retry-delay 1 \
+  http://127.0.0.1:3000/readyz
+Restart=on-failure
+RestartSec=2s
+KillSignal=SIGTERM
+TimeoutStopSec=140
+LimitNOFILE=65536
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+ReadWritePaths=/var/log/uz
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`Type=exec` đánh dấu service active khi binary được exec, không phải khi nó đang
+listen. `ExecStartPost` lấp khoảng trống đó: vòng curl chờ `/readyz`, và fail sẽ
+đánh dấu unit failed. Đây là start gate, không phải tín hiệu readiness liên tục;
+dùng monitor bên ngoài hoặc load balancer cho việc kiểm tra ongoing.
+
+`ExecStart` trỏ thẳng vào binary, không qua shell. Nhờ vậy process là main process
+của unit, nên `KillSignal=SIGTERM` đến đúng handler do `catch_shutdown_signals` cài
+và drain path chạy.
+
+## Environment
+
+```sh
+UWEBZOCKETS_WORKERS=4
+```
+
+`build_cluster_from_environment` đọc biến đó khi không có
+`ClusterOptions.worker_count` rõ ràng, và fallback về số CPU của platform nếu thiếu.
+Chỉ cho service user đọc file này, vì đây là nơi thường chứa token và đường dẫn tới
+private key.
+
+Đường dẫn certificate nên nằm trong environment file hoặc trong configuration của
+binary, không nằm trong argument của `ExecStart`, nơi mọi user local có thể đọc từ
+process list.
+
+## Các directive hardening
+
+| Directive                    | Tác dụng                                             | Bỏ khi                                                |
+| ---------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| `NoNewPrivileges`            | Chặn setuid và capability escalation                 | Không bao giờ; server không cần cả hai                |
+| `ProtectSystem=strict`       | Mount filesystem read-only trừ các path được liệt kê | App phải ghi ra ngoài `ReadWritePaths`                |
+| `ReadWritePaths=/var/log/uz` | Cho phép log file sink                               | App chỉ log ra stderr                                 |
+| `PrivateTmp`                 | Cấp `/tmp` riêng cho unit                            | Không có gì trong app chia sẻ `/tmp` với unit khác    |
+| `CapabilityBoundingSet=`     | Bỏ toàn bộ capability                                | Bind port dưới 1024                                   |
+| `RestrictAddressFamilies`    | Giới hạn socket ở IPv4, IPv6 và local socket         | App cần address family khác                           |
+| `LimitNOFILE`                | Nâng descriptor limit trên số connection             | Không bao giờ; mặc định quá thấp cho 1.024 connection |
+
+Unit bind port 80 hoặc 443 cần `AmbientCapabilities=CAP_NET_BIND_SERVICE` và
+`CapabilityBoundingSet` không rỗng; nên dùng port cao cộng reverse proxy để service
+không cần capability nào. Tạo `/var/log/uz` trước lần start đầu, nếu không mount
+`ReadWritePaths` sẽ fail unit với `226/NAMESPACE`.
+
+## Log
+
+systemd ghi stdout và stderr vào journal. Development log sink mặc định im lặng khi
+stderr không phải terminal, nên journal có record `std.log` như startup và error,
+nhưng không có development log theo từng request. Bind `App.set_dev_log_file` vào
+một path trong `ReadWritePaths` khi cần request log, và rotate file đó ngoài
+systemd.
+
+## Stop và restart
+
+`TimeoutStopSec=140` phủ idle timeout mặc định 120 giây với một margin. Nếu service
+còn draining khi hết timeout, systemd gửi SIGKILL và connection đang chạy bị reset.
+Đặt `Restart=on-failure` thay vì `always`, để một lần `systemctl stop` có chủ đích
+không bị hiểu là crash.
+
+`RestartSec=2s` cố ý ngắn vì process không rebuild state khi start: slab được
+allocate một lần và listener bind ngay.
+
+## Kiểm tra
+
+```sh
+sudo install -Dm0644 uz-app.service /etc/systemd/system/uz-app.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now uz-app
+systemctl status uz-app
+curl -fsS http://127.0.0.1:3000/readyz
+sudo systemctl stop uz-app
+systemctl show -p ExecMainStatus uz-app
+```
+
+Kỳ vọng `active (running)`, `200` từ readiness route và `ExecMainStatus=0` sau khi
+stop. Theo dõi drain bằng `journalctl -u uz-app -f` ở terminal khác; không được có
+`ShutdownIncomplete` và không có kernel OOM message.
+
+## Các lỗi thường gặp
+
+| Triệu chứng                        | Nguyên nhân                                    | Cách sửa                                         |
+| ---------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| Unit timeout lúc start             | `Type=notify` nhưng không có `sd_notify`       | Dùng `Type=exec` và HTTP readiness gate          |
+| Unit fail sau `ExecStartPost`      | Readiness route không bao giờ trả lời          | Kiểm tra port, bind address và route             |
+| `status=226/NAMESPACE`             | Directive hardening chặn path cần thiết        | Bỏ directive hoặc thêm path vào `ReadWritePaths` |
+| `status=203/EXEC`                  | Sai `ExecStart` hoặc thiếu execute bit         | Trỏ đúng binary và kiểm tra mode                 |
+| Service bị kill lúc stop           | `TimeoutStopSec` ngắn hơn drain                | Tăng lên hoặc hạ `idle_timeout_ms`               |
+| Restart loop sau một lần stop sạch | `Restart=always`                               | Dùng `Restart=on-failure`                        |
+| Journal không có request line      | stderr không phải terminal nên dev log im lặng | Bind `set_dev_log_file` vào path ghi được        |

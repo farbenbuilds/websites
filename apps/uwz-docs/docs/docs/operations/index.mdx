@@ -1,0 +1,140 @@
+---
+title: Operations
+description: Build, verify, release, and operate µWebZockets from source, from the first checkout to a draining production process.
+sidebar:
+  order: 1
+search:
+  tags: [operations, build, testing]
+---
+
+This section is for maintainers and contributors who build and verify
+µWebZockets itself: the framework repository, its pinned dependencies, its test
+gates, and its release and runtime work. If you are adding µWebZockets to an
+application, start with [Installation](/docs/getting-started/installation)
+instead. That page uses `zig fetch --save`; this section starts from a clone of
+the framework.
+
+The pages here describe commands that operate on the framework checkout. They
+are not application build steps, and they are not required to use the package.
+
+## How the section is organized
+
+| Group    | Question it answers                                                      |
+| -------- | ------------------------------------------------------------------------ |
+| Build    | Which toolchain, build graph, and target do I need?                      |
+| Verify   | Which gate proves the change I made?                                     |
+| Release  | What ships, how is it versioned, and what is pinned?                     |
+| Operate  | How do I read logs and metrics and stop the process without losing work? |
+| Advanced | How do I use the C ABI, edge, kernel-bypass, and kTLS surfaces?          |
+
+## Build
+
+<CardGroup cols={2}>
+  <Card title="Build from source" href="/docs/operations/build" icon="hammer">
+    Clone the checkout, install Zig 0.16.0, understand the `builds/` graph, and verify with the unit
+    suite.
+  </Card>
+  <Card title="Nix development shell" href="/docs/operations/nix" icon="snowflake">
+    Use pinned Nixpkgs 26.05 for Zig, `wrk`, and a coherent sanitizer runtime on Linux.
+  </Card>
+  <Card title="Cross-compilation" href="/docs/operations/cross-compilation" icon="network">
+    Build musl, Windows, macOS, and BSD targets with Zig's bundled C/C++ toolchain and zlib.
+  </Card>
+</CardGroup>
+
+## Verify
+
+<CardGroup cols={2}>
+  <Card title="Tests" href="/docs/operations/testing" icon="flask-conical">
+    Pick the unit, package-consumer, compliance, or fuzz layer that proves a change.
+  </Card>
+  <Card title="Sanitizers" href="/docs/operations/sanitizers" icon="shield-check">
+    Run ASan, UBSan, and LSan together, or the separate MSan C/C++ boundary smoke.
+  </Card>
+  <Card title="Fuzzing" href="/docs/operations/fuzzing" icon="bug">
+    Drive the Smith harness, the five OSS-Fuzz objects, and the ClusterFuzzLite gate.
+  </Card>
+</CardGroup>
+
+## Release
+
+<CardGroup cols={2}>
+  <Card title="C ABI" href="/docs/operations/c-abi" icon="braces">
+    Build the archives, install the header, link a C program, and handle the versioned error codes.
+  </Card>
+  <Card title="Releases" href="/docs/operations/releases" icon="rocket">
+    Bump the single version source, keep every copy in agreement, and publish a source-only tag.
+  </Card>
+  <Card title="Dependencies" href="/docs/operations/dependencies" icon="layers">
+    Audit immutable pins, maintained forks, provenance checks, and rollback rules.
+  </Card>
+  <Card title="Platform support" href="/docs/operations/platforms" icon="server">
+    See which platforms build, which run in hosted CI, and what each support claim depends on.
+  </Card>
+</CardGroup>
+
+## Operate
+
+<CardGroup cols={2}>
+  <Card title="Development log" href="/docs/operations/logging" icon="activity">
+    Turn the terminal log on or off, bind a file sink, watch source paths, and read dropped records.
+  </Card>
+  <Card title="Metrics" href="/docs/operations/metrics" icon="gauge">
+    Enable the bounded Prometheus registry, scrape the hidden endpoint, and read per-worker
+    counters.
+  </Card>
+  <Card title="Graceful shutdown" href="/docs/operations/graceful-shutdown" icon="clock">
+    Arm the signal watcher, let the application drain, and release a server or worker group.
+  </Card>
+  <Card title="Troubleshooting" href="/docs/operations/troubleshooting" icon="shield-alert">
+    Match a symptom to its cause, apply the smallest fix, and prevent the failure from returning.
+  </Card>
+  <Card title="Development log reference" href="/docs/operations/development-log" icon="archive">
+    Read the record fields, event payloads, fixed buffer, sink counters, and startup banner.
+  </Card>
+</CardGroup>
+
+## Advanced
+
+<CardGroup cols={2}>
+  <Card title="eBPF latency histogram" href="/docs/operations/ebpf" icon="activity">
+    Build the XDP objects, pin the latency map, and read its packet buckets from the hidden
+    endpoint.
+  </Card>
+  <Card title="WASM edge targets" href="/docs/operations/wasm" icon="cpu">
+    Build the freestanding and WASI modules and call the bounded `alloc` and handle exports.
+  </Card>
+  <Card title="kTLS" href="/docs/operations/ktls" icon="key-round">
+    Use the standalone Linux kTLS helper on a socket you already own.
+  </Card>
+  <Card title="AF_XDP" href="/docs/operations/af-xdp" icon="network">
+    Build the XSK redirect and drive the transport from your own process.
+  </Card>
+</CardGroup>
+
+## What this section assumes
+
+| Assumption                | Detail                                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Compiler                  | Zig 0.16.0. The Nix shell provides it; a plain install must match the minor version.                                              |
+| Host platforms            | Linux runs the hosted matrix on `x86_64` and `aarch64`. macOS is supported and cross-compiled; Windows is gated by a runtime job. |
+| Repository access         | A clone of `farbenbuilds/uWebZockets`, plus the `vendor/h1spec` submodule for the h1spec gate.                                    |
+| Network on the first run  | Zig fetches the pinned dependency packages into its global and local caches.                                                      |
+| No system build toolchain | BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib are compiled from pinned sources.                                     |
+
+## Boundaries
+
+| Not covered here                    | Where it lives                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| Application installation            | [Installation](/docs/getting-started/installation)                                           |
+| Application handler and route tests | [Testing an HTTP server](/docs/http/testing)                                                 |
+| Deployment topology and TLS rollout | [Production certificates](/docs/security/production-certificates)                            |
+| Throughput and latency claims       | [Benchmarking](/docs/performance/benchmarking)                                               |
+| Runtime architecture                | [Architecture](/docs/architecture/backends), [Memory model](/docs/architecture/memory-model) |
+
+## Related
+
+- [Platform support](/docs/architecture/backends) describes the runtime backends behind each target.
+- [Dependencies](/docs/architecture/dependencies) lists the pinned packages and maintained forks.
+- [Contributing](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
+  covers branch and pull-request conventions for the framework repository.

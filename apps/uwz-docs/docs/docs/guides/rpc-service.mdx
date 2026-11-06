@@ -1,0 +1,180 @@
+---
+title: Build an RPC service
+description: Mount a typed JSON-RPC 2.0 service, read its error and batch behavior, and size it for the payloads it carries.
+sidebar:
+  order: 8
+search:
+  tags: [guide, json-rpc, how-to]
+---
+
+Typed procedures are the shortest path from a Zig struct to a JSON-RPC method.
+
+## Problem
+
+You have operations that need named methods, a request/response shape, and
+structured errors, and you do not want to hand-write JSON dispatch for each one.
+
+## Assumptions
+
+- Your Zig 0.16.0 project already depends on µWebZockets.
+- Method names are stable public identifiers, copied at registration.
+- Parameters fit the 4 KiB typed scratch; larger documents use the raw `register`
+  API with an explicit allocator, covered in
+  [typed procedures](/docs/json-rpc/typed-procedures).
+
+## Build the service
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const AddParams = struct { left: i64, right: i64 };
+const AddResult = struct { sum: i64 };
+const DivideParams = struct { numerator: i64, denominator: i64 };
+const DivideResult = struct { quotient: i64 };
+
+fn add(params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    return .{ .sum = params.left + params.right };
+}
+
+fn divide(params: DivideParams) uz.json_rpc.HandlerError!DivideResult {
+    if (params.denominator == 0) return error.InvalidParams;
+    return .{ .quotient = @divTrunc(params.numerator, params.denominator) };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var rpc = uz.json_rpc.Service{};
+    try rpc.register_typed("math.add", AddParams, AddResult, add);
+    try rpc.register_typed("math.divide", DivideParams, DivideResult, divide);
+    _ = try app.rpc("/rpc", &rpc);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.rpc` registers `POST /rpc`, seals the registry, and stores a pointer to the
+service. Keep the service alive for the whole run: it owns one response buffer and
+belongs to one event loop. `service.response_buffer()` exposes that buffer when you
+dispatch manually.
+
+## Errors and batches
+
+A procedure fault is still an HTTP `200` with an `error` object; only transport
+failures use another status.
+
+| You return              | JSON-RPC result                | HTTP |
+| ----------------------- | ------------------------------ | ---- |
+| A result value          | `result` member                | 200  |
+| `error.InvalidParams`   | `-32602 Invalid params`        | 200  |
+| `call.fail(code, text)` | Your `-32000` to `-32099` code | 200  |
+| A notification (no id)  | No body                        | 204  |
+
+A batch is parsed completely before the first procedure runs, so a syntax error in
+the last element stops the whole batch. A semantic error in one element does not.
+See [JSON-RPC errors](/docs/json-rpc/errors) and
+[batches and notifications](/docs/json-rpc/batches-and-notifications).
+
+## Capacity assumptions
+
+| Resource                | Default                | Symptoms when exhausted                   |
+| ----------------------- | ---------------------- | ----------------------------------------- |
+| Procedures              | 64 per service         | `error.ProcedureCapacityReached`          |
+| Copied method names     | 4 KiB per service      | `error.MethodStorageCapacityReached`      |
+| Response document       | 16 KiB per service     | `-32603`, or HTTP `500` for a large body  |
+| Typed parameter scratch | 4 KiB of stack         | `-32603 Internal error` when it overflows |
+| Request body            | 16 KiB `max_body_size` | `413 Payload Too Large` before dispatch   |
+
+Raise the service capacities with `uz.json_rpc.configured_service`.
+
+## Failure behavior
+
+| Condition                         | Result                                         |
+| --------------------------------- | ---------------------------------------------- |
+| Unknown method                    | `200` with `-32601 Method not found`           |
+| Missing or mistyped `params`      | `200` with `-32602 Invalid params`             |
+| Wrong or duplicate `Content-Type` | `415 Unsupported Media Type`, empty body       |
+| Result larger than the response   | `-32603`, or `500` when the error does not fit |
+| Registration after mount          | `error.RegistryLocked` at startup              |
+
+## Verification
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"math.add","params":{"left":2,"right":3},"id":1}' \
+  | jq -e '.result.sum == 5'
+```
+
+```sh
+curl -sS http://127.0.0.1:3000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '[{"jsonrpc":"2.0","method":"math.add","params":{"left":4,"right":5},"id":3},
+           {"jsonrpc":"2.0","method":"math.add","params":{"left":6,"right":7}}]'
+```
+
+The first command exits non-zero unless the sum is `5`. The batch returns a
+one-element array: the notification ran but produced no response. Send
+`math.divide` with `"denominator":0` and the response carries `-32602`.
+
+## Variation: carry context
+
+`register_typed_context` passes a mutable pointer to typed state. The context must
+be a mutable single-item pointer; a value or a const pointer is a compile error.
+
+```zig
+const Ledger = struct { calls: u64 = 0 };
+
+fn transfer(context: *Ledger, params: AddParams) uz.json_rpc.HandlerError!AddResult {
+    context.calls += 1;
+    return .{ .sum = params.left + params.right + context.calls };
+}
+
+var ledger = Ledger{};
+try rpc.register_typed_context("math.counted_add", &ledger, AddParams, AddResult, transfer);
+```
+
+In a cluster, create one ledger per worker. The pointer is not shared across event
+loops.
+
+## Variation: compile-time dispatch
+
+`comptime_service` builds a fixed jump table. It has no `register` or `seal`, so
+`app.rpc` rejects it at compile time; mount it by calling `dispatch` yourself.
+
+```zig
+fn add_raw(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    var parse_buffer: [4 * 1024]u8 = undefined;
+    var parse_allocator = std.heap.FixedBufferAllocator.init(&parse_buffer);
+    const parsed = try call.parse_params(AddParams, parse_allocator.allocator());
+    defer parsed.deinit();
+    try call.result(.{ .sum = parsed.value.left + parsed.value.right });
+}
+
+const procedures = [_]uz.json_rpc.StaticProcedure{
+    .{ .method = "math.add", .handler = add_raw },
+};
+const StaticRpc = uz.json_rpc.comptime_service(&procedures);
+var rpc = StaticRpc{};
+
+fn rpc_route(req: *uz.Request, res: *uz.Response) void {
+    const document = rpc.dispatch(req.bytes(), rpc.response_buffer()) catch {
+        res.end("500 Internal Server Error", "") catch {};
+        return;
+    };
+    const body = document orelse {
+        res.end("204 No Content", "") catch {};
+        return;
+    };
+    res.end_with_headers("200 OK", "Content-Type: application/json\r\n", body) catch {};
+}
+```
+
+## Next
+
+- [Typed procedures](/docs/json-rpc/typed-procedures) covers parameter lifetimes.
+- [JSON-RPC capacities](/docs/json-rpc/capacities) sizes the response buffer.

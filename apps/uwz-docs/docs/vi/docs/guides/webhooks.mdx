@@ -1,0 +1,180 @@
+---
+title: Nhận webhook
+description: Xác minh chữ ký HMAC trước khi parse, giới hạn body, từ chối timestamp bị replay, chống trùng theo key và trả 2xx nhanh.
+sidebar:
+  order: 15
+search:
+  tags: [guide, webhooks, security, hmac]
+---
+
+Nhận delivery, xác minh rồi trả lời trước khi sender timeout. Thứ tự là hợp
+đồng: chữ ký trước, parse sau, và giới hạn body bao trùm cả hai.
+
+## Vấn đề
+
+Provider post JSON và ký raw body bằng shared secret. Phải từ chối delivery giả
+và replay, chịu retry mà không lặp side effect, và trả 2xx trước retry timeout.
+
+## Giả định
+
+- Secret là cấu hình deployment; ở đây là hằng số chỉ để chương trình compile.
+- `max_body_size` giới hạn body; ví dụ nâng lên 64 KiB.
+- Sender retry khi nhận non-2xx và khi timeout.
+- Bảng idempotency là per worker, nên shard delivery theo key trong cluster.
+
+## Viết chương trình
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const secret = "whsec_replace_with_a_32_byte_secret";
+
+const Idempotency = struct {
+    io: std.Io,
+    hashes: [32]u64 = [_]u64{0} ** 32,
+    next: usize = 0,
+    fn seen(self: *Idempotency, key: []const u8) bool {
+        return std.mem.indexOfScalar(u64, &self.hashes, std.hash.Wyhash.hash(0, key)) != null;
+    }
+    fn remember(self: *Idempotency, key: []const u8) void {
+        self.hashes[self.next] = std.hash.Wyhash.hash(0, key);
+        self.next = (self.next + 1) % self.hashes.len;
+    }
+};
+
+fn verify(timestamp: []const u8, body: []const u8, signature: []const u8) bool {
+    var provided: [32]u8 = undefined;
+    _ = std.fmt.hexToBytes(&provided, signature) catch return false;
+    var mac = std.crypto.auth.hmac.sha2.HmacSha256.init(secret);
+    mac.update(timestamp);
+    mac.update(".");
+    mac.update(body);
+    var expected: [32]u8 = undefined;
+    mac.final(&expected);
+    return std.crypto.timing_safe.eql([32]u8, expected, provided);
+}
+
+fn reject(res: *uz.Response, status: []const u8, body: []const u8) void {
+    res.end(status, body) catch {};
+}
+
+fn receive(context: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const store: *Idempotency = @ptrCast(@alignCast(context));
+    const timestamp = req.get_header("x-webhook-timestamp") orelse
+        return reject(res, "400 Bad Request", "missing timestamp");
+    const signature = req.get_header("x-webhook-signature") orelse
+        return reject(res, "400 Bad Request", "missing signature");
+    const key = req.get_header("idempotency-key") orelse
+        return reject(res, "400 Bad Request", "missing idempotency key");
+    const sent_ms = std.fmt.parseInt(i64, timestamp, 10) catch
+        return reject(res, "400 Bad Request", "invalid timestamp");
+    const now_ms: i64 = @intCast(@divTrunc(std.Io.Clock.now(.real, store.io).nanoseconds, std.time.ns_per_ms));
+    if (@abs(now_ms - sent_ms) > 300 * std.time.ms_per_s) return reject(res, "400 Bad Request", "stale");
+    if (!verify(timestamp, req.bytes(), signature)) return reject(res, "401 Unauthorized", "bad signature");
+    if (store.seen(key)) return reject(res, "200 OK", "duplicate");
+    store.remember(key);
+    res.end("202 Accepted", "") catch |err| std.log.err("ack failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var store = Idempotency{ .io = init.io };
+    var app = try uz.Server.builder(init.io)
+        .with_max_body_size(64 * 1024)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+    _ = try app.route_context(.post, "/webhooks/events", &store, receive);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`req.bytes()` trả raw body. Không gọi `req.json` trước khi kiểm tra chữ ký, và
+dùng `timing_safe.eql` cho phép so sánh.
+
+## Kiểm tra
+
+```sh
+zig build run
+```
+
+Terminal thứ hai ký body rồi post:
+
+```sh
+ts=$(($(date +%s) * 1000)); body='{"event":"invoice.paid"}'
+sig=$(printf '%s.%s' "$ts" "$body" \
+  | openssl dgst -sha256 -hmac 'whsec_replace_with_a_32_byte_secret' -hex \
+  | sed 's/^.*= //')
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "X-Webhook-Timestamp: $ts" -H "X-Webhook-Signature: $sig" \
+  -H 'Idempotency-Key: evt_123' --data-binary "$body" \
+  http://127.0.0.1:3000/webhooks/events
+```
+
+Lần đầu in `202`. Lặp lại: delivery thứ hai trả `200` với `duplicate` và không
+lặp side effect. Đổi một byte trong body để nhận `401`; dùng lại timestamp sau
+301 giây để nhận `400`.
+
+## Giả định capacity
+
+| Tài nguyên     | Giới hạn | Hệ quả                     |
+| -------------- | -------- | -------------------------- |
+| Request body   | 64 KiB   | Body lớn hơn nhận `413`    |
+| Timestamp skew | 300 giây | Delivery cũ hơn nhận `400` |
+
+Ring quên key cũ; dùng full key trong shared store khi cần.
+
+## Hành vi khi lỗi
+
+| Điều kiện                | Kết quả                 |
+| ------------------------ | ----------------------- |
+| Thiếu timestamp hoặc key | `400`, không parse      |
+| Sai hex hoặc sai độ dài  | `401`, không parse      |
+| Chữ ký không khớp        | `401`, không parse      |
+| Timestamp ngoài cửa sổ   | `400`                   |
+| Key trùng                | `200`, không lặp effect |
+
+Trả 2xx nhanh là một phần của correctness. Nếu side effect lâu hơn timeout của
+provider, đưa payload đã xác minh vào queue và ack ngay. Async token phải
+complete trên event loop sở hữu; không có cross-thread queue.
+
+## Biến thể
+
+### Header gộp kiểu Stripe
+
+Stripe gửi một header chứa timestamp và một hoặc nhiều chữ ký:
+
+```zig
+fn stripe_signature(header: []const u8, body: []const u8) bool {
+    var stamp: []const u8 = "";
+    var parts = std.mem.tokenizeScalar(u8, header, ',');
+    while (parts.next()) |part| {
+        if (std.mem.startsWith(u8, part, "t=")) stamp = part[2..];
+        if (std.mem.startsWith(u8, part, "v1=") and verify(stamp, body, part[3..])) return true;
+    }
+    return false;
+}
+```
+
+Chấp nhận nếu bất kỳ `v1=` nào khớp: provider gửi nhiều giá trị khi rotate.
+
+### Chữ ký chỉ trên body không có replay window
+
+HMAC chứng minh authenticity, nhưng delivery bị bắt vẫn hợp lệ mãi mãi:
+
+```zig
+if (!verify("", req.bytes(), signature)) {
+    res.end("401 Unauthorized", "bad signature") catch {};
+    return;
+}
+```
+
+Ghép với idempotency key và event id từ provider. Chữ ký một mình không phải
+replay protection.
+
+## Liên quan
+
+- [Handler](/docs/http/handlers) bao gồm `route_context` và vòng đời callback.
+- [Xử lý upload](/docs/guides/uploads) giải thích giới hạn body buffer.
+- [Threat model](/docs/security/threat-model) đặt kiểm tra chữ ký ở trust boundary.

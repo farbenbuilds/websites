@@ -1,0 +1,138 @@
+---
+title: Build from source
+description: Clone the framework, install Zig 0.16.0, build with ReleaseSafe, and verify the checkout with the full unit suite.
+sidebar:
+  order: 2
+search:
+  tags: [operations, build, zig]
+---
+
+Build the framework from a checkout when you need to change it, run its test
+gates, or produce the static library yourself. Application projects normally
+fetch a tagged release with `zig fetch` and never clone this repository; see
+[Installation](/docs/getting-started/installation) for that path.
+
+## Requirements
+
+| Requirement        | Value                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| Zig                | 0.16.0                                                                                |
+| Host platforms     | Linux and macOS on `x86_64` and `aarch64`                                             |
+| Windows            | `x86_64-windows-gnu` compile gates plus a `windows-2025` runtime job                  |
+| BSD                | FreeBSD, NetBSD, OpenBSD, and DragonFlyBSD community build targets                    |
+| h1spec submodule   | `vendor/h1spec`, needed only for the h1spec compliance gate                           |
+| System C toolchain | None. Zig compiles BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib itself |
+
+No CMake, Ninja, Go, Perl, Python, `patch`, or system zlib installation is
+required. The pinned C and C++ dependencies are built by Zig's own toolchain.
+
+## Clone and build
+
+1. Clone the repository. Add `--recurse-submodules` when you will run the
+   h1spec target.
+
+   ```sh
+   git clone https://github.com/farbenbuilds/uWebZockets.git
+   cd uWebZockets
+   ```
+
+2. Enter the pinned shell, or use a local Zig 0.16.0 install.
+
+   ```sh
+   nix develop
+   ```
+
+3. Run the unit suite and build the default artifacts.
+
+   ```sh
+   zig build test --summary all
+   zig build -Doptimize=ReleaseSafe
+   ```
+
+`zig build` alone uses the debug optimization mode. Use
+`-Doptimize=ReleaseSafe` for the gate that keeps runtime safety checks while
+optimizing. `ReleaseFast` is the mode used for the static library that consumers
+link; see [Cross-compilation](/docs/operations/cross-compilation).
+
+## Build graph
+
+The root `build.zig` only declares the version and injects the module graph.
+Target, vendor, sanitizer, test, fuzz, and example construction lives in focused
+modules under `builds/`.
+
+| Module                      | Owns                                                                      |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `builds/orchestrator.zig`   | Target selection, `all-targets`, and the clangd database                  |
+| `builds/targets/native.zig` | Native library, executables, `lib`, and the test graph wiring             |
+| `builds/targets/wasm.zig`   | `wasm-freestanding` and `wasm-wasi` artifacts                             |
+| `builds/targets/ebpf.zig`   | `uwz_xdp.o` and `uwz_latency.o`                                           |
+| `builds/vendor/`            | BoringSSL, lsquic, libdeflate, and zlib compilation                       |
+| `builds/testing.zig`        | `test`, `test-compile`, `h1spec`, `autobahn`, `msan`, and the C ABI smoke |
+| `builds/fuzzing.zig`        | `fuzz`, `oss-fuzz-objects`, and `oss-fuzz-smoke`                          |
+| `builds/sanitizers.zig`     | Instrumented toolchain settings and the sanitizer run environment         |
+| `builds/examples.zig`       | One runnable build step per example                                       |
+
+## First build and caches
+
+The first build downloads the pinned packages through Zig's package manager
+into the global cache and the local `.zig-cache` directory. It then compiles the
+C and C++ dependencies for the selected target. Later builds reuse both caches
+and do not re-fetch the sources.
+
+| Cache        | Default location | Contains                                          |
+| ------------ | ---------------- | ------------------------------------------------- |
+| Global cache | `~/.cache/zig`   | Fetched packages and compiled dependency objects  |
+| Local cache  | `.zig-cache`     | Build graph state and per-configuration artifacts |
+
+Use one cache consistently. Switching between a custom `ZIG_GLOBAL_CACHE_DIR`
+and the default cache can make a build look for objects that the other cache
+never produced; rebuild with the cache you intend to keep rather than deleting
+source or dependency pins.
+
+## Optional artifacts
+
+Build the edge and kernel-bypass targets explicitly. They are not part of the
+default install step.
+
+```sh
+zig build wasm-freestanding -Doptimize=ReleaseSafe
+zig build wasm-wasi -Doptimize=ReleaseSafe
+zig build ebpf
+zig build all-targets -Doptimize=ReleaseSafe
+```
+
+| Artifact          | Output                                                         |
+| ----------------- | -------------------------------------------------------------- |
+| WASM freestanding | Linear memory for V8 isolate hosts                             |
+| WASM WASI         | Bounded `alloc`/`free` and generation-checked handle functions |
+| eBPF              | `zig-out/share/uwebzockets/uwz_xdp.o` and `uwz_latency.o`      |
+| Static library    | `zig-out/lib` archives and `zig-out/include/uWebZockets.h`     |
+
+The eBPF latency histogram is read by the hidden `/metrics` endpoint only when
+the map is pinned at `/sys/fs/bpf/uwz_latency`. Attaching the XSK redirect and
+populating the map require Linux network-administration privileges.
+`ServerConfig.transport = .kernel_bypass` reports `.standard` with reason
+`.data_path_unwired`; applications that want AF_XDP drive `uz.xdp_transport` and
+`uz.xdp` directly.
+
+## Verify the checkout
+
+```sh
+zig build test --summary all
+```
+
+The `test` step runs the centralized unit suite from `src/tests/main.zig`,
+compiles and runs the C ABI smoke program, compiles the C++ header check, and
+runs the archive check. A green run is the minimum evidence that a clean
+checkout builds and that the production modules still satisfy their tests.
+
+Add `-Dsanitize=true -Doptimize=ReleaseSafe` on Linux for the instrumented run,
+or `nix develop "path:." -c zig build test --summary all` to match CI's shell
+invocation. Both are covered in [Tests](/docs/operations/testing) and
+[Sanitizers](/docs/operations/sanitizers).
+
+## Related
+
+- [Nix development shell](/docs/operations/nix) pins the compiler and sanitizer runtime.
+- [Cross-compilation](/docs/operations/cross-compilation) covers musl, Windows, macOS, and BSD targets.
+- [Dependencies](/docs/architecture/dependencies) explains the pinned packages and forks.

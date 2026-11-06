@@ -1,0 +1,154 @@
+---
+title: Reverse proxy
+description: Decide where TLS terminates, pass the client address safely, keep WebSocket and streaming hops alive, and know what a proxy costs HTTP/3.
+sidebar:
+  order: 11
+search:
+  tags: [how-to, deployment, proxy]
+---
+
+A reverse proxy is optional. The framework terminates TLS itself and serves
+HTTP/1.1, HTTP/2, and HTTP/3 on one application, so a proxy is a choice about
+certificate ownership, shared edge policy, and topology, not a requirement. What
+you cannot skip is the decision about who writes `X-Forwarded-For` and how long
+the proxy keeps an idle connection.
+
+## Where TLS terminates
+
+| Placement    | Encrypted hop             | Backend hop                    | Tradeoff                                                   |
+| ------------ | ------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| At the proxy | Client to proxy           | Proxy to app, plain or TLS     | One certificate store, but the proxy must forward honestly |
+| Passthrough  | Client to app             | None, the proxy forwards bytes | The app owns certificates; the proxy cannot add client IP  |
+| Both         | Client to proxy, then TLS | Proxy to app over TLS          | Maximum isolation, two certificate lifecycles              |
+
+Passthrough cannot supply the client address: the framework does not parse the
+PROXY protocol, and `Request` carries no peer address. If the application needs
+the client IP, terminate TLS at the proxy and write the forwarding header there.
+
+## Client address
+
+`Request` exposes headers, not a socket address, so behind a proxy the only client
+identity is the header your edge writes:
+
+```zig
+fn clientAddress(request: *const uz.Request) []const u8 {
+    // A duplicate field means a hop appended instead of overwriting.
+    return request.get_unique_header("x-forwarded-for") orelse "unknown";
+}
+```
+
+The proxy must overwrite the header, not append to it. With nginx, set
+`proxy_set_header X-Forwarded-For $remote_addr`. With Caddy, the default
+`reverse_proxy` writes the immediate peer address and ignores inbound
+`X-Forwarded-*` values unless you configure trusted proxies.
+
+| Rule                                            | Reason                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| Overwrite, never append                         | An appended chain lets a client choose its own first entry        |
+| Trust the header only from the proxy            | Anything that can reach the app directly can forge it             |
+| Bind the app to loopback or a private interface | There is no peer-address check to fall back on                    |
+| Use `get_unique_header` for limiter keys        | A duplicate returns `null` instead of selecting an attacker value |
+
+`middleware.RateLimit` keys on whatever the application passes. A header the
+client can set rotates the bucket and evicts other clients from a full table, so
+hash the trusted header or a server-derived identity. See
+[Rate limiting](/docs/http/rate-limiting) for the table behavior.
+
+## WebSocket upgrade
+
+| Requirement        | nginx                                                                         | Caddy                         |
+| ------------------ | ----------------------------------------------------------------------------- | ----------------------------- |
+| Backend protocol   | `proxy_http_version 1.1`                                                      | Automatic                     |
+| Upgrade headers    | `proxy_set_header Upgrade $http_upgrade` and `Connection $connection_upgrade` | Automatic                     |
+| Read timeout       | `proxy_read_timeout` above `idle_timeout_ms`                                  | `transport http` read timeout |
+| Response buffering | `proxy_buffering off` on the socket location                                  | `flush_interval -1`           |
+
+`$connection_upgrade` is the usual `map` from `$http_upgrade` to `upgrade` or
+`close`; without it, a shared location sends `Connection: upgrade` on plain
+requests too. Most proxies complete the handshake over HTTP/1.1. The framework
+also supports RFC 8441 tunnelling over HTTP/2, but that needs proxy support for
+extended CONNECT, which is uncommon.
+
+An idle WebSocket lives until `idle_timeout_ms`, 120 seconds by default. A proxy
+read timeout below that closes the socket first, and the client reconnects on a
+timer that looks like a proxy defect. Raise the proxy timeout or lower the
+framework timeout to match.
+
+## HTTP/2 to the backend
+
+| Hop                             | Mechanism                          | Supported |
+| ------------------------------- | ---------------------------------- | --------- |
+| Client to proxy                 | TLS ALPN or cleartext              | Yes       |
+| Proxy to app over TLS           | ALPN selects `h2`, then `http/1.1` | Yes       |
+| Proxy to app in cleartext       | HTTP/2 prior knowledge             | Yes       |
+| Proxy to app with `h2c` Upgrade | RFC 7540 Upgrade                   | No        |
+
+Cleartext HTTP/2 uses prior knowledge, not the `Upgrade: h2c` handshake. A proxy
+that only offers h2c Upgrade must keep the backend hop on HTTP/1.1, or enable TLS
+so ALPN can select `h2`.
+
+## Limits and timeouts
+
+| Proxy setting         | Must be                                        | Otherwise                                               |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------- |
+| Request body limit    | At least `max_body_size`                       | The proxy returns its own `413`, not the structured one |
+| Header size and count | Above `max_header_size` and `max_header_count` | The proxy rejects first with its own error              |
+| Read timeout          | Above `idle_timeout_ms`                        | Idle keep-alive and WebSocket connections drop early    |
+| Connect timeout       | Short                                          | A dead app pod holds client slots at the edge           |
+| Response buffering    | Off for streaming and SSE routes               | Events arrive in bursts when the buffer fills           |
+| Response compression  | Off where the app already gzips                | Double compression wastes CPU and grows the body        |
+
+Keep the proxy's limits slightly above the framework's. A proxy limit below the
+application limit hides the structured rejection that names the exact bound, and
+the operator loses the useful error.
+
+## Streaming and SSE
+
+`res.begin_stream` and `res.sse()` write incrementally, so every buffer between
+the handler and the client must be disabled or bounded by latency. Set nginx
+`proxy_buffering off` and `proxy_cache off` on those locations, or Caddy
+`flush_interval -1`. Do not enable response compression at the proxy for those
+routes: the framework's streaming path does not set a length, and a compressing
+proxy buffers to find one.
+
+## HTTP/3
+
+HTTP/3 end to end means UDP reaches the application listener. A proxy that
+terminates QUIC and opens a TCP connection to the app gives HTTP/3 at the edge
+only; the backend still runs HTTP/2 or HTTP/1.1. The framework emits no `Alt-Svc`
+header, so protocol discovery is the client's or the edge's job.
+
+| Topology                        | Result                                                     |
+| ------------------------------- | ---------------------------------------------------------- |
+| UDP passthrough to `listen_udp` | End-to-end HTTP/3; the proxy must route UDP per connection |
+| QUIC at the edge, TCP to app    | HTTP/3 for the client, HTTP/2 or HTTP/1.1 to the app       |
+| TCP-only load balancer          | No HTTP/3; the QUIC listener is unreachable                |
+
+A stateless UDP load balancer still has to keep one QUIC connection's datagrams on
+one backend. Address migration breaks that mapping, so pin the path or disable
+migration.
+
+## Verify
+
+```sh
+curl -sS -o /dev/null -w '%{http_version}\n' --http2 https://app.example.com/
+curl -sS -N https://app.example.com/events
+curl -i -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  https://app.example.com/chat
+```
+
+Expect `2` for the HTTP/2 request, incremental lines from the SSE route, and
+`101 Switching Protocols` from the WebSocket route. Send a forged
+`X-Forwarded-For` to an echo route and confirm the proxy replaced it.
+
+## Failures
+
+| Symptom                              | Cause                                         | Fix                                             |
+| ------------------------------------ | --------------------------------------------- | ----------------------------------------------- |
+| WebSocket closes after a minute      | Proxy read timeout below the idle timeout     | Raise the timeout or lower `idle_timeout_ms`    |
+| All clients share one rate-limit key | Proxy appends a client-supplied header        | Overwrite `X-Forwarded-For` at the edge         |
+| `413` without a limit name           | Proxy body limit below `max_body_size`        | Raise the proxy limit above the framework limit |
+| SSE events arrive in bursts          | Response buffering enabled                    | Disable buffering on that location              |
+| `400` on every WebSocket request     | HTTP/1.0 or a missing `Connection` header     | Force HTTP/1.1 and forward the Upgrade headers  |
+| HTTP/3 works at the edge only        | Proxy terminates QUIC and uses TCP to the app | Pass UDP through, or accept edge-only HTTP/3    |

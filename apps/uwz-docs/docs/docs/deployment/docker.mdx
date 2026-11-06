@@ -1,0 +1,164 @@
+---
+title: Docker
+description: Build a small two-stage image with Zig 0.16.0, run it non-root on a read-only filesystem, and pass SIGTERM through to the app.
+sidebar:
+  order: 8
+search:
+  tags: [how-to, deployment, docker]
+---
+
+µWebZockets publishes no container image and ships no Dockerfile. The repository
+releases source tags, so every image is yours to build and sign. This page gives a
+two-stage template: a build stage with the pinned Zig toolchain, and a runtime
+stage that contains the binary, its certificates, and nothing that can compile.
+
+The Zig build commands and the signal behavior are verified in the framework
+documentation. The Dockerfile, base images, and health-check wiring are a
+template that this repository does not build in CI. Treat the template as a
+starting point and run your own image scan and smoke test before production.
+
+## Multi-stage build
+
+```dockerfile
+FROM debian:bookworm-slim AS build
+
+ARG ZIG_VERSION=0.16.0
+ARG ZIG_TARBALL=zig-x86_64-linux-0.16.0.tar.xz
+ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends ca-certificates curl xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSLo /tmp/zig.tar.xz \
+      "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_TARBALL}" \
+ && echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict \
+ && tar -xJf /tmp/zig.tar.xz -C /opt \
+ && ln -s "/opt/${ZIG_TARBALL%.tar.xz}/zig" /usr/local/bin/zig
+
+WORKDIR /src
+COPY build.zig build.zig.zon ./
+COPY src ./src
+RUN zig build -Doptimize=ReleaseSafe --prefix /out
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/bin/uz-app /usr/local/bin/uz-app
+
+USER 65532:65532
+EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=2s --start-period=5s --retries=3 \
+  CMD curl --fail --silent --show-error http://127.0.0.1:3000/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/uz-app"]
+```
+
+Two details carry the correctness:
+
+- The `ENTRYPOINT` is exec form, so the binary is PID 1 and receives
+  `SIGTERM` directly. A shell-form entrypoint would leave a `/bin/sh` between the
+  daemon and the signal. With `catch_shutdown_signals` armed, the process then
+  drains and exits instead of being killed.
+- `USER 65532:65532` is a numeric identity with no passwd entry. That avoids a
+  `passwd` package in the runtime image and keeps the container non-root.
+
+Replace `uz-app` with the executable name that your `build.zig` installs. The
+`COPY` path and the entrypoint must name the same file.
+
+The tarball name and checksum above are the x86_64 Linux release from the Zig
+download index. For another architecture, override both build arguments; for a
+different patch release, override `ZIG_VERSION`, `ZIG_TARBALL`, and `ZIG_SHA256`
+together.
+
+## Build and run
+
+```sh
+docker build --tag uz-app:2.1.6 .
+docker run --rm --read-only --name uz-app \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --publish 3000:3000 \
+  --mount type=bind,src="$PWD/certs",dst=/etc/uz/certs,readonly \
+  uz-app:2.1.6
+```
+
+`--read-only` works because the server writes nothing at runtime: the slab is
+allocated in memory and the development log writes to stderr. If you call
+`App.set_dev_log_file`, mount that one path writable instead of dropping the flag.
+Certificates are a runtime mount, never an image layer, so a private key does not
+end up in an image digest or a registry. There is no hot reload, so a rotated
+certificate means a new container, not a rewritten file.
+
+Add a `.dockerignore` with `.zig-cache`, `zig-out`, `.git`, and any local env
+file. Without it the build context carries caches and secrets into the daemon on
+every rebuild.
+
+## Signals and stop time
+
+Docker sends SIGTERM on `docker stop` and waits ten seconds by default. That is
+shorter than the default 120-second idle timeout, so the container is usually
+killed mid-drain. Pass a stop timeout that matches the supervisor:
+
+```sh
+docker stop --time 140 uz-app
+```
+
+The grace period has to exceed the drain bound, as described in
+[Shutdown and draining](/docs/deployment/shutdown). Kubernetes'
+`terminationGracePeriodSeconds` and systemd's `TimeoutStopSec` are the same
+number in different clothing.
+
+## Health and readiness
+
+`HEALTHCHECK` is a liveness probe: it answers whether the process serves
+`/healthz`, not whether it can take more traffic. Readiness belongs to the
+orchestrator because only it knows how many replicas are behind the service.
+Serve `/readyz` and let Kubernetes or the load balancer call it.
+
+The framework has no built-in health endpoint. Register the routes yourself and
+keep the readiness handler cheap: it must not allocate per request or touch a
+shared structure that a worker does not own.
+
+## Capacity and memory
+
+The memory limit must cover one slab per active worker, plus the regions outside
+the slab:
+
+| Region            | Scope                                | In `slab_bytes()` |
+| ----------------- | ------------------------------------ | ----------------- |
+| Application slab  | One per active worker                | Yes               |
+| Worker inbox      | `(64 + 1) * max_ws_message_size`     | No                |
+| `SSL_CTX`         | One per active worker when TLS is on | No                |
+| QUIC engine pools | Created by `listen_udp`              | No                |
+
+Measure `slab_bytes()` for your configuration, multiply by the active worker
+count, add headroom, and set `--memory` above that total. A limit below the slab
+fails at startup rather than under load. See
+[Capacity sizing](/docs/performance/capacity-sizing) for the worksheet.
+
+## What is verified
+
+| Item                                           | Status                                                    |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| `zig build -Doptimize=ReleaseSafe`             | Documented build command for the framework                |
+| Zig 0.16.0 tarball name and checksum           | Taken from the Zig 0.16.0 download index                  |
+| SIGTERM drain through `catch_shutdown_signals` | Documented runtime behavior                               |
+| No published image or Dockerfile               | Repository releases source tags only                      |
+| Base images, health command, image hardening   | Template; not built or scanned by this repository         |
+| A musl static binary on `scratch`              | Possible with `-Dtarget=x86_64-linux-musl`; untested here |
+
+## Failures
+
+| Symptom                              | Cause                                            | Fix                                                       |
+| ------------------------------------ | ------------------------------------------------ | --------------------------------------------------------- |
+| `exec format error`                  | Image architecture differs from the built target | Build for the image platform, for example `linux/arm64`   |
+| Container exits on `docker stop`     | Stop timeout shorter than the drain              | Raise `--time` or lower `idle_timeout_ms`                 |
+| Permission denied on the certificate | Mounted files not readable by UID 65532          | Fix ownership on the host or use a read-only secret mount |
+| Health check never passes            | No `/healthz` route, or the route is behind auth | Register the route before any auth middleware             |
+| Writes fail at runtime               | `--read-only` without a writable log mount       | Mount the log directory or keep the log on stderr         |
+| Build cannot fetch dependencies      | Build stage has no network or no writable cache  | Allow egress during build, or vendor the pinned packages  |

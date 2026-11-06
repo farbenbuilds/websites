@@ -1,0 +1,163 @@
+---
+title: Thêm graceful shutdown
+description: Bắt SIGTERM, ngừng accept, drain connection đang hoạt động và giải phóng application hoặc worker cluster mà không mất exit status.
+sidebar:
+  order: 17
+search:
+  tags: [guide, shutdown, signals, operations]
+---
+
+Graceful shutdown là signal handler, drain, rồi release theo đúng thứ tự.
+Listener dừng trước, việc đang chạy hoàn tất, và process thoát với status mà
+supervisor đọc được.
+
+## Vấn đề
+
+Một deploy gửi `SIGTERM`. Connection vẫn giữ keep-alive socket, async response
+đang pending, và worker cluster sở hữu nhiều event loop. Process phải ngừng
+accept, hoàn tất việc có bound, giải phóng memory và thoát với status 0.
+
+## Giả định
+
+- Ứng dụng chạy trên Linux hoặc macOS và supervisor gửi `SIGTERM`.
+- Một process cài một signal watcher. Cài lần hai là lỗi, không phải thay thế
+  im lặng.
+- Request đang chạy bị giới hạn bởi connection idle timeout và handler work.
+  Không có deadline riêng cho in-flight request.
+
+## Viết chương trình
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("still serving") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`catch_shutdown_signals` phải chạy trước `run`. Nó cài một process-wide
+SIGINT/SIGTERM watcher và đưa cả hai signal vào cùng drain path với
+`App.shutdown`: ngừng accept, huỷ completion đang chờ, drain connection, giải
+phóng slab, rồi để `run` trả về.
+
+`deinit` assert trạng thái đã drain. Giữ `defer app.deinit()` và không gọi nó
+từ trong callback.
+
+## Kiểm tra
+
+```sh
+zig build
+./zig-out/bin/your-app & pid=$!
+sleep 1
+curl -s http://127.0.0.1:3000/
+kill -TERM "$pid"
+wait "$pid"; echo "exit $?"
+```
+
+Thay `your-app` bằng tên executable của bạn.
+
+```console
+still serving
+exit 0
+```
+
+Gửi `SIGTERM` khi request đang chạy để thấy drain: handler đang chạy hoàn tất,
+listener ngừng accept, process thoát sau khi write queue rỗng. `SIGTERM` lần hai
+gộp vào cùng request.
+
+## Những gì được drain
+
+| Thành phần            | Hành vi khi shutdown                        |
+| --------------------- | ------------------------------------------- |
+| Listener              | Ngừng accept ngay                           |
+| Keep-alive connection | Đóng khi idle hoặc khi idle timeout hết     |
+| Request đang chạy     | Hoàn tất trừ khi peer ngắt kết nối          |
+| Async token           | Complete hoặc fail closed trước khi release |
+| Write queue           | Flush byte đang chờ trong bound             |
+| Slab                  | `deinit` giải phóng sau khi loop dừng       |
+
+Idle timeout mặc định là 120 giây. Keep-alive client không gửi request nữa có
+thể giữ connection lâu như vậy, nên grace period của supervisor phải lớn hơn
+drain tệ nhất, không chỉ request trung bình.
+
+## Supervisor chờ
+
+```yaml
+terminationGracePeriodSeconds: 30
+```
+
+Supervisor gửi `SIGTERM`, chờ, rồi gửi `SIGKILL`. `SIGKILL` bỏ qua drain, nên
+grace period phải phủ idle timeout hoặc connection phải đóng sớm hơn. Không có
+deadline in-flight request ngoài idle timeout: tự bound handler dài, hoặc chỉ
+nâng idle timeout khi cũng nâng grace period. systemd `TimeoutStopSec` theo cùng
+quy tắc.
+
+## Giả định capacity
+
+| Tài nguyên      | Giới hạn                          | Hệ quả                       |
+| --------------- | --------------------------------- | ---------------------------- |
+| Connection slot | `max_clients` lúc startup         | Connection mới dừng ở bound  |
+| Idle keep-alive | `idle_timeout_ms`, mặc định 120 s | Drain có thể kéo dài như vậy |
+| Pending write   | `write_queue_size`                | Peer chậm làm chậm drain     |
+| Signal watcher  | Một mỗi process                   | Cài lần hai trả lỗi          |
+
+## Hành vi khi lỗi
+
+| Điều kiện                      | Kết quả                               |
+| ------------------------------ | ------------------------------------- |
+| `catch_shutdown_signals` lần 2 | `error.SignalWatcherAlreadyInstalled` |
+| Gọi sau khi shutdown bắt đầu   | `error.ApplicationUnavailable`        |
+| `deinit` từ event loop         | Panic: assert trạng thái drain        |
+| Peer ngừng đọc                 | Write queue backpressure drain        |
+| Grace period ngắn hơn drain    | `SIGKILL`, connection reset           |
+
+## Biến thể
+
+### Shutdown từ admin route
+
+Controller có thể yêu cầu cùng drain mà không cần signal:
+
+```zig
+fn stop(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const app: *uz.App(128) = @ptrCast(@alignCast(context));
+    res.end("202 Accepted", "shutting down") catch {};
+    app.request_shutdown();
+}
+```
+
+Đăng ký bằng `app.route_context(.post, "/admin/shutdown", &app, stop)`.
+`request_shutdown` lưu request và đánh thức loop sở hữu, nên an toàn từ thread
+khác. Hoàn tất response trước khi yêu cầu shutdown.
+
+### Release cluster bằng `deinit_checked`
+
+Cluster cài một watcher cho mọi worker:
+
+```zig
+try group.catch_shutdown_signals();
+try group.listen("0.0.0.0", 3000);
+group.run() catch |err| std.log.err("cluster failed: {}", .{err});
+try group.deinit_checked();
+```
+
+`deinit_checked` là release path an toàn cho supervisor: nó trả
+`error.ClusterRunning` khi `run` đang chạy thay vì panic. Giữ một owner cho
+`Cluster`, không move nó sau khi `run` bắt đầu, và xem `state()`,
+`first_failure()`, `failure_count()` trước khi release.
+
+## Liên quan
+
+- [Signal handling](/docs/operations/graceful-shutdown) giải thích watcher.
+- [Shutdown và draining](/docs/deployment/shutdown) đặt grace period.
+- [Cluster nội bộ](/docs/architecture/cluster-internals) giải thích teardown worker.

@@ -1,0 +1,136 @@
+---
+title: Test
+description: Chọn gate unit, package consumer, compliance, fuzz hoặc sanitizer để chứng minh một thay đổi trong framework repository.
+sidebar:
+  order: 4
+search:
+  tags: [operations, testing, compliance]
+---
+
+µWebZockets kiểm tra một thay đổi ở nhiều lớp. Unit suite trả lời module có hành
+xử đúng không; package consumer trả lời import đã document còn compile được
+không; các protocol gate trả lời server có khớp peer HTTP/1.1, RFC 6455 và HTTP/3
+không. Chạy lớp hẹp nhất chứng minh được thay đổi của bạn, rồi chạy gate rộng hơn
+trước release.
+
+Test application là bài toán khác. Nếu bạn đang test route, handler và error
+document của mình, hãy đọc [Test một HTTP server](/docs/http/testing).
+
+## Các lớp test
+
+| Lớp                      | Command                                                                             | Chứng minh                                                               | Gate                        |
+| ------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------- |
+| Unit suite               | `zig build test --summary all`                                                      | Hành vi module, parser, capacity, lifecycle và error path                | Mọi thay đổi                |
+| Test module theo khu vực | `zig build test --summary all`                                                      | Coverage từ `src/tests/*_tests.zig` được import bởi `src/tests/main.zig` | Mọi thay đổi                |
+| C ABI smoke              | `zig build test --summary all`                                                      | Chương trình C11 link archive, gọi public API và thoát sạch              | Mọi thay đổi                |
+| C++ header check         | `zig build test --summary all`                                                      | `include/uWebZockets.h` compile như C++17 với warning là error           | Thay đổi header             |
+| Package consumer         | `cd tests/package_consumer && zig build check -Doptimize=ReleaseSafe --summary all` | Quickstart trong README compile được với module surface của release      | Thay đổi module surface     |
+| h1spec                   | `zig build h1spec`                                                                  | HTTP/1.1 parser và server conform với bộ h1spec                          | Thay đổi parser, release    |
+| Autobahn                 | `zig build autobahn`                                                                | Hành vi server RFC 6455, gồm cả compression group                        | Thay đổi WebSocket, release |
+| HTTP/3 interop           | `bash scripts/http3_compliance/run.sh`                                              | Hành vi HTTP/3 liên implementation với curl/ngtcp2 và aioquic            | Thay đổi QUIC, release      |
+| Fuzz smoke               | `zig build fuzz --fuzz=100K -Doptimize=ReleaseSafe`                                 | Parser có giới hạn sống sót với input sinh ra, không crash hoặc treo     | Thay đổi parser             |
+| OSS-Fuzz object          | `zig build oss-fuzz-objects -Doptimize=ReleaseSafe`                                 | Cả năm target libFuzzer link được với sanitizer coverage                 | Thay đổi fuzz harness       |
+| Release metadata         | `sh scripts/check_release_version.sh`                                               | Bản copy version, assertion trong header và header tài liệu khớp nhau    | Release                     |
+
+Chạy bảng này từ checkout của framework. Package consumer là dòng duy nhất đổi
+directory, và nó dùng repository xung quanh làm path dependency.
+
+## Unit suite
+
+```sh
+zig build test --summary all
+```
+
+`src/tests/main.zig` là entry point duy nhất của test. Nó import các module theo
+khu vực dưới `src/tests/`, ví dụ `http_tests.zig`, `ws_tests.zig`,
+`tls_tests.zig` và `quic_tests.zig`. Production module không bao giờ import suite,
+nên module được ship không mang dependency chỉ dùng cho test.
+
+Cùng step đó cũng build và chạy chương trình C ABI smoke, compile C++ header check
+và chạy archive check. Output của `--summary all` chỉ ra step đã fail; hãy đọc
+tên test trước khi cho rằng parser hay network stack có lỗi.
+
+Dùng `test-compile` khi bạn chỉ cần graph compile được:
+
+```sh
+zig build test-compile -Doptimize=ReleaseSafe --summary all
+```
+
+## Package consumer
+
+Fixture consumer compile quickstart trong README với module surface của release.
+Nó bắt được `build.zig` import hỏng, module export bị thiếu hoặc một call đã
+document không còn compile.
+
+```sh
+cd tests/package_consumer
+zig build check -Doptimize=ReleaseSafe --summary all
+```
+
+CI cũng chạy `scripts/check_package_paths.sh` với một path consumer sạch. Script
+đó bảo vệ package manifest, không phải hành vi application.
+
+## Protocol compliance
+
+Các target compliance khởi động một server. Một client suite điều khiển server
+đó, nên chỉ command thôi chưa phải toàn bộ gate.
+
+| Suite    | Command cho server   | Client                                                                    |
+| -------- | -------------------- | ------------------------------------------------------------------------- |
+| h1spec   | `zig build h1spec`   | `vendor/h1spec` chạy bằng Deno trên `127.0.0.1:8000`                      |
+| Autobahn | `zig build autobahn` | `tests/autobahn/server_test.js` bằng Deno và Docker trên `127.0.0.1:9001` |
+
+Clone với `--recurse-submodules` trước khi chạy h1spec. Với release 2.1.6,
+Autobahn accept toàn bộ 517 case: 514 `OK` và 3 `INFORMATIONAL`, gồm compression
+group 12 và 13. Hãy coi đó là protocol evidence cho revision đã tag, không phải
+phát biểu về route hay proxy của application.
+
+Gate HTTP/3 so sánh server với các client implementation độc lập. Nó chạy trong
+shell Nix riêng:
+
+```sh
+nix develop "path:." -c nix develop "path:./scripts/http3_compliance" -c \
+  bash scripts/http3_compliance/run.sh
+```
+
+Đây là cross-implementation check. Một feature mà listener từ chối theo thiết kế
+sẽ trả protocol error, đó là kết quả mong đợi chứ không phải gate failure.
+
+## Fuzz và sanitizer gate
+
+Fuzzing có trang riêng. Bản ngắn: `zig build fuzz` chạy Smith harness,
+`oss-fuzz-objects` build các target libFuzzer ABI, còn `oss-fuzz-smoke` chạy seed
+deterministic mà không cần libFuzzer. Xem [Fuzzing](/docs/operations/fuzzing) cho
+danh sách target và sancov shim.
+
+Sanitizer run thay thế test step thường:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+ASan, UBSan và LSan dùng chung mode này. MSan là step `msan` riêng và chỉ bao phủ
+ranh giới dependency C/C++. Đọc [Sanitizer](/docs/operations/sanitizers) trước khi
+trộn flag.
+
+## Chi phí và phạm vi
+
+| Gate               | Chi phí thường gặp                                   |
+| ------------------ | ---------------------------------------------------- |
+| Unit suite         | Check mặc định cho mọi chỉnh sửa                     |
+| Package consumer   | Thêm một lần compile; rẻ khi dependency cache đã ấm  |
+| h1spec và Autobahn | Build cộng client bên ngoài và, với Autobahn, Docker |
+| HTTP/3 interop     | Thêm một shell Nix và các client độc lập             |
+| Lần fuzz 100K      | Vài phút; có giới hạn để pull request chạy được      |
+| Sanitizer run      | Vendor cache riêng và test binary chậm hơn           |
+
+Không thay unit suite bằng compliance gate. Compliance chứng minh protocol
+surface; nó không chứng minh error path của một module hay một capacity boundary.
+
+## Liên quan
+
+- [Test một HTTP server](/docs/http/testing) đi qua test ở mức application.
+- [HTTP/2 testing](/docs/http2/testing) và [HTTP/3 testing](/docs/http3/testing)
+  đi qua check application theo từng protocol.
+- [Build từ source](/docs/operations/build) giải thích build graph trong `builds/`
+  định nghĩa các step này.

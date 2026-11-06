@@ -1,0 +1,120 @@
+---
+title: BSD targets
+description: Read the build-only status of FreeBSD, NetBSD, OpenBSD, and DragonFlyBSD, the shared kqueue backend, and the checks a local deployment must run itself.
+sidebar:
+  order: 15
+search:
+  tags: [reference, deployment, bsd]
+---
+
+FreeBSD, NetBSD, OpenBSD, and DragonFlyBSD share the framework's build graph. They
+do not have a hosted runtime job: no CI runner executes the suite on a BSD, so the
+repository cannot claim runtime support for them. A BSD deployment is possible,
+but its evidence is yours to produce.
+
+## Status
+
+| Target       | Example triple     | Build graph | Hosted runtime CI | Support claim |
+| ------------ | ------------------ | ----------- | ----------------- | ------------- |
+| FreeBSD      | `x86_64-freebsd`   | Shared      | None              | Build only    |
+| NetBSD       | `x86_64-netbsd`    | Shared      | None              | Build only    |
+| OpenBSD      | `x86_64-openbsd`   | Shared      | None              | Build only    |
+| DragonFlyBSD | `x86_64-dragonfly` | Shared      | None              | Build only    |
+
+"Build only" means the code is expected to compile for the target and is not
+executed in the project's CI. It does not mean a release was tested on that
+kernel, and it does not promise a supported configuration.
+
+## Build the target
+
+```sh
+zig build -Dtarget=x86_64-freebsd -Doptimize=ReleaseSafe
+zig build lib -Dtarget=x86_64-freebsd -Doptimize=ReleaseFast --summary all
+```
+
+The first command cross-compiles an application that depends on µWebZockets. The
+second installs the C ABI archives and header for the target. Zig fetches and
+compiles BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib for the
+selected target, so no BSD sysroot or system zlib is required.
+
+Run the command for your revision and keep the output with the deployment record.
+The repository does not run these targets in CI, so a green local build is the
+only build evidence that exists for your artifact.
+
+## kqueue notes
+
+The event loop uses libxev, which selects kqueue on the BSDs and macOS. The same
+dispatch code therefore runs on hosts with very different kernel versions.
+
+| Item                      | Status                                                  |
+| ------------------------- | ------------------------------------------------------- |
+| kqueue backend            | Shared with macOS through the pinned libxev fork        |
+| Absolute-timer replay fix | In 2.1.6; a stopping scheduler no longer re-arms        |
+| kqueue dispatch fixes     | XEV-003 to XEV-005, pinned at `c49f6dfb`                |
+| macOS kqueue evidence     | 65/65 tests in Debug and ReleaseSafe on the pinned tree |
+| BSD runtime evidence      | None in CI; measure it on your host                     |
+
+The macOS result is the closest published kqueue evidence, and it still comes from
+a cross-compiled test graph rather than a hosted runtime job. Do not transfer that
+result to a BSD kernel version. Pin 2.1.6 or later, because earlier releases
+re-armed a completed absolute timer and could spin a kqueue loop.
+
+Two platform behaviors follow from the same code path:
+
+- Workers are unpinned. The affinity layer reports `error.UnsupportedPlatform` on
+  platforms without a hard-affinity API, and startup continues unpinned.
+- The cluster requests `SO_REUSEPORT` on every non-Windows target. It is not the
+  Windows `SO_REUSEADDR` fallback, and kernel distribution across listeners is the
+  platform's choice.
+
+## What to verify locally
+
+Run these on the BSD host, not on a Linux cross-build:
+
+1. Build the application natively with Zig 0.16.0 and start it.
+2. Request the health route over loopback and confirm a `200`.
+3. If TLS is enabled, confirm ALPN selects `h2` and the certificate chain is
+   served correctly.
+4. Start the cluster with the production worker count and confirm every worker
+   accepts a connection.
+5. Send SIGTERM and confirm the process exits with status 0 inside the grace
+   period.
+6. If HTTP/3 is enabled, confirm the UDP listener answers
+   `curl --http3-only -k` and that the firewall allows UDP.
+7. If the C ABI is used, link the installed archives on the target, not only on
+   the build host.
+
+```sh
+curl -fsS http://127.0.0.1:3000/healthz
+curl --http2 -k https://127.0.0.1:3443/
+curl --http3-only -k https://127.0.0.1:8443/
+```
+
+Record the kernel version, the Zig version, and the pinned framework commit with
+the results. A BSD report without those three values cannot be compared with
+another run.
+
+## Known differences
+
+| Area              | Difference from Linux                                      |
+| ----------------- | ---------------------------------------------------------- |
+| Worker affinity   | Not available; workers start unpinned                      |
+| Cluster port      | `SO_REUSEPORT`, no Windows fallback                        |
+| UDP transmit      | No `UDP_SEGMENT` GSO; the QUIC path sends per packet       |
+| Sanitizers        | Not available; ASan, UBSan, and MSan are native Linux only |
+| Hosted runtime CI | None; the build graph is compiled but not executed in CI   |
+| MSan contract     | C/C++ dependency boundary only, and only on native Linux   |
+
+## What you may not claim
+
+| Claim                              | Status                                             |
+| ---------------------------------- | -------------------------------------------------- |
+| "FreeBSD is supported"             | No; the build graph compiles, nothing runs in CI   |
+| "NetBSD passes the test suite"     | No such job exists                                 |
+| "OpenBSD kqueue is verified"       | Only macOS has published kqueue evidence           |
+| "DragonFlyBSD is production ready" | Your own measurements would have to establish that |
+| "Sanitizer clean on BSD"           | Sanitizers are native Linux only                   |
+
+A deployment may state that it built and ran a pinned commit on a named kernel
+version, with the commands and results attached. That is a report about one
+artifact, not a platform support claim.

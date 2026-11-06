@@ -1,0 +1,180 @@
+---
+title: Receive webhooks
+description: Verify an HMAC signature before parsing, bound the body, reject replayed timestamps, deduplicate by key, and acknowledge with a fast 2xx.
+sidebar:
+  order: 15
+search:
+  tags: [guide, webhooks, security, hmac]
+---
+
+Accept the delivery, verify it, and answer before the sender times out.
+Signature first, parsing second, and a bounded body limit above both.
+
+## Problem
+
+A provider posts JSON and signs the raw body with a shared secret. Reject forged
+and replayed deliveries, survive retries, and answer before the retry timer.
+
+## Assumptions
+
+- The secret is deployment configuration; it is a constant here to compile.
+- `max_body_size` bounds the body; this example raises it to 64 KiB.
+- The sender retries on a non-2xx response and on a timeout.
+- The idempotency table is per worker, so shard deliveries by key in a cluster.
+
+## Write the program
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const secret = "whsec_replace_with_a_32_byte_secret";
+
+const Idempotency = struct {
+    io: std.Io,
+    hashes: [32]u64 = [_]u64{0} ** 32,
+    next: usize = 0,
+    fn seen(self: *Idempotency, key: []const u8) bool {
+        return std.mem.indexOfScalar(u64, &self.hashes, std.hash.Wyhash.hash(0, key)) != null;
+    }
+    fn remember(self: *Idempotency, key: []const u8) void {
+        self.hashes[self.next] = std.hash.Wyhash.hash(0, key);
+        self.next = (self.next + 1) % self.hashes.len;
+    }
+};
+
+fn verify(timestamp: []const u8, body: []const u8, signature: []const u8) bool {
+    var provided: [32]u8 = undefined;
+    _ = std.fmt.hexToBytes(&provided, signature) catch return false;
+    var mac = std.crypto.auth.hmac.sha2.HmacSha256.init(secret);
+    mac.update(timestamp);
+    mac.update(".");
+    mac.update(body);
+    var expected: [32]u8 = undefined;
+    mac.final(&expected);
+    return std.crypto.timing_safe.eql([32]u8, expected, provided);
+}
+
+fn reject(res: *uz.Response, status: []const u8, body: []const u8) void {
+    res.end(status, body) catch {};
+}
+
+fn receive(context: *anyopaque, req: *uz.Request, res: *uz.Response) void {
+    const store: *Idempotency = @ptrCast(@alignCast(context));
+    const timestamp = req.get_header("x-webhook-timestamp") orelse
+        return reject(res, "400 Bad Request", "missing timestamp");
+    const signature = req.get_header("x-webhook-signature") orelse
+        return reject(res, "400 Bad Request", "missing signature");
+    const key = req.get_header("idempotency-key") orelse
+        return reject(res, "400 Bad Request", "missing idempotency key");
+    const sent_ms = std.fmt.parseInt(i64, timestamp, 10) catch
+        return reject(res, "400 Bad Request", "invalid timestamp");
+    const now_ms: i64 = @intCast(@divTrunc(std.Io.Clock.now(.real, store.io).nanoseconds, std.time.ns_per_ms));
+    if (@abs(now_ms - sent_ms) > 300 * std.time.ms_per_s) return reject(res, "400 Bad Request", "stale");
+    if (!verify(timestamp, req.bytes(), signature)) return reject(res, "401 Unauthorized", "bad signature");
+    if (store.seen(key)) return reject(res, "200 OK", "duplicate");
+    store.remember(key);
+    res.end("202 Accepted", "") catch |err| std.log.err("ack failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var store = Idempotency{ .io = init.io };
+    var app = try uz.Server.builder(init.io)
+        .with_max_body_size(64 * 1024)
+        .build(std.heap.page_allocator);
+    defer app.deinit();
+    _ = try app.route_context(.post, "/webhooks/events", &store, receive);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`req.bytes()` returns the raw body. Do not call `req.json` before the signature
+check, and use `timing_safe.eql` for the comparison.
+
+## Verify it
+
+```sh
+zig build run
+```
+
+In a second terminal, sign the body and post it:
+
+```sh
+ts=$(($(date +%s) * 1000)); body='{"event":"invoice.paid"}'
+sig=$(printf '%s.%s' "$ts" "$body" \
+  | openssl dgst -sha256 -hmac 'whsec_replace_with_a_32_byte_secret' -hex \
+  | sed 's/^.*= //')
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "X-Webhook-Timestamp: $ts" -H "X-Webhook-Signature: $sig" \
+  -H 'Idempotency-Key: evt_123' --data-binary "$body" \
+  http://127.0.0.1:3000/webhooks/events
+```
+
+The first call prints `202`. Repeat it: the second delivery returns `200` with
+`duplicate` and does not repeat the side effect. Change one body byte for `401`.
+Reuse the timestamp after 301 seconds for `400`.
+
+## Capacity assumptions
+
+| Resource       | Bound       | Consequence                         |
+| -------------- | ----------- | ----------------------------------- |
+| Request body   | 64 KiB      | Larger bodies get `413`             |
+| Signatures     | 32 hashes   | A retry older than 32 events misses |
+| Timestamp skew | 300 seconds | Older deliveries get `400`          |
+
+The ring forgets old keys, and a 64-bit hash can collide. Use the full key in a
+shared store when that matters.
+
+## Failure behavior
+
+| Condition                | Result                  |
+| ------------------------ | ----------------------- |
+| Missing timestamp or key | `400`, no parsing       |
+| Signature mismatch       | `401`, no parsing       |
+| Duplicate key            | `200`, no second effect |
+
+A fast 2xx is part of correctness. If the side effect outlives the provider
+timeout, enqueue the verified payload and acknowledge now. An async token must
+complete on the owning event loop; there is no cross-thread queue.
+
+## Variations
+
+### Stripe-style combined header
+
+Stripe sends one header with a timestamp and one or more signatures:
+
+```zig
+fn stripe_signature(header: []const u8, body: []const u8) bool {
+    var stamp: []const u8 = "";
+    var parts = std.mem.tokenizeScalar(u8, header, ',');
+    while (parts.next()) |part| {
+        if (std.mem.startsWith(u8, part, "t=")) stamp = part[2..];
+        if (std.mem.startsWith(u8, part, "v1=") and verify(stamp, body, part[3..])) return true;
+    }
+    return false;
+}
+```
+
+Accept if any `v1=` value matches: the provider sends more than one during
+secret rotation.
+
+### Body-only signature has no replay window
+
+The HMAC proves authenticity, but a captured delivery stays valid forever:
+
+```zig
+if (!verify("", req.bytes(), signature)) {
+    res.end("401 Unauthorized", "bad signature") catch {};
+    return;
+}
+```
+
+Pair it with the idempotency key and a provider-side event id.
+
+## Related
+
+- [Handlers](/docs/http/handlers) covers `route_context` and callback lifetimes.
+- [Handle uploads](/docs/guides/uploads) explains the buffered body limit.
+- [Threat model](/docs/security/threat-model) places signature checks at the boundary.

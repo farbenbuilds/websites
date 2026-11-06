@@ -1,0 +1,179 @@
+---
+title: Publish OpenAPI
+description: Phục vụ tài liệu OpenAPI 3.1 sinh từ route đã đăng ký, đọc đúng shape và gate output trong CI trước khi publish.
+sidebar:
+  order: 14
+search:
+  tags: [guide, openapi, how-to]
+---
+
+`app.openapi(path)` biến route table thành một tài liệu OpenAPI 3.1. Tài liệu được
+sinh từ metadata lúc đăng ký, nên không tốn allocation trên mỗi request và không
+thể lệch khỏi các route mà server thực sự đã đăng ký.
+
+## Bài toán
+
+Client và code generator cần mô tả API dạng máy đọc được mà bạn không phải bảo trì
+thủ công.
+
+## Giả định
+
+- Route được đăng ký trước `listen`, điều vốn đã bắt buộc.
+- Tài liệu chỉ trả lời câu hỏi routing, không có schema.
+- Route table còn xa giới hạn buffer của tài liệu được sinh.
+
+## Publish tài liệu
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn index(_: *uz.Request, res: *uz.Response) void {
+    res.text("index") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_user(_: *uz.Request, res: *uz.Response) void {
+    res.text("user") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn show_report(_: *uz.Request, res: *uz.Response) void {
+    res.text("report") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/", index);
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.get("/reports/:year/:month", show_report);
+    _ = try app.openapi("/openapi.json");
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`app.openapi` cũng là một lần đăng ký route: nó phải chạy trước `listen`, tiêu một
+route record, và path nó phục vụ xuất hiện trong chính tài liệu của nó.
+
+## Shape được sinh
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": { "title": "uWebZockets API", "version": "2.1.6" },
+  "paths": {
+    "/users/{id}": { "get": { "responses": { "200": { "description": "Success" } } } },
+    "/openapi.json": { "get": { "responses": { "200": { "description": "Success" } } } }
+  }
+}
+```
+
+| Element        | Giá trị                                                     |
+| -------------- | ----------------------------------------------------------- |
+| `openapi`      | Luôn là `3.1.0`                                             |
+| `info.title`   | `uWebZockets API` trừ khi bạn tự dùng `uz.openapi.generate` |
+| `info.version` | Version release của framework, không phải của application   |
+| `paths`        | Một entry mỗi path khác nhau, theo thứ tự đăng ký           |
+| Operation key  | Tên method viết thường, trừ các extension `x-`              |
+| Responses      | Đúng một `200` với description `Success`                    |
+| `x-websocket`  | `true` trên route WebSocket, được ghi là `GET`              |
+
+Các key `x-any`, `x-query` và `x-connect` không phải operation key của OpenAPI, nên
+validator nghiêm ngặt có thể từ chối tài liệu chứa chúng.
+
+## Path parameter
+
+| Path đã đăng ký         | Path được sinh            |
+| ----------------------- | ------------------------- |
+| `/users/:id`            | `/users/{id}`             |
+| `/assets/*path`         | `/assets/{path}`          |
+| `/reports/:year/:month` | `/reports/{year}/{month}` |
+
+Chỉ `:` hoặc `*` ở đầu segment mới bắt đầu một parameter; `:` bên trong segment vẫn
+là literal. Router validate tên trước, nên capture trùng fail lúc đăng ký trước khi
+có thể vào tài liệu.
+
+## Giả định capacity
+
+| Tài nguyên         | Mặc định                            | Khi vượt                            |
+| ------------------ | ----------------------------------- | ----------------------------------- |
+| Route record       | 320: 256 node cộng 64 pattern route | `error.RouteCapacityReached`        |
+| Path được giữ lại  | 64 KiB `max_route_registry_size`    | `error.RouteStorageCapacityReached` |
+| Tài liệu được sinh | Buffer 64 KiB trong endpoint có sẵn | `500 Internal Server Error`         |
+
+Buffer tài liệu còn giữ một route snapshot tạm, nên ngân sách JSON thấp hơn 64 KiB.
+Giữ path ngắn và số route thấp hơn xa giới hạn record.
+
+## Hành vi khi lỗi
+
+| Điều kiện                 | Kết quả                                         |
+| ------------------------- | ----------------------------------------------- |
+| Số route chạm giới hạn    | `error.RouteCapacityReached`                    |
+| Storage path cạn          | `error.RouteStorageCapacityReached`             |
+| Tài liệu không vừa buffer | `500`, body `OpenAPI document exceeds capacity` |
+
+## Phần không được sinh
+
+Tài liệu chỉ mô tả routing. Nó không có request hay response schema, không có
+`parameters`, `requestBody`, `components`, `tags`, `servers` hay `security`, và
+không có summary hay description cho operation. Không có router API để gắn metadata
+đó, và `HEAD` fallback ngầm định cùng câu trả lời `OPTIONS` tự động không phải
+operation vì cả hai đều không phải route đã đăng ký.
+
+Nếu cần tài liệu đầy đủ hơn, `uz.openapi.generate(buffer, routes, options)` là
+public. Bạn tự build route list và metadata, nên tài liệu không còn được sinh từ
+router table.
+
+## Kiểm chứng
+
+```sh
+curl -s http://127.0.0.1:3000/openapi.json | jq -e '.openapi == "3.1.0"'
+curl -s http://127.0.0.1:3000/openapi.json | jq -e '.paths["/users/{id}"].get'
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/openapi.json
+```
+
+`jq -e` thoát khác 0 khi biểu thức sai hoặc null, nên cả hai dùng được làm check;
+command cuối in `200`.
+
+## Biến thể: public docs route
+
+Publish tài liệu ở path ổn định có version và link nó từ API docs. Giữ nó không cần
+authentication để generator đọc được, và giữ route table nhỏ để tài liệu nằm trong
+buffer.
+
+```zig
+_ = try app.get("/v1/items", list_items);
+_ = try app.get("/v1/items/:id", show_item);
+_ = try app.openapi("/v1/openapi.json");
+```
+
+Path có version cho phép publish tài liệu mới mà không phá client hiện có; mọi path
+trong đó vẫn đến từ cùng router.
+
+## Biến thể: check schema trong CI
+
+Start server, assert shape và fail job khi một route biến mất.
+
+```sh
+set -eu
+zig build run &
+server_pid=$!
+trap 'kill "$server_pid"' EXIT
+
+curl -sS --retry 10 --retry-connrefused -o openapi.json \
+  http://127.0.0.1:3000/openapi.json
+
+jq -e '.openapi == "3.1.0"' openapi.json > /dev/null
+jq -e '.paths["/users/{id}"].get.responses["200"]' openapi.json > /dev/null
+```
+
+Assertion thứ hai chứng minh route vẫn resolve; thêm một dòng `jq -e` cho mỗi route
+bạn không thể để mất.
+
+## Tiếp theo
+
+- [Tài liệu OpenAPI](/docs/http/openapi) là reference cho shape và giới hạn.
+- [Routing](/docs/http/routing) trình bày route limit và chuyển đổi `{name}`.

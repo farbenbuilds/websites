@@ -1,0 +1,115 @@
+---
+title: Các target BSD
+description: Đọc trạng thái build-only của FreeBSD, NetBSD, OpenBSD và DragonFlyBSD, kqueue backend dùng chung và những kiểm tra deployment phải tự chạy.
+sidebar:
+  order: 15
+search:
+  tags: [reference, deployment, bsd]
+---
+
+FreeBSD, NetBSD, OpenBSD và DragonFlyBSD dùng chung build graph của framework. Chúng
+không có hosted runtime job: không CI runner nào chạy suite trên BSD, nên repository
+không thể claim runtime support cho các target này. Deployment trên BSD là khả thi,
+nhưng evidence là việc của bạn.
+
+## Trạng thái
+
+| Target       | Triple ví dụ       | Build graph | Hosted runtime CI | Support claim |
+| ------------ | ------------------ | ----------- | ----------------- | ------------- |
+| FreeBSD      | `x86_64-freebsd`   | Dùng chung  | Không             | Chỉ build     |
+| NetBSD       | `x86_64-netbsd`    | Dùng chung  | Không             | Chỉ build     |
+| OpenBSD      | `x86_64-openbsd`   | Dùng chung  | Không             | Chỉ build     |
+| DragonFlyBSD | `x86_64-dragonfly` | Dùng chung  | Không             | Chỉ build     |
+
+"Chỉ build" nghĩa là code được kỳ vọng compile cho target và không được chạy trong
+CI của project. Nó không có nghĩa là một release đã được test trên kernel đó, và
+cũng không hứa một cấu hình được hỗ trợ.
+
+## Build target
+
+```sh
+zig build -Dtarget=x86_64-freebsd -Doptimize=ReleaseSafe
+zig build lib -Dtarget=x86_64-freebsd -Doptimize=ReleaseFast --summary all
+```
+
+Lệnh đầu cross-compile một application phụ thuộc µWebZockets. Lệnh thứ hai install
+C ABI archive và header cho target. Zig tự fetch và compile BoringSSL, lsquic,
+ls-qpack, ls-hpack, libdeflate và zlib cho target đã chọn, nên không cần BSD sysroot
+hay system zlib.
+
+Chạy lệnh với revision của bạn và giữ output trong deployment record. Repository
+không chạy các target này trong CI, nên một lần build local xanh là evidence duy nhất
+cho artifact của bạn.
+
+## Ghi chú kqueue
+
+Event loop dùng libxev, và libxev chọn kqueue trên các BSD cùng macOS. Cùng một
+dispatch code vì vậy chạy trên những kernel rất khác nhau.
+
+| Hạng mục                   | Trạng thái                                           |
+| -------------------------- | ---------------------------------------------------- |
+| kqueue backend             | Dùng chung với macOS qua libxev fork được pin        |
+| Fix absolute-timer replay  | Có trong 2.1.6; scheduler đang dừng không re-arm nữa |
+| Fix kqueue dispatch        | XEV-003 đến XEV-005, pin tại `c49f6dfb`              |
+| Evidence kqueue trên macOS | 65/65 test ở Debug và ReleaseSafe trên tree được pin |
+| Evidence runtime trên BSD  | Không có trong CI; phải đo trên host của bạn         |
+
+Kết quả macOS là evidence kqueue đã publish gần nhất, và nó vẫn đến từ test graph
+cross-compile chứ không từ hosted runtime job. Đừng chuyển kết quả đó sang một
+kernel BSD. Pin 2.1.6 hoặc mới hơn, vì release trước đó re-arm absolute timer đã
+xong và có thể làm kqueue loop spin.
+
+Hai hành vi platform đến từ cùng code path:
+
+- Worker không được pin. Affinity layer trả `error.UnsupportedPlatform` trên
+  platform không có hard-affinity API, và startup tiếp tục không pin.
+- Cluster yêu cầu `SO_REUSEPORT` trên mọi target không phải Windows. Đây không
+  phải fallback `SO_REUSEADDR` của Windows, và kernel tự quyết định phân phối giữa
+  các listener.
+
+## Cần kiểm tra tại chỗ
+
+Chạy trên host BSD, không phải trên cross-build Linux:
+
+1. Build application native với Zig 0.16.0 và start nó.
+2. Gọi health route qua loopback và xác nhận `200`.
+3. Nếu bật TLS, xác nhận ALPN chọn `h2` và certificate chain được phục vụ đúng.
+4. Start cluster với worker count production và xác nhận mọi worker nhận connection.
+5. Gửi SIGTERM và xác nhận process thoát với status 0 trong grace period.
+6. Nếu bật HTTP/3, xác nhận UDP listener trả lời `curl --http3-only -k` và firewall
+   cho phép UDP.
+7. Nếu dùng C ABI, link archive đã install trên target, không chỉ trên build host.
+
+```sh
+curl -fsS http://127.0.0.1:3000/healthz
+curl --http2 -k https://127.0.0.1:3443/
+curl --http3-only -k https://127.0.0.1:8443/
+```
+
+Ghi lại kernel version, Zig version và framework commit đã pin cùng với kết quả. Một
+báo cáo BSD thiếu ba giá trị đó không so sánh được với lần chạy khác.
+
+## Khác biệt đã biết
+
+| Khu vực           | Khác Linux                                                |
+| ----------------- | --------------------------------------------------------- |
+| Worker affinity   | Không có; worker start không pin                          |
+| Cluster port      | `SO_REUSEPORT`, không có fallback Windows                 |
+| UDP transmit      | Không có `UDP_SEGMENT` GSO; QUIC path gửi từng packet     |
+| Sanitizer         | Không có; ASan, UBSan và MSan chỉ native Linux            |
+| Hosted runtime CI | Không; build graph được compile nhưng không chạy trong CI |
+| MSan contract     | Chỉ C/C++ dependency boundary, và chỉ trên native Linux   |
+
+## Những gì không được claim
+
+| Claim                              | Trạng thái                                            |
+| ---------------------------------- | ----------------------------------------------------- |
+| "FreeBSD được hỗ trợ"              | Không; build graph compile, không có gì chạy trong CI |
+| "NetBSD pass test suite"           | Không có job như vậy                                  |
+| "OpenBSD kqueue đã được xác minh"  | Chỉ macOS có evidence kqueue được publish             |
+| "DragonFlyBSD sẵn sàng production" | Cần measurement của chính bạn để chứng minh           |
+| "Sanitizer sạch trên BSD"          | Sanitizer chỉ native Linux                            |
+
+Một deployment được phép nói rằng nó đã build và chạy một commit được pin trên một
+kernel version cụ thể, kèm command và kết quả. Đó là báo cáo về một artifact, không
+phải claim support cho cả platform.

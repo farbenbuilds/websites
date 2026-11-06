@@ -1,0 +1,140 @@
+---
+title: Tests
+description: Choose the unit, package-consumer, compliance, fuzz, or sanitizer gate that proves a change in the framework repository.
+sidebar:
+  order: 4
+search:
+  tags: [operations, testing, compliance]
+---
+
+µWebZockets verifies a change at several layers. The unit suite answers whether
+a module behaves; the package consumer answers whether the documented import
+still compiles; the protocol gates answer whether the server matches HTTP/1.1,
+RFC 6455, and HTTP/3 peers. Run the narrowest layer that proves your change,
+then the broader gate before a release.
+
+Application tests are a different problem. If you are testing your own routes,
+handlers, and error documents, read [Testing an HTTP server](/docs/http/testing).
+
+## Test layers
+
+| Layer                 | Command                                                                             | Proves                                                                   | Gate                       |
+| --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------- |
+| Unit suite            | `zig build test --summary all`                                                      | Module behavior, parsers, capacities, lifecycle, and error paths         | Every change               |
+| Per-area test modules | `zig build test --summary all`                                                      | `src/tests/*_tests.zig` coverage imported by `src/tests/main.zig`        | Every change               |
+| C ABI smoke           | `zig build test --summary all`                                                      | The C11 program links the archive, calls the public API, and exits clean | Every change               |
+| C++ header check      | `zig build test --summary all`                                                      | `include/uWebZockets.h` compiles as C++17 with warnings as errors        | Header changes             |
+| Package consumer      | `cd tests/package_consumer && zig build check -Doptimize=ReleaseSafe --summary all` | The README quickstart compiles against the released module surface       | Module surface changes     |
+| h1spec                | `zig build h1spec`                                                                  | HTTP/1.1 parser and server conformance against the h1spec suite          | Parser changes, release    |
+| Autobahn              | `zig build autobahn`                                                                | RFC 6455 server behavior, including compression groups                   | WebSocket changes, release |
+| HTTP/3 interop        | `bash scripts/http3_compliance/run.sh`                                              | Cross-implementation HTTP/3 behavior against curl/ngtcp2 and aioquic     | QUIC changes, release      |
+| Fuzz smoke            | `zig build fuzz --fuzz=100K -Doptimize=ReleaseSafe`                                 | Bounded parsers survive generated inputs without crashing or hanging     | Parser changes             |
+| OSS-Fuzz objects      | `zig build oss-fuzz-objects -Doptimize=ReleaseSafe`                                 | All five libFuzzer targets link with sanitizer coverage                  | Fuzz harness changes       |
+| Release metadata      | `sh scripts/check_release_version.sh`                                               | Version copies, header assertions, and docs headers agree                | Release                    |
+
+Run the table from the framework checkout. The package consumer is the only row
+that changes directory, and it uses the surrounding repository as a path
+dependency.
+
+## Unit suite
+
+```sh
+zig build test --summary all
+```
+
+`src/tests/main.zig` is the only test entry point. It imports the per-area
+modules under `src/tests/`, such as `http_tests.zig`, `ws_tests.zig`,
+`tls_tests.zig`, and `quic_tests.zig`. Production modules never import the
+suite, so a shipped module carries no test-only dependency.
+
+The same step also builds and runs the C ABI smoke program, compiles the C++
+header check, and runs the archive check. The `--summary all` output names the
+step that failed; read the failing test name before assuming the parser or the
+network stack is at fault.
+
+Use `test-compile` when you only need the graph to compile:
+
+```sh
+zig build test-compile -Doptimize=ReleaseSafe --summary all
+```
+
+## Package consumer
+
+The consumer fixture compiles the README quickstart against the release module
+surface. It catches a broken `build.zig` import, a missing exported module, or a
+documented call that no longer compiles.
+
+```sh
+cd tests/package_consumer
+zig build check -Doptimize=ReleaseSafe --summary all
+```
+
+CI also runs `scripts/check_package_paths.sh` against a clean path consumer. That
+script guards the package manifest, not application behavior.
+
+## Protocol compliance
+
+The compliance targets start a server. A client suite drives it, so the command
+alone is not the whole gate.
+
+| Suite    | Server command       | Client                                                                   |
+| -------- | -------------------- | ------------------------------------------------------------------------ |
+| h1spec   | `zig build h1spec`   | `vendor/h1spec` run with Deno on `127.0.0.1:8000`                        |
+| Autobahn | `zig build autobahn` | `tests/autobahn/server_test.js` with Deno and Docker on `127.0.0.1:9001` |
+
+Clone with `--recurse-submodules` before running h1spec. For the release 2.1.6,
+Autobahn accepts all 517 cases: 514 `OK` and 3 `INFORMATIONAL`, including
+compression groups 12 and 13. Treat that as protocol evidence for the tagged
+revision, not as a statement about an application's routes or proxy.
+
+The HTTP/3 gate compares the server with independent client implementations. It
+runs in its own Nix shell:
+
+```sh
+nix develop "path:." -c nix develop "path:./scripts/http3_compliance" -c \
+  bash scripts/http3_compliance/run.sh
+```
+
+The gate is a cross-implementation check. A feature the listener rejects by
+design returns a protocol error, which is the expected result, not a gate
+failure.
+
+## Fuzz and sanitizer gates
+
+Fuzzing has its own page. The short version is that `zig build fuzz` exercises
+the Smith harness, `oss-fuzz-objects` builds the libFuzzer ABI targets, and
+`oss-fuzz-smoke` runs deterministic seeds without libFuzzer. See
+[Fuzzing](/docs/operations/fuzzing) for the target list and the sancov shim.
+
+Sanitizer runs replace the plain test step:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+ASan, UBSan, and LSan share that mode. MSan is a separate `msan` step and only
+covers the C/C++ dependency boundary. See
+[Sanitizers](/docs/operations/sanitizers) before mixing flags.
+
+## Cost and scope
+
+| Gate                | Typical cost                                                |
+| ------------------- | ----------------------------------------------------------- |
+| Unit suite          | The default check for every edit                            |
+| Package consumer    | One extra compile; cheap after the dependency cache is warm |
+| h1spec and Autobahn | Build plus an external client and, for Autobahn, Docker     |
+| HTTP/3 interop      | A second Nix shell and independent clients                  |
+| 100K fuzz run       | Minutes; bounded so a pull request can run it               |
+| Sanitizer runs      | A separate vendor cache and a slower test binary            |
+
+Do not replace the unit suite with a compliance gate. Compliance proves the
+protocol surface; it does not prove a module's error path or a capacity
+boundary.
+
+## Related
+
+- [Testing an HTTP server](/docs/http/testing) covers application-level tests.
+- [HTTP/2 testing](/docs/http2/testing) and [HTTP/3 testing](/docs/http3/testing)
+  cover protocol-specific application checks.
+- [Build from source](/docs/operations/build) explains the `builds/` graph that
+  defines these steps.

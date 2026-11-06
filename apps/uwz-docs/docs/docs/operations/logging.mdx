@@ -1,0 +1,127 @@
+---
+title: Development log
+description: Turn the terminal development log on or off, bind a file sink, watch source paths, and read dropped records and request lines.
+sidebar:
+  order: 12
+search:
+  tags: [how-to, logging, operations]
+---
+
+The development log is on by default. It writes a startup wordmark, a ready
+summary, and one line per connection, request, WebSocket message, metric
+snapshot, and watched-file change. It is allocation-free and per worker, so it
+belongs in development and in a bounded production file, not in a hot path that
+also logs elsewhere. The field-by-field reference is
+[Development log reference](/docs/operations/development-log).
+
+## Turn it on or silence it
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`.with_dev_log(false)` silences the wordmark, request lines, metric snapshots,
+and file-change lines. It is a comptime builder option, so it is fixed at build
+time rather than toggled per request.
+
+The default stderr sink stays quiet when stderr is not a terminal. A redirected
+run therefore keeps its log files and pipes free of development output unless
+you bind a file.
+
+## Terminal detection
+
+| Output state                         | What appears                                        |
+| ------------------------------------ | --------------------------------------------------- |
+| stderr is a terminal                 | Wordmark, ready summary, and event lines            |
+| stderr is redirected                 | Sink stays quiet by default                         |
+| Terminal narrower than the block art | One-line `µWebZockets` mark instead of the wordmark |
+| Development log disabled             | Plain `server listening` line from `std.log`        |
+
+The width probe is best effort: redirected output keeps the full wordmark, and a
+terminal that cannot be measured is treated as wide enough.
+
+## Write to a file
+
+```zig
+const log_file = try std.Io.Dir.cwd().createFile(
+    init.io,
+    "server.log",
+    .{ .truncate = false },
+);
+defer log_file.close(init.io);
+
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+server.set_dev_log_file(log_file);
+```
+
+Call `set_dev_log_file` before `listen` or `run`, so the startup wordmark uses
+the file. An explicitly bound file always records, even when stderr is not a
+terminal and even when the default sink would stay quiet.
+
+## Flush pending bytes
+
+`server.flush_dev_log()` writes any pending bytes for the current worker. Each
+record already writes immediately, so a flush matters when a short write left
+bytes buffered or when you want a clean final file before exit. It does nothing
+when the log is disabled.
+
+## Watch source paths
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_dev_log(true)
+    .with_watch_paths(&.{ "src" })
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+`with_watch_paths` requires an enabled development log. The paths are borrowed
+for the application lifetime. Linux reads an inotify descriptor through the
+event loop, so a saved file produces a line in real time and the idle loop stays
+blocked. Other targets walk the roots on a 500 ms timer and diff modification
+time and size. Both backends skip build and VCS directories and never allocate
+per event.
+
+```console
+watch modified src/router/app.zig
+```
+
+## Per-worker sinks and dropped records
+
+Every worker thread owns one `dev_log.Sink`. Each record is rendered into that
+sink's fixed 4096-byte buffer and written immediately, so the terminal reflects
+events as they happen and the event loop never allocates. A metric snapshot
+renders every counter and flushes once, rather than flushing per counter.
+
+A line that cannot fit, and a failed or short write, is dropped and counted in
+the sink's dropped counter rather than retried. Recording never blocks the loop
+on a slow terminal and never spins waiting for it.
+
+## Request line format
+
+```console
+12:04:31 | [GET] /healthz : 200
+```
+
+The clock is dim, the method is cyan, and the status is colored by class.
+HTTP/1.1 and HTTP/2 dispatch emit the same request records. HTTP/3 emits one
+`http_request` record per completed request through the owning thread's sink, so
+the log is the record of HTTP/3 traffic.
+
+## Verify
+
+Start the app in a terminal and request one route. One request line appears per
+completed exchange, and a saved file under a watched path adds one `watch`
+line. Redirect stderr and confirm that no new lines appear without a bound file.
+
+## Related
+
+- [Development log reference](/docs/operations/development-log) documents every
+  event, field, and sink limit.
+- [Metrics](/docs/operations/metrics) explains the counters a snapshot records.

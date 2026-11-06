@@ -1,0 +1,135 @@
+---
+title: Nix development shell
+description: Vào shell Nixpkgs 26.05 đã pin để có Zig 0.16.0, wrk và sanitizer runtime đồng bộ trên các host Linux được hỗ trợ.
+sidebar:
+  order: 3
+search:
+  tags: [operations, nix, toolchain]
+---
+
+Flake pin compiler, công cụ hỗ trợ và sanitizer runtime mà các CI gate dùng. Vào
+shell khi bạn muốn toolchain giống CI, hoặc khi sanitizer build cần compiler-rt,
+glibc và dynamic linker khớp nhau. Shell không thay đổi build: cùng các command
+Zig chạy cả trong và ngoài shell.
+
+## Vào shell
+
+Từ root của repository:
+
+```sh
+nix develop
+```
+
+Với working tree còn dirty, hoặc trước khi commit một file mới, hãy build flake từ
+working directory thay vì git revision:
+
+```sh
+nix develop path:.
+```
+
+`path:.` copy cây hiện tại, gồm cả file chưa track, vào Nix store. CI dùng dạng
+này để pull request được test từ đúng nội dung thực tế. Chạy một command mà không
+cần shell tương tác bằng `-c`:
+
+```sh
+nix develop "path:." -c zig build test --summary all
+```
+
+## Những gì được pin
+
+| Input          | Pin                                    |
+| -------------- | -------------------------------------- |
+| Nixpkgs        | `nixos-26.05`                          |
+| Zig            | `0.16.0` qua `zig-overlay`             |
+| Flake plumbing | `flake-parts`                          |
+| Dependency set | `zon2nix` khi host platform có package |
+
+Flake expose bốn system: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin` và
+`aarch64-darwin`. Output của `nix build` là một native build cục bộ. Project
+công bố source tag, không công bố binary package theo platform, nên consumer vẫn
+fetch tag bằng `zig fetch`.
+
+## Shell cung cấp gì
+
+| Thành phần         | Mục đích                                                  |
+| ------------------ | --------------------------------------------------------- |
+| Zig 0.16.0         | Compiler duy nhất cần thiết; nó build dependency C và C++ |
+| `zls`              | Language server cho editor                                |
+| `ripgrep`          | Tìm kiếm trong checkout                                   |
+| `wrk`              | Load generator cho benchmark và load test                 |
+| `zon2nix`          | Sinh package set ở platform có publish package            |
+| LLVM `compiler-rt` | Sanitizer runtime trên host Linux GNU                     |
+
+Shell đặt `UWEBZOCKETS_DEFAULT_TARGET` thành target triple của host. Trên Linux
+nó cũng export `UWEBZOCKETS_RUNTIME_DYNAMIC_LINKER` và
+`UWEBZOCKETS_RUNTIME_LIBRARY_PATH` để lần chạy debug hoặc release dùng glibc của
+shell thay vì loader của host.
+
+Trên host Linux GNU, các biến sanitizer cũng được đặt:
+`UWEBZOCKETS_SANITIZER_LIB_DIR` trỏ tới `compiler-rt`, còn
+`UWEBZOCKETS_SANITIZER_LIBC_DIR` và `UWEBZOCKETS_SANITIZER_DYNAMIC_LINKER` trỏ
+tới libc và loader khớp. Tổ hợp này giúp `-Dsanitize=true` chạy mà không cần
+thêm flag.
+
+## Sanitizer
+
+Lần chạy đầy đủ có instrumentation không cần path argument bên trong shell:
+
+```sh
+zig build test -Dsanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Smoke MemorySanitizer là bước riêng và chỉ chạy trên Linux `x86_64`:
+
+```sh
+zig build msan -Dmemory-sanitize=true -Doptimize=ReleaseSafe --summary all
+```
+
+Hai mode loại trừ nhau. [Sanitizer](/docs/operations/sanitizers) giải thích flag,
+ranh giới C/C++ mà chúng bao phủ và workaround `use_sigaltstack=0` của ASan cho
+threaded test.
+
+## Musl shell
+
+Trên Linux, flake cũng expose một musl development shell:
+
+```sh
+nix develop .#musl
+```
+
+Dùng nó khi bạn muốn default target và runtime path khớp một musl build. Với một
+lần cross build đơn lẻ, target flag là đủ:
+
+```sh
+zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseSafe
+```
+
+## Khi chỉ cần Zig thuần
+
+| Tình huống                                     | Dùng Nix | Dùng Zig 0.16.0 thuần                |
+| ---------------------------------------------- | -------- | ------------------------------------ |
+| Khớp unit gate và release gate của CI          | Có       | Có                                   |
+| Chạy ASan, UBSan hoặc LSan                     | Có       | Cần runtime path                     |
+| Chạy smoke MSan cho ranh giới dependency       | Có       | Chỉ Linux `x86_64`, kèm runtime path |
+| Build target musl, Windows hoặc BSD            | Tùy chọn | Có                                   |
+| Sửa trên macOS mà không cần runtime gate Linux | Tùy chọn | Có                                   |
+
+Ngoài Nix, truyền `-Dsanitizer-lib-dir=/path/to/compiler-rt/lib`. Nếu runtime đó
+cần glibc khác host, truyền `-Dsanitizer-libc-dir` và
+`-Dsanitizer-dynamic-linker` khớp nhau. Sanitizer build chỉ chạy native Linux.
+
+## Kiểm tra
+
+```sh
+nix develop "path:." -c zig build test --summary all
+```
+
+Kỳ vọng unit suite, C ABI smoke, C++ header check và archive check đều pass. Một
+shell không resolve được flake là vấn đề Nix input hoặc network, không phải lỗi
+compiler; giữ lại command lỗi và output khi báo cáo.
+
+## Liên quan
+
+- [Build từ source](/docs/operations/build) đi qua build graph và cache.
+- [Test](/docs/operations/testing) ánh xạ từng gate tới command chạy nó.
+- [Cross-compilation](/docs/operations/cross-compilation) đi qua target không phải host.

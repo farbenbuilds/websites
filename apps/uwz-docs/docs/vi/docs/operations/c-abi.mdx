@@ -1,0 +1,179 @@
+---
+title: C ABI
+description: Build static archive, cài header, link một chương trình C và xử lý các error code có version ở từng bước lifecycle.
+sidebar:
+  order: 8
+search:
+  tags: [reference, c-abi, operations]
+---
+
+C ABI chạy một server µWebZockets từ C hoặc C++ mà không cần viết application
+code bằng Zig. Nó expose một opaque application handle, các byte view được borrow
+và capacity cố định. [Kiến trúc C ABI](/docs/architecture/c-abi) giải thích thiết
+kế; [C ABI types and enums](/docs/type-safety/c-abi-types) liệt kê từng value.
+
+## Cài header và archive
+
+```sh
+zig build lib -Doptimize=ReleaseFast
+```
+
+Bước `lib` cài `zig-out/include/uWebZockets.h` và các archive sau vào
+`zig-out/lib`. So `uwz_version()` với các macro version để header và archive
+lệch build không thể đi cùng nhau.
+
+| Archive                   | Nội dung                                 |
+| ------------------------- | ---------------------------------------- |
+| `libuWebZockets.a`        | C ABI entry point, router và Zig runtime |
+| `liblsquic.a`             | QUIC và HTTP/3 engine                    |
+| `libssl.a`, `libcrypto.a` | BoringSSL TLS record và cryptography     |
+| `libdeflate.a`            | Deflate và gzip codec                    |
+| `libz.a`                  | zlib, gồm bản mà HTTP gzip codec dùng    |
+
+## Opaque handle
+
+| Handle               | Ý nghĩa                                      |
+| -------------------- | -------------------------------------------- |
+| `uwz_app`            | Application, listener, event loop và storage |
+| `uwz_request`        | Request view chỉ sống trong callback         |
+| `uwz_response`       | Response writer cho request hiện tại         |
+| `uwz_websocket`      | Một WebSocket connection đã upgrade          |
+| `uwz_async_response` | Async token copy được, complete đúng một lần |
+
+## Capacity cố định
+
+| Capacity                    |  Value | Áp dụng khi                                   |
+| --------------------------- | -----: | --------------------------------------------- |
+| Connection                  | `1024` | `uwz_app_create` cố định slab; không override |
+| `UWZ_MAX_ROUTES`            |   `64` | Registration trả `UWZ_ERROR_CAPACITY`         |
+| `UWZ_MAX_MIDDLEWARE`        |   `32` | `uwz_app_use` trả `UWZ_ERROR_CAPACITY`        |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |   `16` | Route nhiều capture hơn sẽ fail registration  |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` | `2048` | Path dài hơn sẽ fail registration             |
+
+Route string được copy vào C storage cố định, nên route thứ sáu mươi lăm là lỗi
+lúc startup chứ không phải một lần drop im lặng.
+
+## Nhóm hàm
+
+| Nhóm              | Các hàm tiêu biểu                                                             |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Create, destroy   | `uwz_app_create`, `uwz_app_create_tls`, `uwz_app_shutdown`, `uwz_app_destroy` |
+| Registration      | `uwz_app_route`, `uwz_app_route_async`, `uwz_app_use`, `uwz_app_ws`           |
+| Serving           | `uwz_app_listen`, `uwz_app_listen_udp`, `uwz_app_run`, `uwz_app_publish`      |
+| Request, response | `uwz_request_path`, `uwz_request_header`, `uwz_response_end`                  |
+| Async response    | `uwz_async_response_end`, `uwz_async_response_end_with_headers`               |
+| WebSocket         | `uwz_websocket_send`, `uwz_websocket_subscribe`, `uwz_websocket_terminate`    |
+
+`uwz_app_create` yêu cầu `*out_app` là `NULL`, nên một handle đang sống không bao
+giờ bị ghi đè. `uwz_app_destroy` gán `NULL` cho handle của caller khi thành công,
+nhưng gọi từ callback thì trả `UWZ_ERROR_INVALID_STATE` và giữ handle hợp lệ; hãy
+destroy sau khi `uwz_app_run` trả về. Shutdown gọi từ callback được drain bởi lần
+run đang active.
+
+## Error code
+
+|  Code | Constant                     | Tên trả về         | Khi nào gặp                                             |
+| ----: | ---------------------------- | ------------------ | ------------------------------------------------------- |
+|   `0` | `UWZ_OK`                     | `ok`               | Call hoàn tất                                           |
+|  `-1` | `UWZ_ERROR_INVALID_ARGUMENT` | `invalid argument` | Slice sai, out-handle đã có giá trị, route không hợp lệ |
+|  `-2` | `UWZ_ERROR_OUT_OF_MEMORY`    | `out of memory`    | Cấp phát slab, TLS context hoặc QUIC engine fail        |
+|  `-3` | `UWZ_ERROR_INVALID_STATE`    | `invalid state`    | Sai bước lifecycle, response đã start, token cũ         |
+|  `-4` | `UWZ_ERROR_ALREADY_EXISTS`   | `already exists`   | Route pattern trùng hoặc listener đã bind               |
+|  `-5` | `UWZ_ERROR_CAPACITY`         | `capacity reached` | Hết capacity route, middleware, parameter hoặc peer     |
+|  `-6` | `UWZ_ERROR_WOULD_BLOCK`      | `would block`      | Output queue hoặc write path đầy                        |
+|  `-7` | `UWZ_ERROR_PROTOCOL`         | `protocol error`   | Framing, handshake hoặc output quá lớn                  |
+|  `-8` | `UWZ_ERROR_IO`               | `I/O error`        | Socket, bind hoặc TLS read/write fail                   |
+|  `-9` | `UWZ_ERROR_UNSUPPORTED`      | `unsupported`      | HTTP/3 chưa init, backend không khả dụng                |
+| `-10` | `UWZ_ERROR_INTERNAL`         | `internal error`   | Lỗi không có mapping hẹp hơn                            |
+
+Các giá trị âm là append-only và là một phần của ABI. `uwz_error_name` trả một
+string tĩnh, gồm `unknown error` cho value ngoài enum.
+
+## Quyền sở hữu async token
+
+`uwz_async_response` giữ một state pointer private và một generation. Value được
+truyền vào async callback chỉ sống trong callback. Callback trả
+`UWZ_HANDLER_PENDING` phải copy toàn bộ struct vào storage của caller.
+
+- Bản copy dùng được trên event loop sở hữu nó cho đến khi complete hoặc
+  shutdown, và không bao giờ sau `uwz_app_destroy`.
+- Completion xảy ra đúng một lần; generation check từ chối token cũ và token
+  trùng bằng `UWZ_ERROR_INVALID_STATE`.
+- Work ở thread khác phải marshal về loop sở hữu trước.
+
+Request field, route capture và WebSocket message slice có cùng vòng đời
+callback đó, nên hãy copy nếu callback sau cần dùng.
+
+## Yêu cầu link
+
+```sh
+cc -std=c11 -O2 -o server main.c \
+  zig-out/lib/libuWebZockets.a zig-out/lib/liblsquic.a \
+  zig-out/lib/libssl.a zig-out/lib/libcrypto.a \
+  zig-out/lib/libdeflate.a zig-out/lib/libz.a \
+  -lstdc++ -lc -lm -lpthread
+```
+
+Xếp mỗi archive phụ thuộc trước archive mà nó gọi vào; lỗi undefined symbol
+thường là do đảo thứ tự hoặc thiếu C++ runtime. Gọi tên runtime đó rõ ràng:
+`-lstdc++` với GCC, `-lc++` với Clang trên macOS. Windows cần thêm
+`-lws2_32 -lmswsock -lcrypt32 -ladvapi32`.
+
+## Chương trình C tối thiểu
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <uWebZockets.h>
+
+static uwz_slice slice(const char *text)
+{
+    uwz_slice value;
+    value.data = (const uint8_t *) text;
+    value.length = strlen(text);
+    return value;
+}
+
+static void home(const uwz_request *request, uwz_response *response, void *user_data)
+{
+    (void) request; (void) user_data;
+    uwz_error result = uwz_response_end(response, slice("200 OK"), slice("ok"));
+    if (result != UWZ_OK)
+        fprintf(stderr, "response failed: %s\n", uwz_error_name(result));
+}
+
+int main(void)
+{
+    static const char route[] = "/";
+    static const char address[] = "127.0.0.1";
+    uwz_app *app = NULL;
+    uwz_error result = uwz_app_create(&app);
+    if (result != UWZ_OK) {
+        fprintf(stderr, "create failed: %s\n", uwz_error_name(result));
+        return 1;
+    }
+    result = uwz_app_route(app, UWZ_HTTP_GET, route, sizeof(route) - 1, home, NULL);
+    if (result == UWZ_OK)
+        result = uwz_app_listen(app, address, sizeof(address) - 1, 3000);
+    if (result == UWZ_OK)
+        result = uwz_app_run(app);
+    if (result != UWZ_OK)
+        fprintf(stderr, "server failed: %s\n", uwz_error_name(result));
+    if (uwz_app_destroy(&app) != UWZ_OK) {
+        fprintf(stderr, "destroy failed\n");
+        return 1;
+    }
+    return result == UWZ_OK ? 0 : 1;
+}
+```
+
+`uwz_app_run` block cho đến khi shutdown. Handler phải end response trước khi trả
+về, và mọi route phải tồn tại trước `uwz_app_listen`. Một `GET /` trả `200` với
+body `ok`.
+
+## C ABI không expose gì
+
+C ABI không project `ServerConfig`, capacity compile-time, `uz.schema`,
+`uz.json_rpc`, `uz.client`, HTTP/2, HPACK, HTTP/3 extension, WebTransport, mTLS,
+certificate rotation, `uz.ktls`, `uz.xdp` hay shared memory. Dùng Zig API khi
+deployment cần một trong những surface đó.

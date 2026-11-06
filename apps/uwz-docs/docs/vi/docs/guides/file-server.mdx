@@ -1,0 +1,161 @@
+---
+title: Serve file tĩnh
+description: Mount directory asset bị giới hạn với ETag, byte range, MIME detection và cache policy khớp với audience của file.
+sidebar:
+  order: 5
+search:
+  tags: [guide, static-files, http]
+---
+
+Guide này mount một directory và serve file với validator, byte range và cache
+directive. Mount an toàn trước traversal, từ chối symlink, và không allocation
+trên request path.
+
+## Bài toán
+
+Bạn cần serve static asset mà không viết file handler, đồng thời giữ directory
+được serve bị giới hạn, trả lời conditional request, và chọn cache policy đúng
+cho file public lẫn private.
+
+## Giả định
+
+- Zig 0.16.0 và µWebZockets 2.1.6 cài bằng `zig fetch --save`.
+- `public/` tồn tại tương đối với working directory và chứa `index.html`.
+- Một worker trên `0.0.0.0:3000`, plaintext cho sendfile path.
+
+## Chương trình
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn home(_: *uz.Request, res: *uz.Response) void {
+    res.text("assets live under /assets") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.static("/assets", "public", .{
+        .index = "index.html",
+        .etag = true,
+        .max_age = 3600,
+    });
+
+    _ = try app.get("/", home);
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`root` được mở một lần khi mount được tạo, tương đối với working directory. Mount
+mọi directory trước khi listener đầu tiên start.
+
+## Mount contract
+
+| Item        | Rule                                                                  | Failure                            |
+| ----------- | --------------------------------------------------------------------- | ---------------------------------- |
+| Prefix      | Không rỗng, bắt đầu bằng `/`, không có `?`, `#`, CR, LF, `:` hoặc `*` | `error.InvalidRoutePath`           |
+| Route       | `GET {prefix}/*path`; `HEAD` fallback về `GET`                        | Method khác nhận `405`             |
+| Mount count | 8 mỗi application                                                     | `error.StaticRouteCapacityReached` |
+| Index name  | Validate lúc mount                                                    | `error.InvalidStaticPath`          |
+| Root        | Mở với `follow_symlinks = false`                                      | Startup error                      |
+
+Path capture được percent-decode, sau đó bị từ chối nếu chứa NUL, backslash,
+segment `.` hoặc `..`, hoặc dài hơn 1024 byte. Mọi component và file cuối được mở
+không follow symlink, nên link không thể thoát khỏi root.
+
+## Option và response field
+
+| Field     | Default        | Effect                                            |
+| --------- | -------------- | ------------------------------------------------- |
+| `index`   | `"index.html"` | Thêm khi path kết thúc bằng `/`; `null` tắt index |
+| `etag`    | `true`         | `ETag` mạnh từ size và modification time          |
+| `max_age` | `0`            | Khác 0 phát `Cache-Control: public, max-age=N`    |
+
+Mọi response mang `Accept-Ranges: bytes`. `If-None-Match` thắng
+`If-Modified-Since` và match trả `304 Not Modified` với cùng validator, không có
+body. Một range RFC 9110 được hỗ trợ: `bytes=start-end`, `bytes=start-` và
+`bytes=-suffix`. Field nhiều range trả `416`, và `If-Range` phải match validator
+mạnh hiện tại nếu không range bị bỏ qua.
+
+## Capacity assumptions
+
+| Bound                              | Value                           | Nguồn                     |
+| ---------------------------------- | ------------------------------- | ------------------------- |
+| Mounts                             | 8                               | Route capacity cố định    |
+| Plaintext `GET` và `HEAD`          | kernel `sendfile`, không buffer | `Response.send_file`      |
+| File size trên TLS, HTTP/2, HTTP/3 | `write_queue_size - 4096`       | 60 KiB ở default 64 KiB   |
+| Decoded path                       | 1024 byte                       | Buffer confinement nội bộ |
+| Range mỗi request                  | 1                               | Nhiều range bị từ chối    |
+
+File vượt giới hạn buffered trên TLS trả `413 Content Too Large`. Tăng
+`write_queue_size` nếu asset cần, và tính memory cho từng connection.
+
+## Verification
+
+```sh
+zig build run
+```
+
+```sh
+curl -i http://127.0.0.1:3000/assets/
+curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+curl -i -X POST http://127.0.0.1:3000/assets/index.html
+curl -i --path-as-is http://127.0.0.1:3000/assets/../src/main.zig
+```
+
+Request đầu trả `200 OK` kèm `ETag`. Request thứ hai trả `206 Partial Content` và
+`Content-Range` khi file đủ lớn. Request thứ ba trả `405 Method Not Allowed` kèm
+`Allow`, request thứ tư trả `403 Forbidden` thay vì source file.
+
+Lặp request đầu với validator nhận được để kiểm tra cache path:
+
+```sh
+curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
+```
+
+Thay `ETAG` bằng giá trị chính xác và kỳ vọng `304 Not Modified` không body.
+
+## Failure behavior
+
+| Điều kiện                            | Kết quả                                    |
+| ------------------------------------ | ------------------------------------------ |
+| Segment `..`, NUL, backslash         | `403 Forbidden`                            |
+| Symlink trong bất kỳ component       | `403 Forbidden`                            |
+| File thiếu hoặc không phải directory | `404 Not Found`                            |
+| File vượt capacity buffered          | `413 Content Too Large`                    |
+| Range nhiều hoặc không thoả          | `416 Range Not Satisfiable`                |
+| Method khác `GET` hoặc `HEAD`        | `405 Method Not Allowed` kèm `Allow`       |
+| Mount thứ chín                       | Startup `error.StaticRouteCapacityReached` |
+
+## Variations
+
+### Mount directory thứ hai
+
+Thêm mount download với policy riêng. Index bị tắt và file không cache public:
+
+```zig
+_ = try app.static("/downloads", "downloads", .{
+    .index = null,
+    .etag = true,
+    .max_age = 0,
+});
+```
+
+Prefix phải khác nhau và tổng số vẫn trong giới hạn tám mount.
+
+### Serve file private
+
+Không đặt file private sau `max_age` khác 0: shared cache sẽ giữ chúng. Mount
+chúng dưới prefix riêng với `max_age = 0` và đặt authentication guard trước prefix
+đó. Khi tập file hoàn toàn không public, ưu tiên handler kiểm tra authorization
+theo từng file; static mount trả lời trước khi handler kịp xem request.
+
+## Liên quan
+
+- [Static files](/docs/http/static-files)
+- [HTTP limits](/docs/http/limits)
+- [Thêm authentication](/docs/guides/authentication)

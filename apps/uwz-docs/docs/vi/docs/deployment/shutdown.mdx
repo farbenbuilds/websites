@@ -1,0 +1,165 @@
+---
+title: Shutdown và draining
+description: Gửi SIGTERM, đi theo drain order, chọn grace period cho supervisor và release cluster mà không panic hay mất request.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, deployment, shutdown]
+---
+
+Một process µWebZockets dừng qua một drain path duy nhất. Signal, `App.shutdown`
+gọi trực tiếp và yêu cầu từ supervisor đều đi vào cùng một chuỗi: ngừng accept,
+cancel công việc còn treo, chờ các loop drain xong rồi release slab.
+`catch_shutdown_signals` chỉ nối signal vào path đó; phải gọi trước `run`.
+
+## Chương trình hoàn chỉnh
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+fn work(_: *uz.Request, res: *uz.Response) void {
+    res.text("done") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(512)
+        .build_cluster(std.heap.page_allocator, 4, .{});
+    defer group.deinit();
+
+    const Group = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Group.Worker, index: usize) !void {
+            _ = index;
+            _ = try worker.get("/healthz", health);
+            _ = try worker.get("/work", work);
+        }
+    }.routes);
+
+    try group.catch_shutdown_signals();
+    try group.listen("0.0.0.0", 3000);
+    try group.run();
+}
+```
+
+Bốn worker chia sẻ port qua `SO_REUSEPORT` trên Linux và macOS, còn trên Windows
+dùng fallback `SO_REUSEADDR`. Một SIGTERM drain toàn bộ worker vì cluster chỉ cài
+một watcher process-wide trên worker đầu tiên.
+
+## Drain order
+
+| Bước | Hành động                                                      | Kết quả quan sát được                                 |
+| ---- | -------------------------------------------------------------- | ----------------------------------------------------- |
+| 1    | Từ chối work mới và đánh dấu application unavailable           | Các lifecycle call trả `error.ApplicationUnavailable` |
+| 2    | Dừng timing wheel, file watcher và signal watcher              | Timer định kỳ và log watcher dừng                     |
+| 3    | Đóng TCP listener và shutdown QUIC transport                   | Không còn connection hay datagram mới được accept     |
+| 4    | Cancel connection completion và chạy loop tới khi chúng disarm | Connection pool rỗng                                  |
+| 5    | Kiểm tra drained state và release TLS, QUIC, loop và slab      | `run` đã return; `deinit` hoàn tất việc release       |
+
+`run` return sau bước 4. Bước 1 đến 4 chạy trên các loop sở hữu; bước 5 là `deinit`
+hoặc `deinit_checked`, hai hàm này kiểm tra drained state thay vì đoán. Gọi
+`deinit` từ trong callback sẽ panic, vì loop mà nó định drive chính là loop đang
+chạy call đó.
+
+## Quy tắc signal
+
+| Call                                       | Quy tắc                                               | Lỗi                                     |
+| ------------------------------------------ | ----------------------------------------------------- | --------------------------------------- |
+| `App.catch_shutdown_signals`               | Trước `run`, một lần cho mỗi process                  | `error.SignalWatcherAlreadyInstalled`   |
+| `Cluster.catch_shutdown_signals`           | Trước `run`, một lần cho mỗi group                    | `error.SignalWatcherAlreadyInstalled`   |
+| `App.catch_shutdown_signals` sau shutdown  | Không được phép                                       | `error.ApplicationUnavailable`          |
+| `Cluster.catch_shutdown_signals` sau `run` | Không được phép                                       | `error.ClusterStopped`                  |
+| `App.shutdown` từ trong handler            | Được phép trên loop thread; bắt đầu shutdown          | Không có lỗi khi app còn sống           |
+| `App.shutdown` từ thread khác              | Không được phép; dùng `request_shutdown`              | Chạm vào loop state từ bên ngoài        |
+| `Cluster.request_shutdown`                 | Gọi từ bất kỳ thread; yêu cầu shutdown cho mọi worker | No-op sau khi group đã stopped          |
+| `Cluster.deinit` khi `run` còn active      | Panic                                                 | `cannot deinitialize a running cluster` |
+
+Trên POSIX, handler ghi một byte vào self-pipe non-blocking mà loop poll, nên
+handler không allocate và không log. Trên Windows, watcher dùng
+`SetConsoleCtrlHandler` cho Ctrl+C, console close và logoff/shutdown. Signal thứ
+hai trong lúc draining gộp vào cùng một request.
+
+## Chờ process thoát
+
+Việc của supervisor là gửi SIGTERM rồi chờ. Không có deadline riêng cho request
+đang chạy: drain bị chặn trên bởi `ServerConfig.idle_timeout_ms`, vì một
+keep-alive connection đang drain chỉ đóng khi idle hết hạn. Giá trị mặc định là
+120 giây, nên grace period ngắn hơn idle timeout sẽ biến một lần drain sạch thành
+SIGKILL.
+
+| Supervisor           | Thiết lập                       | Quy tắc                                          |
+| -------------------- | ------------------------------- | ------------------------------------------------ |
+| Kubernetes           | `terminationGracePeriodSeconds` | Lớn hơn `idle_timeout_ms` cộng thời gian release |
+| systemd              | `TimeoutStopSec`                | Cùng bound; `KillSignal=SIGTERM`                 |
+| Docker               | `docker stop --time`            | Cùng bound, tính bằng giây                       |
+| Process host tự viết | Chờ child rồi đọc exit status   | Exit code 0 sau signal nghĩa là drain hoàn tất   |
+
+Hạ `idle_timeout_ms` khi supervisor không thể chờ hai phút. WebSocket đang idle
+cũng chịu cùng deadline, nên client phải reconnect thay vì trông vào một socket
+idle vô hạn.
+
+## Cluster state
+
+`Cluster.state()` cho biết group đang ở đâu trong lifecycle:
+
+| State        | Ý nghĩa                                             | Call hữu ích                       |
+| ------------ | --------------------------------------------------- | ---------------------------------- |
+| `configured` | Đã build và configure, chưa chạy                    | `listen`, `catch_shutdown_signals` |
+| `running`    | Các worker thread đang hoạt động                    | `request_shutdown`, `publish`      |
+| `stopped`    | Mọi loop đã drain; group có thể release             | `deinit_checked`, `first_failure`  |
+| `releasing`  | Việc release đã được claim; caller thứ hai phải chờ | Không; chờ `released`              |
+| `released`   | Storage đã free; không được dùng lại value          | Không                              |
+
+`state()` chỉ để tham khảo, không phải lock. Supervisor vẫn gọi `deinit_checked`
+và xử lý `error.ClusterRunning` thay vì poll state rồi hy vọng race đã đóng.
+
+## Release bằng `deinit_checked`
+
+`Cluster.deinit` panic khi `run` còn active. Supervisor không chấp nhận panic thì
+dùng `deinit_checked` và xử lý lỗi duy nhất mà nó có thể trả:
+
+```zig
+group.deinit_checked() catch |err| switch (err) {
+    error.ClusterRunning => {
+        std.log.err("run has not returned yet", .{});
+        return err;
+    },
+};
+```
+
+Call này claim việc release đúng một lần. Caller đồng thời sẽ chờ tới khi owner
+thắng publish `released`, nên signal handler và supervisor thread có thể cùng đi
+vào một release path mà không double free. Giữ một owner cho `Cluster`, không copy
+hay move value sau khi watcher hoặc `run` bắt đầu, và giữ nó sống tới hết release.
+
+## Kiểm tra
+
+```sh
+zig build -Doptimize=ReleaseSafe
+./zig-out/bin/uz-app &
+pid=$!
+curl -fsS http://127.0.0.1:3000/healthz
+kill -TERM "$pid"
+wait "$pid"
+echo "exit: $?"
+```
+
+Kỳ vọng `ok` và `exit: 0`, không panic và không có `ShutdownIncomplete`. Chạy lại
+khi đang có request loop; request được accept trước signal sẽ hoàn tất hoặc fail
+vì connection đóng, và process vẫn thoát.
+
+## Các lỗi thường gặp
+
+| Triệu chứng                             | Nguyên nhân                           | Cách sửa                                            |
+| --------------------------------------- | ------------------------------------- | --------------------------------------------------- |
+| Panic lúc thoát                         | `deinit` chạy khi `run` còn active    | `request_shutdown`, chờ `run`, rồi release          |
+| `SignalWatcherAlreadyInstalled`         | Watcher thứ hai trong cùng process    | Một watcher cho mỗi process hoặc group              |
+| `ApplicationUnavailable` khi arm signal | Shutdown đã bắt đầu                   | Gọi `catch_shutdown_signals` trước `run`            |
+| Process bị kill ở grace deadline        | Grace period ngắn hơn thời gian drain | Tăng grace period hoặc hạ `idle_timeout_ms`         |
+| Drain không bao giờ xong                | Handler block worker loop             | Return khỏi handler; không sleep hay block trong đó |
+| Cluster thoát với worker error          | Một worker fail trước shutdown        | Đọc `first_failure()` để lấy index, phase và error  |

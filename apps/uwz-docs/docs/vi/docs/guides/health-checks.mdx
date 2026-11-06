@@ -1,0 +1,180 @@
+---
+title: Thêm health check
+description: Phục vụ route liveness và readiness tách biệt process, listener và capacity, rồi nối chúng với supervisor hoặc Kubernetes probe.
+sidebar:
+  order: 16
+search:
+  tags: [guide, health, kubernetes, operations]
+---
+
+Health check là một HTTP route do bạn sở hữu. µWebZockets không có endpoint
+sẵn, và framework không thể quyết định "ready" nghĩa là gì với dependency của
+bạn.
+
+## Vấn đề
+
+Supervisor cần biết khi nào restart process và khi nào gửi traffic. Process còn
+sống nhưng đang drain phải fail readiness trong khi vẫn trả lời liveness.
+
+## Giả định
+
+- Ứng dụng phục vụ HTTP plaintext trên port 3000 sau một probe.
+- Liveness là câu trả lời cố định. Readiness theo state của ứng dụng và một cờ
+  dependency do code của bạn cập nhật.
+- Cluster cấp cho mỗi worker một bản state riêng.
+
+## Viết chương trình
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Readiness = struct {
+    draining: bool = false,
+    dependency_ok: bool = true,
+};
+
+fn healthz(_: *uz.Request, res: *uz.Response) void {
+    res.end("200 OK", "ok") catch {};
+}
+
+fn readyz(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *Readiness = @ptrCast(@alignCast(context));
+    if (state.draining or !state.dependency_ok) {
+        res.end("503 Service Unavailable", "not ready") catch {};
+        return;
+    }
+    res.end("200 OK", "ready") catch {};
+}
+
+fn drain(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const state: *Readiness = @ptrCast(@alignCast(context));
+    state.draining = true;
+    res.end("202 Accepted", "draining") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var state = Readiness{};
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/healthz", healthz);
+    _ = try app.get_context("/readyz", &state, readyz);
+    _ = try app.route_context(.post, "/admin/drain", &state, drain);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+`/healthz` không chạm dependency. `/readyz` chỉ đọc state do caller sở hữu, nên
+database chậm không làm probe timeout. Cập nhật `dependency_ok` từ một
+background check có bound, không bao giờ inline trong probe.
+
+## Kiểm tra
+
+```sh
+zig build run
+```
+
+```sh
+curl -s -o /dev/null -w 'healthz %{http_code}\n' http://127.0.0.1:3000/healthz
+curl -s -o /dev/null -w 'readyz  %{http_code}\n' http://127.0.0.1:3000/readyz
+curl -s -X POST http://127.0.0.1:3000/admin/drain
+curl -s -o /dev/null -w 'readyz  %{http_code}\n' http://127.0.0.1:3000/readyz
+```
+
+Kỳ vọng `200`, `200`, `202`, rồi `503`. Probe cuối fail trong khi process vẫn
+phục vụ request. Đó là khác biệt giữa liveness và readiness.
+
+Drain route là một control surface. Đặt nó trên internal listener hoặc bảo vệ
+bằng authentication; không expose nó trên interface public.
+
+## Process, listener và capacity
+
+| Tín hiệu       | 200 chứng minh                                     | Không chứng minh được |
+| -------------- | -------------------------------------------------- | --------------------- |
+| Process sống   | Event loop chạy và handler đã thực thi             | Rằng nó nhận việc mới |
+| Listener bound | Socket nhận probe và route nó                      | Dependency dùng được  |
+| Capacity trống | Không gì; probe là một request trên một connection | Chỗ cho burst kế tiếp |
+
+Handler chỉ chạy sau khi listener bind và accept connection, nên một response
+chứng minh process và listener cùng lúc. Startup và drain phá cặp đó: port từ
+chối hoặc ngừng accept, probe không kết nối được, supervisor coi là not ready.
+
+Capacity khác. Cạn capacity là tường minh và cục bộ: TCP connection dư bị đóng,
+body quá lớn nhận `413`, header block quá lớn nhận `431`. Readiness handler
+không thấy connection nó không nhận, nên đừng tuyên bố còn capacity từ đó. Dùng
+counter `uwz_connections_accepted` và `uwz_connections_closed` cùng load test.
+
+## Nối với supervisor
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 3000 }
+  periodSeconds: 10
+  failureThreshold: 3
+readinessProbe:
+  httpGet: { path: /readyz, port: 3000 }
+  periodSeconds: 5
+  failureThreshold: 2
+```
+
+Trỏ cả hai probe vào route không I/O. Liveness probe gọi dependency sẽ restart
+process khỏe khi dependency down. Đặt `terminationGracePeriodSeconds` lớn hơn
+thời gian drain; systemd dùng `Type=exec`.
+
+## Giả định capacity
+
+| Tài nguyên       | Giới hạn                          | Hệ quả                      |
+| ---------------- | --------------------------------- | --------------------------- |
+| Probe connection | Nằm trong `max_clients`           | Probe chiếm connection slot |
+| Dependency check | Timeout có bound trong task riêng | Check treo không chặn loop  |
+
+## Hành vi khi lỗi
+
+| Điều kiện           | Kết quả probe   |
+| ------------------- | --------------- |
+| Cờ draining bật     | Readiness `503` |
+| Cờ dependency false | Readiness `503` |
+
+## Biến thể
+
+### Dependency check với truth table
+
+Giữ quyết định thuần và test không cần socket:
+
+```zig
+fn ready(state: Readiness) bool {
+    return !state.draining and state.dependency_ok;
+}
+
+test "readiness truth table" {
+    try std.testing.expect(ready(.{}));
+    try std.testing.expect(!ready(.{ .draining = true }));
+}
+```
+
+`zig test` trên module chứa `ready` chứng minh bảng.
+
+### Drain trước khi gửi signal
+
+Gọi `/admin/drain` từ pre-stop hook, đợi một probe interval, rồi gửi `SIGTERM`.
+Load balancer gỡ instance trong khi process vẫn trả lời; sau đó
+`catch_shutdown_signals` ngừng accept và drain.
+
+```sh
+curl -fsS -X POST http://127.0.0.1:3000/admin/drain
+sleep 5
+kill -TERM "$(pgrep -f 'zig-out/bin/your-app')"
+```
+
+Không có bước đầu, traffic có thể đến sau khi listener đóng và trước khi
+endpoint bị gỡ.
+
+## Liên quan
+
+- [Production checklist](/docs/deployment/checklist) bao gồm probe và rollout.
+- [Kubernetes](/docs/deployment/kubernetes) đặt grace period và budget.
+- [Graceful shutdown](/docs/guides/graceful-shutdown) drain khi có signal.

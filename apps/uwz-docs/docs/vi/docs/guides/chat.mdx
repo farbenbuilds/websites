@@ -1,0 +1,179 @@
+---
+title: Build một chat server
+description: Subscribe socket vào topic có bound, publish từng message, và giữ một peer chậm không làm chậm những peer khác.
+sidebar:
+  order: 6
+search:
+  tags: [guide, websocket, pub-sub]
+---
+
+Guide này build một room public qua WebSocket. Mỗi socket subscribe khi open,
+publish mọi message, và rời room khi close; peer ngừng đọc sẽ bị bỏ qua.
+
+## Bài toán
+
+Bạn cần mọi peer đang kết nối thấy từng message mà không cần room state phía
+server, không buffer vô hạn, và không để một client chậm chặn fan-out của tất cả.
+
+## Giả định
+
+- Zig 0.16.0 và µWebZockets 2.1.6 cài bằng `zig fetch --save`; một worker trên
+  `0.0.0.0:3000` với WebSocket message capacity mặc định 16 KiB.
+- `wscat` qua `npx` để verification. Browser hoạt động tương tự.
+
+## Chương trình
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.subscribe("lobby") catch |err| {
+        std.log.warn("subscribe failed: {}", .{err});
+        ws.terminate();
+        return;
+    };
+    _ = ws.publish("lobby", "system: a peer joined", true);
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    const delivered = ws.publish("lobby", message, opcode == .text);
+    if (delivered == 0) std.log.info("no subscriber accepted the message", .{});
+}
+
+fn on_drain(ws: *uz.WebSocket) void {
+    std.log.info("drained: {} bytes queued", .{ws.buffered_amount()});
+}
+
+fn on_close(ws: *uz.WebSocket) void {
+    _ = ws.publish("lobby", "system: a peer left", true);
+    _ = ws.unsubscribe("lobby");
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = try app.ws("/chat", .{
+        .open = on_open,
+        .message = on_message,
+        .drain = on_drain,
+        .close = on_close,
+        .ping_interval_ms = 30_000,
+        .pong_timeout_ms = 10_000,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+## Delivery contract
+
+`publish` đóng một frame cho mỗi subscriber vào write queue của connection đó và
+trả số queue đã nhận. Message slice chỉ được mượn trong callback; `send` copy nó
+trước khi trả về, nên echo ngay là an toàn.
+
+| Fact         | Ý nghĩa                                                       |
+| ------------ | ------------------------------------------------------------- |
+| Return value | Subscriber có write queue nhận frame                          |
+| Full queue   | Subscriber đó bị bỏ qua; publish vẫn thành công với peer khác |
+
+## Capacity assumptions
+
+| Bound                        | Value  | Exceeded behavior                      |
+| ---------------------------- | ------ | -------------------------------------- |
+| Active topic                 | 1024   | `error.TopicCapacityReached`           |
+| Socket-to-topic subscription | 8192   | `error.SubscriptionCapacityReached`    |
+| Subscriber mỗi topic         | 65535  | `error.TopicSubscriberCapacityReached` |
+| Write queue mỗi connection   | 64 KiB | `send` trả `error.WouldBlock`          |
+
+Đây là giới hạn theo worker. Bốn worker mỗi worker giữ được 8192 subscription, và
+cluster broadcast tiêu một inbox slot mỗi worker, không phải mỗi connection.
+
+## Verification
+
+```sh
+zig build run
+```
+
+Mở hai terminal và chạy lệnh sau ở mỗi terminal:
+
+```sh
+npx wscat -c ws://127.0.0.1:3000/chat
+```
+
+```console
+Connected (press CTRL+C to quit)
+> hello
+< system: a peer joined
+< hello
+```
+
+Client thứ hai in join notice và message. Close nó rồi gửi thêm một lần: số
+delivery giảm từ hai xuống một và leave notice xuất hiện.
+
+## Failure behavior
+
+| Điều kiện                        | Kết quả                                       |
+| -------------------------------- | --------------------------------------------- |
+| Write queue của subscriber đầy   | Frame bị bỏ cho peer đó, count không tính nó  |
+| Bảng topic hoặc subscription đầy | `subscribe` trả error; guide này close socket |
+| Peer ngừng trả lời ping          | Heartbeat close nó, sau đó `on_close` chạy    |
+
+## Variations
+
+### Tách room
+
+Đăng ký một route cho mỗi room và chia sẻ callback qua tham số topic:
+
+```zig
+fn join(ws: *uz.WebSocket, topic: []const u8) void {
+    ws.subscribe(topic) catch return ws.terminate();
+    _ = ws.publish(topic, "system: a peer joined", true);
+}
+
+fn on_lobby_open(ws: *uz.WebSocket) void {
+    join(ws, "room:lobby");
+}
+
+fn on_lobby_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room:lobby", message, opcode == .text);
+}
+```
+
+Lặp cặp này cho từng room và đăng ký thành `/chat/lobby`, `/chat/ops`. Giữ danh
+sách room trong code để topic name luôn là literal.
+
+### Thêm history buffer
+
+Giữ một ring cố định các message đã copy và replay khi open. Copy vào storage cố
+định; giữ slice của callback sẽ đọc memory đã được giải phóng:
+
+```zig
+const Entry = struct { len: usize = 0, bytes: [128]u8 = undefined };
+var history: [50]Entry = undefined;
+var history_len: usize = 0;
+var history_next: usize = 0;
+
+fn remember(message: []const u8) void {
+    if (message.len > 128) return;
+    const entry = &history[history_next];
+    @memcpy(entry.bytes[0..message.len], message);
+    entry.len = message.len;
+    history_next = (history_next + 1) % history.len;
+    history_len = @min(history_len + 1, history.len);
+}
+```
+
+Gọi `remember` từ `on_message` trước khi publish, rồi replay bằng cách đi từ
+entry cũ nhất và gọi `ws.send` cho từng entry. Ring này là process-wide. `Cluster`
+chạy worker dưới dạng thread trong cùng address space, nên ring module-level sẽ bị
+chia sẻ mà không có lock. Giữ history ở client hoặc external store khi cluster,
+hoặc chạy một process cho mỗi worker.
+
+## Liên quan
+
+- [Pub/sub](/docs/websocket/pub-sub)
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub)

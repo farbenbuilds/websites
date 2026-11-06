@@ -1,0 +1,169 @@
+---
+title: Shutdown and draining
+description: Send SIGTERM, follow the drain order, size the supervisor grace period, and release a cluster without a panic.
+sidebar:
+  order: 7
+search:
+  tags: [how-to, deployment, shutdown]
+---
+
+A µWebZockets process stops through one drain path. A signal, an explicit
+`App.shutdown`, and a supervisor request all converge on the same sequence: stop
+accepting, cancel outstanding work, wait for the loops to drain, then release the
+slab. `catch_shutdown_signals` only wires the signal to that path; it must be
+called before `run`.
+
+## Complete program
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch {};
+}
+
+fn work(_: *uz.Request, res: *uz.Response) void {
+    res.text("done") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(512)
+        .build_cluster(std.heap.page_allocator, 4, .{});
+    defer group.deinit();
+
+    const Group = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Group.Worker, index: usize) !void {
+            _ = index;
+            _ = try worker.get("/healthz", health);
+            _ = try worker.get("/work", work);
+        }
+    }.routes);
+
+    try group.catch_shutdown_signals();
+    try group.listen("0.0.0.0", 3000);
+    try group.run();
+}
+```
+
+Four workers share the port through `SO_REUSEPORT` on Linux and macOS, and
+through the `SO_REUSEADDR` fallback on Windows. One SIGTERM drains every worker
+because the cluster installs a single process-wide watcher on the first worker.
+
+## Drain order
+
+| Step | Action                                                             | Observable result                                     |
+| ---- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| 1    | Reject new work and mark the application unavailable               | Lifecycle calls return `error.ApplicationUnavailable` |
+| 2    | Stop the timing wheel, the file watcher, and the signal watcher    | Recurring timers and log watchers stop                |
+| 3    | Close TCP listeners and shut down the QUIC transport               | No new connections or datagrams are accepted          |
+| 4    | Cancel connection completions and run the loop until they disarm   | The connection pool empties                           |
+| 5    | Verify drained state and release TLS, QUIC, loop, and slab storage | `run` has returned; `deinit` finishes the release     |
+
+`run` returns after step 4. Steps 1 to 4 happen on the owning loops; step 5 is
+`deinit` or `deinit_checked`, which asserts drained state instead of guessing.
+Calling `deinit` from inside a callback panics, because the loop it would drive
+is the loop it runs on.
+
+## Signal rules
+
+| Call                                         | Rule                                           | Failure                                 |
+| -------------------------------------------- | ---------------------------------------------- | --------------------------------------- |
+| `App.catch_shutdown_signals`                 | Before `run`, once per process                 | `error.SignalWatcherAlreadyInstalled`   |
+| `Cluster.catch_shutdown_signals`             | Before `run`, once per group                   | `error.SignalWatcherAlreadyInstalled`   |
+| `App.catch_shutdown_signals` after shutdown  | Not allowed                                    | `error.ApplicationUnavailable`          |
+| `Cluster.catch_shutdown_signals` after `run` | Not allowed                                    | `error.ClusterStopped`                  |
+| `App.shutdown` from a handler                | Allowed on the loop thread; begins shutdown    | None while the app is live              |
+| `App.shutdown` from another thread           | Not allowed; use `request_shutdown`            | Touches loop state from outside         |
+| `Cluster.request_shutdown`                   | Any thread; requests shutdown for every worker | No-op after the group is stopped        |
+| `Cluster.deinit` while `run` is active       | Panics                                         | `cannot deinitialize a running cluster` |
+
+On POSIX the handlers write one byte into a non-blocking self-pipe that the loop
+polls, so a signal never allocates or logs in the handler. On Windows the
+watcher uses `SetConsoleCtrlHandler` for Ctrl+C, console close, and
+logoff/shutdown events. A second signal during draining coalesces into the same
+request.
+
+## Wait for the exit
+
+The supervisor's job is to send SIGTERM and wait. There is no separate in-flight
+request deadline: the drain is bounded by `ServerConfig.idle_timeout_ms`, because
+a drained keep-alive connection is closed when it idles out. The default is 120
+seconds, so a grace period that is shorter than the idle timeout turns a clean
+drain into a SIGKILL.
+
+| Supervisor            | Setting                                  | Rule                                                 |
+| --------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| Kubernetes            | `terminationGracePeriodSeconds`          | Greater than `idle_timeout_ms` plus release time     |
+| systemd               | `TimeoutStopSec`                         | Same bound; `KillSignal=SIGTERM`                     |
+| Docker                | `docker stop --time`                     | Same bound, counted in seconds                       |
+| A custom process host | Wait on the child, then check its status | Exit code 0 after a signal means the drain completed |
+
+Lower `idle_timeout_ms` when the supervisor cannot wait two minutes. An idle
+WebSocket is subject to the same deadline, so clients must reconnect rather than
+expect an endless idle socket.
+
+## Cluster state
+
+`Cluster.state()` reports where the group is in the lifecycle:
+
+| State        | Meaning                                        | Useful calls                       |
+| ------------ | ---------------------------------------------- | ---------------------------------- |
+| `configured` | Built and configured, not running              | `listen`, `catch_shutdown_signals` |
+| `running`    | Worker threads are active                      | `request_shutdown`, `publish`      |
+| `stopped`    | Every loop drained; the group can be released  | `deinit_checked`, `first_failure`  |
+| `releasing`  | Release is claimed; a second caller waits      | None; wait for `released`          |
+| `released`   | Storage is freed; the value must not be reused | None                               |
+
+`state()` is informational. It is not a lock, so a supervisor still calls
+`deinit_checked` and handles `error.ClusterRunning` rather than polling the
+state and hoping the race is closed.
+
+## Release with `deinit_checked`
+
+`Cluster.deinit` panics when `run` is still active. A supervisor that cannot
+accept a panic uses `deinit_checked` and handles the one error it can return:
+
+```zig
+group.deinit_checked() catch |err| switch (err) {
+    error.ClusterRunning => {
+        std.log.err("run has not returned yet", .{});
+        return err;
+    },
+};
+```
+
+The call claims release once. A concurrent caller waits until the winning owner
+publishes `released`, so a signal handler and a supervisor thread can both reach
+the same release path without a double free. Keep one `Cluster` owner, do not
+copy or move the value after the watcher or `run` starts, and keep it alive
+through release.
+
+## Verify
+
+```sh
+zig build -Doptimize=ReleaseSafe
+./zig-out/bin/uz-app &
+pid=$!
+curl -fsS http://127.0.0.1:3000/healthz
+kill -TERM "$pid"
+wait "$pid"
+echo "exit: $?"
+```
+
+Expect `ok` and `exit: 0`, with no panic and no `ShutdownIncomplete` error. Repeat
+while a request loop is running; requests accepted before the signal either
+complete or fail with the connection closed, and the process still exits.
+
+## Failures
+
+| Symptom                               | Cause                                | Fix                                                     |
+| ------------------------------------- | ------------------------------------ | ------------------------------------------------------- |
+| Panic on exit                         | `deinit` ran while `run` was active  | `request_shutdown`, wait for `run`, then release        |
+| `SignalWatcherAlreadyInstalled`       | A second watcher in the same process | Install one watcher per process or group                |
+| `ApplicationUnavailable` while arming | Shutdown already started             | Call `catch_shutdown_signals` before `run`              |
+| Process killed at the grace deadline  | Grace period shorter than the drain  | Raise the grace period or lower `idle_timeout_ms`       |
+| Drain never finishes                  | A handler blocks its worker loop     | Return from the handler; never sleep or block inside it |
+| Cluster exits with a worker error     | A worker failed before shutdown      | Read `first_failure()` for index, phase, and error      |

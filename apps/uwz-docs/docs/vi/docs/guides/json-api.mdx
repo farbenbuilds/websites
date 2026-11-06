@@ -1,0 +1,180 @@
+---
+title: Build một JSON API
+description: Nhận JSON body có bound, validate trong buffer cố định, rồi trả status code và JSON document đã escape đúng cách.
+sidebar:
+  order: 2
+search:
+  tags: [guide, json, http]
+---
+
+Guide này build một JSON API hai route: một route parse body có type và trả
+`201 Created`, route còn lại render path parameter. Text từ client được escape
+bằng `std.json.fmt`.
+
+## Bài toán
+
+Bạn cần một route nhận JSON document, từ chối input sai với đúng status, và trả
+JSON phản ánh kết quả. Body phải có bound, parse phải dùng buffer cố định trong
+request, và text của client không bao giờ đi vào JSON mà chưa escape.
+
+## Giả định
+
+- Zig 0.16.0 và µWebZockets 2.1.6 cài bằng `zig fetch --save`; một worker
+  plaintext trên `127.0.0.1:3000`, không có database.
+
+## Chương trình
+
+```zig title="src/main.zig"
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const Note = struct {
+    text: []const u8,
+};
+
+fn is_json(req: *const uz.Request) bool {
+    const content_type = req.get_unique_header("content-type") orelse return false;
+    return std.mem.startsWith(u8, content_type, "application/json");
+}
+
+fn fail(res: *uz.Response, status: []const u8, code: []const u8) void {
+    var body: [64]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"error\":{f}}}", .{std.json.fmt(code, .{})}) catch return;
+    res.end_with_headers(status, "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+fn create_note(req: *uz.Request, res: *uz.Response) void {
+    if (!is_json(req)) return fail(res, "415 Unsupported Media Type", "json_required");
+
+    var parse_buffer: [16 * 1024]u8 = undefined;
+    var parse_allocator = std.heap.FixedBufferAllocator.init(&parse_buffer);
+    const parsed = req.json(Note, parse_allocator.allocator()) catch |err| switch (err) {
+        error.OutOfMemory => return fail(res, "500 Internal Server Error", "out_of_memory"),
+        else => return fail(res, "400 Bad Request", "invalid_json"),
+    };
+    defer parsed.deinit();
+
+    if (parsed.value.text.len == 0 or parsed.value.text.len > 256) {
+        return fail(res, "422 Unprocessable Entity", "invalid_text");
+    }
+
+    var body: [2048]u8 = undefined;
+    const rendered = std.fmt.bufPrint(
+        &body,
+        "{{\"id\":{d},\"text\":{f}}}",
+        .{ std.hash.Wyhash.hash(0, parsed.value.text), std.json.fmt(parsed.value.text, .{}) },
+    ) catch return fail(res, "500 Internal Server Error", "render");
+    res.end_with_headers("201 Created", "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+fn show_note(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse return fail(res, "404 Not Found", "not_found");
+    var body: [128]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"id\":{f}}}", .{std.json.fmt(id, .{})}) catch return;
+    res.end_with_headers("200 OK", "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var server = try uz.Server.builder(init.io)
+        .with_max_clients(128)
+        .with_max_body_size(8 * 1024)
+        .build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.post("/notes", create_note);
+    _ = try server.get("/notes/:id", show_note);
+
+    try server.catch_shutdown_signals();
+    try server.listen("127.0.0.1", 3000);
+    try server.run();
+}
+```
+
+`req.json` parse byte bất kể media type, nên handler kiểm tra `Content-Type`
+trước. `res.json` và `res.json_buf` luôn gửi `200`, nên response `201 Created`
+dùng `end_with_headers`. Mọi chuỗi từ client được render bằng `std.json.fmt`, hàm
+này escape quote và control byte.
+
+## Verification
+
+```sh
+zig build run
+```
+
+Gửi một note hợp lệ từ terminal thứ hai:
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"slab"}'
+```
+
+Kỳ vọng `201 Created` và body `{"id":<number>,"text":"slab"}`. Sau đó kiểm tra
+từng trường hợp bị từ chối:
+
+```sh
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: text/plain' -d '{"text":"slab"}'
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: application/json' -d '{'
+curl -i -X POST http://127.0.0.1:3000/notes -H 'Content-Type: application/json' -d '{"text":""}'
+curl -i http://127.0.0.1:3000/notes/42
+```
+
+Các command in ra `415`, `400`, `422` và `200`. Body trên 8 KiB trả document
+`413` có cấu trúc trước khi `create_note` chạy.
+
+## Capacity assumptions
+
+| Bound        | Value        | Nguồn                |
+| ------------ | ------------ | -------------------- |
+| Request body | 8 KiB        | `with_max_body_size` |
+| Parse buffer | 16 KiB stack | `parse_buffer`       |
+
+## Failure behavior
+
+| Điều kiện                             | Kết quả                                     |
+| ------------------------------------- | ------------------------------------------- |
+| Thiếu media type hoặc không phải JSON | `415 Unsupported Media Type`                |
+| Body trên 8 KiB                       | `413 Payload Too Large`, handler không chạy |
+| JSON sai hoặc thiếu field             | `400 Bad Request`                           |
+| `text` rỗng hoặc trên 256 byte        | `422 Unprocessable Entity`                  |
+
+## Variations
+
+### Error envelope
+
+Thay `fail` để mọi error cùng shape, vẫn render vào buffer stack:
+
+```zig
+fn fail(res: *uz.Response, status: []const u8, code: []const u8) void {
+    var body: [96]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&body, "{{\"error\":{{\"code\":{f}}}}}", .{std.json.fmt(code, .{})}) catch return;
+    res.end_with_headers(status, "Content-Type: application/json; charset=utf-8\r\n", rendered) catch {};
+}
+```
+
+### Schema validation
+
+Khai báo rule trên type và để validator báo field sai đầu tiên:
+
+```zig
+const CreateNote = struct {
+    text: []const u8,
+    pub const validation = .{
+        .text = uz.schema.Rule{ .min_length = 1, .max_length = 256 },
+    };
+};
+var issue = uz.schema.Issue{};
+var validate_buffer: [16 * 1024]u8 = undefined;
+var validate_allocator = std.heap.FixedBufferAllocator.init(&validate_buffer);
+const parsed = req.validate_json_detailed(CreateNote, validate_allocator.allocator(), &issue) catch |err| switch (err) {
+    error.ConstraintViolation => return fail(res, "422 Unprocessable Entity", @tagName(issue.kind)),
+    error.MalformedJson => return fail(res, "400 Bad Request", "invalid_json"),
+    else => return fail(res, "500 Internal Server Error", "validate"),
+};
+defer parsed.deinit();
+```
+
+Toàn bộ rule và issue kind nằm ở
+[Schema validation](/docs/type-safety/schema-validation). Contract của helper ở
+[JSON responses](/docs/http/json); bước loopback ở
+[Test một app µWebZockets](/docs/guides/testing).

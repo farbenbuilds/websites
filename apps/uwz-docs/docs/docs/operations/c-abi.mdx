@@ -1,0 +1,180 @@
+---
+title: C ABI
+description: Build the static archives, install the header, link a C program, and handle the versioned error codes at each lifecycle step.
+sidebar:
+  order: 8
+search:
+  tags: [reference, c-abi, operations]
+---
+
+The C ABI runs a µWebZockets server from C or C++ without writing Zig
+application code. It
+exposes one opaque application handle, borrowed byte views, and fixed
+capacities. [C ABI architecture](/docs/architecture/c-abi) explains the design;
+[C ABI types and enums](/docs/type-safety/c-abi-types) lists every value.
+
+## Install the header and archives
+
+```sh
+zig build lib -Doptimize=ReleaseFast
+```
+
+The `lib` step installs `zig-out/include/uWebZockets.h` and these archives under
+`zig-out/lib`. Check `uwz_version()` against the version macros so a mismatched
+header and archive cannot ship together.
+
+| Archive                   | Contents                                    |
+| ------------------------- | ------------------------------------------- |
+| `libuWebZockets.a`        | C ABI entry points, router, and Zig runtime |
+| `liblsquic.a`             | QUIC and HTTP/3 engine                      |
+| `libssl.a`, `libcrypto.a` | BoringSSL TLS records and cryptography      |
+| `libdeflate.a`            | Deflate and gzip codecs                     |
+| `libz.a`                  | zlib, including the HTTP gzip codec's copy  |
+
+## Opaque handles
+
+| Handle               | Meaning                                         |
+| -------------------- | ----------------------------------------------- |
+| `uwz_app`            | Application, listeners, event loop, and storage |
+| `uwz_request`        | Callback-local request view                     |
+| `uwz_response`       | Response writer for the current request         |
+| `uwz_websocket`      | One upgraded WebSocket connection               |
+| `uwz_async_response` | Copyable one-shot completion token              |
+
+## Fixed capacities
+
+| Capacity                    |  Value | Enforced when                                  |
+| --------------------------- | -----: | ---------------------------------------------- |
+| Connections                 | `1024` | `uwz_app_create` fixes the slab; no C override |
+| `UWZ_MAX_ROUTES`            |   `64` | Registration returns `UWZ_ERROR_CAPACITY`      |
+| `UWZ_MAX_MIDDLEWARE`        |   `32` | `uwz_app_use` returns `UWZ_ERROR_CAPACITY`     |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |   `16` | A route with more captures fails registration  |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` | `2048` | A longer path fails registration               |
+
+Route strings are copied into fixed C storage, so a sixty-fifth route is a
+startup error rather than a silent drop.
+
+## Function groups
+
+| Group             | Representative calls                                                          |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Create, destroy   | `uwz_app_create`, `uwz_app_create_tls`, `uwz_app_shutdown`, `uwz_app_destroy` |
+| Registration      | `uwz_app_route`, `uwz_app_route_async`, `uwz_app_use`, `uwz_app_ws`           |
+| Serving           | `uwz_app_listen`, `uwz_app_listen_udp`, `uwz_app_run`, `uwz_app_publish`      |
+| Request, response | `uwz_request_path`, `uwz_request_header`, `uwz_response_end`                  |
+| Async response    | `uwz_async_response_end`, `uwz_async_response_end_with_headers`               |
+| WebSocket         | `uwz_websocket_send`, `uwz_websocket_subscribe`, `uwz_websocket_terminate`    |
+
+`uwz_app_create` requires `*out_app` to be `NULL`, so a live handle is never
+overwritten. `uwz_app_destroy` nulls the caller's handle on success, but from a
+callback it returns `UWZ_ERROR_INVALID_STATE` and leaves the handle valid; destroy
+it after `uwz_app_run` returns. A shutdown requested from a callback is drained
+by the active run.
+
+## Error codes
+
+|  Code | Constant                     | Name string        | Reported when                                        |
+| ----: | ---------------------------- | ------------------ | ---------------------------------------------------- |
+|   `0` | `UWZ_OK`                     | `ok`               | The call completed                                   |
+|  `-1` | `UWZ_ERROR_INVALID_ARGUMENT` | `invalid argument` | Bad slice, occupied out-handle, invalid route        |
+|  `-2` | `UWZ_ERROR_OUT_OF_MEMORY`    | `out of memory`    | Slab, TLS context, or QUIC engine allocation failed  |
+|  `-3` | `UWZ_ERROR_INVALID_STATE`    | `invalid state`    | Wrong lifecycle step, started response, stale token  |
+|  `-4` | `UWZ_ERROR_ALREADY_EXISTS`   | `already exists`   | Duplicate route pattern or bound listener            |
+|  `-5` | `UWZ_ERROR_CAPACITY`         | `capacity reached` | Fixed route, middleware, parameter, or peer capacity |
+|  `-6` | `UWZ_ERROR_WOULD_BLOCK`      | `would block`      | Output queue or write path is full                   |
+|  `-7` | `UWZ_ERROR_PROTOCOL`         | `protocol error`   | Framing, handshake, or oversized output              |
+|  `-8` | `UWZ_ERROR_IO`               | `I/O error`        | Socket, bind, or TLS read and write failure          |
+|  `-9` | `UWZ_ERROR_UNSUPPORTED`      | `unsupported`      | HTTP/3 not initialized, backend unavailable          |
+| `-10` | `UWZ_ERROR_INTERNAL`         | `internal error`   | Failure with no narrower mapping                     |
+
+The negative values are append-only and part of the ABI. `uwz_error_name`
+returns a static string, including `unknown error` for a value outside the enum.
+
+## Async token ownership
+
+`uwz_async_response` holds a private state pointer and a generation. The value
+passed to an async callback is callback-local. A callback that returns
+`UWZ_HANDLER_PENDING` copies the whole struct into caller-owned storage.
+
+- The copy is usable on the owning event loop until completion or shutdown, and
+  never after `uwz_app_destroy`.
+- Completion happens exactly once; the generation check rejects stale and
+  duplicate tokens with `UWZ_ERROR_INVALID_STATE`.
+- Work on another thread must marshal back to the owning loop first.
+
+Request fields, route captures, and WebSocket message slices share that callback
+lifetime, so copy them if a later callback needs them.
+
+## Link requirements
+
+```sh
+cc -std=c11 -O2 -o server main.c \
+  zig-out/lib/libuWebZockets.a zig-out/lib/liblsquic.a \
+  zig-out/lib/libssl.a zig-out/lib/libcrypto.a \
+  zig-out/lib/libdeflate.a zig-out/lib/libz.a \
+  -lstdc++ -lc -lm -lpthread
+```
+
+List each dependent archive before the archives it calls into; undefined symbols
+usually mean a reversed order or a missing C++ runtime. Name that runtime
+explicitly: `-lstdc++` with GCC, `-lc++` with Clang on macOS. Windows also needs
+`-lws2_32 -lmswsock -lcrypt32 -ladvapi32`.
+
+## Minimal C program
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <uWebZockets.h>
+
+static uwz_slice slice(const char *text)
+{
+    uwz_slice value;
+    value.data = (const uint8_t *) text;
+    value.length = strlen(text);
+    return value;
+}
+
+static void home(const uwz_request *request, uwz_response *response, void *user_data)
+{
+    (void) request; (void) user_data;
+    uwz_error result = uwz_response_end(response, slice("200 OK"), slice("ok"));
+    if (result != UWZ_OK)
+        fprintf(stderr, "response failed: %s\n", uwz_error_name(result));
+}
+
+int main(void)
+{
+    static const char route[] = "/";
+    static const char address[] = "127.0.0.1";
+    uwz_app *app = NULL;
+    uwz_error result = uwz_app_create(&app);
+    if (result != UWZ_OK) {
+        fprintf(stderr, "create failed: %s\n", uwz_error_name(result));
+        return 1;
+    }
+    result = uwz_app_route(app, UWZ_HTTP_GET, route, sizeof(route) - 1, home, NULL);
+    if (result == UWZ_OK)
+        result = uwz_app_listen(app, address, sizeof(address) - 1, 3000);
+    if (result == UWZ_OK)
+        result = uwz_app_run(app);
+    if (result != UWZ_OK)
+        fprintf(stderr, "server failed: %s\n", uwz_error_name(result));
+    if (uwz_app_destroy(&app) != UWZ_OK) {
+        fprintf(stderr, "destroy failed\n");
+        return 1;
+    }
+    return result == UWZ_OK ? 0 : 1;
+}
+```
+
+`uwz_app_run` blocks until shutdown. The handler must end the response before it
+returns, and every route must exist before `uwz_app_listen`. A `GET /` returns
+`200` with the body `ok`.
+
+## What the C ABI does not expose
+
+The C ABI does not project `ServerConfig`, compile-time capacities, `uz.schema`,
+`uz.json_rpc`, `uz.client`, HTTP/2, HPACK, HTTP/3 extensions, WebTransport,
+mTLS, certificate rotation, `uz.ktls`, `uz.xdp`, or shared memory. Use the Zig
+API when a deployment needs one of those surfaces.

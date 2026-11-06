@@ -1,0 +1,180 @@
+---
+title: Nhúng từ C hoặc C++
+description: Build C server hoàn chỉnh với header đã cài, link archive release và tuân thủ capacity cố định, borrowed view cùng lifetime của async token.
+sidebar:
+  order: 21
+search:
+  tags: [guide, c-abi, c, cpp, ffi]
+---
+
+C ABI là server binding với capacity cố định. Một opaque application handle sở
+hữu router, listener, loop và storage; callback C mượn view trong một lần gọi.
+
+## Vấn đề
+
+Host C hoặc C++ muốn phục vụ HTTP mà không nhúng source Zig. Nó cần header đã
+cài, link graph, chương trình hoàn chỉnh và quy tắc ownership để callback không
+giữ lại memory đã mượn.
+
+## Giả định
+
+- Zig 0.16.0 build cả library và chương trình C.
+- Host compile C11 hoặc C++17.
+- Deployment vừa capacity cố định; ABI không có `ServerConfig`, schema,
+  JSON-RPC, client, HTTP/2, HTTP/3 hay mTLS.
+
+## Build chương trình
+
+Thêm package bằng
+`zig fetch --save 'git+https://github.com/farbenbuilds/uWebZockets#<tag>'`.
+Project consumer sở hữu `build.zig`, `build.zig.zon` và `src/main.c`:
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{ .target = target, .optimize = optimize });
+    const exe = b.addExecutable(.{ .name = "c_server", .root_module = b.createModule(.{
+        .target = target, .optimize = optimize, .link_libc = true, .link_libcpp = true,
+    }) });
+    exe.root_module.addIncludePath(uz.path("include"));
+    exe.root_module.addCSourceFile(.{ .file = b.path("src/main.c"), .flags = &.{"-std=c11"} });
+    exe.root_module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        exe.root_module.linkLibrary(uz.artifact(name));
+    }
+    b.installArtifact(exe);
+}
+```
+
+```c src/main.c
+#include "uWebZockets.h"
+#include <stdio.h>
+#include <string.h>
+
+static uwz_slice slice_of(const char *text) {
+    uwz_slice value = { (const uint8_t *) text, strlen(text) };
+    return value;
+}
+
+static void hello(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) request;
+    (void) user_data;
+    uwz_error err = uwz_response_end(response, slice_of("200 OK"), slice_of("hello from C"));
+    if (err != UWZ_OK) fprintf(stderr, "response: %s\n", uwz_error_name(err));
+}
+
+static int fail(uwz_app **app, uwz_error code, const char *step) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(code));
+    if (*app != NULL) uwz_app_destroy(app);
+    return 1;
+}
+
+int main(void) {
+    uwz_app *app = NULL;
+    static const char path[] = "/";
+    static const char address[] = "0.0.0.0";
+    uwz_error err = uwz_app_create(&app);
+    if (err != UWZ_OK) return fail(&app, err, "create");
+    err = uwz_app_route(app, UWZ_HTTP_GET, path, sizeof(path) - 1, hello, NULL);
+    if (err != UWZ_OK) return fail(&app, err, "route");
+    err = uwz_app_listen(app, address, sizeof(address) - 1, 3000);
+    if (err != UWZ_OK) return fail(&app, err, "listen");
+    err = uwz_app_run(app);
+    uwz_error released = uwz_app_destroy(&app);
+    if (err != UWZ_OK) return fail(&app, err, "run");
+    return released == UWZ_OK ? 0 : fail(&app, released, "destroy");
+}
+```
+
+```sh
+zig build
+./zig-out/bin/c_server
+```
+
+`uwz_app_create` yêu cầu `*out_app` là `NULL`; destroy ghi `NULL` vào handle.
+Mọi call có thể lỗi trả `uwz_error` âm có version, in được bằng
+`uwz_error_name`.
+
+## Kiểm tra
+
+```sh
+curl -s http://127.0.0.1:3000/
+```
+
+Kỳ vọng `hello from C`. Dừng bằng Ctrl+C. ABI có `uwz_app_shutdown`, không có
+signal watcher, nên supervisor gọi shutdown từ application code, không từ
+signal context.
+
+## Capacity cố định
+
+| Macro                | Giá trị | Ý nghĩa                         |
+| -------------------- | ------: | ------------------------------- |
+| Connection slot      |   1.024 | C application lúc compile       |
+| `UWZ_MAX_ROUTES`     |      64 | Route path được copy            |
+| `UWZ_MAX_MIDDLEWARE` |      32 | Middleware callback theo thứ tự |
+
+Đăng ký fail với `UWZ_ERROR_CAPACITY` khi bảng đầy. Không có slab sizing kiểu
+Zig từ C; dùng Zig API khi 1.024 connection không phù hợp.
+
+## Lifetime và token
+
+| Giá trị              | Hợp lệ đến                            |
+| -------------------- | ------------------------------------- |
+| Request field        | Callback trả về, hoặc token complete  |
+| Route parameter      | Callback trả về                       |
+| WebSocket message    | Callback nhận nó trả về               |
+| `user_data`          | `uwz_app_destroy` sau khi drain       |
+| `uwz_async_response` | Completion hoặc shutdown; copy để giữ |
+
+Async callback trả `UWZ_HANDLER_PENDING` phải copy toàn bộ struct
+`uwz_async_response` vào storage do caller sở hữu và complete đúng một lần trên
+loop sở hữu. Token cũ trả `UWZ_ERROR_INVALID_STATE`. Destroy từ callback cũng
+trả lỗi đó; destroy sau khi `uwz_app_run` trả về.
+
+## Hành vi khi lỗi
+
+| Điều kiện                   | Kết quả                      |
+| --------------------------- | ---------------------------- |
+| `*out_app` khác `NULL`      | `UWZ_ERROR_INVALID_ARGUMENT` |
+| Địa chỉ listen không hợp lệ | `UWZ_ERROR_INVALID_ARGUMENT` |
+| Token complete lần hai      | `UWZ_ERROR_INVALID_STATE`    |
+
+## Biến thể
+
+### Wrapper ownership C++
+
+```cpp
+uwz_app *raw = nullptr;
+if (uwz_app_create(&raw) != UWZ_OK) return 1;
+auto deleter = [](uwz_app *app) { uwz_app_destroy(&app); };
+std::unique_ptr<uwz_app, decltype(deleter)> app(raw, deleter);
+```
+
+Deleter chạy sau khi `uwz_app_run` trả về; giữ wrapper sống.
+
+### Async response
+
+```c
+struct pending { uwz_async_response token; };
+
+static uwz_handler_result defer(const uwz_request *request, uwz_async_response *response, void *user_data) {
+    struct pending *slot = user_data;
+    (void) request;
+    slot->token = *response;
+    return UWZ_HANDLER_PENDING;
+}
+
+static void finish(struct pending *slot) {
+    uwz_async_response_end(&slot->token, slice_of("200 OK"), slice_of("later"));
+}
+```
+
+`finish` chạy trên event loop sở hữu; không có cross-thread wake.
+
+## Liên quan
+
+- [C ABI reference](/docs/operations/c-abi) liệt kê function và enum.
+- [C ABI architecture](/docs/architecture/c-abi) giải thích handle model.

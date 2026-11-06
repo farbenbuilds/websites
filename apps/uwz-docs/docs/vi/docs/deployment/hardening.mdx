@@ -1,0 +1,129 @@
+---
+title: Hardening
+description: Chốt authentication, rate limit, CORS, header, timeout, TRACE và request limit trước khi public listener nhận traffic.
+sidebar:
+  order: 5
+search:
+  tags: [how-to, deployment, security]
+---
+
+Hardening là một tập quyết định, không phải một switch. µWebZockets giới hạn mọi
+parser và cung cấp bốn middleware primitive, nhưng nó không chọn identity model,
+threshold hay browser policy thay bạn. Trang này liệt kê những quyết định mà một
+public deployment phải ghi lại.
+
+Mỗi control có recipe riêng. Hãy theo link thay vì copy cấu hình từ đây; recipe
+giữ đầy đủ chi tiết về ownership và failure.
+
+## Ranh giới tin cậy
+
+| Ranh giới      | Framework thực thi                                  | Deployment sở hữu                                    |
+| -------------- | --------------------------------------------------- | ---------------------------------------------------- |
+| TLS            | Chỉ TLS 1.3, ALPN policy, verify client certificate | Certificate issuance, CA bundle, rotation, pinning   |
+| HTTP parsing   | Buffer cố định, framing chặt, rejection có cấu trúc | Capacity sizing và OS resource limit                 |
+| Authentication | Constant-time compare, middleware fail closed       | User store, token issuance, authorization theo route |
+| Rate limiting  | Token bucket cố định và bảng theo từng worker       | Chọn key, threshold, chính sách shared state         |
+| WebSocket      | Giới hạn message size, đóng idle qua heartbeat      | Origin check, session identity, authorization topic  |
+
+Framework không ship web application firewall, DDoS protection, user directory,
+session store hay secret management. Đó là các thành phần của deployment. Đọc
+[Threat model](/docs/security/threat-model) cho asset và khả năng của attacker
+mà trang này giả định.
+
+## Authentication
+
+`uz.middleware.Auth` validate credential Basic và Bearer trong constant time và
+trả challenge `401`. Đăng ký nó trên application mang route nhạy cảm.
+
+Middleware áp cho mọi request trên application đó. Nếu một listener trộn route
+public và private, middleware không chọn được tập con. Hãy tách surface thành các
+application riêng, hoặc kiểm tra trong handler cho những route cần nó.
+Authentication chứng minh credential; authorization vẫn thuộc về handler.
+
+Đọc [Authentication](/docs/http/authentication) cho credential registration và
+format challenge.
+
+## Rate limiting
+
+Rate limiting là token bucket cố định, key do bạn chọn. Suy ra key từ thứ client
+không thể xoay vòng tùy ý:
+
+| Nguồn key      | Dùng khi                                                |
+| -------------- | ------------------------------------------------------- |
+| `key_fn`       | Bạn có identity đã authentication hoặc bucket id suy ra |
+| `key_header`   | Một trusted proxy đặt header                            |
+| `key_constant` | Mọi request ánh xạ vào một bucket trên mỗi worker       |
+
+Không bao giờ key theo header thô do client gửi trừ khi trusted proxy ghi đè nó.
+Mảng bucket do caller sở hữu và mỗi worker giữ limiter riêng, nên cluster bốn
+worker nhận khoảng bốn lần rate mỗi worker trừ khi bạn chia ngân sách hoặc chia
+sẻ state ngoài framework.
+
+Đọc [Rate limiting](/docs/http/rate-limiting) cho cách định cỡ mảng và contract
+`429` cùng `Retry-After`.
+
+## CORS và header
+
+| Control                      | Hành vi                                 | Đừng giả định                         |
+| ---------------------------- | --------------------------------------- | ------------------------------------- |
+| `middleware.Cors`            | Exact origin match; preflight trả `204` | Rằng CORS là authentication           |
+| `middleware.SecurityHeaders` | Năm response header mặc định            | Rằng default là browser policy đầy đủ |
+
+Áp cả hai một cách có chủ đích. Listener service-to-service có thể không cần
+cái nào, còn listener phục vụ browser cần origin list đã review thay vì
+wildcard. Đọc [CORS](/docs/http/cors) và
+[Security headers](/docs/http/security-headers) cho default và override chính xác.
+
+## Timeout và request limit
+
+| Limit               | Mặc định      | Quyết định deployment                                  |
+| ------------------- | ------------- | ------------------------------------------------------ |
+| Idle timeout        | 120 giây      | Giảm cho client ngắn hạn; tăng cho client chậm         |
+| Header read timeout | Cấu hình được | Giới hạn request head hoặc body HTTP/1 chưa hoàn chỉnh |
+| Request body        | 16 KiB        | Chỉ nâng tới upload hợp lệ lớn nhất                    |
+| Request line        | 8 KiB         | Giữ trừ khi client hợp lệ gửi target dài hơn           |
+| Header block        | 16 KiB        | Nâng cùng header count khi proxy thêm field            |
+
+Mọi limit được thực thi bằng rejection có cấu trúc: `413` cho body, `431` cho
+header, và `503` khi một capacity limit như WebSocket tunnel bị cạn. Rejection
+nêu tên limit và giá trị, nên client sửa được request.
+
+Đọc [HTTP limits](/docs/http/limits) cho bảng đầy đủ.
+
+## Chính sách TRACE
+
+TRACE là opt-in. Framework không đăng ký route và không tự tạo echo response
+theo RFC 9110, nên public surface mặc định không có TRACE handler. Tắt nó trên
+public deployment trừ khi có yêu cầu vận hành.
+
+Nếu bật, handler phản chiếu phải redact `Authorization`, `Cookie`,
+`Proxy-Authorization` và secret của application, đồng thời giữ byte phản chiếu
+trong response capacity. Một echo không redact biến endpoint thành nơi rò rỉ
+credential. Đọc [TRACE](/docs/http/trace) cho quy tắc handler.
+
+## Secret
+
+- Giữ signing key tối thiểu 32 byte, và giữ mọi secret ngoài repository, image
+  và log.
+- Cookie signing chứng minh integrity; nó không mã hóa. Không đặt dữ liệu mật
+  trong signed cookie.
+- So sánh secret trong constant time. Middleware authentication có sẵn làm việc
+  này; một check tự viết không được dùng so sánh chuỗi short-circuit.
+- Không đặt secret trong rejection document, metric label hay route path.
+
+## Early data
+
+TCP context chỉ nhận `GET`, `HEAD`, `OPTIONS` và `TRACE` trước khi handshake xác
+nhận. Mọi thứ khác nhận `425 Too Early`. Giữ handler `GET` idempotent, vì early
+data có thể bị replay. Cấu hình client certificate tắt hẳn early data. Đọc
+[Early data and 0-RTT](/docs/security/early-data) cho replay model.
+
+## Liên quan
+
+- [Authentication](/docs/http/authentication)
+- [Rate limiting](/docs/http/rate-limiting)
+- [CORS](/docs/http/cors)
+- [Security headers](/docs/http/security-headers)
+- [HTTP limits](/docs/http/limits)
+- [Threat model](/docs/security/threat-model)
+- [TLS deployment](/docs/deployment/tls)

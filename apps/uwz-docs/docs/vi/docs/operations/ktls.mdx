@@ -1,0 +1,114 @@
+---
+title: kTLS
+description: Dùng helper kTLS Linux độc lập trên socket bạn đã sở hữu, và hiểu vì sao TLS connection path không thể giao key cho kernel.
+sidebar:
+  order: 19
+search:
+  tags: [how-to, operations, ktls, tls]
+---
+
+`uz.ktls` là helper Linux độc lập. Nó lập trình kernel TLS record state trên một
+socket application đã sở hữu, và cung cấp zero-copy send cho file và pipe. Nó
+không thuộc TLS connection path của server, và bản build này không thể đưa nó vào
+đường đó.
+
+## Vì sao không có handoff
+
+Server terminate TLS trong BoringSSL với một `SSL_CTX` cho mỗi worker và một
+`SSL` cho mỗi connection. Chuyển một connection đã thiết lập sang kTLS đòi hỏi
+TLS library export traffic key đã thương lượng cho kernel. BoringSSL được pin
+không có interface key-handoff được hỗ trợ, nên connection path không bao giờ thử
+chuyển và cũng không âm thầm nhận là đã chuyển.
+
+| Layer                 | Xử lý record                                       |
+| --------------------- | -------------------------------------------------- |
+| Server TLS (mặc định) | BoringSSL trong userspace, chỉ TLS 1.3             |
+| `uz.ktls`             | Kernel Linux, TLS 1.2 AES-128-GCM state do bạn cài |
+| Handoff giữa hai bên  | Không có trong bản build này                       |
+
+Vì vậy helper dành cho application tự terminate hoặc proxy record layer của
+chính nó, ví dụ một terminator đã giữ traffic secret và muốn kernel mã hóa, giải
+mã, rồi nuôi `sendfile` hoặc `splice`.
+
+## Bề mặt API
+
+| Call                                                                           | Tác dụng                                                    |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `enable(fd)`                                                                   | Đặt upper-layer protocol `tls` trên TCP socket đã thiết lập |
+| `configure_aes_gcm_128(fd, direction, crypto)`                                 | Cài AES-128-GCM record state cho một direction              |
+| `enable_aes_gcm_128(fd, direction, crypto)`                                    | Bật kTLS và cài direction đó trong một call                 |
+| `sendfile_once(socket_fd, file_fd, offset, length)`                            | Gửi byte file không copy payload qua userspace              |
+| `splice_once(input_fd, input_offset, socket_fd, output_offset, length, flags)` | Splice byte pipe không copy payload qua userspace           |
+
+`direction` là `.transmit` hoặc `.receive`. Record state là `AesGcm128`: version
+TLS 1.2, cipher identifier 51, IV 8 byte, key 16 byte, salt 4 byte và record
+sequence 8 byte. Default điền sẵn field version và cipher, nên chỉ cần cung cấp
+key material và sequence.
+
+```zig
+const uz = @import("uWebZockets");
+
+var record: uz.ktls.AesGcm128 = .{
+    .iv = iv,
+    .key = key,
+    .salt = salt,
+    .record_sequence = sequence,
+};
+try uz.ktls.enable_aes_gcm_128(socket_fd, .transmit, record);
+```
+
+TLS stack của bạn export bốn giá trị đó cho mỗi direction. Helper copy struct vào
+một giá trị local và xóa bản copy sau call socket option; struct của caller không
+đổi và vẫn giữ key, nên đừng để nó lọt vào log, crash dump hay snapshot.
+
+Module chỉ có trên Linux. Tham chiếu nó trên target khác là compile error, không
+phải fallback runtime.
+
+## Error
+
+| Error                         | Nguyên nhân                                                  |
+| ----------------------------- | ------------------------------------------------------------ |
+| `error.InvalidFileDescriptor` | Descriptor không phải socket đang mở                         |
+| `error.KernelTlsUnavailable`  | Kernel hoặc socket family từ chối upper-layer protocol `tls` |
+| `error.PermissionDenied`      | Process không được đặt option trên socket này                |
+| `error.WouldBlock`            | `sendfile` hoặc `splice` non-blocking chưa thể tiến triển    |
+| `error.SyscallFailed`         | Mọi lỗi kernel khác                                          |
+
+`WouldBlock` nghĩa là socket buffer đầy, không phải record state sai. Retry khi
+socket ghi được.
+
+## Ranh giới kiểm chứng
+
+Helper chứng minh được rằng các call socket option thành công. Nó không chứng
+minh được peer giải mã đúng những gì kernel ghi, vì nó không thực hiện handshake
+và không đọc alert.
+
+1. Gọi `enable_aes_gcm_128` cho cả hai direction và kiểm tra error trả về.
+2. Gửi một plaintext đã biết qua socket và giải mã ở peer.
+3. Gửi một ciphertext đã biết từ peer và so sánh plaintext.
+4. Chạy `sendfile_once` và xác nhận độ dài cùng nội dung file đến đúng.
+
+Lỗi ở bước 2 hoặc 3 là key, IV, sequence hoặc direction không khớp, không phải lỗi
+server. Đừng đưa helper vào đường mà bạn không test end to end được.
+
+## Không phải mặc định deployment
+
+kTLS không thay đổi câu chuyện TLS production được hỗ trợ:
+
+- TLS policy của server vẫn là TLS 1.3 với xử lý record của BoringSSL. kTLS ở
+  đây cài TLS 1.2 AES-128-GCM state, không khớp policy đó.
+- Certificate loading, ALPN, mTLS, early data và session ticket vẫn là việc của
+  BoringSSL. Helper không có tương đương.
+- Record sequence, rekey và alert handling vẫn thuộc code của bạn.
+
+Giữ BoringSSL userspace record làm mặc định. Chỉ dùng `uz.ktls` khi bạn đã sở hữu
+record layer và đã đo được rằng đường kernel có ích.
+
+## Liên quan
+
+- [kTLS và AF_XDP](/docs/architecture/ktls-and-xdp) đặt cả hai helper cạnh
+  protocol core và nêu rõ ranh giới.
+- [TLS 1.3 và ALPN](/docs/security/tls) mô tả context policy mà server thực sự
+  dùng.
+- [Transport](/docs/architecture/transports) trình bày đường TCP và TLS đang sở
+  hữu việc xử lý record.

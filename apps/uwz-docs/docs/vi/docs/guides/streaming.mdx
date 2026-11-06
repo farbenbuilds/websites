@@ -1,0 +1,180 @@
+---
+title: Stream một response lớn
+description: Đẩy body của response từ producer callback, giữ cursor riêng cho từng response và xử lý backpressure mà không buffer toàn bộ payload.
+sidebar:
+  order: 10
+search:
+  tags: [guide, streaming, how-to]
+---
+
+`begin_stream` đưa cho transport một producer thay vì một body, và transport chỉ
+gọi nó khi còn chỗ cho chunk tiếp theo. Nhờ vậy response có thể vượt write queue.
+
+## Bài toán
+
+Bạn phải trả một payload mà bạn không muốn buffer, ví dụ một report được sinh ra
+hoặc một log export dài. Buffer nó tốn bộ nhớ cho mỗi connection.
+
+## Giả định
+
+- Producer sinh chunk kế tiếp một cách đồng bộ, không theo timer hay application
+  event.
+- Mỗi response đồng thời sở hữu cursor riêng; status và header là cuối cùng trước
+  khi byte đầu tiên rời đi.
+
+## Build route
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+const chunks = [_][]const u8{ "alpha\n", "beta\n", "gamma\n" };
+
+const Slot = struct {
+    active: bool = false,
+    index: usize = 0,
+};
+
+const Pool = struct {
+    slots: [128]Slot = [_]Slot{.{}} ** 128,
+};
+
+fn produce(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const slot: *Slot = @ptrCast(@alignCast(context));
+    errdefer slot.* = .{};
+    while (slot.index < chunks.len) {
+        res.write_chunk(chunks[slot.index]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        slot.index += 1;
+    }
+    try res.end_chunks();
+    slot.* = .{};
+    return .done;
+}
+
+fn start(context: *anyopaque, _: *uz.Request, res: *uz.Response) void {
+    const pool: *Pool = @ptrCast(@alignCast(context));
+    for (&pool.slots) |*slot| {
+        if (slot.active) continue;
+        slot.* = .{ .active = true };
+        res.begin_stream("200 OK", "Content-Type: text/plain; charset=utf-8\r\n", slot, produce) catch |err| {
+            slot.* = .{};
+            std.log.err("stream start failed: {}", .{err});
+        };
+        return;
+    }
+    res.end("503 Service Unavailable", "") catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    var pool = Pool{};
+    _ = try app.route_context(.get, "/download", &pool, start);
+
+    try app.catch_shutdown_signals();
+    try app.listen("127.0.0.1", 3000);
+    try app.run();
+}
+```
+
+`Pool` là storage do application sở hữu. Một slot cho mỗi stream đồng thời giữ
+cursor tường minh và tránh allocation trong request path.
+
+## Giả định capacity
+
+| Tài nguyên     | Giới hạn                                                          |
+| -------------- | ----------------------------------------------------------------- |
+| Write queue    | 64 KiB mỗi connection mặc định (`with_write_queue_size`)          |
+| Một chunk      | Phải vừa queue, hoặc vừa flow-control window của HTTP/2 và HTTP/3 |
+| Tổng body      | Không cap; queue giới hạn một lần gọi, không giới hạn response    |
+| Cursor storage | Một slot mỗi stream đồng thời; claim trước `begin_stream`         |
+
+Chunk không bao giờ vừa thì retry không tạo tiến triển; chia nó thành piece nhỏ
+hơn.
+
+## Hành vi khi lỗi
+
+| Điều kiện                                        | Kết quả                            |
+| ------------------------------------------------ | ---------------------------------- |
+| Producer error sau khi head đã gửi               | HTTP/1.1 đóng; HTTP/2 reset stream |
+| Không xử lý `error.WouldBlock`                   | Producer kết thúc bằng error       |
+| Status không cho body, hoặc `HEAD` trên HTTP/1.1 | `error.BodyNotAllowed`             |
+
+Chọn status trước `begin_stream`; producer failure là body bị cắt.
+
+## Khác biệt giữa transport
+
+| Transport | Body framing                 | Producer resume khi        |
+| --------- | ---------------------------- | -------------------------- |
+| HTTP/1.1  | `Transfer-Encoding: chunked` | Write-ring drain           |
+| HTTP/2    | `DATA` frame                 | Stream flow-control window |
+| HTTP/3    | `DATA` frame                 | Stream flow-control window |
+
+## Kiểm chứng
+
+```sh
+curl --raw -i http://127.0.0.1:3000/download
+curl -s http://127.0.0.1:3000/download | wc -c
+```
+
+Kỳ vọng `200 OK`, `Transfer-Encoding: chunked` và không có `Content-Length`;
+`--raw` còn cho thấy kích thước từng chunk. Số byte ổn định giữa các lần chạy.
+
+## Biến thể: chunk kiểu file
+
+Cắt một buffer do application sở hữu khi payload đã nằm sẵn trong bộ nhớ.
+
+```zig
+const Blob = struct { bytes: []const u8, offset: usize = 0 };
+
+fn produce_blob(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const state: *Blob = @ptrCast(@alignCast(context));
+    while (state.offset < state.bytes.len) {
+        const end = @min(state.offset + 8 * 1024, state.bytes.len);
+        res.write_chunk(state.bytes[state.offset..end]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        state.offset = end;
+    }
+    try res.end_chunks();
+    return .done;
+}
+```
+
+Chunk 8 KiB vừa queue mặc định 64 KiB. Không đọc file đĩa bên trong producer: đọc
+blocking sẽ chặn mọi connection trên worker đó. Phục vụ file bằng `res.send_file`
+hoặc `App.static`.
+
+## Biến thể: generator có bound
+
+```zig
+const Generator = struct { remaining: usize, buffer: [4096]u8 = undefined };
+
+fn produce_generated(context: *anyopaque, res: *uz.Response) !uz.StreamStatus {
+    const state: *Generator = @ptrCast(@alignCast(context));
+    while (state.remaining > 0) {
+        const length = @min(state.remaining, state.buffer.len);
+        @memset(state.buffer[0..length], 'x');
+        res.write_chunk(state.buffer[0..length]) catch |err| switch (err) {
+            error.WouldBlock => return .pending,
+            else => return err,
+        };
+        state.remaining -= length;
+    }
+    try res.end_chunks();
+    return .done;
+}
+```
+
+Mỗi chunk được sinh vào storage của producer. `write_chunk` copy, nên dùng lại
+buffer là an toàn, nhưng lần retry `WouldBlock` phải sinh đúng byte cũ.
+
+## Tiếp theo
+
+- [Streaming responses](/docs/http/streaming) là reference cho producer contract.
+- [Backpressure](/docs/concepts/backpressure) giải thích quy tắc `WouldBlock`.
