@@ -40,7 +40,7 @@ html {
   --blume-content-width: 42rem;
   --blume-code-background: #ffffff;
 
-  --uwz-docs-frame-width: 81.875rem;
+  --uwz-docs-frame-width: 82.5rem;
 
   /* Vivid reading indicator; the text stays at 6.9:1 on this paper. */
   --docs-active-bar: #d9480f;
@@ -106,6 +106,13 @@ html {
 
   /* 3.2:1 against the dark paper surface. */
   --farben-border-strong: #6b665c;
+}
+
+/* Keep the shorter line length on tablets; widen the reading measure on desktop. */
+@media (min-width: 64rem) {
+  :root {
+    --blume-content-width: 44rem;
+  }
 }
 
 /* Generate the utility classes the shared components and local Svelte islands use. */

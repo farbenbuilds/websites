@@ -22,15 +22,17 @@ html:has(.docs-home-hero) #blume-content {
   --hero-ink: #171512;
   --hero-muted: #5f5a52;
   --hero-rule: #8a8378;
-  --hero-accent: #a64600;
-  --hero-accent-bright: #7a3300;
+  /* Vivid orange family from the reading active state; the CTA uses one
+   * deeper step so white text stays above 5:1. */
+  --hero-accent: #c2410c;
+  --hero-accent-bright: #8f3500;
   --hero-ink-on-accent: #ffffff;
   --hero-hover: #ebe5d8;
-  --hero-eyebrow: #8a4a00;
-  --hero-still: #a64600;
-  --hero-wing-1: #c2410c;
-  --hero-wing-2: #a16207;
-  --hero-wing-3: #d97706;
+  --hero-eyebrow: #8f3500;
+  --hero-still: #d9480f;
+  --hero-wing-1: #d9480f;
+  --hero-wing-2: #e8752e;
+  --hero-wing-3: #f08c4a;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 6.4fr) minmax(0, 5.6fr);
