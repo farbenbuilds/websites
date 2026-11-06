@@ -7,6 +7,15 @@ search:
   tags: [operations, cross-compilation, targets]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application truyền cùng Zig target flag trong `build.zig` của bạn; xem
+[Installation](/docs/getting-started/installation).
+:::
+
 Target triple là input bổ sung duy nhất mà một cross build cần. Zig build
 BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib cho target đã chọn, nên
 không cần external sysroot, MinGW zlib hay system prefix.

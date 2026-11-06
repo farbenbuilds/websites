@@ -12,14 +12,45 @@ map; the other increments a per-CPU histogram of ingress frame lengths. The
 server never attaches either one on its own: you build, attach, and pin, then the
 hidden metrics endpoint reads the pinned map.
 
-## Build the objects
+This page starts with the application path after
+[`zig fetch --save`](/docs/getting-started/installation). The framework-checkout
+shortcut is a contributor command and is not required in an application project.
+
+## Build the objects in your application
+
+Add a step to your own `build.zig` that compiles both C programs from the
+dependency. No clone of the framework repository is required.
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const uz = b.dependency("uWebZockets", .{});
+    const redirect = compileEbpf(b, uz.path("src/xdp/xdp_redirect.c"), "uwz_xdp.o");
+    const latency = compileEbpf(b, uz.path("src/observability/uwz_latency_bpf.c"), "uwz_latency.o");
+
+    const step = b.step("ebpf", "Build the eBPF objects from the package sources");
+    step.dependOn(&b.addInstallFile(redirect, "share/uwebzockets/uwz_xdp.o").step);
+    step.dependOn(&b.addInstallFile(latency, "share/uwebzockets/uwz_latency.o").step);
+}
+
+fn compileEbpf(b: *std.Build, source: std.Build.LazyPath, name: []const u8) std.Build.LazyPath {
+    const compile = b.addSystemCommand(&.{
+        b.graph.zig_exe, "cc", "-target", "bpfel-freestanding",
+        "-std=c11", "-O2", "-g", "-c",
+    });
+    compile.addFileArg(source);
+    compile.addArg("-o");
+    return compile.addOutputFileArg(name);
+}
+```
 
 ```sh
 zig build ebpf
+ls zig-out/share/uwebzockets
 ```
 
-The step requires a Linux build host and compiles both C sources with
-`zig cc -target bpfel-freestanding`. It installs two files:
+The step requires a Linux build host and installs two files:
 
 | Output                                    | Source                                | Program                                          |
 | ----------------------------------------- | ------------------------------------- | ------------------------------------------------ |
@@ -28,6 +59,26 @@ The step requires a Linux build host and compiles both C sources with
 
 On a non-Linux host the step fails instead of producing an object the kernel
 cannot load.
+
+## Framework checkout shortcut
+
+The repository also defines `zig build ebpf` for its own contributors. Run that
+command from a clone of
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets); the
+consumer step above installs the same two objects into the application's
+`zig-out` directory.
+
+The runtime reader is the public `uz.ebpf` module. It is already available after
+`zig fetch --save`; importing it does not require the framework checkout.
+
+```zig
+const uz = @import("uWebZockets");
+
+const map_fd = try uz.ebpf.open_pinned("/sys/fs/bpf/uwz_latency");
+defer uz.ebpf.close(map_fd);
+
+const histogram = try uz.ebpf.read_latency_histogram(map_fd);
+```
 
 ## Read path
 

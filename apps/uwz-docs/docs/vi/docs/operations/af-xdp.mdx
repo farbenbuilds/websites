@@ -25,7 +25,33 @@ traffic của server qua đó.
 reason `unsupported_platform` khi chạy. Build step lỗi thay vì tạo object mà
 kernel không load được.
 
-## Build redirect
+## Build redirect trong application
+
+Sau [`zig fetch --save`](/docs/getting-started/installation), thêm một step vào
+`build.zig` của bạn để compile redirect từ dependency. Không cần clone framework
+repository.
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const uz = b.dependency("uWebZockets", .{});
+    const redirect = compileEbpf(b, uz.path("src/xdp/xdp_redirect.c"), "uwz_xdp.o");
+
+    const step = b.step("ebpf", "Build the XSK redirect from the package sources");
+    step.dependOn(&b.addInstallFile(redirect, "share/uwebzockets/uwz_xdp.o").step);
+}
+
+fn compileEbpf(b: *std.Build, source: std.Build.LazyPath, name: []const u8) std.Build.LazyPath {
+    const compile = b.addSystemCommand(&.{
+        b.graph.zig_exe, "cc", "-target", "bpfel-freestanding",
+        "-std=c11", "-O2", "-g", "-c",
+    });
+    compile.addFileArg(source);
+    compile.addArg("-o");
+    return compile.addOutputFileArg(name);
+}
+```
 
 ```sh
 zig build ebpf
@@ -34,6 +60,13 @@ zig build ebpf
 Step này cài `zig-out/share/uwebzockets/uwz_xdp.o`. Program tra RX queue index
 trong XSK map có 256 entry và redirect packet vào socket đã map; queue không có
 trong map rơi xuống `XDP_PASS`, nên traffic vẫn đi theo đường thường.
+
+## Shortcut trong framework checkout
+
+Repository cũng định nghĩa `zig build ebpf` cho contributor của chính nó. Chạy
+command đó từ clone của
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets); nó cài
+cả redirect và latency histogram object.
 
 ```mermaid
 %%{init: {"flowchart":{"useMaxWidth":false}} }%%

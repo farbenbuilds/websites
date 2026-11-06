@@ -12,6 +12,23 @@ socket the application already owns, and it offers zero-copy file and pipe sends
 It is not part of the server's TLS connection path, and this build cannot make it
 part of that path.
 
+## Use it from an application
+
+`uz.ktls` is part of the public `uWebZockets` module. After
+[`zig fetch --save`](/docs/getting-started/installation), import the module and
+call the helper on a socket your process owns:
+
+```zig
+const uz = @import("uWebZockets");
+
+// `socket_fd` and `record` are application-owned; Surface defines the record struct.
+try uz.ktls.enable_aes_gcm_128(socket_fd, .transmit, record);
+```
+
+There is no extra framework build step. You do not add a `build.zig` step and you
+do not clone the repository. The module is Linux-only, so referencing it on
+another target is a compile error.
+
 ## Why there is no handoff
 
 The server terminates TLS in BoringSSL with a per-worker `SSL_CTX` and one `SSL`

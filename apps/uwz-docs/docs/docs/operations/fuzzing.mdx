@@ -7,6 +7,15 @@ search:
   tags: [operations, fuzzing, parsers]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application fuzzing uses your own harness. This page covers the framework Smith and OSS-Fuzz
+targets.
+:::
+
 Fuzzing has two layers. The Smith harness runs bounded parser and validator
 checks inside a normal Zig test build. The OSS-Fuzz objects export
 `LLVMFuzzerTestOneInput` so an external libFuzzer runtime can drive the same

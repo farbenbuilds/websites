@@ -7,6 +7,15 @@ search:
   tags: [operations, fuzzing, parsers]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application fuzzing dùng harness của bạn. Trang này nói về Smith và OSS-Fuzz target của
+framework.
+:::
+
 Fuzzing có hai lớp. Smith harness chạy các check parser và validator có giới hạn
 bên trong một Zig test build bình thường. OSS-Fuzz object export
 `LLVMFuzzerTestOneInput` để libFuzzer runtime bên ngoài điều khiển cùng các

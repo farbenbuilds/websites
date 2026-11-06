@@ -7,12 +7,61 @@ search:
   tags: [how-to, operations, wasm, edge]
 ---
 
-Hai build step biên dịch protocol core độc lập platform sang WebAssembly.
-Artifact freestanding nhắm tới V8 isolate host sở hữu socket và shared memory;
-artifact WASI nhắm tới WASI host. Không artifact nào accept network connection:
-chúng parse và tạo byte protocol rồi host di chuyển các byte đó.
+Hai artifact biên dịch protocol core độc lập platform sang WebAssembly. Artifact
+freestanding nhắm tới V8 isolate host sở hữu socket và shared memory; artifact
+WASI nhắm tới WASI host. Không artifact nào accept network connection: chúng
+parse và tạo byte protocol rồi host di chuyển các byte đó.
 
-## Build
+Trang này bắt đầu với đường application sau
+[`zig fetch --save`](/docs/getting-started/installation). Shortcut trong
+framework checkout là command cho contributor và không cần thiết trong
+application project.
+
+## Dùng từ application
+
+Resolve target `wasm32` trong `build.zig` của bạn và lấy artifact `uWebZockets`
+từ dependency. Không cần clone framework repository.
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+        .abi = .none,
+        .cpu_features_add = std.Target.wasm.featureSet(&.{ .atomics, .bulk_memory }),
+    });
+    const uz = b.dependency("uWebZockets", .{
+        .target = wasm_target,
+        .optimize = .ReleaseSafe,
+    });
+    const artifact = uz.artifact("uWebZockets");
+    const install = b.addInstallArtifact(artifact, .{
+        .dest_dir = .{ .override = .{ .custom = "wasm" } },
+        .dest_sub_path = "uWebZockets-freestanding.wasm",
+    });
+    const step = b.step("wasm-edge", "Build the uWebZockets edge module");
+    step.dependOn(&install.step);
+}
+```
+
+```sh
+zig build wasm-edge
+ls zig-out/wasm
+```
+
+Với biến thể WASI, đổi `.os_tag` thành `.wasi` và `.dest_sub_path` thành
+`uWebZockets-wasi.wasm`. Phần wiring còn lại giữ nguyên. Dependency build chọn
+edge module vì target là `wasm32`; native server không được compile vào artifact
+này.
+
+## Build trong framework checkout
+
+Repository cũng expose các step có tên cho contributor của chính nó. Các command
+này cần clone
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets) và không
+thuộc consumer build.
 
 ```sh
 zig build wasm-freestanding -Doptimize=ReleaseSafe
@@ -103,15 +152,19 @@ edge artifact không export tương đương.
 
 ## Kiểm tra
 
+Build application step và kiểm tra output:
+
 ```sh
-zig build wasm-freestanding -Doptimize=ReleaseSafe
+zig build wasm-edge
 ls zig-out/wasm
 ```
 
 ```console
 uWebZockets-freestanding.wasm
-uWebZockets-wasi.wasm
 ```
+
+Thêm biến thể WASI bằng `.os_tag = .wasi` như phần trên; output thứ hai là
+`uWebZockets-wasi.wasm`.
 
 Instantiate module trong host với memory limit nằm trong biên đã ghi, gọi
 `shared_acquire`, ghi, commit, đọc, rồi release. Một handle release hai lần phải

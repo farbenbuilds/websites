@@ -7,6 +7,15 @@ search:
   tags: [operations, nix, toolchain]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Đây không phải application build step. Nếu đã cài package bằng `zig fetch --save`, xem
+[Installation](/docs/getting-started/installation).
+:::
+
 Flake pin compiler, công cụ hỗ trợ và sanitizer runtime mà các CI gate dùng. Vào
 shell khi bạn muốn toolchain giống CI, hoặc khi sanitizer build cần compiler-rt,
 glibc và dynamic linker khớp nhau. Shell không thay đổi build: cùng các command

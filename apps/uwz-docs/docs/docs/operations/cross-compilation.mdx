@@ -7,6 +7,15 @@ search:
   tags: [operations, cross-compilation, targets]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Your application passes the same Zig target flags in its own `build.zig`; see
+[Installation](/docs/getting-started/installation).
+:::
+
 A target triple is the only extra input a cross build needs. Zig compiles
 BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib for the selected
 target, so no external sysroot, MinGW zlib, or system prefix is involved.

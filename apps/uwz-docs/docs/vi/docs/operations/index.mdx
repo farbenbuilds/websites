@@ -5,130 +5,147 @@ search:
   tags: [operations, build, testing]
 ---
 
-Phần này dành cho maintainer và contributor build và kiểm tra chính µWebZockets:
-framework repository, dependency đã pin, các test gate và công việc release,
-runtime. Nếu bạn đang thêm µWebZockets vào application, hãy bắt đầu với
-[Installation](/docs/getting-started/installation). Trang đó dùng
-`zig fetch --save`; phần này bắt đầu từ một clone của framework.
+Operations gồm hai công việc khác nhau. Một số trang giải thích cách thay đổi,
+kiểm tra và phát hành chính repository µWebZockets; đó là hướng dẫn đóng góp cho
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets). Các
+trang còn lại giải thích cách vận hành application đã cài package bằng
+`zig fetch --save`.
 
-Các trang ở đây mô tả command chạy trên checkout của framework. Chúng không phải
-application build step và không bắt buộc để dùng package.
+Không chạy command dành cho framework contributor trên application project. Hai
+build graph khác nhau: framework checkout sở hữu `builds/`, các test step và
+script release; application project sở hữu `build.zig`, pin package trong
+`build.zig.zon` và import public module `uWebZockets`.
 
-## Phần này được tổ chức thế nào
+## Bắt đầu theo đối tượng
 
-| Nhóm     | Câu hỏi mà nhóm trả lời                                               |
-| -------- | --------------------------------------------------------------------- |
-| Build    | Cần toolchain, build graph và target nào?                             |
-| Verify   | Gate nào chứng minh thay đổi tôi vừa làm?                             |
-| Release  | Thứ gì được ship, version hóa ra sao và pin những gì?                 |
-| Operate  | Đọc log, metrics và dừng process mà không mất việc đang chạy thế nào? |
-| Advanced | Dùng C ABI, edge, kernel-bypass và kTLS surface thế nào?              |
+| Tôi muốn...                              | Đối tượng             | Bắt đầu tại                                                                          |
+| ---------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| Thêm µWebZockets vào application         | Application           | [Installation](/docs/getting-started/installation)                                   |
+| Build và chạy server của riêng tôi       | Application           | [Quickstart](/docs/getting-started/quickstart)                                       |
+| Test route và rejection behavior         | Application           | [Testing an HTTP server](/docs/http/testing)                                         |
+| Dùng WASM, eBPF, kTLS hoặc AF_XDP        | Application           | [Advanced surfaces](#advanced-surfaces-for-applications)                             |
+| Embed server vào chương trình C hoặc C++ | Application           | [C ABI](/docs/operations/c-abi)                                                      |
+| Thay đổi, test hoặc kiểm tra framework   | Framework contributor | [Build from source](/docs/operations/build)                                          |
+| Review dependency pin hoặc publish tag   | Framework contributor | [Dependencies](/docs/operations/dependencies), [Releases](/docs/operations/releases) |
 
-## Build
+## Đóng góp cho µWebZockets
+
+Các trang này giả định bạn đã clone
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets). Chúng
+không phải application build step. Dùng chúng khi bạn thay đổi framework, tái
+hiện một maintainer gate hoặc chuẩn bị pull request cho repository gốc.
+[CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
+của repository quy định branch và review process.
 
 <CardGroup cols={2}>
-  <Card title="Build từ source" href="/docs/operations/build" icon="hammer">
-    Clone checkout, cài Zig 0.16.0, hiểu graph trong `builds/` và kiểm tra bằng unit suite.
+  <Card title="Build from source" href="/docs/operations/build" icon="hammer">
+    Clone framework, cài Zig 0.16.0, hiểu `builds/` graph và kiểm tra checkout bằng unit suite.
   </Card>
   <Card title="Nix development shell" href="/docs/operations/nix" icon="snowflake">
-    Dùng Nixpkgs 26.05 đã pin cho Zig, `wrk` và sanitizer runtime đồng bộ trên Linux.
+    Dùng shell Nixpkgs 26.05 đã pin của repository cho Zig, `wrk` và sanitizer runtime đồng bộ trên
+    Linux.
   </Card>
   <Card title="Cross-compilation" href="/docs/operations/cross-compilation" icon="network">
-    Build target musl, Windows, macOS và BSD bằng toolchain C/C++ và zlib đi kèm Zig.
+    Build framework artifact cho target musl, Windows, macOS và BSD bằng toolchain C/C++ đi kèm Zig.
   </Card>
-</CardGroup>
-
-## Verify
-
-<CardGroup cols={2}>
-  <Card title="Test" href="/docs/operations/testing" icon="flask-conical">
-    Chọn lớp unit, package consumer, compliance hoặc fuzz để chứng minh một thay đổi.
+  <Card title="Tests" href="/docs/operations/testing" icon="flask-conical">
+    Chạy unit, package-consumer, compliance và release-metadata gate bảo vệ thay đổi framework.
   </Card>
-  <Card title="Sanitizer" href="/docs/operations/sanitizers" icon="shield-check">
+  <Card title="Sanitizers" href="/docs/operations/sanitizers" icon="shield-check">
     Chạy ASan, UBSan và LSan cùng nhau, hoặc smoke MSan riêng cho ranh giới C/C++.
   </Card>
   <Card title="Fuzzing" href="/docs/operations/fuzzing" icon="bug">
-    Chạy Smith harness, năm object OSS-Fuzz và gate ClusterFuzzLite.
+    Drive Smith harness, năm OSS-Fuzz object và ClusterFuzzLite gate.
+  </Card>
+  <Card title="Releases" href="/docs/operations/releases" icon="rocket">
+    Bump nguồn version duy nhất, giữ mọi bản copy khớp nhau và publish tag chỉ có source.
+  </Card>
+  <Card title="Dependencies" href="/docs/operations/dependencies" icon="layers">
+    Audit immutable pin, maintained fork, provenance check và rollback rule.
+  </Card>
+  <Card title="Platform support" href="/docs/operations/platforms" icon="server">
+    Xem platform nào build được, platform nào chạy trong hosted CI và mỗi support claim phụ thuộc
+    vào gì.
   </Card>
 </CardGroup>
 
-## Release
+## Vận hành application của bạn
+
+Các trang này mô tả application bạn build với package đã cài. Chúng dùng public
+module và không cần framework checkout.
 
 <CardGroup cols={2}>
   <Card title="C ABI" href="/docs/operations/c-abi" icon="braces">
-    Build archive, cài header, link chương trình C và xử lý error code có version.
+    Embed server từ C hoặc C++, cài header và archive, và xử lý error code có version.
   </Card>
-  <Card title="Phát hành" href="/docs/operations/releases" icon="rocket">
-    Tăng version single source, giữ mọi bản copy khớp nhau và publish tag chỉ có source.
-  </Card>
-  <Card title="Dependency" href="/docs/operations/dependencies" icon="layers">
-    Audit pin bất biến, fork được duy trì, provenance check và quy tắc rollback.
-  </Card>
-  <Card title="Nền tảng hỗ trợ" href="/docs/operations/platforms" icon="server">
-    Xem platform nào build được, platform nào chạy trong hosted CI và mỗi claim phụ thuộc vào gì.
-  </Card>
-</CardGroup>
-
-## Operate
-
-<CardGroup cols={2}>
   <Card title="Development log" href="/docs/operations/logging" icon="activity">
-    Bật hoặc tắt terminal log, gắn file sink, watch source path và đọc record bị drop.
+    Bật hoặc tắt terminal log, bind file sink, watch source path và đọc dropped record.
   </Card>
   <Card title="Metrics" href="/docs/operations/metrics" icon="gauge">
-    Bật Prometheus registry có giới hạn, scrape endpoint ẩn và đọc counter theo worker.
+    Bật Prometheus registry có bound, scrape hidden endpoint và đọc counter theo worker.
   </Card>
-  <Card title="Tắt server an toàn" href="/docs/operations/graceful-shutdown" icon="clock">
-    Arm signal watcher, để application drain và giải phóng server hoặc worker group.
+  <Card title="Graceful shutdown" href="/docs/operations/graceful-shutdown" icon="clock">
+    Arm signal watcher, để application drain và release server hoặc worker group.
   </Card>
-  <Card title="Xử lý sự cố" href="/docs/operations/troubleshooting" icon="shield-alert">
+  <Card title="Troubleshooting" href="/docs/operations/troubleshooting" icon="shield-alert">
     Ghép symptom với nguyên nhân, áp dụng fix nhỏ nhất và ngăn lỗi quay lại.
   </Card>
-  <Card title="Tham chiếu development log" href="/docs/operations/development-log" icon="archive">
-    Đọc record field, event payload, buffer cố định, sink counter và startup banner.
+  <Card title="Development log reference" href="/docs/operations/development-log" icon="archive">
+    Đọc record field, event payload, fixed buffer, sink counter và startup banner.
   </Card>
 </CardGroup>
 
-## Advanced
+## Advanced surfaces for applications
+
+Đây là application feature, không phải framework build step. Các trang giả định
+package đã được thêm bằng `zig fetch --save`; mỗi trang chỉ ra consumer
+`build.zig` wiring hoặc public module import cần thiết.
 
 <CardGroup cols={2}>
-  <Card title="eBPF latency histogram" href="/docs/operations/ebpf" icon="activity">
-    Build XDP object, pin latency map và đọc packet bucket từ endpoint ẩn.
+  <Card title="WASM edge targets" href="/docs/operations/wasm" icon="cpu">
+    Build edge module freestanding hoặc WASI từ dependency và gọi các export có bound.
   </Card>
-  <Card title="WASM edge target" href="/docs/operations/wasm" icon="cpu">
-    Build module freestanding và WASI, gọi `alloc` có giới hạn và các handle export.
+  <Card title="eBPF latency histogram" href="/docs/operations/ebpf" icon="activity">
+    Compile XDP object trong application, pin latency map và đọc packet bucket.
   </Card>
   <Card title="kTLS" href="/docs/operations/ktls" icon="key-round">
-    Dùng helper kTLS độc lập trên Linux với socket bạn đã sở hữu.
+    Import `uz.ktls` và program kernel TLS record state trên socket application đã sở hữu.
   </Card>
   <Card title="AF_XDP" href="/docs/operations/af-xdp" icon="network">
-    Build XSK redirect và điều khiển transport từ process của bạn.
+    Import `uz.xdp_transport` và `uz.xdp`, compile redirect và drive ring từ process của bạn.
   </Card>
 </CardGroup>
 
-## Phần này giả định gì
+| Surface | Sau `zig fetch --save`                                    | Public entry point           |
+| ------- | --------------------------------------------------------- | ---------------------------- |
+| WASM    | Resolve target `wasm32` trong `build.zig` và cài artifact | Artifact của dependency      |
+| eBPF    | Compile C source của package bằng step trong `build.zig`  | `uz.ebpf`                    |
+| kTLS    | Import module; không cần build step                       | `uz.ktls`                    |
+| AF_XDP  | Compile redirect và import transport                      | `uz.xdp`, `uz.xdp_transport` |
 
-| Giả định                   | Chi tiết                                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Compiler                   | Zig 0.16.0. Nix shell cung cấp compiler; bản cài thuần phải khớp minor version.                                        |
-| Host platform              | Linux chạy hosted matrix trên `x86_64` và `aarch64`. macOS được hỗ trợ và cross-compile; Windows có runtime job riêng. |
-| Quyền truy cập repository  | Một clone của `farbenbuilds/uWebZockets`, kèm submodule `vendor/h1spec` cho gate h1spec.                               |
-| Network ở lần chạy đầu     | Zig fetch các package dependency đã pin vào global cache và local cache.                                               |
-| Không cần system toolchain | BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib được build từ source đã pin.                                 |
+## Section này giả định gì
+
+| Giả định                   | Chi tiết                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Compiler                   | Zig 0.16.0. Nix shell cung cấp compiler; bản cài thường phải khớp minor version.                                          |
+| Host platform              | Linux chạy hosted matrix trên `x86_64` và `aarch64`. macOS được hỗ trợ và cross-compile; Windows bị gate bởi runtime job. |
+| Repository access          | Trang contributor dùng clone của `farbenbuilds/uWebZockets`; trang application dùng `zig fetch --save`.                   |
+| Network ở lần build đầu    | Zig fetch các dependency package đã pin vào global cache và local cache.                                                  |
+| Không cần system toolchain | BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate và zlib được compile từ source đã pin.                                  |
 
 ## Ranh giới
 
-| Không nằm ở đây                       | Nằm ở đâu                                                                                    |
-| ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Cài đặt cho application               | [Installation](/docs/getting-started/installation)                                           |
-| Test handler và route của application | [Test một HTTP server](/docs/http/testing)                                                   |
-| Deployment topology và TLS rollout    | [Production certificates](/docs/security/production-certificates)                            |
-| Claim về throughput và latency        | [Benchmarking](/docs/performance/benchmarking)                                               |
-| Kiến trúc runtime                     | [Architecture](/docs/architecture/backends), [Memory model](/docs/architecture/memory-model) |
+| Không nằm ở đây                    | Nằm tại                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| Application installation           | [Installation](/docs/getting-started/installation)                                           |
+| Application handler và route test  | [Testing an HTTP server](/docs/http/testing)                                                 |
+| Deployment topology và TLS rollout | [Production certificates](/docs/security/production-certificates)                            |
+| Throughput và latency claim        | [Benchmarking](/docs/performance/benchmarking)                                               |
+| Runtime architecture               | [Architecture](/docs/architecture/backends), [Memory model](/docs/architecture/memory-model) |
 
 ## Liên quan
 
 - [Platform support](/docs/architecture/backends) mô tả runtime backend phía sau mỗi target.
-- [Dependencies](/docs/architecture/dependencies) liệt kê các package đã pin và fork được duy trì.
+- [Dependencies](/docs/architecture/dependencies) liệt kê package đã pin và maintained fork.
 - [Contributing](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
-  mô tả quy ước branch và pull request cho framework repository.
+  quy định branch và pull-request convention cho framework repository.

@@ -12,6 +12,23 @@ socket application đã sở hữu, và cung cấp zero-copy send cho file và p
 không thuộc TLS connection path của server, và bản build này không thể đưa nó vào
 đường đó.
 
+## Dùng từ application
+
+`uz.ktls` là một phần của public module `uWebZockets`. Sau
+[`zig fetch --save`](/docs/getting-started/installation), import module và gọi
+helper trên socket process của bạn sở hữu:
+
+```zig
+const uz = @import("uWebZockets");
+
+// `socket_fd` và `record` thuộc application; cấu trúc record ở phần Surface.
+try uz.ktls.enable_aes_gcm_128(socket_fd, .transmit, record);
+```
+
+Không cần framework build step. Bạn không thêm `build.zig` step và không clone
+repository. Module chỉ có trên Linux, nên tham chiếu nó trên target khác là
+compile error.
+
 ## Vì sao không có handoff
 
 Server terminate TLS trong BoringSSL với một `SSL_CTX` cho mỗi worker và một

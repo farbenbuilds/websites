@@ -7,6 +7,15 @@ search:
   tags: [operations, nix, toolchain]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+It is not an application build step. If you installed the package with `zig fetch --save`, see
+[Installation](/docs/getting-started/installation) instead.
+:::
+
 The flake pins the compiler, the support tools, and the sanitizer runtime that
 the CI gates use. Enter the shell when you want the same toolchain as CI, or
 when a sanitizer build needs a matching compiler-rt, glibc, and dynamic linker.

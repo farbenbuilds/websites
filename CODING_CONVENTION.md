@@ -190,29 +190,52 @@ new primitive.
 - Agent-facing documents describe observable behavior, ownership, and
   verification. They do not duplicate the full codebase.
 
-### Consumer-facing scope
+### Documentation surfaces
 
-µWebZockets documentation serves developers who add the framework to their own
-application. The framework repository is a dependency source, not a workspace the
-reader is expected to clone, build, test, or modify.
+µWebZockets documentation serves two audiences in separate surfaces. Do not mix
+a framework-contributor command into an application page.
+
+**Application pages** treat µWebZockets as an installed dependency. The framework
+repository is a dependency source, not a workspace the reader is expected to
+clone, build, test, or modify.
 
 - Show dependency setup with `zig fetch --save` and the reader's own
   `build.zig.zon`, `build.zig`, and `src/` tree. Never start from a clone of the
   framework repository.
 - Show behavior with application code that imports `uWebZockets`, not with
   framework-internal programs, test harnesses, or build steps.
-- Consumer commands are the reader's own `zig build`, `zig build run`,
+- Application commands are the reader's own `zig build`, `zig build run`,
   `zig build test` when their `build.zig` defines it, and client tools such as
   `curl`, `wscat`, `h2load`, or a service test.
 - Framework compliance and release evidence is a published fact, not an
   instruction. Do not tell a reader to run Autobahn, h1spec, the HTTP/3
-  compliance script, sanitizer jobs, or Nix shells. Do not tell a reader to
-  install a framework development shell.
+  compliance script, sanitizer jobs, or Nix shells in an application guide.
 - Refer to a framework source file only to source a claim, never as a required
   reading step. Use `src/root.zig` style citations in reference detail, not in a
   tutorial.
 - Code snippets come from `examples/*.zig` and the public API, adapted to a
   consumer `main` and build graph.
+
+**Contributor pages** under `/docs/operations` may describe the framework
+repository, its `builds/` graph, test gates, sanitizers, fuzzing, releases, and
+dependency pins. They carry a different contract.
+
+- Open with a `:::note[Contributing to µWebZockets]` block, link
+  `https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md`, and say
+  the commands target a framework checkout.
+- Use clone, `nix develop`, `zig build test`, sanitizer, fuzz, release, and
+  dependency commands only in these pages. Never present them as application
+  steps.
+- Keep contributor pages in the Operations "Contribute to µWebZockets" group and
+  link the application alternative from the same page.
+- A contributor page still states what an application reader should use instead,
+  usually `zig fetch --save` and the public module.
+
+**Advanced application surfaces** such as WASM, eBPF, kTLS, and AF_XDP are
+application pages even when they need extra build wiring. Show `zig fetch
+--save`, the consumer `build.zig` step, the installed artifact path, and the
+public module import. If the framework also defines a named build step, label it
+as a contributor shortcut and keep it out of the application path.
 
 ### Internationalization ownership
 

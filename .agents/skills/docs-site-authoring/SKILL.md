@@ -46,21 +46,35 @@ description: Install the package, run the first example, and verify the result.
 - External links name the destination instead of using "click here".
 - No emoji, exclamation mark, marketing filler, or unverified claim.
 
-## Consumer Scope
+## Documentation Surfaces
 
-The reader installs µWebZockets into their own Zig project. They do not clone,
-build, test, or develop the framework repository.
+µWebZockets documentation serves two audiences in separate surfaces.
+
+**Application pages** treat µWebZockets as an installed dependency. The reader
+adds it with `zig fetch --save` and works in their own `build.zig` and `src/`.
+They do not clone, build, test, or develop the framework repository.
 
 - Start from `zig fetch --save`, the reader's `build.zig.zon`, and their `src/`.
 - Use application commands: `zig build`, `zig build run`, `zig build test` when
   their build defines it, and client tools such as `curl`, `wscat`, or `h2load`.
 - Never ask a reader to run framework test, compliance, sanitizer, C ABI, or Nix
-  commands, or to enter a framework development shell.
+  commands in an application page.
 - Cite framework source only to prove a claim. Do not make reading or editing
   `src/` a prerequisite.
 - Demonstrate behavior with the public API and code adapted from
   `examples/*.zig` into the reader's project.
 - Present framework compliance results as dated upstream evidence, not as a task.
+
+**Contributor pages** under `/docs/operations` document changing the framework
+repository. They open with a `:::note[Contributing to µWebZockets]` block, link
+`CONTRIBUTE.md`, and may use clone, `nix develop`, test, sanitizer, fuzz, and
+release commands. They link the application alternative from the same page and
+stay out of tutorials, Getting Started, Deployment, and Guides.
+
+**Advanced application surfaces** such as WASM, eBPF, kTLS, and AF_XDP are
+application pages. Show `zig fetch --save`, the consumer `build.zig` step, the
+installed artifact path, and the public module import. Label a framework named
+build step as a contributor shortcut.
 
 ## Page Types
 

@@ -7,6 +7,15 @@ search:
   tags: [operations, sanitizers, memory]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application test không chạy các gate này. Với kiểm tra ở mức application, xem
+[Testing an HTTP server](/docs/http/testing).
+:::
+
 Sanitizer đặt instrumentation vào dependency C và C++ đã pin, C shim cục bộ và
 chương trình C ABI. Chúng không thay safety check của Zig: các lần chạy có
 instrumentation cũng dùng `ReleaseSafe` và giữ frame pointer. Có hai mode và

@@ -1,7 +1,7 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  title: "Triển khai",
+  title: "Deployment",
   icon: "rocket",
   order: 17,
   directory: "none",

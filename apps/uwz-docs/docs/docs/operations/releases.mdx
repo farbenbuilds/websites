@@ -7,6 +7,15 @@ search:
   tags: [explanation, releases, operations]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Consume a release with `zig fetch --save`; see [Installation](/docs/getting-started/installation).
+This page covers cutting a framework release.
+:::
+
 A µWebZockets release is a source tag. There are no per-platform archives, no
 installer, and no checksum file: a consumer fetches the tag with `zig fetch` and
 Zig builds the C and C++ dependencies from their pins. This page covers the

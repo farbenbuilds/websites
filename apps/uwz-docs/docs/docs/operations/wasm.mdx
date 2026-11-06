@@ -7,12 +7,60 @@ search:
   tags: [how-to, operations, wasm, edge]
 ---
 
-Two build steps compile the platform-neutral core to WebAssembly. The
+Two artifacts compile the platform-neutral core to WebAssembly. The
 freestanding artifact targets a V8 isolate host that owns sockets and shared
 memory; the WASI artifact targets a WASI host. Neither artifact accepts network
 connections: they parse and produce protocol bytes that the host moves.
 
-## Build
+This page starts with the application path after
+[`zig fetch --save`](/docs/getting-started/installation). The framework-checkout
+shortcut is a contributor command and is not required in an application project.
+
+## Use it from an application
+
+Resolve a `wasm32` target in your own `build.zig` and ask the dependency for its
+`uWebZockets` artifact. No clone of the framework repository is required.
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+        .abi = .none,
+        .cpu_features_add = std.Target.wasm.featureSet(&.{ .atomics, .bulk_memory }),
+    });
+    const uz = b.dependency("uWebZockets", .{
+        .target = wasm_target,
+        .optimize = .ReleaseSafe,
+    });
+    const artifact = uz.artifact("uWebZockets");
+    const install = b.addInstallArtifact(artifact, .{
+        .dest_dir = .{ .override = .{ .custom = "wasm" } },
+        .dest_sub_path = "uWebZockets-freestanding.wasm",
+    });
+    const step = b.step("wasm-edge", "Build the uWebZockets edge module");
+    step.dependOn(&install.step);
+}
+```
+
+```sh
+zig build wasm-edge
+ls zig-out/wasm
+```
+
+For the WASI variant, change `.os_tag` to `.wasi` and `.dest_sub_path` to
+`uWebZockets-wasi.wasm`. The rest of the wiring is the same. The dependency
+build selects the edge module because the target is `wasm32`; the native server
+is not compiled into this artifact.
+
+## Build in the framework checkout
+
+The repository also exposes named steps for its own contributors. These commands
+require a clone of
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets) and are
+not part of a consumer build.
 
 ```sh
 zig build wasm-freestanding -Doptimize=ReleaseSafe
@@ -103,8 +151,10 @@ application, and the edge artifact exports no equivalent.
 
 ## Verify
 
+Build the application step and check the output:
+
 ```sh
-zig build wasm-freestanding -Doptimize=ReleaseSafe
+zig build wasm-edge
 ls zig-out/wasm
 ```
 

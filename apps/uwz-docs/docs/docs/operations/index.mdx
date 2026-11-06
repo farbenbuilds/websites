@@ -5,60 +5,61 @@ search:
   tags: [operations, build, testing]
 ---
 
-This section is for maintainers and contributors who build and verify
-µWebZockets itself: the framework repository, its pinned dependencies, its test
-gates, and its release and runtime work. If you are adding µWebZockets to an
-application, start with [Installation](/docs/getting-started/installation)
-instead. That page uses `zig fetch --save`; this section starts from a clone of
-the framework.
+Operations covers two different jobs. Some pages explain how to change, verify,
+and release the µWebZockets repository itself; those are contribution guides for
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets). Other
+pages explain how to run an application that installed the package with
+`zig fetch --save`.
 
-The pages here describe commands that operate on the framework checkout. They
-are not application build steps, and they are not required to use the package.
+Do not run a framework-contributor command against an application project. The
+build graphs differ: the framework checkout owns `builds/`, its test steps, and
+its release scripts; a consumer project owns its `build.zig`, pins the package in
+`build.zig.zon`, and imports the public `uWebZockets` module.
 
-## How the section is organized
+## Start by audience
 
-| Group    | Question it answers                                                      |
-| -------- | ------------------------------------------------------------------------ |
-| Build    | Which toolchain, build graph, and target do I need?                      |
-| Verify   | Which gate proves the change I made?                                     |
-| Release  | What ships, how is it versioned, and what is pinned?                     |
-| Operate  | How do I read logs and metrics and stop the process without losing work? |
-| Advanced | How do I use the C ABI, edge, kernel-bypass, and kTLS surfaces?          |
+| I want to...                             | Audience              | Start here                                                                           |
+| ---------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| Add µWebZockets to my application        | Application           | [Installation](/docs/getting-started/installation)                                   |
+| Build and run my own server              | Application           | [Quickstart](/docs/getting-started/quickstart)                                       |
+| Test my routes and rejection behavior    | Application           | [Testing an HTTP server](/docs/http/testing)                                         |
+| Use WASM, eBPF, kTLS, or AF_XDP          | Application           | [Advanced surfaces](#advanced-surfaces-for-applications)                             |
+| Embed the server in a C or C++ program   | Application           | [C ABI](/docs/operations/c-abi)                                                      |
+| Change, test, or verify the framework    | Framework contributor | [Build from source](/docs/operations/build)                                          |
+| Review a dependency pin or publish a tag | Framework contributor | [Dependencies](/docs/operations/dependencies), [Releases](/docs/operations/releases) |
 
-## Build
+## Contribute to µWebZockets
+
+These pages assume a clone of
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets). They are
+not application build steps. Use them when you change the framework, reproduce a
+maintainer gate, or prepare a pull request against the original repository. The
+repository's own
+[CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md)
+owns the branch and review process.
 
 <CardGroup cols={2}>
   <Card title="Build from source" href="/docs/operations/build" icon="hammer">
-    Clone the checkout, install Zig 0.16.0, understand the `builds/` graph, and verify with the unit
-    suite.
+    Clone the framework, install Zig 0.16.0, understand the `builds/` graph, and verify the checkout
+    with the unit suite.
   </Card>
   <Card title="Nix development shell" href="/docs/operations/nix" icon="snowflake">
-    Use pinned Nixpkgs 26.05 for Zig, `wrk`, and a coherent sanitizer runtime on Linux.
+    Use the repository's pinned Nixpkgs 26.05 shell for Zig, `wrk`, and a coherent sanitizer runtime
+    on Linux.
   </Card>
   <Card title="Cross-compilation" href="/docs/operations/cross-compilation" icon="network">
-    Build musl, Windows, macOS, and BSD targets with Zig's bundled C/C++ toolchain and zlib.
+    Build framework artifacts for musl, Windows, macOS, and BSD targets with Zig's bundled C/C++
+    toolchain.
   </Card>
-</CardGroup>
-
-## Verify
-
-<CardGroup cols={2}>
   <Card title="Tests" href="/docs/operations/testing" icon="flask-conical">
-    Pick the unit, package-consumer, compliance, or fuzz layer that proves a change.
+    Run the unit, package-consumer, compliance, and release-metadata gates that protect a framework
+    change.
   </Card>
   <Card title="Sanitizers" href="/docs/operations/sanitizers" icon="shield-check">
     Run ASan, UBSan, and LSan together, or the separate MSan C/C++ boundary smoke.
   </Card>
   <Card title="Fuzzing" href="/docs/operations/fuzzing" icon="bug">
     Drive the Smith harness, the five OSS-Fuzz objects, and the ClusterFuzzLite gate.
-  </Card>
-</CardGroup>
-
-## Release
-
-<CardGroup cols={2}>
-  <Card title="C ABI" href="/docs/operations/c-abi" icon="braces">
-    Build the archives, install the header, link a C program, and handle the versioned error codes.
   </Card>
   <Card title="Releases" href="/docs/operations/releases" icon="rocket">
     Bump the single version source, keep every copy in agreement, and publish a source-only tag.
@@ -71,9 +72,16 @@ are not application build steps, and they are not required to use the package.
   </Card>
 </CardGroup>
 
-## Operate
+## Operate your application
+
+These pages describe the application you build with the installed package. They
+use the public module and do not require a framework checkout.
 
 <CardGroup cols={2}>
+  <Card title="C ABI" href="/docs/operations/c-abi" icon="braces">
+    Embed the server from C or C++, install the header and archives, and handle the versioned error
+    codes.
+  </Card>
   <Card title="Development log" href="/docs/operations/logging" icon="activity">
     Turn the terminal log on or off, bind a file sink, watch source paths, and read dropped records.
   </Card>
@@ -92,31 +100,42 @@ are not application build steps, and they are not required to use the package.
   </Card>
 </CardGroup>
 
-## Advanced
+## Advanced surfaces for applications
+
+These pages are application features, not framework build steps. They assume the
+package was added with `zig fetch --save`; each page shows the consumer
+`build.zig` wiring or public module import you need.
 
 <CardGroup cols={2}>
-  <Card title="eBPF latency histogram" href="/docs/operations/ebpf" icon="activity">
-    Build the XDP objects, pin the latency map, and read its packet buckets from the hidden
-    endpoint.
-  </Card>
   <Card title="WASM edge targets" href="/docs/operations/wasm" icon="cpu">
-    Build the freestanding and WASI modules and call the bounded `alloc` and handle exports.
+    Build the freestanding or WASI edge module from the dependency and call its bounded exports.
+  </Card>
+  <Card title="eBPF latency histogram" href="/docs/operations/ebpf" icon="activity">
+    Compile the XDP objects in your application, pin the latency map, and read its packet buckets.
   </Card>
   <Card title="kTLS" href="/docs/operations/ktls" icon="key-round">
-    Use the standalone Linux kTLS helper on a socket you already own.
+    Import `uz.ktls` and program kernel TLS record state on a socket your application already owns.
   </Card>
   <Card title="AF_XDP" href="/docs/operations/af-xdp" icon="network">
-    Build the XSK redirect and drive the transport from your own process.
+    Import `uz.xdp_transport` and `uz.xdp`, compile the redirect, and drive the rings from your
+    process.
   </Card>
 </CardGroup>
 
-## What this section assumes
+| Surface | After `zig fetch --save`                                          | Public entry point           |
+| ------- | ----------------------------------------------------------------- | ---------------------------- |
+| WASM    | Resolve a `wasm32` target in `build.zig` and install the artifact | The dependency artifact      |
+| eBPF    | Compile the package C sources with your own `build.zig` step      | `uz.ebpf`                    |
+| kTLS    | Import the module; no extra build step                            | `uz.ktls`                    |
+| AF_XDP  | Compile the redirect and import the transport                     | `uz.xdp`, `uz.xdp_transport` |
+
+## What the section assumes
 
 | Assumption                | Detail                                                                                                                            |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Compiler                  | Zig 0.16.0. The Nix shell provides it; a plain install must match the minor version.                                              |
 | Host platforms            | Linux runs the hosted matrix on `x86_64` and `aarch64`. macOS is supported and cross-compiled; Windows is gated by a runtime job. |
-| Repository access         | A clone of `farbenbuilds/uWebZockets`, plus the `vendor/h1spec` submodule for the h1spec gate.                                    |
+| Repository access         | The contributor pages use a clone of `farbenbuilds/uWebZockets`; application pages use `zig fetch --save`.                        |
 | Network on the first run  | Zig fetches the pinned dependency packages into its global and local caches.                                                      |
 | No system build toolchain | BoringSSL, lsquic, ls-qpack, ls-hpack, libdeflate, and zlib are compiled from pinned sources.                                     |
 

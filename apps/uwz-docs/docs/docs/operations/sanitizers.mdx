@@ -7,6 +7,15 @@ search:
   tags: [operations, sanitizers, memory]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application tests do not run these gates. For application-level checks, see
+[Testing an HTTP server](/docs/http/testing).
+:::
+
 Sanitizers instrument the pinned C and C++ dependencies, the local C shim, and
 the C ABI program. They do not replace Zig's own safety checks: the instrumented
 runs also use `ReleaseSafe` and keep frame pointers. Two modes exist, and they

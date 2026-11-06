@@ -7,6 +7,15 @@ search:
   tags: [explanation, dependencies, operations]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Application pin package trong `build.zig.zon` của bạn; xem
+[Installation](/docs/getting-started/installation). Trang này nói về dependency graph của framework.
+:::
+
 µWebZockets build event loop, TLS, QUIC và compression từ các package đã pin. Mọi
 pin là một URL bất biến hoặc một full commit kèm Zig package hash, nên một archive
 bị thay đổi sẽ làm dependency resolution fail thay vì âm thầm thay source đã

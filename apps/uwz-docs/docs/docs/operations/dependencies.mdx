@@ -7,6 +7,15 @@ search:
   tags: [explanation, dependencies, operations]
 ---
 
+:::note[Contributing to µWebZockets]
+This page describes the framework repository at
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), not an application
+project. Use it when you change or verify the framework and prepare a pull request
+following [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Your application pins the package in its own `build.zig.zon`; see
+[Installation](/docs/getting-started/installation). This page covers the framework dependency graph.
+:::
+
 µWebZockets builds its event loop, TLS, QUIC, and compression from pinned
 packages. Every pin is an immutable URL or a full commit plus a Zig package
 hash, so a changed archive fails dependency resolution instead of silently

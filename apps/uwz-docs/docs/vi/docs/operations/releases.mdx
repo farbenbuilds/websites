@@ -7,6 +7,15 @@ search:
   tags: [explanation, releases, operations]
 ---
 
+:::note[Đóng góp cho µWebZockets]
+Trang này mô tả framework repository tại
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets), không phải
+application project. Dùng khi bạn thay đổi hoặc kiểm tra framework và chuẩn bị pull request
+theo [CONTRIBUTE.md](https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md).
+Consumer dùng release qua `zig fetch --save`; xem [Installation](/docs/getting-started/installation).
+Trang này nói về việc cắt release cho framework.
+:::
+
 Một release của µWebZockets là một source tag. Không có archive theo platform,
 không có installer và không có file checksum: consumer fetch tag bằng `zig fetch`
 rồi Zig build các dependency C và C++ từ pin của chúng. Trang này trình bày các

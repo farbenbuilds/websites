@@ -12,14 +12,46 @@ object còn lại tăng histogram packet-length của frame ingress, tách theo 
 CPU. Server không tự attach object nào: bạn build, attach, pin, rồi hidden
 metrics endpoint đọc map đã pin.
 
-## Build object
+Trang này bắt đầu với đường application sau
+[`zig fetch --save`](/docs/getting-started/installation). Shortcut trong
+framework checkout là command cho contributor và không cần thiết trong
+application project.
+
+## Build object trong application
+
+Thêm một step vào `build.zig` của bạn để compile cả hai C program từ dependency.
+Không cần clone framework repository.
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const uz = b.dependency("uWebZockets", .{});
+    const redirect = compileEbpf(b, uz.path("src/xdp/xdp_redirect.c"), "uwz_xdp.o");
+    const latency = compileEbpf(b, uz.path("src/observability/uwz_latency_bpf.c"), "uwz_latency.o");
+
+    const step = b.step("ebpf", "Build the eBPF objects from the package sources");
+    step.dependOn(&b.addInstallFile(redirect, "share/uwebzockets/uwz_xdp.o").step);
+    step.dependOn(&b.addInstallFile(latency, "share/uwebzockets/uwz_latency.o").step);
+}
+
+fn compileEbpf(b: *std.Build, source: std.Build.LazyPath, name: []const u8) std.Build.LazyPath {
+    const compile = b.addSystemCommand(&.{
+        b.graph.zig_exe, "cc", "-target", "bpfel-freestanding",
+        "-std=c11", "-O2", "-g", "-c",
+    });
+    compile.addFileArg(source);
+    compile.addArg("-o");
+    return compile.addOutputFileArg(name);
+}
+```
 
 ```sh
 zig build ebpf
+ls zig-out/share/uwebzockets
 ```
 
-Step này cần build host Linux và biên dịch cả hai C source bằng
-`zig cc -target bpfel-freestanding`. Nó cài hai file:
+Step này cần build host Linux và cài hai file:
 
 | Output                                    | Source                                | Program                                         |
 | ----------------------------------------- | ------------------------------------- | ----------------------------------------------- |
@@ -28,6 +60,25 @@ Step này cần build host Linux và biên dịch cả hai C source bằng
 
 Trên host không phải Linux, step này lỗi thay vì tạo object mà kernel không load
 được.
+
+## Shortcut trong framework checkout
+
+Repository cũng định nghĩa `zig build ebpf` cho contributor của chính nó. Chạy
+command đó từ clone của
+[farbenbuilds/uWebZockets](https://github.com/farbenbuilds/uWebZockets); consumer
+step ở trên cài cùng hai object vào thư mục `zig-out` của application.
+
+Runtime reader là public module `uz.ebpf`. Module này đã có sau
+`zig fetch --save`; import nó không cần framework checkout.
+
+```zig
+const uz = @import("uWebZockets");
+
+const map_fd = try uz.ebpf.open_pinned("/sys/fs/bpf/uwz_latency");
+defer uz.ebpf.close(map_fd);
+
+const histogram = try uz.ebpf.read_latency_histogram(map_fd);
+```
 
 ## Đường đọc
 

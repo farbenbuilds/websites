@@ -3,7 +3,7 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-05
+> Last updated: 2026-11-06
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
@@ -65,8 +65,10 @@ Every agent assigned a documentation task must follow this sequence:
    translation can be reviewed; never publish machine translation unchecked.
 6. Keep code samples complete enough to compile or run. If a sample is an
    excerpt, name the consumer file it belongs in and the full source it adapts
-   from. Follow section 8.12: never require a clone, build, test, or Nix shell of
-   the framework repository.
+   from. Follow section 8.12: application pages start from `zig fetch --save`;
+   contributor pages under `/docs/operations` say they target the framework
+   repository, link `CONTRIBUTE.md`, and keep maintainer commands out of
+   application pages.
 7. Run the page gate and the site gate. Paste the commands and outcomes into the
    task report.
 8. Update the page row status, the milestone dashboard, and any source map entry
@@ -955,6 +957,12 @@ and both docs builds; the root Vitest suite passed 26 files and 74 tests. Browse
 viewport, axe, keyboard, reduced-motion, and search QA for the 116 new routes were
 not run in this environment; the next review should repeat the 320/768/1280 pass
 before the section is treated as launch-verified.
+
+The same change separates framework-contributor operations from application
+operations. Contributor pages carry a scope note and link `CONTRIBUTE.md`;
+application pages keep the `zig fetch --save` path. The WASM, eBPF, kTLS, and
+AF_XDP pages now show the consumer `build.zig` step or public module import, with
+the framework checkout command labelled as a shortcut.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -2190,10 +2198,14 @@ invent a number to make the page feel complete.
 - [ ] Search finds the page by title and a body phrase.
 - [ ] The page has a next step.
 
-### 8.12 Consumer documentation boundary
+### 8.12 Application and contributor documentation boundary
 
-The website serves teams that install µWebZockets into their own Zig project. It
-does not onboard them into the framework repository. This boundary is mandatory:
+The website serves two audiences. Application pages onboard developers who install
+µWebZockets into their own Zig or C project. Contributor pages document the
+framework repository and how to change it. The boundary between the two surfaces
+is mandatory.
+
+#### Application pages
 
 - The reader's starting point is `zig fetch --save`, their `build.zig.zon`, and
   their `src/`. A page that begins with `git clone` or a repository checkout is
@@ -2220,20 +2232,50 @@ does not onboard them into the framework repository. This boundary is mandatory:
   or client error. Do not send the reader into framework internals to diagnose an
   application problem.
 
-A reviewer rejects a page that violates this boundary even when the command is
-accurate for a framework contributor.
+#### Contributor pages
 
-#### Consumer verification map
+- Contributor pages live in the Operations section and open with a
+  `:::note[Contributing to µWebZockets]` block. The note links
+  `https://github.com/farbenbuilds/uWebZockets/blob/main/CONTRIBUTE.md` and says
+  the commands target a framework checkout.
+- They may use clone, `nix develop`, `zig build test`, sanitizer, fuzz, release,
+  dependency-pin, and compliance commands because those commands belong to the
+  framework repository.
+- They must state the application alternative, usually `zig fetch --save` and the
+  public module, so a reader cannot mistake a maintainer step for an application
+  step.
+- They stay in the Operations "Contribute to µWebZockets" group and out of
+  tutorials, Getting Started, Deployment, and Guides.
+- A page that documents an application-reachable module such as `uz.ktls`,
+  `uz.ebpf`, `uz.xdp`, or the WASM edge artifact is an application page even when
+  it needs a custom build step.
 
-| Page goal                 | Correct evidence                                        |
-| ------------------------- | ------------------------------------------------------- |
-| Install the package       | `zig fetch --save` and a consumer `build.zig.zon` entry |
-| First server              | `zig build run` plus one `curl` request                 |
-| WebSocket route           | `wscat` or a browser console session                    |
-| HTTP/2 route              | `curl --http2`, `h2load`, or another HTTP/2 client      |
-| HTTP/3 route              | `curl --http3-only` with a QUIC-enabled client          |
-| Capacity behavior         | A load client and the application's own counters/logs   |
-| Protocol compliance claim | Published upstream evidence with version and date       |
+#### Advanced application surfaces
+
+WASM, eBPF, kTLS, and AF_XDP are application features. After `zig fetch --save`,
+their pages show the consumer `build.zig` step, the installed artifact path, and
+the public module import. If the framework also defines a named build step, the
+page labels it as a contributor shortcut and keeps it out of the application
+path.
+
+A reviewer rejects an application page that requires a framework clone, and
+rejects a contributor page that does not declare its scope and application
+alternative.
+
+#### Application verification map
+
+| Page goal                 | Correct evidence                                         |
+| ------------------------- | -------------------------------------------------------- |
+| Install the package       | `zig fetch --save` and a consumer `build.zig.zon` entry  |
+| First server              | `zig build run` plus one `curl` request                  |
+| WebSocket route           | `wscat` or a browser console session                     |
+| HTTP/2 route              | `curl --http2`, `h2load`, or another HTTP/2 client       |
+| HTTP/3 route              | `curl --http3-only` with a QUIC-enabled client           |
+| Capacity behavior         | A load client and the application's own counters/logs    |
+| WASM edge artifact        | A consumer `build.zig` step after `zig fetch --save`     |
+| eBPF object               | Consumer step compiles the package C source              |
+| kTLS or AF_XDP module     | Public `uz.ktls`, `uz.xdp`, or `uz.xdp_transport` import |
+| Protocol compliance claim | Published upstream evidence with version and date        |
 
 ## 9. Internationalization
 
