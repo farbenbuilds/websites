@@ -83,7 +83,7 @@ export default defineConfig({
     fonts: {
       display: {
         name: "Google Sans Flex",
-        weights: ["500..800"],
+        weights: ["500..700"],
         subsets: ["latin", "vietnamese"],
       },
       body: {

@@ -1765,8 +1765,8 @@ Rules:
 - From 64 to 80 rem the right rail is hidden, so the inline "On this page"
   disclosure replaces it and the article centers in the remaining column. This
   is the intentional two-column band, not a missing rail.
-- Reading-page titles use the display face at 800 weight,
-  `clamp(2.125rem, 1.6rem + 2vw, 3rem)`, `-0.05em` tracking, and `1.05` line
+- Reading-page titles use the display face at semibold 600 weight,
+  `clamp(2.125rem, 1.6rem + 2vw, 3rem)`, `-0.025em` tracking, and `1.08` line
   height. The landing hero keeps its own display scale.
 - Active navigation uses vivid orange in light mode and polished gold in dark
   mode. Pair the color with weight and `aria-current`, never color alone.
