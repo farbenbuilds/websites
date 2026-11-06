@@ -1,0 +1,50 @@
+/*
+ * Reading-page shell.
+ *
+ * Blume hard-codes a full-bleed three-column grid with 17.5rem rails, which
+ * leaves the 42rem prose column floating far from both rails on wide screens.
+ * These overrides keep a centered frame with narrower rails and oRPC's rail,
+ * gutter, and main padding measurements. The direct-child h1 guard keeps the
+ * landing page, including its full-screen hero, on the original shell.
+ *
+ * Selectors target Blume 2.2.6 data hooks. Re-measure after every Blume upgrade.
+ */
+
+html:has(#blume-content > article > h1) [data-blume-doc-grid] {
+  width: min(100%, var(--uwz-docs-frame-width));
+  margin-inline: auto;
+}
+
+@media (min-width: 64rem) {
+  html:has(#blume-content > article > h1) [data-blume-doc-grid] {
+    grid-template-columns: 14.5rem minmax(0, 1fr);
+  }
+
+  html:has(#blume-content > article > h1) [data-blume-doc-grid] > #blume-content {
+    padding: 3rem 3rem 3.5rem;
+  }
+
+  html:has(#blume-content > article > h1) [data-blume-nav-drawer] {
+    padding: 1.5rem 1.5rem 2rem 1.25rem;
+  }
+}
+
+@media (min-width: 80rem) {
+  html:has(#blume-content > article > h1) [data-blume-doc-grid]:has(> [data-blume-toc]) {
+    grid-template-columns: 14.5rem minmax(0, 1fr) 16.5rem;
+  }
+
+  html:has(#blume-content > article > h1) [data-blume-toc] {
+    padding: 3rem 1rem 2.5rem;
+  }
+
+  html:has(#blume-content > article > h1) [data-blume-header] {
+    padding-inline: max(1.5rem, calc((100% - var(--uwz-docs-frame-width)) / 2));
+  }
+}
+
+@media (min-width: 96rem) {
+  html:has(#blume-content > article > h1) [data-blume-doc-grid]:has(> [data-blume-toc]) {
+    grid-template-columns: 15.875rem minmax(0, 1fr) 16.5rem;
+  }
+}

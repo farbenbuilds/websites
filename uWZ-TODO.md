@@ -1741,21 +1741,35 @@ accent, square geometry, display type for the landing hero, and a calm
 reading surface for documentation. The docs must feel like the same publication
 as the landing page without turning every page into a poster.
 
-| Token            | Light         | Dark          | Use                          |
-| ---------------- | ------------- | ------------- | ---------------------------- |
-| Background       | `#f4f0e6`     | `#161513`     | Page and header paper        |
-| Foreground       | `#171512`     | `#ece6da`     | Body and display ink         |
-| Muted            | `#ebe5d8`     | `#211f1b`     | Callouts, table headers      |
-| Muted foreground | `#5f5a52`     | `#a39c90`     | Secondary text, labels       |
-| Border           | `#d3ccbe`     | `#2c2a25`     | Rules and dividers           |
-| Radius           | `0`           | `0`           | Controls, cards, code blocks |
-| Accent           | Orange preset | Orange preset | Links, focus, active state   |
-| Content width    | `42rem`       | `42rem`       | Prose measure                |
+| Token            | Light         | Dark          | Use                            |
+| ---------------- | ------------- | ------------- | ------------------------------ |
+| Background       | `#f4f0e6`     | `#161513`     | Page and header paper          |
+| Foreground       | `#171512`     | `#ece6da`     | Body and display ink           |
+| Muted            | `#ebe5d8`     | `#211f1b`     | Callouts, table headers        |
+| Muted foreground | `#5f5a52`     | `#a39c90`     | Secondary text, labels         |
+| Border           | `#d3ccbe`     | `#2c2a25`     | Rules and dividers             |
+| Radius           | `0`           | `0`           | Controls, cards, code blocks   |
+| Accent           | Orange preset | Orange preset | Links and focus                |
+| Navigation bar   | `#d9480f`     | `#d4af37`     | Active page and TOC marker     |
+| Navigation ink   | `#8f3500`     | `#edcb7a`     | Active page and category label |
+| Reading frame    | `81.875rem`   | `81.875rem`   | Centered docs shell            |
+| Content width    | `42rem`       | `42rem`       | Prose measure                  |
 
 Rules:
 
-- Keep Blume's 64 px header, 17.5 rem rails, and 42 rem prose measure unless a
-  measured readability test justifies a change.
+- Keep Blume's 64 px header and 42 rem prose measure. Reading pages use a
+  81.875 rem centered frame with 14.5 rem and 16.5 rem rails from 80 rem,
+  15.875 rem and 16.5 rem rails from 96 rem, 3 rem main padding from 64 rem,
+  1.5 rem navigation top padding, and 3 rem TOC top padding, matching oRPC's
+  reading shell. Re-measure at 1280, 1440, and 1920 before changing it.
+- From 64 to 80 rem the right rail is hidden, so the inline "On this page"
+  disclosure replaces it and the article centers in the remaining column. This
+  is the intentional two-column band, not a missing rail.
+- Reading-page titles use the display face at 800 weight,
+  `clamp(2.125rem, 1.6rem + 2vw, 3rem)`, `-0.05em` tracking, and `1.05` line
+  height. The landing hero keeps its own display scale.
+- Active navigation uses vivid orange in light mode and polished gold in dark
+  mode. Pair the color with weight and `aria-current`, never color alone.
 - Use the accent for interactive meaning, not large decorative fills.
 - Do not recolor Blume's syntax tokens. Flatten code chrome, keep contrast.
 - Keep the landing hero's motion inside the hero; docs pages use no ambient
