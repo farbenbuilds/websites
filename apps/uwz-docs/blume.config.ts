@@ -51,9 +51,6 @@ export default defineConfig({
     },
   },
   redirects: createRedirects(),
-  deployment: {
-    site: "https://uwz.farben.dev",
-  },
   markdown: {
     code: {
       theme: {
