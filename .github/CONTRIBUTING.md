@@ -191,6 +191,19 @@ Agent-assisted changes follow the same rules. The agent team is defined in
 - The Developer implements one scoped slice.
 - The Reviewer verifies independently and reports actionable findings.
 - The Integrator confirms the combined diff and evidence.
+- A whole-codebase refactor loads `untangle-codebase`, records a decision log,
+  and proves behavior parity with the existing suite plus targeted tests for
+  extracted contracts.
+
+Install or update a third-party skill from the repository root with the
+project-compatible CLI. `npx` is blocked by the pnpm `devEngines` requirement:
+
+```sh
+pnpm dlx skills@latest add <owner/repo> --skill <skill-id> -y
+```
+
+Review the `skills-lock.json` diff and the installed `SKILL.md` before
+committing. Do not edit vendored skill bodies by hand.
 
 An agent must not claim a check it did not run, suppress a review finding, or
 commit, push, and open a pull request without user authorization.

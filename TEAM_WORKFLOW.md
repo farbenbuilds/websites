@@ -103,15 +103,16 @@ suppress a finding, reclassify a failure, or weaken a check to close the phase.
 
 ## 3. Routing by Change Type
 
-| Change                                  | Primary core role | Required specialists            | Minimum evidence                                        |
-| --------------------------------------- | ----------------- | ------------------------------- | ------------------------------------------------------- |
-| Documentation page or guide             | Developer         | docs-writer, astro-blume        | `vp run <app>#check`, `vp run <app>#build`, link review |
-| Visual redesign or component styling    | Developer         | ui-stylist, svelte-engineer     | Both docs builds, keyboard and responsive review        |
-| New shared Svelte component             | Developer         | svelte-engineer, ui-stylist     | `@farben/ui#check`, consuming app build                 |
-| Blume configuration or content pipeline | Developer         | astro-blume, docs-writer        | Docs check, build, generated `llms.txt` review          |
-| Agent, skill, or template change        | Developer         | docs-writer, verification       | JSON/TOML parse, command contract review                |
-| Dependency or toolchain update          | Developer         | verification, security-reviewer | `pnpm ready`, lockfile review, advisory check           |
-| Security-sensitive surface              | Architect         | security-reviewer, verification | Threat model, validation tests, explicit review         |
+| Change                                      | Primary core role | Required specialists            | Minimum evidence                                        |
+| ------------------------------------------- | ----------------- | ------------------------------- | ------------------------------------------------------- |
+| Documentation page or guide                 | Developer         | docs-writer, astro-blume        | `vp run <app>#check`, `vp run <app>#build`, link review |
+| Visual redesign or component styling        | Developer         | ui-stylist, svelte-engineer     | Both docs builds, keyboard and responsive review        |
+| New shared Svelte component                 | Developer         | svelte-engineer, ui-stylist     | `@farben/ui#check`, consuming app build                 |
+| Blume configuration or content pipeline     | Developer         | astro-blume, docs-writer        | Docs check, build, generated `llms.txt` review          |
+| Agent, skill, or template change            | Developer         | docs-writer, verification       | JSON/TOML parse, command contract review                |
+| Whole-codebase behavior-preserving refactor | Architect         | reviewer, verification          | Decision log, `pnpm ready`, behavior parity evidence    |
+| Dependency or toolchain update              | Developer         | verification, security-reviewer | `pnpm ready`, lockfile review, advisory check           |
+| Security-sensitive surface                  | Architect         | security-reviewer, verification | Threat model, validation tests, explicit review         |
 
 This table covers the two current Blume docs apps. A new marketing or shop app on
 another framework is an architecture decision with its own stack specialist and
@@ -188,20 +189,24 @@ Skills live in `.agents/skills/<id>/SKILL.md`. OpenCode loads them with the
 narrowest set that fits the phase; do not load the whole library. If a listed
 skill is missing, report the drift instead of guessing.
 
-| Role                | Load first                                                                                                                      | Add for the task                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `architect`         | `agent-team-orchestration`, `websites-conventions`, `grill-me`, `ponytail`                                                      | `pragmatic-functional-programming`, `thermo-nuclear-code-quality-review`, domain skills for the affected surface |
-| `developer`         | `websites-conventions`, `agent-team-orchestration`, `pragmatic-functional-programming`, `ponytail`, `typescript-best-practices` | `typescript-advanced-types`, `install-anti-slop`, `vite`, `vitest`, domain skills for the slice                  |
-| `reviewer`          | `websites-conventions`, `thermo-nuclear-code-quality-review`, `verification-and-release`                                        | `web-security-review`, `ui-ux-pro-max`, `impeccable`, `svelte5-best-practices`                                   |
-| `integrator`        | `agent-team-orchestration`, `verification-and-release`, `technical-documentation`                                               | `ponytail`, `docs-site-authoring`, `web-security-review`                                                         |
-| `docs-writer`       | `technical-documentation`, `docs-site-authoring`, `blume`, `astro`                                                              | `context7`, `websites-conventions`, `impeccable` for reader-facing structure                                     |
-| `ui-stylist`        | `web-ui-styling`, `ui-ux-pro-max`, `impeccable`, `tailwind-design-system`, `shadcn-svelte`                                      | `gsap-core`, `chrome-devtools`, `svelte5-best-practices`                                                         |
-| `astro-blume`       | `astro`, `blume`, `docs-site-authoring`, `vite`                                                                                 | `technical-documentation`, `context7`, `nix-best-practices`                                                      |
-| `svelte-engineer`   | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`, `typescript-best-practices`                             | `typescript-advanced-types`, `web-ui-styling`, `vitest`                                                          |
-| `verification`      | `verification-and-release`, `vitest`, `vite`, `thermo-nuclear-code-quality-review`                                              | `install-anti-slop`, `typescript-best-practices`, `nix-best-practices`                                           |
-| `security-reviewer` | `web-security-review`, `context7`, `find-skills`                                                                                | `technical-documentation`, `verification-and-release`                                                            |
+| Role                | Load first                                                                                                                      | Add for the task                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `architect`         | `agent-team-orchestration`, `websites-conventions`, `grill-me`, `ponytail`                                                      | `untangle-codebase`, `pragmatic-functional-programming`, `thermo-nuclear-code-quality-review`, domain skills for the affected surface |
+| `developer`         | `websites-conventions`, `agent-team-orchestration`, `pragmatic-functional-programming`, `ponytail`, `typescript-best-practices` | `untangle-codebase`, `typescript-advanced-types`, `install-anti-slop`, `vite`, `vitest`, domain skills for the slice                  |
+| `reviewer`          | `websites-conventions`, `thermo-nuclear-code-quality-review`, `verification-and-release`                                        | `untangle-codebase`, `web-security-review`, `ui-ux-pro-max`, `impeccable`, `svelte5-best-practices`                                   |
+| `integrator`        | `agent-team-orchestration`, `verification-and-release`, `technical-documentation`                                               | `ponytail`, `docs-site-authoring`, `web-security-review`                                                                              |
+| `docs-writer`       | `technical-documentation`, `docs-site-authoring`, `blume`, `astro`                                                              | `context7`, `websites-conventions`, `impeccable` for reader-facing structure                                                          |
+| `ui-stylist`        | `web-ui-styling`, `ui-ux-pro-max`, `impeccable`, `tailwind-design-system`, `shadcn-svelte`                                      | `gsap-core`, `chrome-devtools`, `svelte5-best-practices`                                                                              |
+| `astro-blume`       | `astro`, `blume`, `docs-site-authoring`, `vite`                                                                                 | `technical-documentation`, `context7`, `nix-best-practices`                                                                           |
+| `svelte-engineer`   | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`, `typescript-best-practices`                             | `typescript-advanced-types`, `web-ui-styling`, `vitest`                                                                               |
+| `verification`      | `verification-and-release`, `vitest`, `vite`, `thermo-nuclear-code-quality-review`                                              | `install-anti-slop`, `typescript-best-practices`, `nix-best-practices`                                                                |
+| `security-reviewer` | `web-security-review`, `context7`, `find-skills`                                                                                | `technical-documentation`, `verification-and-release`                                                                                 |
 
 `caveman` is opt-in only when the user asks for terse output. `find-skills` is
 for discovering a missing capability, not for loading a skill that is already
 listed here. `context7` is for current library documentation, not for project
 rules.
+
+`untangle-codebase` is explicit-load only. Its Comments and Tests additions are
+opt-in, and neither may remove a gate or a regression test. A refactor slice
+must keep behavior parity and add a test for any extracted public contract.

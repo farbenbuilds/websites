@@ -9,9 +9,19 @@ These are installed with the `skills` CLI and pinned by
 Update them through the CLI, review the lockfile diff, and keep the upstream
 provenance intact.
 
+Run the CLI through pnpm from the repository root. `npx` is blocked by the
+pnpm `devEngines` requirement, so use the same CLI through `pnpm dlx`:
+
+```sh
+pnpm dlx skills@latest add caldoai/skills --skill untangle-codebase -y
+```
+
 Upstream content may contain emoji or wording that does not match this
 repository's style. It is vendored as-is and is exempt from the repository
 no-emoji rule. Project-owned skills below follow the repository style.
+
+`untangle-codebase` is the whole-codebase refactor skill. Load it explicitly for
+a multi-module refactor and keep the decision log its workflow describes.
 
 ## Project-Owned Skills
 
