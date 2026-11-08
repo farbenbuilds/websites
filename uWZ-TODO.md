@@ -3,7 +3,7 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-08
+> Last updated: 2026-11-09
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
@@ -964,7 +964,7 @@ application pages keep the `zig fetch --save` path. The WASM, eBPF, kTLS, and
 AF_XDP pages now show the consumer `build.zig` step or public module import, with
 the framework checkout command labelled as a shortcut.
 
-On 2026-11-08 the migration, reference, and canonical example sections added 30
+On 2026-11-09 the migration, reference, and canonical example sections added 30
 English and 30 Vietnamese pages, bringing the site to 516 documentation pages
 plus the two landing pages (518 pages total). `blume check` type-checked 518
 pages with 0 errors, 0 warnings, and 0 hints; `blume validate --strict` found no
@@ -3501,7 +3501,7 @@ source at the time it is written.
 | 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
 | 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
 | 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                      | Docs writing pass  |
-| 2026-11-08 | Shipped the migration, reference, and canonical example sections with Vietnamese mirrors; added reference API coverage and docs parity tests                                               | Docs writing pass  |
+| 2026-11-09 | Shipped the migration, reference, and canonical example sections with Vietnamese mirrors; added reference API coverage and docs parity tests                                               | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.
