@@ -11,7 +11,8 @@ The C ABI runs a µWebZockets server from C or C++ without writing Zig
 application code. It
 exposes one opaque application handle, borrowed byte views, and fixed
 capacities. [C ABI architecture](/docs/architecture/c-abi) explains the design;
-[C ABI types and enums](/docs/type-safety/c-abi-types) lists every value.
+[C ABI types and enums](/docs/type-safety/c-abi-types) lists every value. The
+stable lookup for every declaration is [C ABI reference](/reference/c-abi).
 
 ## Install the header and archives
 
@@ -175,6 +176,8 @@ returns, and every route must exist before `uwz_app_listen`. A `GET /` returns
 ## What the C ABI does not expose
 
 The C ABI does not project `ServerConfig`, compile-time capacities, `uz.schema`,
-`uz.json_rpc`, `uz.client`, HTTP/2, HPACK, HTTP/3 extensions, WebTransport,
-mTLS, certificate rotation, `uz.ktls`, `uz.xdp`, or shared memory. Use the Zig
-API when a deployment needs one of those surfaces.
+`uz.json_rpc`, `uz.client`, HTTP/2 frame or HPACK control, HTTP/3 extensions,
+WebTransport, mTLS, certificate rotation, `uz.ktls`, `uz.xdp`, or shared memory.
+Ordinary HTTP/2 works over `uwz_app_create_tls` because the shared server
+negotiates it through ALPN. Use the Zig API when a deployment needs one of the
+other surfaces.

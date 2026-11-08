@@ -1,0 +1,217 @@
+---
+title: Custom builder
+description: Configure a server with explicit capacities, read the slab size before allocating it, and accept a 50 MiB upload with a structured 413 above the limit.
+sidebar:
+  order: 6
+search:
+  tags: [reference, tutorial, http1, capacity]
+---
+
+This example builds a server with explicit capacities instead of a preset. It
+allows four concurrent connections, reserves a 50 MiB request body per
+connection, sets a 256 KiB write queue and a 60 s idle timeout, and prints the
+computed slab before allocating it. The program is `examples/custom_builder.zig`
+in the framework repository.
+
+## Source [#source]
+
+```zig src/main.zig
+//! Custom builder: fluent overrides with automatic slab math.
+//!
+//! Build and run:
+//!   zig build custom_builder -Doptimize=ReleaseSafe
+//!   curl -s -X POST http://127.0.0.1:3001/upload --data-binary @large.json
+//!
+//! The body limit below reserves a 50 MiB request buffer per connection, so
+//! only a few connections fit comfortably; the builder reports the exact slab
+//! before allocating it once. A request that exceeds the configured limit is
+//! answered with a structured 413 that names the limit and the knob to raise.
+
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn upload(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [128]u8 = undefined;
+    res.json_buf(.{ .received_bytes = req.bytes().len }, &scratch) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    const builder = uz.Server.builder(init.io)
+        .with_max_clients(4)
+        .with_max_body_size(50 * 1024 * 1024)
+        .with_write_queue_size(256 * 1024)
+        .with_idle_timeout_ms(60_000);
+
+    std.debug.print(
+        "custom_builder: one startup slab of {d} MiB\n",
+        .{(try builder.slab_bytes()) / (1024 * 1024)},
+    );
+
+    var server = try builder.build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.post("/upload", upload);
+
+    try server.listen("0.0.0.0", 3001);
+    try server.run();
+}
+```
+
+[Full source](https://github.com/farbenbuilds/uWebZockets/blob/v2.1.6/examples/custom_builder.zig)
+
+Every `with_*` call returns a new builder type with the value fixed at compile
+time. `slab_bytes()` runs the same checked layout as `build`, so the printed
+size matches the allocation that follows.
+
+## Build wiring [#build-wiring]
+
+Copy the program into `src/main.zig` of a project that imports the package. The
+dependency fetch and the `build.zig` module are shared by every example:
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Follow [Run an example in your project](/examples#run-an-example-in-your-project)
+for the `build.zig` block and the `run` step. The build adds the
+`uWebZockets` module import and does not need a framework checkout.
+
+The `zig build custom_builder` line in the module header is the framework
+checkout step. That command is a contributor shortcut, not the application path.
+
+## Run [#run]
+
+```sh
+zig build run
+```
+
+```console
+custom_builder: one startup slab of 204 MiB
+```
+
+The line reports 204 MiB on the reference Linux x86_64 build. The value depends
+on the target and the exact capacities, so read the line your build prints. The
+division truncates the fractional MiB.
+
+The process binds `0.0.0.0:3001` and blocks in `server.run()`. The program does
+not arm `catch_shutdown_signals`, so Ctrl+C ends it without the graceful drain
+path.
+
+## Verify [#verify]
+
+Send a small body:
+
+```sh
+printf '{"hello":"world"}' > small.json
+curl -s -X POST http://127.0.0.1:3001/upload --data-binary @small.json
+```
+
+```console
+{"received_bytes":17}
+```
+
+The handler reads the borrowed body length and does not copy or parse the
+bytes. The response is a 200 with the byte count.
+
+Send a body one byte over the limit:
+
+```sh
+head -c 52428801 /dev/zero > large.bin
+curl -s -o response.json -w '%{http_code}\n' \
+  -X POST http://127.0.0.1:3001/upload --data-binary @large.bin
+cat response.json
+```
+
+```console
+413
+{"error":{"code":"payload_too_large","message":"Request body exceeded the 50MB limit. Consider increasing 'max_body_size' in ServerConfig.","limit_bytes":52428800}}
+```
+
+50 MiB is 52,428,800 bytes. The rejection document is written by the transport,
+not by `upload`, and it names both the configured limit and the
+`max_body_size` field that raises it. The value uses binary units with `MB`
+labels.
+
+## Slab math [#slab-math]
+
+The 204 MiB startup slab is dominated by the request buffers:
+
+| Region                                       |            Approximate contribution |
+| -------------------------------------------- | ----------------------------------: |
+| Four HTTP/1.1 request buffers at 50 MiB each |                             200 MiB |
+| Four 256 KiB write queues                    |                               1 MiB |
+| Four embedded HTTP/2 sessions                | Target-dependent, about 3 MiB total |
+| Four 16 KiB WebSocket message buffers        |                              64 KiB |
+| Router storage                               |                Fixed default arrays |
+
+A request buffer is a per-connection reservation, not a per-request allocation.
+The 50 MiB of body storage exists before the first upload arrives, and the body
+bytes land in that reserved space. `req.bytes()` borrows it for the callback.
+After the callback returns, the buffer is reused for the next request on the
+connection.
+
+The connection count and the body limit trade against each other. Four
+connections can hold four 50 MiB requests at once, and the fifth concurrent
+connection is refused. Raise either value only after checking the new slab size.
+
+## Key APIs [#key-apis]
+
+| Call                                     | Effect                                                     |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| `uz.Server.builder(init.io)`             | Starts from the default capacities                         |
+| `.with_max_clients(4)`                   | Compiles four connection slots                             |
+| `.with_max_body_size(50 * 1024 * 1024)`  | Reserves a 50 MiB request buffer per connection            |
+| `.with_write_queue_size(256 * 1024)`     | Sets a 256 KiB pending-output queue per connection         |
+| `.with_idle_timeout_ms(60_000)`          | Closes a drained keep-alive connection after 60 s          |
+| `builder.slab_bytes()`                   | Runs the checked layout and returns the exact startup size |
+| `builder.build(std.heap.page_allocator)` | Performs the single slab allocation                        |
+| `server.post("/upload", upload)`         | Registers the upload route before the listener starts      |
+| `req.bytes().len`                        | Reads the borrowed body length without copying             |
+| `res.json_buf(...)`                      | Formats the byte count into 128 bytes of stack scratch     |
+| `server.listen` / `server.run()`         | Binds port 3001 and drives the event loop                  |
+
+## Capacities [#capacities]
+
+| Capacity          |                  Value | Set by                                  | Consequence                                       |
+| ----------------- | ---------------------: | --------------------------------------- | ------------------------------------------------- |
+| Connections       |                      4 | `.with_max_clients(4)`                  | The fifth concurrent connection is refused        |
+| Request body      |                 50 MiB | `.with_max_body_size(50 * 1024 * 1024)` | A larger body receives `413`                      |
+| Write queue       |                256 KiB | `.with_write_queue_size(256 * 1024)`    | A full queue returns `error.WouldBlock`           |
+| Idle timeout      |                   60 s | `.with_idle_timeout_ms(60_000)`         | A drained keep-alive connection closes            |
+| WebSocket message |                 16 KiB | Default                                 | A larger message is rejected on a WebSocket route |
+| Request line      |                  8 KiB | Default                                 | A larger request line receives `431`              |
+| Headers           |      16 KiB, 64 fields | Default                                 | A larger header block receives `431`              |
+| Router            | 256 nodes, 64 patterns | Default                                 | A larger route table fails registration           |
+
+The example trades connection count for body size. A 50 MiB reservation per
+connection is useful for a few trusted upload peers and wasteful for many small
+JSON clients. The 256 KiB write queue is larger than this handler needs; it
+leaves room for a larger response without resizing the server later.
+
+## Variation [#variation]
+
+Trade body size back for more peers:
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(16)
+    .with_max_body_size(8 * 1024 * 1024)
+    .with_write_queue_size(256 * 1024)
+    .with_idle_timeout_ms(60_000);
+```
+
+Sixteen 8 MiB request buffers total 128 MiB before the HTTP/2, queue, and router
+regions, so the printed slab is smaller than the 204 MiB baseline. Do not scale
+the number linearly: every connection also carries an HTTP/2 session, a write
+queue, and message storage. Call `slab_bytes()` for the exact result.
+
+## Next [#next]
+
+- [Basic microservice](/examples/basic-microservice) uses a preset for many
+  small JSON requests instead of a custom body limit.
+- [Uploads](/docs/guides/uploads) covers streaming an upload without buffering
+  the whole body.
+- [HTTP limits](/docs/http/limits) lists the request, header, and body
+  rejections in context.
+- [Capacity model](/docs/concepts/capacity-model) explains how one
+  `ServerConfig` becomes a slab.

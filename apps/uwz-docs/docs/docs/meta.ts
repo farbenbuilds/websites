@@ -24,5 +24,6 @@ export default defineMeta({
     "operations",
     "deployment",
     "guides",
+    "migration",
   ],
 });

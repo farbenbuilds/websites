@@ -1,0 +1,257 @@
+---
+title: Chuyển từ std.http
+description: Thay accept loop và response writer viết tay của std.http bằng router, startup slab, body có giới hạn, TLS và graceful shutdown của µWebZockets.
+sidebar:
+  order: 2
+search:
+  tags: [migration, http, http1, routing]
+---
+
+`std.http.Server` parse một connection. Nó không sở hữu listener, router, TLS
+context hay worker model, nên chương trình thường tự mọc thêm accept loop, so
+sánh target, ghi response và sizing buffer. Trang này map chương trình đó sang
+`uz.App` và nêu những gì framework làm thay.
+
+## Trước: connection loop của std.http [#before]
+
+Đoạn excerpt sau bắt đầu sau khi đã accept một `std.Io.net.Stream`. Listener
+setup, buffer allocation và outer accept loop được lược bỏ. Đây là excerpt tiêu
+biểu, không phải chương trình standalone hoàn chỉnh.
+
+```zig
+var recv_buffer: [8 * 1024]u8 = undefined;
+var send_buffer: [8 * 1024]u8 = undefined;
+var conn_reader = stream.reader(io, &recv_buffer);
+var conn_writer = stream.writer(io, &send_buffer);
+var server = std.http.Server.init(&conn_reader, &conn_writer);
+
+while (server.reader.state == .ready) {
+    var request = server.receiveHead() catch |err| switch (err) {
+        error.HttpConnectionClosing => return,
+        else => return err,
+    };
+
+    if (request.head.method == .GET and std.mem.eql(u8, request.head.target, "/health")) {
+        try request.respond("ok", .{ .status = .ok });
+    } else {
+        try request.respond("not found", .{ .status = .not_found });
+    }
+}
+```
+
+Chương trình thật vẫn cần accept loop, một `std.http.Server` cho mỗi connection,
+quy tắc đọc hoặc discard body, và một nhánh response cho mỗi target.
+`request.respond` nhận body slice và `RespondOptions`; nó không route, compress
+hay negotiate protocol.
+
+## Sau: server µWebZockets [#after]
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn hello(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| std.log.err("response failed: {}", .{res_err});
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn echo(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.text()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(256).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/health", health);
+    _ = try app.get("/hello/:name", hello);
+    _ = try app.post("/echo", echo);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 8080);
+    try app.run();
+}
+```
+
+Thêm dependency bằng lệnh trong [Quickstart](/docs/getting-started/quickstart):
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Giá trị `App(256)` sở hữu listener, event loop, router và slab; `main` giữ nó tại
+chỗ và giải phóng đúng một lần.
+
+## Map khởi động và accept loop [#map-startup-and-accept-loop]
+
+| Chương trình `std.http`                         | µWebZockets                                               |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| `std.Io.net.IpAddress.parse` và `.listen`       | `app.listen(address, port)`                               |
+| `listener.accept(io)` trong loop                | Event loop tự arm accept; application không gọi `accept`  |
+| Một `std.http.Server.init` cho mỗi connection   | Một `uz.App(N).init(io)` cho cả process                   |
+| Read buffer và write buffer theo connection     | Storage theo connection trong startup slab                |
+| Loop keep-alive `server.reader.state == .ready` | Parser và idle deadline của connection quản lý việc reuse |
+| Connection task blocking hoặc tự spawn          | Completion trên worker event loop                         |
+| Không có signal handling                        | `app.catch_shutdown_signals()` trước `app.run()`          |
+
+`App(N)` cố định số connection tại compile time. Chọn `N` theo peak concurrent
+connection, không theo request rate. `App(256)` từ chối connection thứ 257; builder
+expose cùng quyết định đó tại runtime với `with_max_clients`. Xem
+[Capacity model](/docs/concepts/capacity-model).
+
+## Map allocator model [#map-allocator-model]
+
+Bản thân `std.http.Server` không allocate sau khi setup buffer. Phần lớn chương
+trình quanh nó thì có: allocate arena cho mỗi request, build response string hoặc
+copy header vào owned slice. µWebZockets chuyển việc đó về startup.
+
+| Concern                | Chương trình `std.http`                                       | µWebZockets                                          |
+| ---------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| Application memory     | Phụ thuộc chương trình: allocate theo connection hoặc request | Một slab lúc `init`; giải phóng một lần lúc `deinit` |
+| Request header và body | Slice trong head buffer; body đọc qua `Reader`                | Slice borrow từ request buffer của connection        |
+| Giữ request data       | Copy vào allocated storage                                    | `req.clone(allocator)` hoặc bounded copy             |
+| Response body          | Buffer hoặc writer thuộc caller                               | Buffered helper copy vào write queue có giới hạn     |
+| Capacity failure       | Allocation error, truncation hoặc limit tự đặt                | Capacity startup có tên và một HTTP rejection cụ thể |
+
+Request path không allocate. Ngoại lệ được nêu rõ: `req.clone(allocator)` và
+`req.json(T, allocator)`. Mọi thứ khác hoặc borrow hoặc ghi vào fixed storage.
+Handler format response vào stack buffer, như `hello`, không chạm heap.
+
+## Map routing và request [#map-routing-and-request]
+
+| `std.http`                      | µWebZockets                                                            |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| `request.head.method`           | `req.method`                                                           |
+| `request.head.target`           | `req.target`; dùng `req.path` và `req.query` sau khi parse             |
+| `request.iterateHeaders()`      | `req.headers()`, `req.get_header`, `req.get_unique_header`             |
+| Tự `std.mem.eql` trên target    | Route tĩnh, `:param` và terminal `*wildcard` đã đăng ký                |
+| Không có capture extraction     | `req.get_param("name")`, tối đa 16 capture borrow                      |
+| Không có method dispatch helper | `app.get`, `app.post`, `app.put` và các method helper khác             |
+| Không có policy 404 hay 405     | Router trả lời route không khớp; path đúng nhưng sai method nhận `405` |
+
+Route registration xảy ra trước `listen` đầu tiên. Đăng ký sau đó trả
+`error.RoutesLocked`; đây không phải runtime reload API. Route tĩnh thắng
+parameter, và một parameterized shape không được đăng ký hai lần với tên capture
+khác nhau. Xem [Routing](/docs/http/routing).
+
+## Map xử lý body [#map-body-handling]
+
+`std.http` cho bạn `request.readerExpectNone(buffer)` hoặc
+`request.readerExpectContinue(buffer)` và để bạn quyết định cách đọc: allocate,
+stream hay discard. µWebZockets buffer toàn bộ body đến `max_body_size` trước khi
+dispatch, rồi trao cho handler một slice borrow.
+
+| Nhu cầu         | `std.http`                         | µWebZockets                                       |
+| --------------- | ---------------------------------- | ------------------------------------------------- |
+| Body nhỏ        | Đọc `Reader` vào buffer của caller | `req.text()` hoặc `req.bytes()`                   |
+| Body JSON       | Đọc rồi parse với allocator        | `req.json(T, allocator)`                          |
+| Form hoặc query | Tự parse body hoặc target          | `req.form()`, `req.query_params()`                |
+| Upload lớn      | Stream qua `Reader`                | Tăng `max_body_size`; vẫn buffer toàn bộ          |
+| Body quá lớn    | Application tự định nghĩa          | `413 Payload Too Large` với structured error body |
+
+Tăng limit cũng tăng chi phí slab cho mỗi connection. Body limit 1 MiB trên 1.024
+connection reserve ít nhất 1 GiB request storage, nên phải sizing limit theo
+connection count. Xem [HTTP limits](/docs/http/limits).
+
+## Map response writing [#map-response-writing]
+
+| `std.http`                                  | µWebZockets                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `request.respond(body, .{ .status = .ok })` | `res.text(body)`, `res.json(value, allocator)` hoặc `res.end("200 OK", body)` |
+| `RespondOptions.extra_headers`              | `res.append_header` hoặc `res.end_with_headers`                               |
+| Ghi chunked thủ công                        | `res.begin_chunked`, `res.write_chunk`, `res.end_chunks`                      |
+| Streaming thủ công                          | `res.begin_stream()` với `StreamProducer`                                     |
+| Không có server-sent events helper          | `res.sse()`                                                                   |
+| Tự viết status line và reason               | Status string chuẩn truyền vào response helper                                |
+
+Một response complete đúng một lần. Gọi body helper lần thứ hai trả error; nó
+không append. Nếu write queue đầy, helper trả `error.WouldBlock` thay vì tăng bộ
+nhớ. Xem [Response](/docs/http/response) và
+[Backpressure](/docs/concepts/backpressure).
+
+## Map TLS [#map-tls]
+
+`std.http` parse plaintext trên reader và writer mà bạn cung cấp. TLS là một lớp
+riêng quanh stream, còn certificate loading, ALPN và TLS version policy là trách
+nhiệm của application.
+
+µWebZockets sở hữu TLS context. Chọn initializer trước `listen`:
+
+```zig
+var app = try uz.App(256).init_https(init.io, "cert.pem", "key.pem");
+defer app.deinit();
+
+_ = try app.get("/health", health);
+try app.listen("0.0.0.0", 8443);
+try app.run();
+```
+
+`init_https` đọc certificate và key một lần. `init_https_ephemeral` tạo
+development certificate cho localhost. TLS chỉ 1.3, với ALPN `h2` rồi
+`http/1.1`; client TLS 1.2 sẽ fail handshake. Cluster TLS gọi `enable_https` một
+lần trên cluster; mỗi worker tạo `SSL_CTX` riêng. Xem
+[TLS](/docs/security/tls) và [TLS clusters](/docs/security/tls-clusters).
+
+## Giới hạn cần tính trước [#limitations]
+
+| Giới hạn                        | Hệ quả                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| Connection capacity cố định     | `App(N)` từ chối connection `N + 1`; chọn `N` trước deployment                 |
+| Request body buffer có giới hạn | Không có upload stream không giới hạn; tăng `max_body_size` hoặc tách endpoint |
+| Route bị khóa lúc `listen`      | Không có dynamic route registration                                            |
+| Một response cho mỗi request    | Completion thứ hai fail; công việc dài dùng async token                        |
+| Request memory được borrow      | Dữ liệu giữ sau callback phải copy hoặc clone                                  |
+| Chỉ TLS 1.3                     | Peer TLS 1.2 không kết nối được                                                |
+| Không có per-request allocator  | Handler phải dùng bounded storage hoặc allocator call rõ ràng                  |
+
+Đổi lại, server khởi động với một allocation, từ chối input quá lớn ngay tại
+parser và shutdown qua một signal path duy nhất.
+
+## Kiểm tra migration [#verify-the-migration]
+
+```sh
+curl -s http://127.0.0.1:8080/health
+```
+
+```console
+ok
+```
+
+```sh
+curl -s http://127.0.0.1:8080/hello/Ada
+```
+
+```console
+hello Ada
+```
+
+```sh
+curl -s -X POST --data 'hello' http://127.0.0.1:8080/echo
+```
+
+```console
+hello
+```
+
+Gửi `SIGTERM` và xác nhận `run` trả về sau khi drain thay vì cần kill process.
+
+## Tiếp theo [#next]
+
+- [Request](/docs/http/request) liệt kê mọi accessor borrow.
+- [Response](/docs/http/response) liệt kê mọi writer và failure mode.
+- [HTTP server đầu tiên](/docs/examples/first-http-server) bắt đầu từ project
+  sạch.
+- [Server configuration](/reference/server-config) bao phủ mọi capacity và
+  preset.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  liệt kê release chứa từng public API.

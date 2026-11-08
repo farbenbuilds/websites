@@ -59,7 +59,7 @@ Client HTTP/2 không thể bắt đầu bằng một request HTTP/1.1 có `Upgra
 client dùng prior knowledge trên connection cleartext, hoặc dùng TLS với ALPN.
 :::
 
-## TLS dùng ALPN
+## TLS dùng ALPN [#tls-uses-alpn]
 
 TLS termination dùng BoringSSL và chỉ TLS 1.3. Các phiên bản cũ bị từ chối tại
 context. Context quảng bá `h2` trước rồi `http/1.1`, nên client gửi cả hai sẽ

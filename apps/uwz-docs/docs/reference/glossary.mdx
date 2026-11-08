@@ -1,0 +1,117 @@
+---
+title: Glossary lookup
+description: Look up the canonical meaning of every µWebZockets term, with stable anchors, and the page that explains it in context.
+sidebar:
+  order: 10
+search:
+  tags: [reference, concept]
+---
+
+This is the canonical A-Z lookup for terms used across the site. Each entry gives
+the meaning used by µWebZockets and links to the page that owns the behavior.
+The [getting started glossary](/docs/getting-started/glossary) is the onboarding
+tour; this page is the reference index with stable anchors. Link to an entry with
+`/reference/glossary#<term-anchor>`, for example `/reference/glossary#async-token`.
+
+Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
+[Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
+
+## A [#a]
+
+| Term                                              | Definition                                                                                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="abi"></a>**ABI**                           | The binary contract exposed by `include/uWebZockets.h`, currently ABI version 1.0 with opaque handles, `uwz_slice` views, and fixed capacities. See [C ABI](/reference/c-abi).            |
+| <a id="alpn"></a>**ALPN**                         | The TLS extension that selects `h2` or `http/1.1` before HTTP bytes flow, with the server preferring `h2`. See [protocol negotiation](/docs/concepts/protocol-negotiation#tls-uses-alpn). |
+| <a id="application-slab"></a>**Application slab** | The one contiguous startup allocation that holds an application's pools, buffers, queues, and router storage. See the [capacity model](/docs/concepts/capacity-model).                    |
+| <a id="async-token"></a>**Async token**           | A copyable, generation-checked `AsyncResponse` that completes exactly once on the owning event loop. See [async responses](/docs/concepts/async-responses).                               |
+
+## B [#b]
+
+| Term                                      | Definition                                                                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="backpressure"></a>**Backpressure** | A bounded producer signal, usually `error.WouldBlock`, that asks the caller to resume after the queue drains. See [backpressure](/docs/concepts/backpressure).    |
+| <a id="bbrv1"></a>**BBRv1**               | The fixed QUIC congestion-control algorithm, applied with per-connection pacing. See [QUIC transport](/docs/http3/quic-transport).                                |
+| <a id="boringssl"></a>**BoringSSL**       | The pinned TLS 1.3 implementation that provides records, ALPN, certificate handling, and crypto primitives. See [TLS](/docs/security/tls).                        |
+| <a id="borrowed"></a>**Borrowed**         | A slice owned by a connection or request and valid only for the callback that received it. See [ownership and lifetimes](/docs/concepts/ownership-and-lifetimes). |
+
+## C [#c]
+
+| Term                                            | Definition                                                                                                                                                              |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="capacity"></a>**Capacity**               | A startup or compile-time bound, not a throughput number. See the [capacity model](/docs/concepts/capacity-model).                                                      |
+| <a id="cluster"></a>**Cluster**                 | A thread-per-core worker group with one event loop and one slab per worker, coordinated through bounded inboxes. See the [cluster model](/docs/concepts/cluster-model). |
+| <a id="completion"></a>**Completion**           | An event-loop result for accept, read, write, close, timer, or async wake, stored inline in its owner. See the [event loop](/docs/architecture/event-loop).             |
+| <a id="connection-slot"></a>**Connection slot** | One reusable `TcpConnection` in the pool, returned only after its close, read, and write completions drain. See the [capacity model](/docs/concepts/capacity-model).    |
+
+## D [#d]
+
+| Term                        | Definition                                                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| <a id="drain"></a>**Drain** | The callback invoked when a bounded write queue has room again. See [backpressure](/docs/concepts/backpressure). |
+
+## H [#h]
+
+| Term                            | Definition                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| <a id="handler"></a>**Handler** | A function registered on a route and invoked by the dispatcher. See [handler shapes](/docs/concepts/handler-shapes). |
+| <a id="hpack"></a>**HPACK**     | HTTP/2 header compression with a bounded dynamic table. See [HPACK](/docs/http2/hpack).                              |
+
+## M [#m]
+
+| Term                                  | Definition                                                                                                                                         |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="middleware"></a>**Middleware** | An ordered callback that runs before route dispatch and may stop the chain. See the [middleware model](/docs/concepts/middleware-model).           |
+| <a id="mtls"></a>**mTLS**             | Mutual TLS, where the client presents a certificate that the server verifies against a caller-supplied CA bundle. See [mTLS](/docs/security/mtls). |
+
+## P [#p]
+
+| Term                            | Definition                                                                                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| <a id="preset"></a>**Preset**   | A named `ServerConfig` tuned for a workload shape. See [ServerConfig presets](/reference/server-config#presets).  |
+| <a id="pub-sub"></a>**Pub/sub** | Bounded topic subscription and publish within one application or cluster. See [pub/sub](/docs/websocket/pub-sub). |
+
+## Q [#q]
+
+| Term                        | Definition                                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="qpack"></a>**QPACK** | HTTP/3 header compression whose header sets and decoded fields use fixed startup pools. See [QPACK](/docs/http3/qpack).                               |
+| <a id="quic"></a>**QUIC**   | The UDP transport beneath HTTP/3, with its own connection, stream, packet, and loss-recovery state. See [QUIC transport](/docs/http3/quic-transport). |
+
+## R [#r]
+
+| Term                                        | Definition                                                                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| <a id="route-capture"></a>**Route capture** | A borrowed `:name` or terminal `*name` value extracted from the path. See [route parameters](/docs/http/route-parameters). |
+
+## S [#s]
+
+| Term                                          | Definition                                                                                                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="shared-nothing"></a>**Shared-nothing** | A design where each worker owns its event loop, slab, and mutable state. See [shared-nothing](/docs/concepts/shared-nothing).                              |
+| <a id="slab"></a>**Slab**                     | Short for application slab, the single allocation an application carves into its bounded regions. See the [capacity model](/docs/concepts/capacity-model). |
+| <a id="slab-layout"></a>**Slab layout**       | The computed partition of the application slab into pool, buffer, queue, and router regions. See the [capacity model](/docs/concepts/capacity-model).      |
+| <a id="soa"></a>**SoA**                       | Structure of arrays, grouping hot fields into parallel arrays for cache-friendly scans. See the [memory model](/docs/architecture/memory-model).           |
+
+## W [#w]
+
+| Term                                    | Definition                                                                                                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="worker"></a>**Worker**           | One OS thread with its own event loop, slab, and optional TLS context. See the [cluster model](/docs/concepts/cluster-model).                                              |
+| <a id="write-queue"></a>**Write queue** | The fixed per-connection ring that holds response bytes until the socket drains and returns `error.WouldBlock` when full. See [backpressure](/docs/concepts/backpressure). |
+
+## 0 [#zero]
+
+| Term                        | Definition                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="0-rtt"></a>**0-RTT** | TLS 1.3 early data; TCP admits only safe methods before the handshake confirms, and the live HTTP/3 listener disables it. See [early data](/docs/http3/early-data). |
+
+## Related
+
+- [Getting started glossary](/docs/getting-started/glossary) introduces the same
+  vocabulary in reading order.
+- [Capacity model](/docs/concepts/capacity-model) explains the slab and every
+  bound that shapes an application.
+- [Protocol matrix](/reference/protocol-matrix) applies these terms to each
+  transport.
+- [Feature matrix](/reference/feature-matrix) states which surfaces are
+  supported or deliberately absent.

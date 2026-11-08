@@ -1,0 +1,112 @@
+---
+title: Canonical examples
+description: Đọc chương trình canonical cho từng capability của µWebZockets, kèm build wiring, run command, expected output và capacity note.
+search:
+  tags: [reference, tutorial, http1, websocket, json-rpc, tls, cluster, http3]
+---
+
+Mỗi trang document một chương trình canonical trong thư mục `examples/` của
+framework. Trang cung cấp complete source, consumer `build.zig` wiring, run
+command, expected output, capacity mà example chọn, và một variation đáng thử.
+
+Các trang này không thay thế task tutorial. Bắt đầu với
+[Your first HTTP server](/docs/examples/first-http-server) khi đang học lifecycle,
+và dùng example page khi cần chính xác chương trình framework ship.
+
+## Example index [#example-index]
+
+| Example                                                    | Shows                                          | Protocol                | Default port |
+| ---------------------------------------------------------- | ---------------------------------------------- | ----------------------- | -----------: |
+| [Hello world](/examples/hello-world)                       | `App(128)`, một route, một response            | HTTP/1.1                |         3000 |
+| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate và ALPN              | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
+| [Shared-nothing cluster](/examples/shared-nothing-cluster) | Bốn worker, mỗi worker một slab và loop        | HTTP/1.1                |         3000 |
+| [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS context và runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
+| [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing    | HTTP/1.1                |         3000 |
+| [Custom builder](/examples/custom-builder)                 | Fluent capacity và `slab_bytes()`              | HTTP/1.1                |         3001 |
+| [Chat server](/examples/chat-server)                       | WebSocket open, message, close và pub/sub      | WebSocket               |         3000 |
+| [RPC server](/examples/rpc-server)                         | Typed JSON-RPC procedure                       | JSON-RPC                |         3000 |
+| [HTTP/3 server](/examples/http3-server)                    | QUIC listener và in-memory TLS                 | HTTP/3                  |     8443 UDP |
+| [Delayed response](/examples/delay-server)                 | Async token và timing wheel                    | HTTP/1.1                |         3000 |
+
+## Run an example in your project [#run-an-example-in-your-project]
+
+<Steps>
+  <Step title="Add the dependency">
+    ```sh
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+    ```
+  </Step>
+  <Step title="Wire the module">
+    ```zig build.zig
+    const std = @import("std");
+
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
+        const optimize = b.standardOptimizeOption(.{});
+        const uz = b.dependency("uWebZockets", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = "example",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+        b.installArtifact(exe);
+
+        const run = b.addRunArtifact(exe);
+        b.step("run", "Run the example").dependOn(&run.step);
+    }
+    ```
+
+  </Step>
+  <Step title="Copy the program">
+    Copy source trên trang vào `src/main.zig`. Full source link trên mỗi trang
+    trỏ tới file framework mà trang mirror.
+  </Step>
+  <Step title="Build and run">
+    ```sh
+    zig build run
+    ```
+  </Step>
+  <Step title="Verify">
+    Dùng lệnh `curl` hoặc `wscat` trên example page. TLS cluster và HTTP/3
+    example cài signal watcher và drain khi Ctrl+C; các example còn lại dừng
+    ngay.
+  </Step>
+</Steps>
+
+## Upstream build steps [#upstream-build-steps]
+
+Framework repository cũng expose mỗi chương trình thành một named build step, ví
+dụ `zig build hello_world` hoặc `zig build tls_cluster`. Các lệnh đó chạy trong
+framework checkout và là contributor shortcut; chúng không phải consumer path.
+Trong project của bạn, dùng `zig build run` sau khi copy source.
+
+## Capacities chosen by the examples [#capacities-chosen-by-the-examples]
+
+| Example                |    Connections | Write queue |   Body | Message | Why                             |
+| ---------------------- | -------------: | ----------: | -----: | ------: | ------------------------------- |
+| Hello world            |            128 |      64 KiB | 16 KiB |  16 KiB | Small default footprint         |
+| HTTPS server           |            128 |      64 KiB | 16 KiB |  16 KiB | Same shape, TLS only            |
+| Shared-nothing cluster | 128 per worker |      32 KiB | 16 KiB |  16 KiB | Four small workers              |
+| TLS cluster            |   128 to 2,048 |      64 KiB | 16 KiB |  16 KiB | Benchmark controls              |
+| Basic microservice     |            256 |      16 KiB | 64 KiB |   8 KiB | JSON request/response           |
+| Custom builder         |              4 |     256 KiB | 50 MiB |  16 KiB | Large uploads, few peers        |
+| Chat server            |            128 |      64 KiB | 16 KiB |  16 KiB | Default WebSocket path          |
+| RPC server             |            128 |      64 KiB | 16 KiB |  16 KiB | Small typed payloads            |
+| HTTP/3 server          |            128 |      64 KiB | 16 KiB |  16 KiB | QUIC request/response           |
+| Delayed response       |            128 |      64 KiB | 16 KiB |  16 KiB | Parked response dùng timer slot |
+
+## Related [#related]
+
+- [Your first HTTP server](/docs/examples/first-http-server) dạy request và
+  response lifecycle từng bước.
+- [Capacity model](/docs/concepts/capacity-model) giải thích các giá trị này trở
+  thành một startup slab như thế nào.
+- [ServerConfig](/reference/server-config) liệt kê mọi field và default.

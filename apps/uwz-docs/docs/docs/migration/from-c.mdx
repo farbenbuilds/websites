@@ -1,0 +1,368 @@
+---
+title: From a C server
+description: Move a C HTTP service onto the µWebZockets C ABI with the consumer build graph, fixed capacities, borrowed callback views, and one-shot async tokens.
+sidebar:
+  order: 4
+search:
+  tags: [migration, c-abi, http1, websocket]
+---
+
+The C ABI is a fixed-capacity server binding for a C or C++ host that does not
+want Zig application code. It replaces the listener, parser, router, and
+response writer while keeping the program in C. This page covers the build
+graph, a complete program, and the lifetime rules. The full declaration list is
+in the [C ABI reference](/reference/c-abi); the build recipe is in
+[Embed from C or C++](/docs/guides/c-abi).
+
+## When to use the ABI [#when-to-use-the-abi]
+
+| Use the C ABI when                                                        | Use the Zig API when                                                       |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| The host is C or C++ and stays there                                      | The service can be written in Zig                                          |
+| The deployment fits 1,024 connections and 64 routes                       | Connection, body, or route capacity must be larger                         |
+| HTTP/1.1, WebSocket, and a fixed TLS or HTTP/3 listener cover the clients | HTTP/2 tuning, JSON-RPC, mTLS, the client, or per-listener TLS is required |
+| A single fixed application slab is acceptable                             | `ServerConfig`, presets, or per-route limits are required                  |
+| The callback model matches the existing code                              | Handlers need explicit context or typed state                              |
+
+The ABI has no `ServerConfig`, schema, JSON-RPC, client, HTTP/2 frame or HPACK
+control, or mTLS surface. Ordinary HTTP/2 works over a TLS application because
+the shared server negotiates it through ALPN; only the low-level HTTP/2 modules
+and tuning stay Zig-only. Its HTTP/3 path is the fixed `uwz_app_create_http3`
+initializer plus `uwz_app_listen_udp`, with no per-listener certificate or
+protocol tuning. Check [Feature matrix](/reference/feature-matrix) before
+committing to the fixed subset.
+
+## Add the dependency [#add-the-dependency]
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+The consumer project owns `build.zig`, `build.zig.zon`, and `src/main.c`. The
+dependency exposes the installed header and every archive the C link needs:
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "c_server",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = true,
+        }),
+    });
+    exe.root_module.addIncludePath(uz.path("include"));
+    exe.root_module.addCSourceFile(.{
+        .file = b.path("src/main.c"),
+        .flags = &.{"-std=c11"},
+    });
+    exe.root_module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        exe.root_module.linkLibrary(uz.artifact(name));
+    }
+    b.installArtifact(exe);
+}
+```
+
+`uz.path("include")` supplies `uWebZockets.h`. `uz.artifact("uWebZockets")` is
+the C ABI archive; the loop links the five dependency archives that archive calls
+into.
+
+## Complete C program [#complete-c-program]
+
+```c src/main.c
+#include "uWebZockets.h"
+#include <stdio.h>
+#include <string.h>
+
+static uwz_slice slice_of(const char *text) {
+    uwz_slice value = { (const uint8_t *) text, strlen(text) };
+    return value;
+}
+
+static void log_error(const char *step, uwz_error err) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(err));
+}
+
+static void health(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) request;
+    (void) user_data;
+    uwz_error err = uwz_response_end(response, slice_of("200 OK"), slice_of("ok"));
+    if (err != UWZ_OK) log_error("health", err);
+}
+
+static void greet(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) user_data;
+    uwz_slice name = uwz_request_parameter(request, slice_of("name"));
+    if (name.length == 0) name = slice_of("world");
+
+    char body[192];
+    int length = snprintf(
+        body,
+        sizeof body,
+        "hello %.*s",
+        (int) name.length,
+        (const char *) name.data
+    );
+    if (length < 0 || (size_t) length >= sizeof body) {
+        log_error("greet", uwz_response_end(
+            response,
+            slice_of("500 Internal Server Error"),
+            slice_of("name too long")
+        ));
+        return;
+    }
+
+    uwz_slice body_slice = { (const uint8_t *) body, (size_t) length };
+    uwz_error err = uwz_response_end_with_headers(
+        response,
+        slice_of("200 OK"),
+        slice_of("content-type: text/plain\r\n"),
+        body_slice
+    );
+    if (err != UWZ_OK) log_error("greet", err);
+}
+
+static void ws_open(uwz_websocket *socket, void *user_data) {
+    (void) user_data;
+    uwz_error err = uwz_websocket_subscribe(socket, slice_of("room"));
+    if (err != UWZ_OK) log_error("subscribe", err);
+}
+
+static void ws_message(
+    uwz_websocket *socket,
+    uwz_slice message,
+    uwz_ws_opcode opcode,
+    void *user_data
+) {
+    (void) user_data;
+    (void) uwz_websocket_publish(
+        socket,
+        slice_of("room"),
+        message,
+        opcode == UWZ_WS_TEXT
+    );
+}
+
+static void ws_close(uwz_websocket *socket, void *user_data) {
+    (void) socket;
+    (void) user_data;
+}
+
+static const uwz_ws_behavior chat = {
+    .upgrade = NULL,
+    .open = ws_open,
+    .message = ws_message,
+    .drain = NULL,
+    .close = ws_close,
+    .user_data = NULL,
+    .compression = UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE,
+    .max_frame_size = 16 * 1024,
+    .max_message_size = 16 * 1024,
+};
+
+static int fail(uwz_app **app, uwz_error err, const char *step) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(err));
+    if (*app != NULL) uwz_app_destroy(app);
+    return 1;
+}
+
+int main(void) {
+    static const char address[] = "0.0.0.0";
+    static const char health_path[] = "/health";
+    static const char greet_path[] = "/hello/:name";
+    static const char ws_path[] = "/chat";
+
+    uwz_app *app = NULL;
+    uwz_error err = uwz_app_create(&app);
+    if (err != UWZ_OK) return fail(&app, err, "create");
+
+    err = uwz_app_route(
+        app,
+        UWZ_HTTP_GET,
+        health_path,
+        sizeof health_path - 1,
+        health,
+        NULL
+    );
+    if (err != UWZ_OK) return fail(&app, err, "route health");
+
+    err = uwz_app_route(
+        app,
+        UWZ_HTTP_GET,
+        greet_path,
+        sizeof greet_path - 1,
+        greet,
+        NULL
+    );
+    if (err != UWZ_OK) return fail(&app, err, "route greet");
+
+    err = uwz_app_ws(app, ws_path, sizeof ws_path - 1, &chat);
+    if (err != UWZ_OK) return fail(&app, err, "websocket");
+
+    err = uwz_app_listen(app, address, sizeof address - 1, 3000);
+    if (err != UWZ_OK) return fail(&app, err, "listen");
+
+    err = uwz_app_run(app);
+    uwz_error released = uwz_app_destroy(&app);
+    if (err != UWZ_OK) return fail(&app, err, "run");
+    if (released != UWZ_OK) return fail(&app, released, "destroy");
+    return 0;
+}
+```
+
+Build and run:
+
+```sh
+zig build
+./zig-out/bin/c_server
+```
+
+## Verify it [#verify-it]
+
+```sh
+curl -s http://127.0.0.1:3000/health
+```
+
+```console
+ok
+```
+
+```sh
+curl -s http://127.0.0.1:3000/hello/Ada
+```
+
+```console
+hello Ada
+```
+
+```sh
+wscat -c ws://127.0.0.1:3000/chat
+```
+
+Open a second `wscat` client. The open callback subscribes every connection to
+`room`; send a message from one client and confirm the other receives it.
+
+## Linking notes [#linking-notes]
+
+| Archive                   | Supplies                                     |
+| ------------------------- | -------------------------------------------- |
+| `libuWebZockets.a`        | C ABI entry points, router, event loop, slab |
+| `libssl.a`, `libcrypto.a` | BoringSSL TLS records and cryptography       |
+| `liblsquic.a`             | QUIC and HTTP/3 engine                       |
+| `libdeflate.a`            | Deflate and gzip codecs                      |
+| `libz.a`                  | zlib, including the HTTP gzip path           |
+
+`build.zig` links all six archives through the dependency. Do not link only
+`libuWebZockets.a`: unresolved symbols from TLS, QUIC, or compression mean a
+missing dependency archive or a reversed order relative to the archive that
+needs it. `link_libcpp = true` is required because the dependency contains C++
+components. A C++ host includes the same header inside `extern "C"`, which the
+header already provides.
+
+The link graph includes the QUIC/HTTP/3 engine and TLS archives even when the C
+program calls only `uwz_app_listen`. The ABI listeners are HTTP/1.1 and TLS, plus
+`uwz_app_listen_udp` for HTTP/3 when the application was created with
+`uwz_app_create_http3`.
+
+## Fixed capacities [#fixed-capacities]
+
+| Capacity              |       Value | Enforced at                                  |
+| --------------------- | ----------: | -------------------------------------------- |
+| Connections           |       1,024 | `uwz_app_create`; no C override              |
+| Routes                |          64 | `uwz_app_route` returns `UWZ_ERROR_CAPACITY` |
+| Middleware            |          32 | `uwz_app_use` returns `UWZ_ERROR_CAPACITY`   |
+| Inline route captures |          16 | Registration fails above the inline count    |
+| Route path            | 2,048 bytes | Registration fails above the limit           |
+
+The 1,024-connection slab is the main constraint. A service that needs 4,000
+connections or a larger body limit is a Zig application, not a C ABI
+application. Route paths are copied into fixed storage; `user_data` is borrowed
+and must stay valid until shutdown drains. The ABI has no signal watcher: call
+`uwz_app_shutdown` from application code, then destroy the handle after
+`uwz_app_run` returns.
+
+## Borrowed views [#borrowed-views]
+
+| Value                | Valid until                                                          |
+| -------------------- | -------------------------------------------------------------------- |
+| `uwz_request` field  | The callback returns; copy it before returning `UWZ_HANDLER_PENDING` |
+| Route parameter      | The callback returns; copy it before returning pending               |
+| WebSocket message    | The receiving callback returns                                       |
+| `user_data`          | `uwz_app_destroy` after the run loop returns                         |
+| `uwz_async_response` | Completion or shutdown; copy it to keep it                           |
+
+The `greet` handler demonstrates the rule: it formats the parameter into a local
+buffer before `uwz_response_end_with_headers` returns. It does not store the
+borrowed parameter. The same rule applies to headers and message slices.
+
+## Async tokens [#async-tokens]
+
+An async route receives a callback-local `uwz_async_response`. To complete later,
+copy the whole struct and return `UWZ_HANDLER_PENDING`:
+
+```c
+struct pending {
+    uwz_async_response token;
+};
+
+static uwz_handler_result defer(
+    const uwz_request *request,
+    uwz_async_response *response,
+    void *user_data
+) {
+    struct pending *slot = user_data;
+    (void) request;
+    slot->token = *response;
+    return UWZ_HANDLER_PENDING;
+}
+
+static void finish(struct pending *slot) {
+    uwz_error err = uwz_async_response_end(
+        &slot->token,
+        slice_of("200 OK"),
+        slice_of("later")
+    );
+    if (err != UWZ_OK) log_error("finish", err);
+}
+```
+
+Register the route with `uwz_app_route_async`. Call `finish` from another
+callback on the owning loop, such as a WebSocket message or a later route. The
+ABI has no timer or cross-thread wake API; work on another thread must marshal
+the result back before completing the token. A stale or duplicate token returns
+`UWZ_ERROR_INVALID_STATE`. Never complete a token after `uwz_app_destroy`.
+
+## Migration checklist [#migration-checklist]
+
+| Step | Action                                                                  | Evidence                                |
+| ---- | ----------------------------------------------------------------------- | --------------------------------------- |
+| 1    | Confirm the service fits 1,024 connections and 64 routes                | Capacity table in the design            |
+| 2    | Keep `user_data` and every callback context alive until shutdown drains | No callback reads freed caller state    |
+| 3    | Convert handlers to `uwz_http_handler` signatures                       | Compiles with `-std=c11 -Wall`          |
+| 4    | Replace request pointers with copied values                             | No borrowed slice outlives its callback |
+| 5    | Convert WebSocket state to `user_data` or an application table          | No per-socket struct assumption         |
+| 6    | Replace timers and threads with loop-owned completion                   | Async token completed on the loop       |
+| 7    | Add `uwz_app_destroy` after `uwz_app_run`                               | Clean exit without a callback destroy   |
+| 8    | Run the old client suite against both servers                           | Same status and body assertions         |
+
+## Next [#next]
+
+- [Embed from C or C++](/docs/guides/c-abi) builds the first C server.
+- [C ABI reference](/reference/c-abi) lists every function, enum, and error.
+- [C ABI operations](/docs/operations/c-abi) covers archive layout and link
+  requirements.
+- [Async responses](/docs/concepts/async-responses) explains the token model in
+  Zig terms.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  lists the release that contains each public API.

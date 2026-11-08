@@ -1,0 +1,311 @@
+---
+title: From uWebSockets
+description: Port a C++ uWebSockets service to Zig by mapping the event loop, handler lifetime, routes, WebSocket behavior, pub/sub, TLS, and cluster deployment.
+sidebar:
+  order: 1
+search:
+  tags: [migration, websocket, http1, cluster]
+---
+
+uWebSockets is a C++ library. Porting a service to µWebZockets means rewriting the
+glue in Zig while keeping the HTTP and WebSocket contract the same. Use this page
+to migrate one service at a time. There is no header-compatible mode and no
+source-compatible wrapper. This page maps the concepts that change and the ones
+that do not.
+
+## Before: the uWebSockets service [#before]
+
+The service registers a parameterized route, buffers a request body, and runs a
+chat room. It is representative uWebSockets code, not a complete production
+server.
+
+```cpp
+#include "App.h"
+#include <iostream>
+#include <string>
+
+struct PerSocketData {};
+
+int main() {
+    uWS::App()
+        .get("/users/:id", [](auto *res, auto *req) {
+            (void) req;
+            std::string id(req->getParameter(0));
+            res->writeHeader("content-type", "text/plain");
+            res->end("user " + id);
+        })
+        .post("/users", [](auto *res, auto *req) {
+            (void) req;
+            res->onData([res, body = std::string()](std::string_view chunk, bool is_end) mutable {
+                body.append(chunk.data(), chunk.length());
+                if (is_end) res->end("created " + std::to_string(body.size()) + " bytes");
+            });
+            res->onAborted([]() {});
+        })
+        .ws<PerSocketData>("/chat", {
+            .open = [](auto *ws) { ws->subscribe("room"); },
+            .message = [](auto *ws, std::string_view message, uWS::OpCode op_code) {
+                ws->publish("room", message, op_code);
+            },
+            .close = [](auto *ws, int code, std::string_view message) {
+                (void) ws;
+                (void) code;
+                (void) message;
+            }
+        })
+        .listen(3000, [](auto *token) {
+            if (!token) std::cerr << "listen failed\n";
+        })
+        .run();
+}
+```
+
+## After: the µWebZockets port [#after]
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse "0";
+    var buffer: [96]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{id}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("user") catch |res_err| std.log.err("response failed: {}", .{res_err});
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.text()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.subscribe("room") catch |err| std.log.err("subscribe failed: {}", .{err});
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room", message, opcode == .text);
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(512).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.post("/users", create_user);
+    _ = try app.ws("/chat", .{
+        .open = on_open,
+        .message = on_message,
+        .compression = .permessage_deflate,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Add the dependency with:
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Keep your own `build.zig` and module import, as described in
+[Quickstart](/docs/getting-started/quickstart). Do not vendor or clone the
+framework repository.
+
+## Event loop and threads [#event-loop-and-threads]
+
+uWebSockets runs one `uWS::App` per thread, and each app owns one event loop.
+`app.run()` blocks on that loop. µWebZockets keeps the one-loop-per-application
+shape: `uz.App(N)` owns one event loop, one slab, and one router, and `app.run()`
+blocks until shutdown drains.
+
+To use several cores, replace one `App` with a cluster. `build_cluster` creates
+one worker per core, each with its own loop and slab, and binds the shared port
+through `SO_REUSEPORT`. No connection state is shared between workers.
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(512)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/users/:id", show_user);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+The `App` or `Cluster` value must stay at a stable address after `listen` or
+`run`. Keep it in `main` and do not move it into a container that relocates.
+
+## Handler signature and lifetimes [#handler-signature-and-lifetimes]
+
+The handler order reverses. A uWebSockets route is a lambda that receives
+`(res, req)`. A µWebZockets route receives `(req, res)` and is a named Zig
+function with signature `fn (*uz.Request, *uz.Response) void`.
+
+In uWebSockets, `req` dies when the handler returns, while `res` stays alive until
+the response ends or `onAborted` fires. In µWebZockets, both pointers are
+callback-scoped. Request fields and route captures borrow connection storage and
+remain valid only through the synchronous callback or until an asynchronous
+token completes. Copy retained data into bounded application storage, or use
+`req.clone(allocator)` for an owned snapshot.
+
+There is no retained `*Response` and no `onAborted` callback. Deferred work
+registers with `route_async` and receives a copyable `AsyncResponse` token that
+completes exactly once on the owning loop. A disconnected peer, a reused
+generation, or an expired token fails closed. See
+[Asynchronous responses](/docs/concepts/async-responses).
+
+## Request and response mapping [#request-and-response-mapping]
+
+| uWebSockets                              | µWebZockets                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `req->getMethod()`                       | `req.method`                                                                                                      |
+| `req->getUrl()`                          | `req.url()`, or `req.path` and `req.query` separately                                                             |
+| `req->getQuery()`                        | `req.query`                                                                                                       |
+| `req->getHeader("x")`                    | `req.get_header("x")`                                                                                             |
+| `req->getParameter(0)`                   | `req.get_param("id")` by capture name                                                                             |
+| `res->writeStatus("200 OK")`             | Status argument of `res.end`, `res.text`, or `res.end_with_headers`                                               |
+| `res->writeHeader(name, value)`          | `res.append_header(name, value)` before the body helper                                                           |
+| `res->end(body)`                         | `res.text`, `res.bytes`, `res.json`, or `res.end("200 OK", body)`                                                 |
+| `res->onData` buffering                  | Bounded body buffering; read `req.text()` in the handler                                                          |
+| `res->tryEnd`, `onWritable`, `onAborted` | `res.begin_stream`, `res.begin_chunked`, or `res.sse`; backpressure is `error.WouldBlock` plus the drain callback |
+
+The built-in body limit is 16 KiB. A uWebSockets route that accumulates a large
+upload must either raise `max_body_size` at startup or redesign the endpoint.
+µWebZockets buffers a complete bounded body before dispatch; it does not expose
+an unbounded request stream.
+
+## Routing and middleware [#routing-and-middleware]
+
+Both routers prefer a static route over `:param`, and `:param` over a wildcard.
+An any-method route loses to an equally specific method route. µWebZockets uses
+`:name` for one segment and a terminal `*name` for the remainder; registration
+fails on a malformed pattern instead of falling back to ambiguous matching.
+
+uWebSockets has no built-in middleware and recommends higher-order functions.
+µWebZockets has an ordered global middleware chain capped at 32 callbacks.
+Register it with `app.use`, and keep per-route composition in the handler. See
+[Routing](/docs/http/routing) and [Middleware](/docs/http/middleware).
+
+| uWebSockets                      | µWebZockets                                        |
+| -------------------------------- | -------------------------------------------------- |
+| `app.get`, `app.post`, `app.any` | Same method helpers on `App`                       |
+| `"/users/:id"`                   | `"/users/:id"`, read with `get_param("id")`        |
+| `"/*"`                           | `"/*path"`; the wildcard must be the final segment |
+| Higher-order route wrapper       | `app.use(context, handler)` for global concerns    |
+
+## WebSocket behavior [#websocket-behavior]
+
+| uWebSockets                                                                      | µWebZockets                                                                               |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `.upgrade`, `.open`, `.message`, `.drain`, `.close`                              | Same `.upgrade`, `.open`, `.message`, `.drain`, `.close` fields                           |
+| `.ping`, `.pong` handlers                                                        | Configured heartbeat with `ping_interval_ms` and `pong_timeout_ms`                        |
+| `.maxPayloadLength`, `.idleTimeout`                                              | `.max_message_size`, `.max_frame_size`, and the application idle timeout                  |
+| `.compression` with `DISABLED` or `SHARED_COMPRESSOR` / `DEDICATED_COMPRESSOR_*` | `.compression = .disabled` or `.permessage_deflate`                                       |
+| `ws->send` returns `BACKPRESSURE`, `SUCCESS`, or `DROPPED`                       | `ws.send` returns an error union; `error.WouldBlock` is backpressure                      |
+| `getBufferedAmount`                                                              | `ws.buffered_amount()`                                                                    |
+| `PerSocketData` on the socket                                                    | No per-socket user-data slot; keep state in explicit context or application-owned storage |
+
+µWebZockets negotiates per-message deflate with
+`server_no_context_takeover` and `client_no_context_takeover`. It does not expose
+the uWebSockets compressor tiers. Enabling compression reserves paired scratch
+per connection; set `ServerConfig.compression = true` to place that scratch in
+the startup slab. See [Compression](/docs/websocket/compression).
+
+A uWebSockets service that stores session state in `PerSocketData` must move that
+state. µWebZockets does not expose a per-socket slot or a handoff from the upgrade
+callback to `open`. Keep state in a fixed-capacity application table and key it by
+a token the client sends in each message, or use topic subscriptions for shared
+room state. Do not infer identity from a socket pointer.
+
+## Pub/sub [#pubsub]
+
+`ws.subscribe(topic)`, `ws.unsubscribe(topic)`, and
+`ws.publish(topic, message, is_text)` keep their names. The return types differ:
+µWebZockets `publish` returns the number of subscribers reached, while
+uWebSockets returns a boolean. Publishing never allocates and works only inside
+the current application loop.
+
+uWebSockets pub/sub is scoped to one `App`. µWebZockets adds
+`Cluster.publish`, which broadcasts through bounded per-worker rings, and
+`Cluster.publish_report`, which reports queued, dropped, and failed wakeups.
+Delivery to every worker does not prove that an application subscriber consumed
+the message. See [Pub/sub](/docs/websocket/pub-sub) and
+[Cluster model](/docs/concepts/cluster-model).
+
+## Compression, TLS, and deployment [#compression-tls-and-deployment]
+
+| Area                  | uWebSockets                                    | µWebZockets                                                       |
+| --------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| WebSocket compression | Compressor tiers                               | Per-message deflate with no context takeover                      |
+| TLS setup             | `uWS::SSLApp` with certificate and key files   | `init_https` or `init_https_ephemeral`, then `listen`             |
+| TLS versions          | Depends on the linked stack                    | TLS 1.3 only, ALPN `h2` then `http/1.1`                           |
+| Cluster TLS           | Application-managed                            | One `SSL_CTX` per worker; credentials read before listen          |
+| Shutdown              | Process handling around `run`                  | `catch_shutdown_signals`, or `Cluster.catch_shutdown_signals`     |
+| Build output          | C++ binary linked against the chosen TLS stack | Zig binary with BoringSSL and lsquic built through the dependency |
+
+Certificate rotation requires a restart because each worker loads credentials
+before its listener starts. A TLS 1.2-only client fails the handshake against
+µWebZockets; confirm the client stack before cutting over.
+
+Platform support differs too. Check [Compatibility](/reference/compatibility)
+before promising a Windows or BSD deployment. Do not carry a uWebSockets
+platform matrix into the port unchanged.
+
+## Port checklist [#port-checklist]
+
+| Step | Action                                                      | Evidence                           |
+| ---- | ----------------------------------------------------------- | ---------------------------------- |
+| 1    | Replace `uWS::App` with `uz.App(N)` and choose `N`          | Slab sizing in `main`              |
+| 2    | Rewrite each lambda as a named `(req, res)` function        | Route table in `main`              |
+| 3    | Move retained request data into owned storage               | `req.clone` or a bounded copy      |
+| 4    | Replace `res` captures with `route_async` tokens            | Async token completion test        |
+| 5    | Map route patterns and parameter names                      | Same paths, `get_param` names      |
+| 6    | Move `PerSocketData` into application state                 | No socket-pointer lookup           |
+| 7    | Choose `.permessage_deflate` only where the client benefits | Compression test                   |
+| 8    | Replace thread scaling with `build_cluster`                 | Four workers, one port             |
+| 9    | Run the old client suite against both servers               | `curl`, `wscat`, or a service test |
+| 10   | Add the signal watcher and drain before rollout             | Shutdown log                       |
+
+## Verify the port [#verify-the-port]
+
+```sh
+curl -s http://127.0.0.1:3000/users/42
+```
+
+```console
+user 42
+```
+
+```sh
+wscat -c ws://127.0.0.1:3000/chat
+```
+
+Send a message and confirm that every other client in `room` receives it. Then
+send `SIGTERM` and check that `run` returns after the drain.
+
+## Next [#next]
+
+- [Async responses](/docs/concepts/async-responses) explains token completion
+  and cross-thread marshalling.
+- [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) lists every
+  borrowed value.
+- [Cluster](/docs/guides/cluster) covers worker counts, TLS, and failure
+  reporting.
+- [Breaking changes](/docs/migration/breaking-changes) records the version
+  contract you are porting to.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  lists the release that contains each public API.

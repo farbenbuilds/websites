@@ -3,7 +3,7 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-06
+> Last updated: 2026-11-08
 > Product baseline: µWebZockets 2.1.6, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
@@ -831,48 +831,48 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.17 Migration
 
-| ID      | Route                                       | Page                      | Type      | Priority | Milestone | Source                  | Status  |
-| ------- | ------------------------------------------- | ------------------------- | --------- | -------- | --------- | ----------------------- | ------- |
-| UWZ-300 | `/docs/migration`                           | Migration                 | Index     | P1       | M5        | This file               | Planned |
-| UWZ-301 | `/docs/migration/from-uwebsockets`          | From uWebSockets          | Migration | P1       | M5        | `docs/api.md`           | Planned |
-| UWZ-302 | `/docs/migration/from-std-http`             | From `std.http`           | Migration | P1       | M5        | `docs/http.md`          | Planned |
-| UWZ-303 | `/docs/migration/from-other-zig-frameworks` | From other Zig frameworks | Migration | P2       | M5        | This file               | Planned |
-| UWZ-304 | `/docs/migration/from-c`                    | From C servers            | Migration | P2       | M5        | `include/uWebZockets.h` | Planned |
-| UWZ-305 | `/docs/migration/v1-to-v2`                  | v1 to v2                  | Migration | P1       | M5        | `CHANGELOG.md`          | Planned |
-| UWZ-306 | `/docs/migration/v2-1-to-v2-2`              | 2.1 to 2.2                | Migration | P1       | M5        | `CHANGELOG.md`, roadmap | Planned |
-| UWZ-307 | `/docs/migration/breaking-changes`          | Breaking changes          | Reference | P1       | M5        | `CHANGELOG.md`          | Planned |
+| ID      | Route                                       | Page                      | Type      | Priority | Milestone | Source                  | Status |
+| ------- | ------------------------------------------- | ------------------------- | --------- | -------- | --------- | ----------------------- | ------ |
+| UWZ-300 | `/docs/migration`                           | Migration                 | Index     | P1       | M5        | This file               | Live   |
+| UWZ-301 | `/docs/migration/from-uwebsockets`          | From uWebSockets          | Migration | P1       | M5        | `docs/api.md`           | Live   |
+| UWZ-302 | `/docs/migration/from-std-http`             | From `std.http`           | Migration | P1       | M5        | `docs/http.md`          | Live   |
+| UWZ-303 | `/docs/migration/from-other-zig-frameworks` | From other Zig frameworks | Migration | P2       | M5        | This file               | Live   |
+| UWZ-304 | `/docs/migration/from-c`                    | From C servers            | Migration | P2       | M5        | `include/uWebZockets.h` | Live   |
+| UWZ-305 | `/docs/migration/v1-to-v2`                  | v1 to v2                  | Migration | P1       | M5        | `CHANGELOG.md`          | Live   |
+| UWZ-306 | `/docs/migration/v2-1-to-v2-2`              | 2.1 to 2.2                | Migration | P1       | M5        | `CHANGELOG.md`, roadmap | Live   |
+| UWZ-307 | `/docs/migration/breaking-changes`          | Breaking changes          | Reference | P1       | M5        | `CHANGELOG.md`          | Live   |
 
 ### 5.18 Reference
 
-| ID      | Route                        | Page                         | Type      | Priority | Milestone | Source                            | Status  |
-| ------- | ---------------------------- | ---------------------------- | --------- | -------- | --------- | --------------------------------- | ------- |
-| UWZ-310 | `/reference`                 | Reference                    | Index     | P0       | M5        | This file                         | Planned |
-| UWZ-311 | `/reference/zig`             | Zig API index                | Reference | P0       | M5        | `src/root.zig`                    | Planned |
-| UWZ-312 | `/reference/server-config`   | `ServerConfig`               | Reference | P0       | M5        | `src/router/config.zig`           | Planned |
-| UWZ-313 | `/reference/limits`          | Capacity and protocol limits | Reference | P0       | M5        | `docs/memory_model.md`            | Planned |
-| UWZ-314 | `/reference/errors`          | Error index                  | Reference | P0       | M5        | source, `docs/troubleshooting.md` | Planned |
-| UWZ-315 | `/reference/c-abi`           | C ABI                        | Reference | P0       | M5        | `include/uWebZockets.h`           | Planned |
-| UWZ-316 | `/reference/build-steps`     | Build steps and flags        | Reference | P1       | M5        | `builds/`                         | Planned |
-| UWZ-317 | `/reference/feature-matrix`  | Feature matrix               | Reference | P0       | M5        | Appendix A                        | Planned |
-| UWZ-318 | `/reference/compatibility`   | Compatibility                | Reference | P1       | M5        | roadmap                           | Planned |
-| UWZ-319 | `/reference/protocol-matrix` | Protocol matrix              | Reference | P1       | M5        | `docs/protocols.md`               | Planned |
-| UWZ-320 | `/reference/glossary`        | Glossary                     | Reference | P1       | M5        | This file                         | Planned |
+| ID      | Route                        | Page                         | Type      | Priority | Milestone | Source                            | Status |
+| ------- | ---------------------------- | ---------------------------- | --------- | -------- | --------- | --------------------------------- | ------ |
+| UWZ-310 | `/reference`                 | Reference                    | Index     | P0       | M5        | This file                         | Live   |
+| UWZ-311 | `/reference/zig`             | Zig API index                | Reference | P0       | M5        | `src/root.zig`                    | Live   |
+| UWZ-312 | `/reference/server-config`   | `ServerConfig`               | Reference | P0       | M5        | `src/router/config.zig`           | Live   |
+| UWZ-313 | `/reference/limits`          | Capacity and protocol limits | Reference | P0       | M5        | `docs/memory_model.md`            | Live   |
+| UWZ-314 | `/reference/errors`          | Error index                  | Reference | P0       | M5        | source, `docs/troubleshooting.md` | Live   |
+| UWZ-315 | `/reference/c-abi`           | C ABI                        | Reference | P0       | M5        | `include/uWebZockets.h`           | Live   |
+| UWZ-316 | `/reference/build-steps`     | Build steps and flags        | Reference | P1       | M5        | `builds/`                         | Live   |
+| UWZ-317 | `/reference/feature-matrix`  | Feature matrix               | Reference | P0       | M5        | Appendix A                        | Live   |
+| UWZ-318 | `/reference/compatibility`   | Compatibility                | Reference | P1       | M5        | roadmap                           | Live   |
+| UWZ-319 | `/reference/protocol-matrix` | Protocol matrix              | Reference | P1       | M5        | `docs/protocols.md`               | Live   |
+| UWZ-320 | `/reference/glossary`        | Glossary                     | Reference | P1       | M5        | This file                         | Live   |
 
 ### 5.19 Examples
 
-| ID      | Route                              | Page                   | Type    | Priority | Milestone | Source                                | Status  |
-| ------- | ---------------------------------- | ---------------------- | ------- | -------- | --------- | ------------------------------------- | ------- |
-| UWZ-330 | `/examples`                        | Examples               | Index   | P1       | M5        | examples/                             | Planned |
-| UWZ-331 | `/examples/hello-world`            | Hello world            | Example | P0       | M1        | `examples/hello_world.zig`            | Planned |
-| UWZ-332 | `/examples/https-server`           | HTTPS server           | Example | P1       | M2        | `examples/https_server.zig`           | Planned |
-| UWZ-333 | `/examples/shared-nothing-cluster` | Shared-nothing cluster | Example | P1       | M2        | `examples/shared_nothing_cluster.zig` | Planned |
-| UWZ-334 | `/examples/tls-cluster`            | TLS cluster            | Example | P1       | M4        | `examples/tls_cluster.zig`            | Planned |
-| UWZ-335 | `/examples/basic-microservice`     | Basic microservice     | Example | P1       | M2        | `examples/basic_microservice.zig`     | Planned |
-| UWZ-336 | `/examples/custom-builder`         | Custom builder         | Example | P2       | M5        | `examples/custom_builder.zig`         | Planned |
-| UWZ-337 | `/examples/chat-server`            | Chat server            | Example | P1       | M2        | `examples/chat_server.zig`            | Planned |
-| UWZ-338 | `/examples/rpc-server`             | RPC server             | Example | P1       | M3        | `examples/rpc_server.zig`             | Planned |
-| UWZ-339 | `/examples/http3-server`           | HTTP/3 server          | Example | P1       | M3        | `examples/http3_server.zig`           | Planned |
-| UWZ-340 | `/examples/delay-server`           | Delayed response       | Example | P2       | M5        | `examples/delay_server.zig`           | Planned |
+| ID      | Route                              | Page                   | Type    | Priority | Milestone | Source                                | Status |
+| ------- | ---------------------------------- | ---------------------- | ------- | -------- | --------- | ------------------------------------- | ------ |
+| UWZ-330 | `/examples`                        | Examples               | Index   | P1       | M5        | examples/                             | Live   |
+| UWZ-331 | `/examples/hello-world`            | Hello world            | Example | P0       | M1        | `examples/hello_world.zig`            | Live   |
+| UWZ-332 | `/examples/https-server`           | HTTPS server           | Example | P1       | M2        | `examples/https_server.zig`           | Live   |
+| UWZ-333 | `/examples/shared-nothing-cluster` | Shared-nothing cluster | Example | P1       | M2        | `examples/shared_nothing_cluster.zig` | Live   |
+| UWZ-334 | `/examples/tls-cluster`            | TLS cluster            | Example | P1       | M4        | `examples/tls_cluster.zig`            | Live   |
+| UWZ-335 | `/examples/basic-microservice`     | Basic microservice     | Example | P1       | M2        | `examples/basic_microservice.zig`     | Live   |
+| UWZ-336 | `/examples/custom-builder`         | Custom builder         | Example | P2       | M5        | `examples/custom_builder.zig`         | Live   |
+| UWZ-337 | `/examples/chat-server`            | Chat server            | Example | P1       | M2        | `examples/chat_server.zig`            | Live   |
+| UWZ-338 | `/examples/rpc-server`             | RPC server             | Example | P1       | M3        | `examples/rpc_server.zig`             | Live   |
+| UWZ-339 | `/examples/http3-server`           | HTTP/3 server          | Example | P1       | M3        | `examples/http3_server.zig`           | Live   |
+| UWZ-340 | `/examples/delay-server`           | Delayed response       | Example | P2       | M5        | `examples/delay_server.zig`           | Live   |
 
 ### 5.20 Project
 
@@ -911,11 +911,11 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Operations            |      20 |      8 |       7 |      5 |      20 |
 | Deployment            |      15 |      7 |       7 |      1 |      15 |
 | Guides                |      23 |      0 |      17 |      6 |      23 |
-| Migration             |       8 |      0 |       6 |      2 |       0 |
-| Reference             |      11 |      7 |       4 |      0 |       0 |
-| Examples              |      11 |      1 |       8 |      2 |       0 |
+| Migration             |       8 |      0 |       6 |      2 |       8 |
+| Reference             |      11 |      7 |       4 |      0 |      11 |
+| Examples              |      11 |      1 |       8 |      2 |      11 |
 | Project               |       9 |      1 |       5 |      3 |       0 |
-| **Total**             | **268** | **96** | **125** | **47** | **229** |
+| **Total**             | **268** | **96** | **125** | **47** | **259** |
 
 The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
 2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
@@ -963,6 +963,24 @@ operations. Contributor pages carry a scope note and link `CONTRIBUTE.md`;
 application pages keep the `zig fetch --save` path. The WASM, eBPF, kTLS, and
 AF_XDP pages now show the consumer `build.zig` step or public module import, with
 the framework checkout command labelled as a shortcut.
+
+On 2026-11-08 the migration, reference, and canonical example sections added 30
+English and 30 Vietnamese pages, bringing the site to 516 documentation pages
+plus the two landing pages (518 pages total). `blume check` type-checked 518
+pages with 0 errors, 0 warnings, and 0 hints; `blume validate --strict` found no
+broken links; `blume build` built 561 pages including generated `.md` mirrors;
+and `blume audit --fail-on warning` reported 0 errors, 0 warnings, and 0 notes
+across 519 audited pages. `pnpm ready` passed lint, format, typecheck, file-size,
+root and workspace tests, strict link validation, and both docs builds; the root
+Vitest suite passed 29 files and 85 tests. The new reference API coverage test
+checks every `src/root.zig` export anchor against a checked-in fixture and can
+compare that fixture with a framework checkout through `UWEBZOCKETS_ROOT`; the
+example source test compares all ten Zig fences with a checked-in hash fixture
+and can compare them byte-for-byte with the same checkout. The docs parity test
+now covers the top-level `/reference` and `/examples` trees and rejects
+plain-text fences. Browser viewport, axe, keyboard, reduced-motion, and search QA
+for the 60 new routes were not run in this environment; the next review should
+repeat the 320/768/1280 pass before the section is treated as launch-verified.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -3483,6 +3501,7 @@ source at the time it is written.
 | 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
 | 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
 | 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                      | Docs writing pass  |
+| 2026-11-08 | Shipped the migration, reference, and canonical example sections with Vietnamese mirrors; added reference API coverage and docs parity tests                                               | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

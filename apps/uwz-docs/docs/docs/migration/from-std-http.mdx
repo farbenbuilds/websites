@@ -1,0 +1,261 @@
+---
+title: From std.http
+description: Replace a hand-written std.http accept loop and response writer with the µWebZockets router, startup slab, bounded bodies, TLS, and graceful shutdown.
+sidebar:
+  order: 2
+search:
+  tags: [migration, http, http1, routing]
+---
+
+`std.http.Server` parses one connection. It does not own a listener, a router, a
+TLS context, or a worker model, so a typical program grows an accept loop, target
+comparisons, response writing, and buffer sizing around it. This page maps that
+program onto `uz.App` and names what the framework stops doing by hand.
+
+## Before: the std.http connection loop [#before]
+
+The following excerpt starts after an accepted `std.Io.net.Stream`. Listener
+setup, buffer allocation, and the outer accept loop are omitted. It is a
+representative excerpt, not a complete standalone program.
+
+```zig
+var recv_buffer: [8 * 1024]u8 = undefined;
+var send_buffer: [8 * 1024]u8 = undefined;
+var conn_reader = stream.reader(io, &recv_buffer);
+var conn_writer = stream.writer(io, &send_buffer);
+var server = std.http.Server.init(&conn_reader, &conn_writer);
+
+while (server.reader.state == .ready) {
+    var request = server.receiveHead() catch |err| switch (err) {
+        error.HttpConnectionClosing => return,
+        else => return err,
+    };
+
+    if (request.head.method == .GET and std.mem.eql(u8, request.head.target, "/health")) {
+        try request.respond("ok", .{ .status = .ok });
+    } else {
+        try request.respond("not found", .{ .status = .not_found });
+    }
+}
+```
+
+The real program still needs an accept loop, one `std.http.Server` per connection,
+a rule for reading or discarding the body, and a response branch for every
+target. `request.respond` accepts a body slice and `RespondOptions`; it does not
+route, compress, or negotiate a protocol.
+
+## After: the µWebZockets server [#after]
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn health(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn hello(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| std.log.err("response failed: {}", .{res_err});
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn echo(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.text()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(256).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/health", health);
+    _ = try app.get("/hello/:name", hello);
+    _ = try app.post("/echo", echo);
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 8080);
+    try app.run();
+}
+```
+
+Add the dependency with the command in
+[Quickstart](/docs/getting-started/quickstart):
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+The `App(256)` value owns the listener, event loop, router, and slab; `main` keeps
+it in place and releases it once.
+
+## Map the startup and accept loop [#map-startup-and-accept-loop]
+
+| `std.http` program                              | µWebZockets                                                       |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| `std.Io.net.IpAddress.parse` and `.listen`      | `app.listen(address, port)`                                       |
+| `listener.accept(io)` in a loop                 | The event loop arms accepts; the application never calls `accept` |
+| One `std.http.Server.init` per connection       | One `uz.App(N).init(io)` for the process                          |
+| Per-connection read and write buffers           | Per-connection storage inside the startup slab                    |
+| `server.reader.state == .ready` keep-alive loop | The connection parser and idle deadline own reuse                 |
+| Blocking or manually spawned connection tasks   | Completions on the worker event loop                              |
+| No signal handling                              | `app.catch_shutdown_signals()` before `app.run()`                 |
+
+`App(N)` fixes the connection count at compile time. Choose `N` from the peak
+concurrent connection count, not from the request rate. `App(256)` refuses the
+257th concurrent connection; the builder exposes the same decision at runtime
+with `with_max_clients`. See [Capacity model](/docs/concepts/capacity-model).
+
+## Map the allocator model [#map-allocator-model]
+
+`std.http.Server` itself is allocation-free after buffer setup. Most programs
+around it are not: they allocate an arena per request, build a response string,
+or copy headers into owned slices. µWebZockets moves that work to startup.
+
+| Concern                  | `std.http` program                                        | µWebZockets                                          |
+| ------------------------ | --------------------------------------------------------- | ---------------------------------------------------- |
+| Application memory       | Whatever the program allocates per connection or request  | One slab at `init`; released once at `deinit`        |
+| Request headers and body | Slices into the head buffer; body read through a `Reader` | Borrowed slices into the connection request buffer   |
+| Retaining request data   | Copy into allocated storage                               | `req.clone(allocator)` or a bounded copy             |
+| Response body            | Caller-owned buffer or writer                             | Buffered helpers copy into the bounded write queue   |
+| Capacity failure         | Allocation error, truncation, or a manual limit           | Named startup capacity and a specific HTTP rejection |
+
+The request path does not allocate. The exceptions are explicit:
+`req.clone(allocator)` and `req.json(T, allocator)`. Everything else either
+borrows or writes into fixed storage. A handler that formats a response into a
+stack buffer, as `hello` does, performs no heap work.
+
+## Map routing and the request [#map-routing-and-request]
+
+| `std.http`                         | µWebZockets                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `request.head.method`              | `req.method`                                                                         |
+| `request.head.target`              | `req.target`; use `req.path` and `req.query` after parsing                           |
+| `request.iterateHeaders()`         | `req.headers()`, `req.get_header`, `req.get_unique_header`                           |
+| Manual `std.mem.eql` on the target | Registered static, `:param`, and terminal `*wildcard` routes                         |
+| No capture extraction              | `req.get_param("name")`, up to 16 borrowed captures                                  |
+| No method dispatch helper          | `app.get`, `app.post`, `app.put`, and the other method helpers                       |
+| No 404 or 405 policy               | The router answers an unmatched route; a known path with the wrong method gets `405` |
+
+Route registration happens before the first `listen`. A later registration
+returns `error.RoutesLocked`; it is not a runtime reload API. Static routes win
+over parameters, and a parameterized shape may not be registered twice with
+different capture names. See [Routing](/docs/http/routing).
+
+## Map body handling [#map-body-handling]
+
+`std.http` gives you `request.readerExpectNone(buffer)` or
+`request.readerExpectContinue(buffer)` and leaves the read strategy to you. You
+decide whether to allocate, stream, or discard. µWebZockets buffers the complete
+body up to `max_body_size` before dispatch, then hands the handler a borrowed
+slice.
+
+| Need           | `std.http`                             | µWebZockets                                             |
+| -------------- | -------------------------------------- | ------------------------------------------------------- |
+| Small body     | Read the `Reader` into a caller buffer | `req.text()` or `req.bytes()`                           |
+| JSON body      | Read, then parse with an allocator     | `req.json(T, allocator)`                                |
+| Form or query  | Parse the body or target manually      | `req.form()`, `req.query_params()`                      |
+| Large upload   | Stream through the `Reader`            | Raise `max_body_size`; the body is still fully buffered |
+| Too-large body | Application-defined                    | `413 Payload Too Large` with a structured error body    |
+
+Raising the limit also raises the per-connection slab cost. A 1 MiB body limit on
+1,024 connections reserves at least 1 GiB of request storage, so size the limit
+against the connection count. See [HTTP limits](/docs/http/limits).
+
+## Map response writing [#map-response-writing]
+
+| `std.http`                                  | µWebZockets                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| `request.respond(body, .{ .status = .ok })` | `res.text(body)`, `res.json(value, allocator)`, or `res.end("200 OK", body)` |
+| `RespondOptions.extra_headers`              | `res.append_header` or `res.end_with_headers`                                |
+| Manual chunked writes                       | `res.begin_chunked`, `res.write_chunk`, `res.end_chunks`                     |
+| Manual streaming                            | `res.begin_stream()` with a `StreamProducer`                                 |
+| No server-sent events helper                | `res.sse()`                                                                  |
+| Manual status line and reason               | Canonical status strings passed to the response helper                       |
+
+A response completes exactly once. Calling a second body helper returns an
+error; it does not append. If the write queue fills, the helper returns
+`error.WouldBlock` instead of growing memory. See
+[Response](/docs/http/response) and [Backpressure](/docs/concepts/backpressure).
+
+## Map TLS [#map-tls]
+
+`std.http` parses plaintext on whatever reader and writer you provide. TLS is a
+separate layer around the stream, and certificate loading, ALPN, and the TLS
+version policy are the application's responsibility.
+
+µWebZockets owns the TLS context. Choose the initializer before `listen`:
+
+```zig
+var app = try uz.App(256).init_https(init.io, "cert.pem", "key.pem");
+defer app.deinit();
+
+_ = try app.get("/health", health);
+try app.listen("0.0.0.0", 8443);
+try app.run();
+```
+
+`init_https` reads the certificate and key once. `init_https_ephemeral` generates
+a development certificate for localhost. TLS is 1.3 only, with ALPN `h2` then
+`http/1.1`; a TLS 1.2 client fails the handshake. Cluster TLS calls
+`enable_https` once on the cluster; each worker creates its own `SSL_CTX`. See
+[TLS](/docs/security/tls) and [TLS clusters](/docs/security/tls-clusters).
+
+## Limitations to plan for [#limitations]
+
+| Limitation                     | Consequence                                                             |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| Fixed connection capacity      | `App(N)` refuses connection `N + 1`; choose `N` before deployment       |
+| Bounded, buffered request body | No unbounded upload stream; raise `max_body_size` or split the endpoint |
+| Routes locked at `listen`      | Dynamic route registration is not available                             |
+| One response per request       | A second completion fails; long work uses an async token                |
+| Borrowed request memory        | Data retained past the callback must be copied or cloned                |
+| TLS 1.3 only                   | A TLS 1.2 peer cannot connect                                           |
+| No per-request allocator       | Handler code must use bounded storage or an explicit allocator call     |
+
+The gain is a server that starts with one allocation, rejects oversized input at
+the parser, and shuts down through one signal path.
+
+## Verify the migration [#verify-the-migration]
+
+```sh
+curl -s http://127.0.0.1:8080/health
+```
+
+```console
+ok
+```
+
+```sh
+curl -s http://127.0.0.1:8080/hello/Ada
+```
+
+```console
+hello Ada
+```
+
+```sh
+curl -s -X POST --data 'hello' http://127.0.0.1:8080/echo
+```
+
+```console
+hello
+```
+
+Send `SIGTERM` and confirm that `run` returns after the drain instead of
+requiring a process kill.
+
+## Next [#next]
+
+- [Request](/docs/http/request) lists every borrowed accessor.
+- [Response](/docs/http/response) lists every writer and its failure mode.
+- [Your first HTTP server](/docs/examples/first-http-server) starts from a clean
+  project.
+- [Server configuration](/reference/server-config) covers every capacity and
+  preset.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  lists the release that contains each public API.

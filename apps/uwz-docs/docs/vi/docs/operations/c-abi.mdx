@@ -174,6 +174,7 @@ body `ok`.
 ## C ABI không expose gì
 
 C ABI không project `ServerConfig`, capacity compile-time, `uz.schema`,
-`uz.json_rpc`, `uz.client`, HTTP/2, HPACK, HTTP/3 extension, WebTransport, mTLS,
-certificate rotation, `uz.ktls`, `uz.xdp` hay shared memory. Dùng Zig API khi
-deployment cần một trong những surface đó.
+`uz.json_rpc`, `uz.client`, HTTP/2 frame hoặc HPACK control, HTTP/3 extension,
+WebTransport, mTLS, certificate rotation, `uz.ktls`, `uz.xdp` hay shared memory.
+HTTP/2 thông thường vẫn chạy qua `uwz_app_create_tls` vì shared server negotiate
+nó bằng ALPN. Dùng Zig API khi deployment cần một trong những surface còn lại.

@@ -1,0 +1,258 @@
+---
+title: ServerConfig
+description: Look up every ServerConfig field, default, constraint, builder override, preset, slab region, and validation error.
+sidebar:
+  order: 2
+search:
+  tags: [reference, capacity]
+---
+
+`ServerConfig` is the single input to the startup slab. Every field is a
+capacity, a timeout, or a policy that is fixed before the first listener starts.
+`Server.builder` turns one configuration into one generated application type and
+one allocation. This page lists every field, its default, its constraint, the
+builder method that replaces it, and the region it sizes.
+
+Protocol rejection behavior lives in [Limits](/reference/limits). The HTTP-only
+detail and rejection documents stay in [HTTP limits](/docs/http/limits). The
+capacity narrative is in [Capacity model](/docs/concepts/capacity-model).
+
+## Capacities are compile-time [#compile-time-capacities]
+
+A capacity sizes the generated `App` type, so it cannot be read from a runtime
+variable. `ServerConfig.with` accepts optional overrides and returns a new
+configuration. `Server.builder` exposes one `with_*` method per field, and each
+takes a `comptime` value. Pass a literal or a `const`:
+
+```zig
+const config = uz.ServerConfig{}.with(.{
+    .max_connections = 512,
+    .max_body_size = 128 * 1024,
+});
+
+const bytes = try config.slab_bytes();
+std.debug.print("startup slab: {d} bytes\n", .{bytes});
+```
+
+`slab_bytes()` runs the same checked layout as `carve`, so sizing and
+partitioning cannot disagree. `Server.builder(...).slab_bytes()` reports the same
+number before `build`. `build(allocator)` performs exactly one allocation and
+returns a value that must stay at a stable address after `listen`.
+
+## Presets [#presets]
+
+Every preset is a plain `ServerConfig`, so any `with_*` override still applies.
+Start one with `Server.builder(init.io).preset(uz.Presets.microservice)` or with
+`Server.preset(init.io, uz.Presets.microservice)`.
+
+| Preset                          | Connections | WS message | Write queue | Request body | Idle timeout | Other settings                                                            |
+| ------------------------------- | ----------: | ---------: | ----------: | -----------: | -----------: | ------------------------------------------------------------------------- |
+| `Presets.microservice`          |         256 |      8 KiB |      16 KiB |       64 KiB |         30 s | Defaults elsewhere                                                        |
+| `Presets.websocket_chat`        |         512 |     32 KiB |      32 KiB |        4 KiB |        120 s | `compression = true`                                                      |
+| `Presets.file_server`           |         128 |      4 KiB |     512 KiB |        8 KiB |        300 s | Defaults elsewhere                                                        |
+| `Presets.kernel_bypass`         |         512 |      8 KiB |      32 KiB |       16 KiB |         60 s | `transport = .kernel_bypass`, `observability = true`                      |
+| `Presets.webtransport_realtime` |         512 |      8 KiB |      32 KiB |        4 KiB |         60 s | `max_datagram_size = 1200`, `datagram_slots = 64`, `observability = true` |
+
+The presets choose conservative connection counts because each embedded HTTP/2
+session dominates the per-connection footprint. They spend bytes on the capacity
+the workload exercises instead of maximizing every dimension.
+
+## Fields [#fields]
+
+### Connection and request buffers [#connection-and-buffers]
+
+| Field                   | Default | Valid range or constraint                                               | Builder override             | What it sizes                                                                                                                  |
+| ----------------------- | ------: | ----------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `max_connections`       |   1,024 | At least 1                                                              | `with_max_clients`           | Connection pool, freelist, every per-connection region, and QUIC connection capacity                                           |
+| `max_ws_message_size`   |  16 KiB | At least 1; a route's `WsBehavior.max_message_size` cannot exceed it    | `with_max_ws_message_size`   | WebSocket message region per connection, cluster inbox message size, RFC 7692 scratch                                          |
+| `write_queue_size`      |  64 KiB | At least 1                                                              | `with_write_queue_size`      | Per-connection output ring, HTTP/3 response body, static file body (this value minus 4 KiB when the queue exceeds 4 KiB)       |
+| `max_body_size`         |  16 KiB | At least 1                                                              | `with_max_body_size`         | HTTP/1 request buffer and body, HTTP/2 `request_body_limit`, HTTP gzip output scratch, rejection policy                        |
+| `max_request_line_size` |   8 KiB | At least 1                                                              | `with_max_request_line_size` | Request buffer stride and the request-line parser limit                                                                        |
+| `max_header_size`       |  16 KiB | At least 1 and at most `u32`; HTTP/3 activation requires at most 65,535 | `with_max_header_size`       | HTTP/1 header block, HTTP/2 and HTTP/3 request-header storage, rejection policy                                                |
+| `max_header_count`      |      64 | At least 64; extra pointer storage must not overflow                    | `with_max_header_count`      | Inline `Request` arrays plus one name/value pair per extra header in each connection slab; HTTP/2 and HTTP/3 decoded-field cap |
+
+`max_header_count` cannot go below 64 because the inline `Request` arrays cannot
+shrink. A larger value carves two slices per extra header into every connection's
+slab region.
+
+### Router [#router]
+
+| Field                     | Default | Valid range or constraint                                      | Builder override               | What it sizes                                                                               |
+| ------------------------- | ------: | -------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
+| `max_route_nodes`         |     256 | 1 to 65,535; combined with `max_pattern_routes` at most 65,535 | `with_max_route_nodes`         | Radix node arrays, static route index, OpenAPI route budget                                 |
+| `max_pattern_routes`      |      64 | 0 to 255; combined node and pattern count at most 65,535       | `with_max_pattern_routes`      | Parameterized and wildcard route table                                                      |
+| `max_middleware`          |      32 | 0 to 255                                                       | `with_max_middleware`          | Ordered middleware array                                                                    |
+| `max_route_path_size`     |   2,048 | 1 to 65,535; the registry must hold at least this many bytes   | `with_max_route_path_size`     | Per-route path storage and the largest accepted route path                                  |
+| `max_route_params`        |      16 | At least 16; extra pointer storage must not overflow           | `with_max_route_params`        | Inline `Request` captures plus capture pointers per extra parameter; HTTP/3 capture storage |
+| `max_route_registry_size` |  64 KiB | At least `max_route_path_size` and at most `u32`               | `with_max_route_registry_size` | Router path registry used by introspection and OpenAPI                                      |
+
+The combined node and pattern count must fit `u16`, and
+`(max_route_nodes + max_pattern_routes) * max_route_path_size` must fit `u32`.
+A configuration that cannot be represented fails validation instead of
+truncating.
+
+### HTTP/2 and HTTP/3 [#http2-and-http3]
+
+| Field                          | Default | Valid range or constraint                                      | Builder override                    | What it sizes                                                    |
+| ------------------------------ | ------: | -------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| `max_h2_header_block_size`     |  16 KiB | At least 1                                                     | `with_max_h2_header_block_size`     | HPACK block buffer in each per-connection HTTP/2 session         |
+| `max_h2_body_size`             |  16 KiB | At least 1                                                     | `with_max_h2_body_size`             | Per-stream body slab and the hard HTTP/2 body ceiling            |
+| `max_h2_response_header_size`  |   4 KiB | At least 1                                                     | `with_max_h2_response_header_size`  | Encoded response header block; the encoder fails closed above it |
+| `max_h2_response_header_count` |      32 | At least 1; includes status and generated `content-length`     | `with_max_h2_response_header_count` | Response field array per stream                                  |
+| `max_h3_body_size`             |  16 KiB | At least 1; `max_h3_body_size + max_header_size` at most `u32` | `with_max_h3_body_size`             | QUIC per-stream body storage outside the startup slab            |
+| `max_h3_response_header_size`  | 4,096 B | 1 to 65,535; field offsets and lengths are `u16`               | `with_max_h3_response_header_size`  | Encoded HTTP/3 response header storage per response              |
+| `max_h3_response_header_count` |      64 | 1 to 4,096                                                     | `with_max_h3_response_header_count` | Transmit descriptor array per response                           |
+
+The HTTP/2 body also cannot exceed `max_body_size`: the session sets
+`request_body_limit` from the HTTP/1 policy while the compiled stream slab is the
+hard ceiling. The HTTP/3 engine allocates its pools at `listen_udp`, so
+`slab_bytes()` does not include them. `listen_udp` additionally rejects
+`max_header_size` above 65,535 with `error.InvalidHttp3Capacity`.
+
+### Timeouts [#timeouts]
+
+| Field                    | Default | Valid range or constraint                      | Builder override              | What it sizes                                                       |
+| ------------------------ | ------: | ---------------------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| `idle_timeout_ms`        | 120,000 | At most `maxInt(i64)`; 0 disables the deadline | `with_idle_timeout_ms`        | HTTP/1 keep-alive idle deadline and HTTP/2 connection idle deadline |
+| `header_read_timeout_ms` |  30,000 | At most `maxInt(i64)`; 0 disables the deadline | `with_header_read_timeout_ms` | Incomplete HTTP/1 request head and body                             |
+
+### Features and transport [#features-and-transport]
+
+| Field               |     Default | Valid range or constraint                                     | Builder override              | What it sizes                                                 |
+| ------------------- | ----------: | ------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `compression`       |     `false` | Boolean                                                       | `with_compression`            | Paired RFC 7692 scratch per connection                        |
+| `http_compression`  |     `false` | Boolean                                                       | `with_http_compression`       | One per-worker gzip codec and output scratch outside the slab |
+| `transport`         | `.standard` | `.standard` or `.kernel_bypass`                               | `with_kernel_bypass`          | AF_XDP UMEM and transport state; page alignment for the slab  |
+| `max_datagram_size` |           0 | 0 or 1 to `u32`; zero requires zero slots                     | `with_webtransport_datagrams` | Largest WebTransport datagram payload per slot                |
+| `datagram_slots`    |           0 | 0 or 1 to `u32`; zero requires zero size                      | `with_webtransport_datagrams` | Datagram ring slots per connection                            |
+| `xdp_frame_size`    |       2,048 | When bypass is selected: power of two, 1,024 to 65,536        | `with_xdp_umem`               | AF_XDP UMEM chunk size                                        |
+| `xdp_frame_count`   |       1,024 | When bypass is selected: power of two, nonzero, at most 4,096 | `with_xdp_umem`               | UMEM frame count; UMEM bytes are frame size times count       |
+
+`kernel_bypass` is a request, not a guarantee. Non-Linux targets compile it out,
+and a Linux host that refuses the probe keeps the standard stack. The frame
+constraints are checked only when `transport == .kernel_bypass`.
+
+### Observability [#observability]
+
+| Field            |    Default | Valid range or constraint                                                                                                                | Builder override     | What it sizes                                              |
+| ---------------- | ---------: | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------- |
+| `observability`  |    `false` | Boolean                                                                                                                                  | `with_observability` | Carves the metrics registry and serves the hidden endpoint |
+| `metrics_path`   | `/metrics` | Nonempty and starts with `/` when observability is on; borrowed for the application lifetime                                             | `with_metrics_path`  | Hidden endpoint path                                       |
+| `enable_dev_log` |     `true` | Boolean                                                                                                                                  | `with_dev_log`       | Startup wordmark, ready summary, and event lines           |
+| `watch_paths`    |      Empty | At most 8 roots; each 1 to 4,095 bytes within a 4,096-byte path buffer; requires `enable_dev_log`; borrowed for the application lifetime | `with_watch_paths`   | Recursive development watchers                             |
+
+## Slab regions [#slab-regions]
+
+`src/router/config.zig` computes the layout with checked arithmetic.
+`slab_bytes()` and `carve` share one offset computation, so sizing and
+partitioning cannot drift. Multiply every per-connection row by
+`max_connections`.
+
+| Region                                 | Size                                                       | Present when                    |
+| -------------------------------------- | ---------------------------------------------------------- | ------------------------------- |
+| Connection pool                        | `max_connections * sizeof(TcpConnection)`                  | Always                          |
+| Pool freelist                          | `max_connections * sizeof(usize)`                          | Always                          |
+| HTTP/1 request buffers                 | `max_connections * request_stride`                         | Always                          |
+| Header extras                          | `max_connections * (max_header_count - 64) * 2 slices`     | `max_header_count` above 64     |
+| Route-capture extras                   | `max_connections * (max_route_params - 16) * 2 slices`     | `max_route_params` above 16     |
+| HTTP/2 sessions                        | `max_connections * h2_session_stride`                      | Always                          |
+| Write queues                           | `max_connections * write_queue_size`                       | Always                          |
+| WebSocket messages                     | `max_connections * max_ws_message_size`                    | Always                          |
+| RFC 7692 scratch                       | `max_connections * 2 * worst_case_scratch`                 | `compression` is on             |
+| Datagram metadata, rings, and payloads | Slot arrays plus `max_connections * datagram_stride`       | Datagrams are on                |
+| AF_XDP UMEM                            | `xdp_frame_size * xdp_frame_count` plus one `XdpTransport` | `transport` is `.kernel_bypass` |
+| Metrics registry                       | One `Registry`                                             | `observability` is on           |
+| Router storage                         | Node, pattern, middleware, and registry arrays             | Always                          |
+
+`request_stride` is `max_request_line_size + max_header_size + max_body_size`
+plus 1,024 bytes of framing slack, rounded up to 16 bytes. The slab starts on at
+least 64 bytes, or on one page when kernel bypass is selected. The list above is
+ordered as the layout carves it; router storage trails the per-connection
+regions so raising a route capacity never shifts connection storage.
+
+`slab_bytes()` does not include the libxev backend table, the per-worker HTTP
+gzip pool, per-worker `SSL_CTX` objects, cluster inboxes, or the QUIC engine pools
+created by `listen_udp`. Those allocations happen once at build, enable, or
+listen time and live outside the slab.
+
+## Complete builder example [#complete-builder]
+
+The example assumes the `uWebZockets` module is already wired into your
+`build.zig`. [Hello world](/examples/hello-world#build-wiring) shows the
+`zig fetch --save` step and the module import.
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| {
+        std.debug.print("response error: {}\n", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    const builder = uz.Server.builder(init.io)
+        .preset(uz.Presets.microservice)
+        .with_max_clients(512)
+        .with_max_body_size(128 * 1024)
+        .with_write_queue_size(96 * 1024)
+        .with_idle_timeout_ms(60_000)
+        .with_observability(true)
+        .with_metrics_path("/internal/metrics");
+
+    std.debug.print("startup slab: {d} bytes\n", .{try builder.slab_bytes()});
+
+    var server = try builder.build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.get("/", hello);
+    try server.listen("0.0.0.0", 3000);
+    try server.run();
+}
+```
+
+The chain starts from the microservice preset, replaces six fields, enables the
+hidden metrics endpoint, prints the exact slab size, and then allocates once.
+`build` returns the generated application type; routes are registered on that
+value before `listen`. A capacity that does not fit the generated type fails at
+compile time instead of at runtime.
+
+## Validation errors [#validation-errors]
+
+`ServerConfig.validate` rejects a configuration that cannot produce a usable
+slab. The builder calls it at compile time and fails with `@compileError` naming
+the error; `slab_bytes()` and `carve` call it again during layout planning.
+`MisalignedSlab` and `SlabTooSmall` come from `carve` and `init_from_slab`, not
+from `validate`.
+
+| Error                             | Trigger                                                                                                                                                                                                                                    | Fix                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `InvalidConnectionCapacity`       | `max_connections == 0`                                                                                                                                                                                                                     | Set at least 1                                                        |
+| `InvalidWebSocketMessageCapacity` | `max_ws_message_size == 0`                                                                                                                                                                                                                 | Set at least 1                                                        |
+| `InvalidWriteQueueCapacity`       | `write_queue_size == 0`                                                                                                                                                                                                                    | Set at least 1                                                        |
+| `InvalidBodyCapacity`             | `max_body_size == 0`                                                                                                                                                                                                                       | Set at least 1                                                        |
+| `InvalidRequestLineCapacity`      | `max_request_line_size == 0`                                                                                                                                                                                                               | Set at least 1                                                        |
+| `InvalidHeaderCapacity`           | `max_header_size == 0` or `max_header_count < 64`                                                                                                                                                                                          | Use a nonzero header block and at least 64 header slots               |
+| `InvalidHttp2Capacity`            | An HTTP/2 capacity is zero or the session storage plan overflows                                                                                                                                                                           | Give each HTTP/2 size and count a nonzero value that fits the slab    |
+| `InvalidHttp3Capacity`            | An HTTP/3 body or response capacity is zero, the response field count exceeds 4,096, the response header size exceeds 65,535, header bytes exceed `u32`, `listen_udp` sees `max_header_size` above 65,535, or the engine storage overflows | Lower the HTTP/3 value or the shared header size                      |
+| `InvalidRouterCapacity`           | Captures below 16, a router limit out of range, a registry smaller than one route path, or the router record or byte product overflows                                                                                                     | Raise `max_route_params` and fit nodes, patterns, paths, and registry |
+| `InvalidIdleTimeout`              | `idle_timeout_ms` exceeds `maxInt(i64)`                                                                                                                                                                                                    | Lower the value or use 0                                              |
+| `InvalidHeaderReadTimeout`        | `header_read_timeout_ms` exceeds `maxInt(i64)`                                                                                                                                                                                             | Lower the value or use 0                                              |
+| `InvalidDatagramCapacity`         | Datagram size and slots are not both zero or both nonzero, or either exceeds `u32`                                                                                                                                                         | Set both, or set both to 0                                            |
+| `InvalidTransportConfiguration`   | Kernel bypass frame size is outside 1,024 to 65,536, a frame size or count is not a power of two, or the count exceeds 4,096                                                                                                               | Use size 1,024 to 65,536 and count at most 4,096                      |
+| `InvalidMetricsPath`              | Observability is on and the path is empty or does not start with `/`                                                                                                                                                                       | Use a root-relative path                                              |
+| `InvalidWatchConfiguration`       | More than 8 roots, an empty root, or a root that does not fit the 4,096-byte path buffer                                                                                                                                                   | Reduce the roots or shorten the paths                                 |
+| `WatchRequiresDevLog`             | Watch paths are set while the development log is off                                                                                                                                                                                       | Enable the development log                                            |
+| `MisalignedSlab`                  | Caller storage does not meet `required_alignment()`                                                                                                                                                                                        | Use page alignment for kernel bypass, otherwise the slab alignment    |
+| `SlabSizeOverflow`                | A checked size or offset product exceeds `usize`, including a header or route-capture pointer stride                                                                                                                                       | Reduce the capacities that overflow                                   |
+| `SlabTooSmall`                    | Caller storage is shorter than `slab_bytes()`                                                                                                                                                                                              | Allocate at least the reported size                                   |
+
+## Next [#next]
+
+- [Capacity model](/docs/concepts/capacity-model) explains how one
+  configuration becomes the startup slab.
+- [Limits](/reference/limits) lists the protocol bounds and overflow behavior.
+- [HTTP limits](/docs/http/limits) covers the HTTP rejection documents in
+  detail.
+- [Zig API index](/reference/zig) links each type and builder to its task page.

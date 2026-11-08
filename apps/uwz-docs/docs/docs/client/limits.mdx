@@ -10,7 +10,8 @@ search:
 A client is a fixed slab of request slots. Every slot embeds its response
 accumulator, request head, socket read buffer, and TLS ciphertext buffer. The
 only compile-time choice is `max_inflight`; the per-response body limit is a
-runtime option bounded by 64 KiB.
+runtime option bounded by 64 KiB. The cross-protocol table is
+[Limits](/reference/limits).
 
 ## Request capacity
 

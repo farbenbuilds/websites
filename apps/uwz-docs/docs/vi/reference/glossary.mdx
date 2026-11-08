@@ -1,0 +1,117 @@
+---
+title: Thuật ngữ tham chiếu
+description: Tra cứu nghĩa chuẩn của mọi thuật ngữ µWebZockets, với anchor ổn định, và trang giải thích nó trong ngữ cảnh sử dụng.
+sidebar:
+  order: 10
+search:
+  tags: [reference, concept]
+---
+
+Đây là lookup A-Z chuẩn cho các thuật ngữ dùng trong toàn site. Mỗi entry nêu
+nghĩa mà µWebZockets dùng và link tới trang sở hữu behavior.
+[Thuật ngữ nhập môn](/docs/getting-started/glossary) là phần giới thiệu ban đầu;
+trang này là reference index với anchor ổn định. Link tới một entry bằng
+`/reference/glossary#<term-anchor>`, ví dụ `/reference/glossary#async-token`.
+
+Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
+[Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
+
+## A [#a]
+
+| Thuật ngữ                                         | Định nghĩa                                                                                                                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="abi"></a>**ABI**                           | Contract binary mà `include/uWebZockets.h` expose, hiện là ABI version 1.0 với opaque handle, `uwz_slice` view và capacity cố định. Xem [C ABI](/reference/c-abi).            |
+| <a id="alpn"></a>**ALPN**                         | TLS extension chọn `h2` hoặc `http/1.1` trước khi byte HTTP chảy qua, với server ưu tiên `h2`. Xem [protocol negotiation](/docs/concepts/protocol-negotiation#tls-uses-alpn). |
+| <a id="application-slab"></a>**Application slab** | Vùng cấp phát liên tục lúc startup, chứa pool, buffer, queue và router storage của một application. Xem [capacity model](/docs/concepts/capacity-model).                      |
+| <a id="async-token"></a>**Async token**           | Giá trị `AsyncResponse` có thể copy, được generation-check và complete đúng một lần trên event loop sở hữu. Xem [async response](/docs/concepts/async-responses).             |
+
+## B [#b]
+
+| Thuật ngữ                                 | Định nghĩa                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="backpressure"></a>**Backpressure** | Tín hiệu producer có bound, thường là `error.WouldBlock`, yêu cầu caller quay lại sau khi queue drain. Xem [backpressure](/docs/concepts/backpressure). |
+| <a id="bbrv1"></a>**BBRv1**               | Thuật toán congestion control cố định của QUIC, áp dụng pacing theo từng connection. Xem [QUIC transport](/docs/http3/quic-transport).                  |
+| <a id="boringssl"></a>**BoringSSL**       | TLS 1.3 implementation đã pin, cung cấp record, ALPN, certificate handling và crypto primitive. Xem [TLS](/docs/security/tls).                          |
+| <a id="borrowed"></a>**Borrowed**         | Slice thuộc connection hoặc request và chỉ hợp lệ trong callback đã nhận nó. Xem [ownership và lifetime](/docs/concepts/ownership-and-lifetimes).       |
+
+## C [#c]
+
+| Thuật ngữ                                       | Định nghĩa                                                                                                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="capacity"></a>**Capacity**               | Bound lúc startup hoặc compile-time, không phải con số throughput. Xem [capacity model](/docs/concepts/capacity-model).                                     |
+| <a id="cluster"></a>**Cluster**                 | Worker group thread-per-core với một event loop và một slab mỗi worker, phối hợp qua inbox có bound. Xem [cluster model](/docs/concepts/cluster-model).     |
+| <a id="completion"></a>**Completion**           | Kết quả event loop cho accept, read, write, close, timer hoặc async wake, được lưu inline trong owner. Xem [event loop](/docs/architecture/event-loop).     |
+| <a id="connection-slot"></a>**Connection slot** | Một `TcpConnection` tái sử dụng trong pool, chỉ trở lại sau khi close, read và write completion drain. Xem [capacity model](/docs/concepts/capacity-model). |
+
+## D [#d]
+
+| Thuật ngữ                   | Định nghĩa                                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| <a id="drain"></a>**Drain** | Callback được gọi khi write queue có bound còn chỗ. Xem [backpressure](/docs/concepts/backpressure). |
+
+## H [#h]
+
+| Thuật ngữ                       | Định nghĩa                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| <a id="handler"></a>**Handler** | Hàm được đăng ký trên route và được dispatcher gọi. Xem [handler shape](/docs/concepts/handler-shapes). |
+| <a id="hpack"></a>**HPACK**     | Header compression của HTTP/2 với dynamic table có bound. Xem [HPACK](/docs/http2/hpack).               |
+
+## M [#m]
+
+| Thuật ngữ                             | Định nghĩa                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="middleware"></a>**Middleware** | Callback có thứ tự chạy trước route dispatch và có thể dừng chain. Xem [middleware model](/docs/concepts/middleware-model).     |
+| <a id="mtls"></a>**mTLS**             | Mutual TLS, client xuất trình certificate để server xác minh với CA bundle do caller cung cấp. Xem [mTLS](/docs/security/mtls). |
+
+## P [#p]
+
+| Thuật ngữ                       | Định nghĩa                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| <a id="preset"></a>**Preset**   | `ServerConfig` có tên, được tinh chỉnh cho một workload shape. Xem [ServerConfig preset](/reference/server-config#presets). |
+| <a id="pub-sub"></a>**Pub/sub** | Subscription và publish topic có bound trong một application hoặc cluster. Xem [pub/sub](/docs/websocket/pub-sub).          |
+
+## Q [#q]
+
+| Thuật ngữ                   | Định nghĩa                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="qpack"></a>**QPACK** | Header compression của HTTP/3, với header set và decoded field dùng pool cố định lúc startup. Xem [QPACK](/docs/http3/qpack).                |
+| <a id="quic"></a>**QUIC**   | UDP transport bên dưới HTTP/3, có connection, stream, packet và loss-recovery state riêng. Xem [QUIC transport](/docs/http3/quic-transport). |
+
+## R [#r]
+
+| Thuật ngữ                                   | Định nghĩa                                                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| <a id="route-capture"></a>**Route capture** | Giá trị `:name` hoặc `*name` ở cuối path, được mượn từ request. Xem [route parameter](/docs/http/route-parameters). |
+
+## S [#s]
+
+| Thuật ngữ                                     | Định nghĩa                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="shared-nothing"></a>**Shared-nothing** | Thiết kế trong đó mỗi worker sở hữu event loop, slab và mutable state riêng. Xem [shared-nothing](/docs/concepts/shared-nothing).               |
+| <a id="slab"></a>**Slab**                     | Tên ngắn của application slab, vùng cấp phát duy nhất được chia thành các region có bound. Xem [capacity model](/docs/concepts/capacity-model). |
+| <a id="slab-layout"></a>**Slab layout**       | Cách application slab được chia thành pool, buffer, queue và router region. Xem [capacity model](/docs/concepts/capacity-model).                |
+| <a id="soa"></a>**SoA**                       | Structure of arrays, nhóm hot field thành mảng song song để scan thân thiện với cache. Xem [memory model](/docs/architecture/memory-model).     |
+
+## W [#w]
+
+| Thuật ngữ                               | Định nghĩa                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <a id="worker"></a>**Worker**           | Một OS thread với event loop, slab và TLS context tùy chọn riêng. Xem [cluster model](/docs/concepts/cluster-model).                                   |
+| <a id="write-queue"></a>**Write queue** | Ring cố định mỗi connection giữ response byte tới khi socket drain và trả `error.WouldBlock` khi đầy. Xem [backpressure](/docs/concepts/backpressure). |
+
+## 0 [#zero]
+
+| Thuật ngữ                   | Định nghĩa                                                                                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="0-rtt"></a>**0-RTT** | TLS 1.3 early data; TCP chỉ nhận safe method trước khi handshake xác nhận, và live HTTP/3 listener tắt nó. Xem [early data](/docs/http3/early-data). |
+
+## Trang liên quan [#related]
+
+- [Thuật ngữ nhập môn](/docs/getting-started/glossary) giới thiệu cùng
+  vocabulary theo thứ tự đọc.
+- [Capacity model](/docs/concepts/capacity-model) giải thích slab và mọi bound
+  định hình một application.
+- [Protocol matrix](/reference/protocol-matrix) áp dụng các thuật ngữ này cho
+  từng transport.
+- [Feature matrix](/reference/feature-matrix) nêu surface nào supported hoặc cố
+  ý không có.

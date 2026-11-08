@@ -1,0 +1,167 @@
+---
+title: Chỉ mục API Zig
+description: Tra cứu mọi export công khai của µWebZockets theo nhóm, loại và trang sở hữu tác vụ, với anchor ổn định để link trực tiếp.
+sidebar:
+  order: 1
+search:
+  tags: [reference]
+---
+
+`src/root.zig` định nghĩa bề mặt Zig được hỗ trợ. Trang này liệt kê toàn bộ 79
+export công khai, nhóm theo khu vực và trỏ mỗi tên tới trang giải thích tác vụ
+của nó. Một tên không có trong danh sách này không thuộc bề mặt được hỗ trợ, kể
+cả khi module sở hữu nó vẫn import được từ repository.
+
+## Cách dùng chỉ mục này [#how-to-use-this-index]
+
+| Bạn cần                        | Đọc                        | Sau đó mở                                       |
+| ------------------------------ | -------------------------- | ----------------------------------------------- |
+| Một constructor hoặc một value | Dòng export                | Cột trang chính                                 |
+| Một helper module              | Dòng module                | Trang concept hoặc guide của module đó          |
+| Link ổn định tới một export    | Anchor `<a id="Name"></a>` | `/reference/zig#Name`                           |
+| Hành vi wire phía sau một tên  | Trang chính                | [Limits](/reference/limits) hoặc trang protocol |
+
+Cột loại dùng bốn giá trị: `type` là struct, enum, union hoặc function-pointer
+type; `function` là constructor kiểu ở comptime; `module` là public import có
+function và type riêng; `value` là hằng số.
+
+## Application và cluster [#application-and-cluster]
+
+| Export                                                          | Loại     | Là gì                                                                   | Trang chính                                           |
+| --------------------------------------------------------------- | -------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
+| <a id="App"></a>`App`                                           | function | Constructor comptime cho application type mặc định có capacity giới hạn | [Application model](/docs/concepts/application-model) |
+| <a id="ConfiguredApp"></a>`ConfiguredApp`                       | function | Application type với WebSocket và write capacity tường minh             | [Application model](/docs/concepts/application-model) |
+| <a id="ConfiguredAppWithTimeout"></a>`ConfiguredAppWithTimeout` | function | Application type với capacity và idle timeout tường minh                | [Application model](/docs/concepts/application-model) |
+| <a id="Server"></a>`Server`                                     | type     | Builder comptime dạng fluent, thực hiện đúng một allocation lúc startup | [ServerConfig](/reference/server-config)              |
+| <a id="ClusterOptions"></a>`ClusterOptions`                     | type     | Chính sách khởi động cho worker group thread-per-core                   | [Shared-nothing](/docs/concepts/shared-nothing)       |
+| <a id="ClusterState"></a>`ClusterState`                         | type     | Trạng thái vòng đời của worker group                                    | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="WorkerFailure"></a>`WorkerFailure`                       | type     | Lỗi worker, spawn hoặc cleanup đầu tiên mà cluster báo lại              | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="FailurePhase"></a>`FailurePhase`                         | type     | Pha tạo ra worker failure                                               | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="PublishReport"></a>`PublishReport`                       | type     | Kết quả chấp nhận và wakeup theo từng worker của một lần publish        | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="ServerConfig"></a>`ServerConfig`                         | type     | Capacity, timeout và preset cấp server                                  | [ServerConfig](/reference/server-config)              |
+| <a id="Presets"></a>`Presets`                                   | type     | Các preset `ServerConfig` có tên                                        | [Presets](/reference/server-config#presets)           |
+| <a id="SlabLayout"></a>`SlabLayout`                             | type     | Các view có kiểu trên startup slab liền mạch                            | [Capacity model](/docs/concepts/capacity-model)       |
+| <a id="default_idle_timeout_ms"></a>`default_idle_timeout_ms`   | value    | Idle timeout mặc định cho keep-alive, 120.000 ms                        | [Timeouts](/reference/server-config#timeouts)         |
+| <a id="http3_available"></a>`http3_available`                   | value    | Build có kèm transport HTTP/3 hay không                                 | [HTTP/3](/docs/http3)                                 |
+| <a id="cluster"></a>`cluster`                                   | module   | Runtime worker group, inbox, publish và báo lỗi                         | [Cluster model](/docs/concepts/cluster-model)         |
+
+## Request và response [#request-and-response]
+
+| Export                                                | Loại | Là gì                                                                         | Trang chính                                                       |
+| ----------------------------------------------------- | ---- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| <a id="Request"></a>`Request`                         | type | Metadata request với capacity cố định, dạng borrow, truyền vào callback       | [HTTP request](/docs/http/request)                                |
+| <a id="OwnedRequest"></a>`OwnedRequest`               | type | Metadata request do allocator sở hữu cho công việc deferred hoặc cross-thread | [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) |
+| <a id="Response"></a>`Response`                       | type | Response writer có giới hạn, truyền vào route callback                        | [HTTP response](/docs/http/response)                              |
+| <a id="AsyncResponse"></a>`AsyncResponse`             | type | Async token một lần, có kiểm tra generation và có thể copy                    | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="StreamProducer"></a>`StreamProducer`           | type | Callback producer cho chunked response điều khiển bằng drain                  | [Streaming](/docs/http/streaming)                                 |
+| <a id="StreamStatus"></a>`StreamStatus`               | type | Kết quả của một lần gọi producer                                              | [Streaming](/docs/http/streaming)                                 |
+| <a id="JsonStream"></a>`JsonStream`                   | type | JSON body writer dạng stream, trả về bởi `Response.begin_json`                | [JSON](/docs/http/json)                                           |
+| <a id="AsyncResponseState"></a>`AsyncResponseState`   | type | State thuộc connection làm nền cho async response token                       | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="AsyncResponseStatus"></a>`AsyncResponseStatus` | type | Vòng đời của async response slot thuộc connection                             | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="ServerSentEvents"></a>`ServerSentEvents`       | type | Stream Server-Sent Events trả về bởi `Response.sse`                           | [Server-Sent Events](/docs/http/server-sent-events)               |
+
+## HTTP helpers [#http-helpers]
+
+| Export                                                | Loại   | Là gì                                                                          | Trang chính                                                            |
+| ----------------------------------------------------- | ------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| <a id="chunked"></a>`chunked`                         | module | Helper response chunked HTTP/1.1 mức thấp                                      | [Chunked responses](/docs/http/chunked)                                |
+| <a id="fetch"></a>`fetch`                             | module | Primitive helper theo WHATWG Fetch Standard                                    | [Fetch, streams and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="client"></a>`client`                           | module | HTTP/1.1 và WebSocket client có giới hạn trên TCP và TLS                       | [Client](/docs/client)                                                 |
+| <a id="streams"></a>`streams`                         | module | Primitive theo WHATWG Streams Standard                                         | [Fetch, streams and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="abort"></a>`abort`                             | module | Cancellation WinterCG hợp tác, dùng chung cho transport và async work          | [Fetch, streams and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="compression_stream"></a>`compression_stream`   | module | `CompressionStream` và `DecompressionStream` dựa trên libdeflate               | [Compression](/docs/http/helpers/compression)                          |
+| <a id="compression_pool"></a>`compression_pool`       | module | Pool gzip codec dùng lại theo worker cho `Response.end_gzip`                   | [Compression](/docs/http/helpers/compression)                          |
+| <a id="multipart"></a>`multipart`                     | module | Primitive parse multipart RFC 7578 không allocation                            | [Multipart](/docs/http/helpers/multipart)                              |
+| <a id="query"></a>`query`                             | module | Cắt query string và percent decode không allocation                            | [Query and forms](/docs/http/helpers/query-and-forms)                  |
+| <a id="form"></a>`form`                               | module | Parse body form-urlencoded không allocation                                    | [Query and forms](/docs/http/helpers/query-and-forms)                  |
+| <a id="cookie"></a>`cookie`                           | module | Helper parse, format và ký HMAC-SHA256 theo RFC 6265                           | [Cookies](/docs/http/helpers/cookies)                                  |
+| <a id="middleware"></a>`middleware`                   | module | Middleware CORS và security header trình duyệt với state cố định               | [Middleware](/docs/http/middleware)                                    |
+| <a id="schema"></a>`schema`                           | module | Validate JSON schema gắn tag ở comptime                                        | [Schema validation](/docs/type-safety/schema-validation)               |
+| <a id="status"></a>`status`                           | module | HTTP status code và status line chuẩn                                          | [HTTP response](/docs/http/response)                                   |
+| <a id="errors"></a>`errors`                           | module | JSON error response có kiểu cho HTTP handler                                   | [HTTP errors](/docs/http/errors)                                       |
+| <a id="negotiate"></a>`negotiate`                     | module | Content negotiation theo Accept header trên danh sách offer do caller cung cấp | [Content negotiation](/docs/http/helpers/content-negotiation)          |
+| <a id="cache"></a>`cache`                             | module | Helper ETag và conditional GET cho response có giới hạn                        | [Caching](/docs/http/helpers/caching)                                  |
+| <a id="openapi"></a>`openapi`                         | module | Route registry và helper tạo OpenAPI document                                  | [OpenAPI](/docs/http/openapi)                                          |
+| <a id="static_files"></a>`static_files`               | module | Handler static directory và file với capacity cố định                          | [Static files](/docs/http/static-files)                                |
+| <a id="HttpMethod"></a>`HttpMethod`                   | type   | Bộ chọn HTTP method cho đăng ký route tổng quát                                | [Routing](/docs/http/routing)                                          |
+| <a id="Handler"></a>`Handler`                         | type   | Route callback đồng bộ, không context                                          | [Routing](/docs/http/routing)                                          |
+| <a id="ContextHandler"></a>`ContextHandler`           | type   | Route callback đồng bộ mang context do caller sở hữu                           | [Routing](/docs/http/routing)                                          |
+| <a id="AsyncHandler"></a>`AsyncHandler`               | type   | Route callback deferred nhận async response token                              | [Async responses](/docs/concepts/async-responses)                      |
+| <a id="ContextAsyncHandler"></a>`ContextAsyncHandler` | type   | Route callback deferred mang context do caller sở hữu                          | [Async responses](/docs/concepts/async-responses)                      |
+| <a id="MiddlewareResult"></a>`MiddlewareResult`       | type   | Kết quả quyết định route dispatch có tiếp tục hay không                        | [Middleware](/docs/http/middleware)                                    |
+| <a id="MiddlewareHandler"></a>`MiddlewareHandler`     | type   | Middleware callback có thứ tự, mang context do caller sở hữu                   | [Middleware](/docs/http/middleware)                                    |
+
+## JSON và JSON-RPC [#json-and-json-rpc]
+
+| Export                          | Loại   | Là gì                                                         | Trang chính                |
+| ------------------------------- | ------ | ------------------------------------------------------------- | -------------------------- |
+| <a id="json_rpc"></a>`json_rpc` | module | Service JSON-RPC 2.0 và helper procedure với capacity cố định | [JSON-RPC](/docs/json-rpc) |
+
+## WebSocket [#websocket]
+
+| Export                                                      | Loại     | Là gì                                                    | Trang chính                                               |
+| ----------------------------------------------------------- | -------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| <a id="WebSocket"></a>`WebSocket`                           | type     | Handle connection RFC 6455 phía server                   | [WebSocket](/docs/websocket)                              |
+| <a id="WsBehavior"></a>`WsBehavior`                         | type     | Callback route WebSocket và giới hạn behavior có bound   | [WebSocket](/docs/websocket)                              |
+| <a id="WsCompression"></a>`WsCompression`                   | type     | Chính sách compression WebSocket chọn theo route         | [Compression](/docs/websocket/compression)                |
+| <a id="Opcode"></a>`Opcode`                                 | type     | Opcode frame RFC 6455                                    | [Messages](/docs/websocket/messages)                      |
+| <a id="websocket_mask"></a>`websocket_mask`                 | module   | Helper masking WebSocket theo vị trí                     | [Handshake](/docs/websocket/handshake)                    |
+| <a id="websocket_backpressure"></a>`websocket_backpressure` | module   | Model chuyển trạng thái backpressure thuần hàm           | [Backpressure](/docs/websocket/backpressure)              |
+| <a id="WebSocketStream"></a>`WebSocketStream`               | function | Constructor stream pull-based chuyên biệt theo transport | [WebSocket streams](/docs/http/helpers/websocket-streams) |
+| <a id="NativeWebSocketStream"></a>`NativeWebSocketStream`   | type     | WebSocket stream gắn với transport server native         | [WebSocket streams](/docs/http/helpers/websocket-streams) |
+
+## TLS và transport [#tls-and-transport]
+
+| Export                                    | Loại   | Là gì                                                          | Trang chính                                                               |
+| ----------------------------------------- | ------ | -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| <a id="tls"></a>`tls`                     | module | API TLS context dựa trên BoringSSL                             | [TLS](/docs/security/tls)                                                 |
+| <a id="crypto_subtle"></a>`crypto_subtle` | module | Tập con Web Crypto dựa trên BoringSSL                          | [TLS](/docs/security/tls)                                                 |
+| <a id="transport"></a>`transport`         | module | Tách transport ở compile time cho protocol-only core           | [Transports](/docs/architecture/transports)                               |
+| <a id="ktls"></a>`ktls`                   | module | kTLS trên Linux và truyền file, pipe zero-copy                 | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="xdp"></a>`xdp`                     | module | Socket AF_XDP zero-copy và UMEM ring                           | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="xdp_transport"></a>`xdp_transport` | module | Chính sách AF_XDP opportunistic, helper UMEM và fallback state | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="udp"></a>`udp`                     | module | API transport UDP và QUIC điều khiển bằng completion           | [QUIC transport](/docs/http3/quic-transport)                              |
+| <a id="shared_memory"></a>`shared_memory` | module | Shared memory có kiểm tra generation và envelope Cap'n Proto   | [Transports](/docs/architecture/transports)                               |
+| <a id="TransportMode"></a>`TransportMode` | type   | Transport backend được yêu cầu qua `ServerConfig.transport`    | [Features and transport](/reference/server-config#features-and-transport) |
+
+## Observability [#observability]
+
+| Export                        | Loại   | Là gì                                                         | Trang chính                                         |
+| ----------------------------- | ------ | ------------------------------------------------------------- | --------------------------------------------------- |
+| <a id="metrics"></a>`metrics` | module | Prometheus metrics registry zero-allocation, capacity cố định | [Metrics](/docs/operations/metrics)                 |
+| <a id="dev_log"></a>`dev_log` | module | Development log có màu, không allocation, ghi theo batch      | [Development log](/docs/operations/development-log) |
+| <a id="ebpf"></a>`ebpf`       | module | Trình đọc histogram per-CPU eBPF đã pin                       | [eBPF](/docs/operations/ebpf)                       |
+
+## HTTP/2 và HTTP/3 [#http2-and-http3]
+
+| Export                                          | Loại   | Là gì                                                                       | Trang chính                                          |
+| ----------------------------------------------- | ------ | --------------------------------------------------------------------------- | ---------------------------------------------------- |
+| <a id="http2"></a>`http2`                       | module | State machine frame và stream HTTP/2 có giới hạn                            | [HTTP/2](/docs/http2)                                |
+| <a id="http2_hpack"></a>`http2_hpack`           | module | HPACK decoder, dynamic table, Huffman codec và response encoder có giới hạn | [HPACK](/docs/http2/hpack)                           |
+| <a id="http2_server"></a>`http2_server`         | module | Request session và API đóng gói response HTTP/2 không allocation            | [Frames and streams](/docs/http2/frames-and-streams) |
+| <a id="http3_extensions"></a>`http3_extensions` | module | Helper extended CONNECT, push và early data cho HTTP/3                      | [HTTP/3](/docs/http3)                                |
+| <a id="webtransport"></a>`webtransport`         | module | Protocol state WebTransport-over-HTTP/3 draft có giới hạn                   | [WebTransport](/docs/http3/webtransport)             |
+| <a id="datagram_ring"></a>`datagram_ring`       | module | Queue SoA capacity cố định cho WebTransport datagram đang chờ               | [WebTransport](/docs/http3/webtransport)             |
+| <a id="datagram"></a>`datagram`                 | module | Route table datagram WebTransport capacity cố định                          | [WebTransport](/docs/http3/webtransport)             |
+
+## Kiểm tra drift [#drift-check]
+
+`src/root.zig` là nguồn duy nhất cho trang này. File khai báo 79 tên
+`pub const`, và mỗi tên xuất hiện đúng một lần ở trên. Một số module còn export
+thêm declaration công khai trong file của chúng; những tên đó đi qua dòng module,
+không phải qua export thứ hai ở root. `src/root.zig` cũng phân tích
+`src/c_api.zig` trong một block `comptime` để các symbol `uwz_*` đi vào static
+library, nhưng C ABI là bề mặt riêng, được ghi ở
+[C ABI](/reference/c-abi).
+
+Khi một release thêm, đổi tên hoặc bỏ một root export, cập nhật bảng này trong
+cùng thay đổi. Một dòng không có `pub const` tương ứng, hoặc một `pub const`
+không có dòng, là drift tài liệu.
+
+## Liên quan [#related]
+
+- [ServerConfig](/reference/server-config) ánh xạ từng field startup tới builder
+  method và slab region.
+- [Limits](/reference/limits) liệt kê các bound protocol được enforce phía sau
+  những type này.
+- [Errors](/reference/errors) liệt kê tên error do các module trên trả về.

@@ -9,6 +9,7 @@ search:
 
 The C ABI is a fixed-capacity server binding. One opaque application handle owns
 the router, listener, loop, and storage; C callbacks borrow views for one call.
+The exhaustive declaration list is [C ABI reference](/reference/c-abi).
 
 ## Problem
 
@@ -21,7 +22,9 @@ retaining borrowed memory.
 - Zig 0.16.0 builds the library and your C program.
 - The host compiles C11 or C++17.
 - The deployment fits the fixed capacities; the ABI has no `ServerConfig`,
-  schema, JSON-RPC, client, HTTP/2, HTTP/3, or mTLS.
+  schema, JSON-RPC, client, HTTP/2 tuning, mTLS, or WebTransport. HTTP/3 is
+  available through `uwz_app_create_http3` and `uwz_app_listen_udp` with the
+  fixed capacities.
 
 ## Build the program
 

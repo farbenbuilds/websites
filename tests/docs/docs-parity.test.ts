@@ -3,14 +3,16 @@ import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-const DOCS_ROOT = "apps/uwz-docs/docs/docs";
-const VI_ROOT = "apps/uwz-docs/docs/vi/docs";
+const DOCS_ROOT = "apps/uwz-docs/docs";
+const VI_ROOT = "apps/uwz-docs/docs/vi";
 
-async function collectPages(root: string): Promise<string[]> {
+async function collectPages(root: string, skipVi = false): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
 
   const pages = await Promise.all(
     entries.map(async (entry) => {
+      if (skipVi && entry.name === "vi") return [];
+
       const path = join(root, entry.name);
 
       if (entry.isDirectory()) return collectPages(path);
@@ -30,7 +32,7 @@ function frontmatter(source: string): string {
 
 describe("uWebZockets documentation tree", () => {
   it("mirrors every English page in the Vietnamese tree", async () => {
-    const pages = await collectPages(DOCS_ROOT);
+    const pages = await collectPages(DOCS_ROOT, true);
 
     const missing = await Promise.all(
       pages.map(async (page) => {
@@ -50,13 +52,27 @@ describe("uWebZockets documentation tree", () => {
   });
 
   it("gives every page a title and a description", async () => {
-    const pages = await collectPages(DOCS_ROOT);
+    const pages = await collectPages(DOCS_ROOT, true);
 
     const invalid = await Promise.all(
       pages.map(async (page) => {
         const block = frontmatter(await readFile(page, "utf8"));
 
         return block.includes("title:") && block.includes("description:") ? null : page;
+      }),
+    );
+
+    expect(invalid.filter((page) => page !== null)).toEqual([]);
+  });
+
+  it("does not use plain-text code fences", async () => {
+    const pages = await collectPages(DOCS_ROOT);
+
+    const invalid = await Promise.all(
+      pages.map(async (page) => {
+        const source = await readFile(page, "utf8");
+
+        return source.includes("```text") ? page : null;
       }),
     );
 

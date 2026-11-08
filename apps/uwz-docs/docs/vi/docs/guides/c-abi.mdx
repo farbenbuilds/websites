@@ -21,7 +21,8 @@ giữ lại memory đã mượn.
 - Zig 0.16.0 build cả library và chương trình C.
 - Host compile C11 hoặc C++17.
 - Deployment vừa capacity cố định; ABI không có `ServerConfig`, schema,
-  JSON-RPC, client, HTTP/2, HTTP/3 hay mTLS.
+  JSON-RPC, client, HTTP/2 tuning, mTLS hay WebTransport. HTTP/3 có qua
+  `uwz_app_create_http3` và `uwz_app_listen_udp` với capacity cố định.
 
 ## Build chương trình
 

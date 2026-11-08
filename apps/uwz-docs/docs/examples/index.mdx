@@ -1,0 +1,114 @@
+---
+title: Canonical examples
+description: Read the canonical program for each µWebZockets capability, with build wiring, run command, expected output, and capacity notes.
+search:
+  tags: [reference, tutorial, http1, websocket, json-rpc, tls, cluster, http3]
+---
+
+Each page documents one canonical program from the framework `examples/`
+directory. The page gives the complete source, the consumer `build.zig` wiring,
+the run command, the expected output, the capacities the example chooses, and
+one variation worth trying.
+
+These pages are not a substitute for the task tutorials. Start with
+[Your first HTTP server](/docs/examples/first-http-server) when you are learning
+the lifecycle, and use an example page when you want the exact program that the
+framework ships.
+
+## Example index
+
+| Example                                                    | Shows                                            | Protocol                | Default port |
+| ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
+| [Hello world](/examples/hello-world)                       | `App(128)`, one route, one response              | HTTP/1.1                |         3000 |
+| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate and ALPN               | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
+| [Shared-nothing cluster](/examples/shared-nothing-cluster) | Four workers, one slab and loop each             | HTTP/1.1                |         3000 |
+| [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS contexts and runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
+| [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing      | HTTP/1.1                |         3000 |
+| [Custom builder](/examples/custom-builder)                 | Fluent capacities and `slab_bytes()`             | HTTP/1.1                |         3001 |
+| [Chat server](/examples/chat-server)                       | WebSocket open, message, close, and pub/sub      | WebSocket               |         3000 |
+| [RPC server](/examples/rpc-server)                         | Typed JSON-RPC procedure                         | JSON-RPC                |         3000 |
+| [HTTP/3 server](/examples/http3-server)                    | QUIC listener and in-memory TLS                  | HTTP/3                  |     8443 UDP |
+| [Delayed response](/examples/delay-server)                 | Async token and timing wheel                     | HTTP/1.1                |         3000 |
+
+## Run an example in your project
+
+<Steps>
+  <Step title="Add the dependency">
+    ```sh
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+    ```
+  </Step>
+  <Step title="Wire the module">
+    ```zig build.zig
+    const std = @import("std");
+
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
+        const optimize = b.standardOptimizeOption(.{});
+        const uz = b.dependency("uWebZockets", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = "example",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+        b.installArtifact(exe);
+
+        const run = b.addRunArtifact(exe);
+        b.step("run", "Run the example").dependOn(&run.step);
+    }
+    ```
+
+  </Step>
+  <Step title="Copy the program">
+    Copy the page source into `src/main.zig`. The full source link on each page
+    points at the framework file the page mirrors.
+  </Step>
+  <Step title="Build and run">
+    ```sh
+    zig build run
+    ```
+  </Step>
+  <Step title="Verify">
+    Use the `curl` or `wscat` command on the example page. The TLS cluster and
+    HTTP/3 examples install the signal watcher and drain on Ctrl+C; the other
+    examples terminate immediately.
+  </Step>
+</Steps>
+
+## Upstream build steps
+
+The framework repository also exposes each program as a named build step, such
+as `zig build hello_world` or `zig build tls_cluster`. Those commands run inside
+a framework checkout and are contributor shortcuts; they are not the consumer
+path. In your project, use `zig build run` after copying the source.
+
+## Capacities chosen by the examples
+
+| Example                |    Connections | Write queue |   Body | Message | Why                              |
+| ---------------------- | -------------: | ----------: | -----: | ------: | -------------------------------- |
+| Hello world            |            128 |      64 KiB | 16 KiB |  16 KiB | Small default footprint          |
+| HTTPS server           |            128 |      64 KiB | 16 KiB |  16 KiB | Same shape, TLS only             |
+| Shared-nothing cluster | 128 per worker |      32 KiB | 16 KiB |  16 KiB | Four small workers               |
+| TLS cluster            |   128 to 2,048 |      64 KiB | 16 KiB |  16 KiB | Benchmark controls               |
+| Basic microservice     |            256 |      16 KiB | 64 KiB |   8 KiB | JSON request/response            |
+| Custom builder         |              4 |     256 KiB | 50 MiB |  16 KiB | Large uploads, few peers         |
+| Chat server            |            128 |      64 KiB | 16 KiB |  16 KiB | Default WebSocket path           |
+| RPC server             |            128 |      64 KiB | 16 KiB |  16 KiB | Small typed payloads             |
+| HTTP/3 server          |            128 |      64 KiB | 16 KiB |  16 KiB | QUIC request/response            |
+| Delayed response       |            128 |      64 KiB | 16 KiB |  16 KiB | Parked responses use timer slots |
+
+## Related
+
+- [Your first HTTP server](/docs/examples/first-http-server) teaches the request
+  and response lifecycle step by step.
+- [Capacity model](/docs/concepts/capacity-model) explains how these values
+  become one startup slab.
+- [ServerConfig](/reference/server-config) lists every field and default.
