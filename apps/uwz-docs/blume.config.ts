@@ -47,9 +47,9 @@ export default defineConfig({
   },
   navigation: {
     tabs: [
-      { label: "Docs", path: "/docs", icon: "book-open" },
-      { label: "Reference", path: "/reference", icon: "braces" },
-      { label: "Examples", path: "/examples", icon: "boxes" },
+      { label: "Docs", path: "/docs" },
+      { label: "Reference", path: "/reference" },
+      { label: "Examples", path: "/examples" },
     ],
     sidebar: {
       display: "group",
