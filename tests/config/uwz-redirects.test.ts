@@ -10,7 +10,7 @@ const EXPECTED_REDIRECTS = [
   { from: "/vi/getting-started/:slug*", to: "/vi/docs/getting-started/:slug*", status: 301 },
   {
     from: "/docs/getting-started/first-http-server",
-    to: "/examples/first-http-server",
+    to: "/examples/hello-world",
     status: 301,
   },
   {
@@ -40,7 +40,7 @@ const EXPECTED_REDIRECTS = [
   },
   {
     from: "/vi/docs/getting-started/first-http-server",
-    to: "/vi/examples/first-http-server",
+    to: "/vi/examples/hello-world",
     status: 301,
   },
   {
@@ -69,7 +69,7 @@ const EXPECTED_REDIRECTS = [
     status: 301,
   },
   { from: "/docs/examples", to: "/examples", status: 301 },
-  { from: "/docs/examples/first-http-server", to: "/examples/first-http-server", status: 301 },
+  { from: "/docs/examples/first-http-server", to: "/examples/hello-world", status: 301 },
   { from: "/docs/examples/first-websocket", to: "/examples/first-websocket", status: 301 },
   {
     from: "/docs/examples/first-json-rpc-service",
@@ -82,7 +82,7 @@ const EXPECTED_REDIRECTS = [
   { from: "/vi/docs/examples", to: "/vi/examples", status: 301 },
   {
     from: "/vi/docs/examples/first-http-server",
-    to: "/vi/examples/first-http-server",
+    to: "/vi/examples/hello-world",
     status: 301,
   },
   { from: "/vi/docs/examples/first-websocket", to: "/vi/examples/first-websocket", status: 301 },
@@ -96,6 +96,12 @@ const EXPECTED_REDIRECTS = [
   {
     from: "/vi/docs/examples/first-http3-server",
     to: "/vi/examples/first-http3-server",
+    status: 301,
+  },
+  { from: "/examples/first-http-server", to: "/examples/hello-world", status: 301 },
+  {
+    from: "/vi/examples/first-http-server",
+    to: "/vi/examples/hello-world",
     status: 301,
   },
 ] as const;

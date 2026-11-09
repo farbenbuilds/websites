@@ -26,8 +26,8 @@ một variation đáng thử. Cả hai track dùng cùng consumer project và ch
 ## Guided tutorials [#guided-tutorials]
 
 <CardGroup cols={2}>
-  <Card title="HTTP server đầu tiên" href="/examples/first-http-server" icon="server">
-    Đăng ký route, đọc capture và kiểm tra listener bằng `curl`.
+  <Card title="Hello world" href="/examples/hello-world" icon="server">
+    Build server canonical, thêm route parameter, verify và drain khi nhận signal.
   </Card>
   <Card title="WebSocket đầu tiên" href="/examples/first-websocket" icon="messages-square">
     Thêm route echo với callback open, message và close.
@@ -60,11 +60,12 @@ Hoàn thành [Cài đặt](/docs/getting-started/installation) và
 
 Mỗi trang document một chương trình trong thư mục `examples/` của framework.
 Trang cung cấp complete source, consumer `build.zig` wiring, run command,
-expected output, capacity mà example chọn và một variation.
+expected output, capacity mà example chọn và một variation. Bắt đầu với
+[Hello world](/examples/hello-world), trang cũng chứa tutorial HTTP đầu tiên;
+bảng bên dưới liệt kê các chương trình lớn hơn.
 
 | Example                                                    | Shows                                          | Protocol                | Default port |
 | ---------------------------------------------------------- | ---------------------------------------------- | ----------------------- | -----------: |
-| [Hello world](/examples/hello-world)                       | `App(128)`, một route, một response            | HTTP/1.1                |         3000 |
 | [HTTPS server](/examples/https-server)                     | In-memory TLS certificate và ALPN              | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
 | [Shared-nothing cluster](/examples/shared-nothing-cluster) | Bốn worker, mỗi worker một slab và loop        | HTTP/1.1                |         3000 |
 | [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS context và runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |

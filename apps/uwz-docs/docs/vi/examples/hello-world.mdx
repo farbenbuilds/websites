@@ -1,15 +1,16 @@
 ---
 title: Hello world
-description: Build server HTTP/1.1 µWebZockets canonical, chạy trong project của bạn và kiểm tra response bằng curl với output mong đợi.
+description: Build server Hello world HTTP/1.1 canonical, thêm route parameter, kiểm tra cả hai bằng curl và drain khi nhận signal.
 sidebar:
-  order: 7
+  order: 1
 search:
-  tags: [reference, tutorial, http1]
+  tags: [tutorial, reference, http1, routing]
 ---
 
-Ví dụ này là server µWebZockets hoàn chỉnh nhỏ nhất. Nó cấp phát một slab
-`App(128)`, đăng ký `GET /`, listen trên port 3000 và trả về một text body.
-Chương trình là `examples/hello_world.zig` trong framework repository.
+Trang này vừa là chương trình Hello world canonical vừa là tutorial HTTP đầu tiên.
+Nó bắt đầu bằng server hoàn chỉnh nhỏ nhất, rồi thêm route parameter, route POST
+và shutdown watcher. Chương trình là `examples/hello_world.zig` trong framework
+repository.
 
 ## Source [#source]
 
@@ -77,14 +78,9 @@ pub fn build(b: *std.Build) void {
 zig build run
 ```
 
-Server block trong `app.run()` cho đến khi nhận `SIGINT` hoặc `SIGTERM`. Ví dụ
-này không gọi `catch_shutdown_signals`, nên Ctrl+C kết thúc process mà không đi
-qua graceful drain path. Thêm watcher khi server sở hữu công việc cần dừng sạch:
-
-```zig
-try app.catch_shutdown_signals();
-try app.run();
-```
+Server block trong `app.run()` cho đến khi nhận `SIGINT` hoặc `SIGTERM`. Chương
+trình canonical không gọi `catch_shutdown_signals`; phần
+[Stop it cleanly](#stop-it-cleanly) thêm watcher đó.
 
 ## Verify [#verify]
 
@@ -103,12 +99,70 @@ Hello from µWebZockets! Zero allocation achieved.
 Body dài 50 byte. Thứ tự header và casing chính xác của `content-length` là chi
 tiết transport; hãy assert status và body trong application test.
 
+## Add a route parameter [#add-a-route-parameter]
+
+Thêm một handler và đăng ký nó trước `listen`:
+
+```zig
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| {
+            std.log.err("response failed: {}", .{res_err});
+        };
+        return;
+    };
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.get("/greet/:name", greet);
+```
+
+Kiểm tra cả hai route:
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3000/greet/Ada
+```
+
+```console
+Hello from µWebZockets! Zero allocation achieved.
+hello Ada
+```
+
+`/greet` không match `/greet/:name` vì parameter yêu cầu một segment không rỗng.
+Đăng ký `/greet` riêng nếu bạn muốn route không có capture. Fallback
+`orelse "world"` xử lý capture bị thiếu, không phải route bị thiếu.
+
+## Add another method [#add-another-method]
+
+Các helper đăng ký route theo tên method. Route POST có thể đọc body đã buffer
+bằng `req.text()`:
+
+```zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.post("/items", create);
+```
+
+`req.text()` trả body đã buffer. Body capacity mặc định là 16 KiB; tăng bằng
+`ServerConfig` hoặc `with_max_body_size` khi application cần upload lớn hơn.
+
 ## Request path [#request-path]
 
 ```mermaid
 sequenceDiagram
     accTitle: Hello world diagram
-    accDescr: Build server HTTP/1.1 µWebZockets canonical, chạy trong project của bạn và kiểm tra response bằng curl với output mong đợi.
+    accDescr: Build the canonical µWebZockets HTTP/1.1 server, run it in your own project, and verify the response with curl.
     participant C as curl
     participant L as Listener
     participant R as Router
@@ -120,6 +174,16 @@ sequenceDiagram
     H-->>L: response complete
     L-->>C: 200 OK with content-length
 ```
+
+## What happens at startup [#what-happens-at-startup]
+
+| Step            | Detail                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `App(128).init` | Tính slab layout và thực hiện một allocation cho 128 connection slot, request buffer, write queue và router storage. |
+| `app.get`       | Ghi route vào fixed router storage. Đăng ký trước `listen` giữ array bất biến khi worker chạy.                       |
+| `listen`        | Bind socket, bắt đầu accept và khóa route registration.                                                              |
+| `run`           | Chạy event loop cho đến khi shutdown hoàn tất.                                                                       |
+| `deinit`        | Giải phóng slab đúng một lần. Nó panic nếu được gọi từ trong loop.                                                   |
 
 ## Capacities [#capacities]
 
@@ -136,19 +200,20 @@ sequenceDiagram
 phải chọn lúc runtime hoặc khi bạn muốn dùng
 [preset](/reference/server-config#presets) có tên.
 
-## What the example demonstrates [#what-the-example-demonstrates]
+## Stop it cleanly [#stop-it-cleanly]
 
-| Call                          | Effect                                           |
-| ----------------------------- | ------------------------------------------------ |
-| `uz.App(128).init(init.io)`   | Tính slab layout và thực hiện một allocation     |
-| `app.get("/", hello_handler)` | Lưu route trước khi listener khóa registration   |
-| `app.listen("0.0.0.0", 3000)` | Bind mọi local interface và bắt đầu accept       |
-| `app.run()`                   | Chạy event loop cho đến khi process dừng         |
-| `app.deinit()`                | Giải phóng slab đúng một lần sau khi loop trả về |
+Thêm watcher trước `listen`:
 
-Handler signature là `fn (*uz.Request, *uz.Response) void`. `res.text` copy body
-vào bounded connection storage trước khi callback trả về, nên literal có thể nằm
-trong static memory.
+```zig
+try app.catch_shutdown_signals();
+try app.listen("0.0.0.0", 3000);
+try app.run();
+```
+
+Nhấn Ctrl+C. Watcher request shutdown, dừng accept, hủy recurring timer, đóng
+connection đang hoạt động và drain completion trước khi `run` trả về. Request
+đang xử lý không được đảm bảo hoàn tất. `defer app.deinit()` sau đó giải phóng
+slab.
 
 ## Variations [#variations]
 
@@ -173,7 +238,8 @@ footprint trước khi allocate.
 
 ## Next [#next]
 
-- [Your first HTTP server](/examples/first-http-server) thêm route
-  parameters, response errors và shutdown watcher.
-- [HTTPS server](/examples/https-server) bọc cùng route trong TLS 1.3.
+- [WebSocket đầu tiên](/examples/first-websocket) thêm route hai chiều.
+- [JSON-RPC service đầu tiên](/examples/first-json-rpc-service) phục vụ typed
+  procedure trên cùng application.
+- [TLS server đầu tiên](/examples/first-tls-server) bọc listener trong TLS 1.3.
 - [ServerConfig](/reference/server-config) liệt kê mọi capacity và default.

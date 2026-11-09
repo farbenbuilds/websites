@@ -30,17 +30,27 @@ const MOVED_EXAMPLE_SLUGS = [
   "first-http3-server",
 ] as const;
 
+const EXAMPLE_TARGETS = new Map<string, string>([["first-http-server", "hello-world"]]);
+
+function exampleTarget(slug: string): string {
+  return EXAMPLE_TARGETS.get(slug) ?? slug;
+}
+
 const EXAMPLE_MOVES: readonly RouteMove[] = MOVED_EXAMPLE_SLUGS.map((slug) => ({
   from: `/docs/getting-started/${slug}`,
-  to: `/examples/${slug}`,
+  to: `/examples/${exampleTarget(slug)}`,
 }));
 
 const SECTION_MOVES: readonly RouteMove[] = [
   { from: "/docs/examples", to: "/examples" },
   ...MOVED_EXAMPLE_SLUGS.map((slug) => ({
     from: `/docs/examples/${slug}`,
-    to: `/examples/${slug}`,
+    to: `/examples/${exampleTarget(slug)}`,
   })),
+];
+
+const HELLO_MOVES: readonly RouteMove[] = [
+  { from: "/examples/first-http-server", to: "/examples/hello-world" },
 ];
 
 const MOVE_GROUPS: readonly LocalizedMoveGroup[] = [
@@ -50,6 +60,8 @@ const MOVE_GROUPS: readonly LocalizedMoveGroup[] = [
   { locale: "vi", moves: EXAMPLE_MOVES },
   { locale: "en", moves: SECTION_MOVES },
   { locale: "vi", moves: SECTION_MOVES },
+  { locale: "en", moves: HELLO_MOVES },
+  { locale: "vi", moves: HELLO_MOVES },
 ];
 
 function toRedirects({ locale, moves }: LocalizedMoveGroup): Redirect[] {

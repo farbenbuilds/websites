@@ -1,15 +1,16 @@
 ---
 title: Hello world
-description: Build the canonical µWebZockets HTTP/1.1 server, run it in your own project, and verify the response with curl.
+description: Build the canonical Hello world HTTP/1.1 server, add a route parameter, verify both with curl, and drain on a signal.
 sidebar:
-  order: 7
+  order: 1
 search:
-  tags: [reference, tutorial, http1]
+  tags: [tutorial, reference, http1, routing]
 ---
 
-This example is the smallest complete µWebZockets server. It allocates one
-`App(128)` slab, registers `GET /`, listens on port 3000, and returns one text
-body. The program is `examples/hello_world.zig` in the framework repository.
+This page is both the canonical Hello world program and the first HTTP tutorial.
+It starts with the smallest complete server, then adds a parameterized route, a
+POST route, and the shutdown watcher. The program is `examples/hello_world.zig`
+in the framework repository.
 
 ## Source
 
@@ -77,15 +78,9 @@ pub fn build(b: *std.Build) void {
 zig build run
 ```
 
-The server blocks in `app.run()` until it receives `SIGINT` or `SIGTERM`. This
-example does not call `catch_shutdown_signals`, so Ctrl+C terminates the process
-without the graceful drain path. Add the watcher when the server owns work that
-must stop cleanly:
-
-```zig
-try app.catch_shutdown_signals();
-try app.run();
-```
+The server blocks in `app.run()` until it receives `SIGINT` or `SIGTERM`. The
+canonical program does not call `catch_shutdown_signals`; the
+[Stop it cleanly](#stop-it-cleanly) section adds that watcher.
 
 ## Verify
 
@@ -103,6 +98,66 @@ Hello from µWebZockets! Zero allocation achieved.
 
 The body is 50 bytes. Header order and the exact `content-length` casing are
 transport details; assert the status and body in an application test.
+
+## Add a route parameter
+
+Add one handler and register it before `listen`:
+
+```zig
+fn greet(req: *uz.Request, res: *uz.Response) void {
+    const name = req.get_param("name") orelse "world";
+    var buffer: [128]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "hello {s}", .{name}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("hello") catch |res_err| {
+            std.log.err("response failed: {}", .{res_err});
+        };
+        return;
+    };
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.get("/greet/:name", greet);
+```
+
+Verify both routes:
+
+```sh
+curl -s http://127.0.0.1:3000/
+curl -s http://127.0.0.1:3000/greet/Ada
+```
+
+```console
+Hello from µWebZockets! Zero allocation achieved.
+hello Ada
+```
+
+`/greet` does not match `/greet/:name` because the parameter requires one
+nonempty segment. Register `/greet` separately if you want a route without a
+capture. The `orelse "world"` fallback covers a missing capture value, not a
+missing route.
+
+## Add another method
+
+The registration helpers follow the method name. A POST route can read the
+buffered body with `req.text()`:
+
+```zig
+fn create(req: *uz.Request, res: *uz.Response) void {
+    const body = req.text();
+    res.text(body) catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+
+_ = try app.post("/items", create);
+```
+
+`req.text()` returns the buffered body. The default body capacity is 16 KiB;
+raise it with `ServerConfig` or `with_max_body_size` when the application needs
+larger uploads.
 
 ## Request path
 
@@ -122,6 +177,16 @@ sequenceDiagram
     L-->>C: 200 OK with content-length
 ```
 
+## What happens at startup
+
+| Step            | Detail                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `App(128).init` | Computes the slab layout and makes one allocation for 128 connection slots, request buffers, write queues, and router storage. |
+| `app.get`       | Writes the route into fixed router storage. Registration before `listen` keeps the arrays immutable while workers run.         |
+| `listen`        | Binds the socket, starts accepting, and locks route registration.                                                              |
+| `run`           | Drives the event loop until shutdown completes.                                                                                |
+| `deinit`        | Releases the slab exactly once. It panics if called from inside the loop.                                                      |
+
 ## Capacities
 
 | Capacity     |             Value | Set by     | Consequence                                |
@@ -137,19 +202,20 @@ sequenceDiagram
 be selected at runtime or when you want a named
 [preset](/reference/server-config#presets).
 
-## What the example demonstrates
+## Stop it cleanly
 
-| Call                          | Effect                                                  |
-| ----------------------------- | ------------------------------------------------------- |
-| `uz.App(128).init(init.io)`   | Computes the slab layout and performs one allocation    |
-| `app.get("/", hello_handler)` | Stores the route before the listener locks registration |
-| `app.listen("0.0.0.0", 3000)` | Binds every local interface and starts accepting        |
-| `app.run()`                   | Drives the event loop until the process stops           |
-| `app.deinit()`                | Releases the slab once after the loop returns           |
+Add the watcher before `listen`:
 
-The handler signature is `fn (*uz.Request, *uz.Response) void`. `res.text`
-copies the body into bounded connection storage before the callback returns, so
-the literal may live in static memory.
+```zig
+try app.catch_shutdown_signals();
+try app.listen("0.0.0.0", 3000);
+try app.run();
+```
+
+Press Ctrl+C. The watcher requests shutdown, which stops accepting, cancels
+recurring timers, closes active connections, and drains completions before
+`run` returns. In-flight requests are not guaranteed to finish. The
+`defer app.deinit()` then releases the slab.
 
 ## Variations
 
@@ -174,7 +240,9 @@ you need the exact footprint before allocating.
 
 ## Next
 
-- [Your first HTTP server](/examples/first-http-server) adds route
-  parameters, response errors, and the shutdown watcher.
-- [HTTPS server](/examples/https-server) wraps the same route in TLS 1.3.
+- [Your first WebSocket](/examples/first-websocket) adds a bidirectional route.
+- [Your first JSON-RPC service](/examples/first-json-rpc-service) serves typed
+  procedures on the same application.
+- [Your first TLS server](/examples/first-tls-server) wraps the listener in TLS
+  1.3.
 - [ServerConfig](/reference/server-config) lists every capacity and default.

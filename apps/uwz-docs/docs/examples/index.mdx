@@ -26,8 +26,8 @@ same consumer project and run with `zig build run`.
 ## Guided tutorials [#guided-tutorials]
 
 <CardGroup cols={2}>
-  <Card title="Your first HTTP server" href="/examples/first-http-server" icon="server">
-    Register routes, read a capture, and verify the listener with `curl`.
+  <Card title="Hello world" href="/examples/hello-world" icon="server">
+    Build the canonical server, add a route parameter, verify it, and drain on a signal.
   </Card>
   <Card title="Your first WebSocket" href="/examples/first-websocket" icon="messages-square">
     Add an echo route with open, message, and close callbacks.
@@ -60,11 +60,12 @@ Complete [Installation](/docs/getting-started/installation) and
 
 Each page documents one program from the framework `examples/` directory. It
 gives the complete source, the consumer `build.zig` wiring, the run command, the
-expected output, the capacities the example chooses, and one variation.
+expected output, the capacities the example chooses, and one variation. Start
+with [Hello world](/examples/hello-world), which also carries the first HTTP
+tutorial; the table lists the larger programs.
 
 | Example                                                    | Shows                                            | Protocol                | Default port |
 | ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
-| [Hello world](/examples/hello-world)                       | `App(128)`, one route, one response              | HTTP/1.1                |         3000 |
 | [HTTPS server](/examples/https-server)                     | In-memory TLS certificate and ALPN               | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
 | [Shared-nothing cluster](/examples/shared-nothing-cluster) | Four workers, one slab and loop each             | HTTP/1.1                |         3000 |
 | [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS contexts and runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
