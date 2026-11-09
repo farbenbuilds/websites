@@ -67,6 +67,8 @@ can use Tailwind v4 syntax.
   `@utility`.
 - Keep raw declarations only in token blocks, `@keyframes`, `@font-face`,
   `@property`, and data-driven custom properties such as `--bar-width`.
+- Author color literals as `oklch()`; `pnpm check:css` rejects hex colors in
+  app and package CSS.
 - Target Blume's rendered DOM with a scoped selector and apply utilities inside
   it. Do not add classes to generated markup.
 - Keep `theme.css` imports relative to its generated location and use `@source`
@@ -223,6 +225,7 @@ Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
 - Links resolve and external links are descriptive.
 - Code fences have a language and no secrets.
 - Navigation and search reach the page.
-- App CSS uses Tailwind syntax and passes `pnpm check:css`.
+- App CSS uses Tailwind syntax and `oklch()` colors, and passes
+  `pnpm check:css`.
 - The build succeeds and generated output is not edited by hand.
 - No emoji, filler, or unverified claim was added.

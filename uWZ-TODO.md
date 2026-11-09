@@ -1831,22 +1831,24 @@ accent, square geometry, display type for the landing hero, and a calm
 reading surface for documentation. The docs must feel like the same publication
 as the landing page without turning every page into a poster.
 
-| Token            | Light         | Dark          | Use                            |
-| ---------------- | ------------- | ------------- | ------------------------------ |
-| Background       | `#f4f0e6`     | `#161513`     | Page and header paper          |
-| Foreground       | `#171512`     | `#ece6da`     | Body and display ink           |
-| Muted            | `#ebe5d8`     | `#211f1b`     | Callouts, table headers        |
-| Muted foreground | `#5f5a52`     | `#a39c90`     | Secondary text, labels         |
-| Border           | `#d3ccbe`     | `#2c2a25`     | Rules and dividers             |
-| Radius           | `0`           | `0`           | Controls, cards, code blocks   |
-| Accent           | Orange preset | Orange preset | Links and focus                |
-| Navigation bar   | `#d9480f`     | `#d4af37`     | Active page and TOC marker     |
-| Navigation ink   | `#8f3500`     | `#edcb7a`     | Active page and category label |
-| Reading frame    | `82.5rem`     | `82.5rem`     | Centered docs shell            |
-| Content width    | `42–44rem`    | `42–44rem`    | Prose measure                  |
+| Token            | Light                        | Dark                         | Use                            |
+| ---------------- | ---------------------------- | ---------------------------- | ------------------------------ |
+| Background       | `oklch(0.9555 0.014 88.68)`  | `oklch(0.1961 0.0042 84.59)` | Page and header paper          |
+| Foreground       | `oklch(0.1969 0.0067 78.16)` | `oklch(0.9264 0.0173 84.59)` | Body and display ink           |
+| Muted            | `oklch(0.9231 0.0186 86.15)` | `oklch(0.24 0.008 84.59)`    | Callouts, table headers        |
+| Muted foreground | `oklch(0.4698 0.0142 79.72)` | `oklch(0.6952 0.019 81.31)`  | Secondary text, labels         |
+| Border           | `oklch(0.847 0.0206 84.59)`  | `oklch(0.2854 0.0094 88.76)` | Rules and dividers             |
+| Radius           | `0`                          | `0`                          | Controls, cards, code blocks   |
+| Accent           | `oklch(0.5136 0.1429 46.64)` | `oklch(0.8179 0.1705 77.95)` | Links and focus                |
+| Navigation bar   | `oklch(0.5999 0.1905 37.88)` | `oklch(0.7665 0.1387 91.06)` | Active page and TOC marker     |
+| Navigation ink   | `oklch(0.4513 0.1334 43.12)` | `oklch(0.854 0.1074 87.36)`  | Active page and category label |
+| Reading frame    | `82.5rem`                    | `82.5rem`                    | Centered docs shell            |
+| Content width    | `42–44rem`                   | `42–44rem`                   | Prose measure                  |
 
 Rules:
 
+- Author every color literal as `oklch()`. Convert a legacy hex value by its
+  exact sRGB result so the palette stays visually identical.
 - Keep Blume's 64 px header and a 42–44 rem prose measure. Reading pages use
   42 rem below 64 rem and 44 rem from 64 rem. The shell is an 82.5 rem centered
   frame with 14.5 rem and 16.5 rem rails from 80 rem, 15.875 rem and 16.5 rem
@@ -1862,8 +1864,9 @@ Rules:
 - Active navigation uses vivid orange in light mode and polished gold in dark
   mode. Pair the color with weight and `aria-current`, never color alone.
 - The landing hero's light-mode butterfly wings use the reading orange family:
-  `#d9480f`, `#e8752e`, and `#f08c4a`. Dark mode keeps its existing gold and
-  amber wing palette.
+  `oklch(0.5999 0.1905 37.88)`, `oklch(0.685 0.1636 48.32)`, and
+  `oklch(0.7351 0.1458 51.89)`. Dark mode keeps its existing gold and amber wing
+  palette.
 - Use the accent for interactive meaning, not large decorative fills.
 - Do not recolor Blume's syntax tokens. Flatten code chrome, keep contrast.
 - Keep the landing hero's motion inside the hero; docs pages use no ambient

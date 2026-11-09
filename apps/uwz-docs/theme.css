@@ -60,29 +60,29 @@ html {
 }
 
 :root {
-  --blume-background: #f4f0e6;
-  --blume-foreground: #171512;
-  --blume-muted: #ebe5d8;
-  --blume-muted-foreground: #5f5a52;
-  --blume-border: #d3ccbe;
+  --blume-background: oklch(0.9555 0.014 88.68);
+  --blume-foreground: oklch(0.1969 0.0067 78.16);
+  --blume-muted: oklch(0.9231 0.0186 86.15);
+  --blume-muted-foreground: oklch(0.4698 0.0142 79.72);
+  --blume-border: oklch(0.847 0.0206 84.59);
   --blume-radius: 0;
   --blume-content-width: 42rem;
-  --blume-code-background: #ffffff;
+  --blume-code-background: oklch(1 0 0);
 
   --uwz-docs-frame-width: 82.5rem;
 
   /* Vivid reading indicator; the text stays at 6.9:1 on this paper. */
-  --docs-active-bar: #d9480f;
-  --docs-active-text: #8f3500;
+  --docs-active-bar: oklch(0.5999 0.1905 37.88);
+  --docs-active-text: oklch(0.4513 0.1334 43.12);
   --docs-active-surface: color-mix(in srgb, var(--docs-active-bar) 12%, var(--blume-background));
   --docs-active-border: color-mix(in srgb, var(--docs-active-bar) 40%, var(--blume-border));
 
   /* The orange preset is 4.37:1 on this paper. This darker orange is 5.28:1. */
-  --blume-accent: #a64600;
-  --blume-accent-foreground: #ffffff;
+  --blume-accent: oklch(0.5136 0.1429 46.64);
+  --blume-accent-foreground: oklch(1 0 0);
 
   /* 3.3:1 against the paper surface; decorative rules stay lighter. */
-  --farben-border-strong: #8a8378;
+  --farben-border-strong: oklch(0.6129 0.0183 79.3);
 
   --farben-field-paper: var(--blume-background);
   --farben-field-ink: var(--blume-foreground);
@@ -120,21 +120,21 @@ html {
 }
 
 :root[data-theme="dark"] {
-  --blume-background: #161513;
-  --blume-foreground: #ece6da;
-  --blume-muted: #211f1b;
-  --blume-muted-foreground: #a39c90;
-  --blume-border: #2c2a25;
-  --blume-code-background: #1b1916;
-  --blume-accent: #ffb300;
-  --blume-accent-foreground: #160f02;
+  --blume-background: oklch(0.1961 0.0042 84.59);
+  --blume-foreground: oklch(0.9264 0.0173 84.59);
+  --blume-muted: oklch(0.24 0.008 84.59);
+  --blume-muted-foreground: oklch(0.6952 0.019 81.31);
+  --blume-border: oklch(0.2854 0.0094 88.76);
+  --blume-code-background: oklch(0.2146 0.0066 78.18);
+  --blume-accent: oklch(0.8179 0.1705 77.95);
+  --blume-accent-foreground: oklch(0.1733 0.03 85.58);
 
   /* Polished gold indicator; text clears 9:1 on the gold-tinted surface. */
-  --docs-active-bar: #d4af37;
-  --docs-active-text: #edcb7a;
+  --docs-active-bar: oklch(0.7665 0.1387 91.06);
+  --docs-active-text: oklch(0.854 0.1074 87.36);
 
   /* 3.2:1 against the dark paper surface. */
-  --farben-border-strong: #6b665c;
+  --farben-border-strong: oklch(0.5118 0.0166 84.59);
 }
 
 /* Keep the shorter line length on tablets; widen the reading measure on desktop. */

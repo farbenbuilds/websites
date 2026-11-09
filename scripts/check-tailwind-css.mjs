@@ -2,7 +2,11 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { findHexColorViolations } from "./check-css-colors.mjs";
+
 const IGNORED_DIRECTORIES = new Set([".astro", ".blume", ".blume-verify", "dist", "node_modules"]);
+
+const COLOR_ROOTS = ["apps", "packages"];
 
 const ALLOWED_AT_RULES = new Set(["@keyframes", "@font-face", "@property"]);
 
@@ -242,12 +246,20 @@ function findViolations(source) {
 
 async function main() {
   const roots = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
-  const targets = roots.length > 0 ? roots : await listBlumeApps();
-  const files = [];
+  const rawTargets = roots.length > 0 ? roots : await listBlumeApps();
+  const colorTargets = roots.length > 0 ? roots : COLOR_ROOTS;
+  const rawFiles = [];
+  const colorFiles = [];
 
-  for (const target of targets) {
-    files.push(...(await listCssFiles(target)));
+  for (const target of rawTargets) {
+    rawFiles.push(...(await listCssFiles(target)));
   }
+
+  for (const target of colorTargets) {
+    colorFiles.push(...(await listCssFiles(target)));
+  }
+
+  const files = [...new Set([...rawFiles, ...colorFiles])];
 
   if (files.length === 0) {
     console.error("Tailwind CSS check failed: no Blume app stylesheets found.");
@@ -258,24 +270,46 @@ async function main() {
 
   const failures = [];
 
-  for (const file of files) {
+  for (const file of rawFiles) {
     const source = await readFile(file, "utf8");
 
     for (const violation of findViolations(source)) {
-      failures.push({ file, ...violation });
+      failures.push({ file, kind: "raw", ...violation });
+    }
+  }
+
+  for (const file of colorFiles) {
+    const source = await readFile(file, "utf8");
+
+    for (const violation of findHexColorViolations(source)) {
+      failures.push({ file, kind: "color", ...violation });
     }
   }
 
   if (failures.length > 0) {
     for (const failure of failures) {
-      console.error(
-        `${relative(process.cwd(), failure.file)}:${failure.line} raw declaration "${failure.statement}" — use @apply, @theme, @utility, or a custom property`,
-      );
+      if (failure.kind === "raw") {
+        console.error(
+          `${relative(process.cwd(), failure.file)}:${failure.line} raw declaration "${failure.statement}" — use @apply, @theme, @utility, or a custom property`,
+        );
+      } else {
+        console.error(
+          `${relative(process.cwd(), failure.file)}:${failure.line} hex color literal "${failure.literal}" in "${failure.property}" — author colors as oklch()`,
+        );
+      }
     }
 
-    console.error(
-      `Tailwind CSS check failed: ${failures.length} raw declaration(s) in ${files.length} file(s).`,
-    );
+    const rawCount = failures.filter((failure) => failure.kind === "raw").length;
+    const colorCount = failures.length - rawCount;
+
+    const summary = [
+      rawCount > 0 ? `${rawCount} raw declaration(s)` : "",
+      colorCount > 0 ? `${colorCount} hex color literal(s)` : "",
+    ]
+      .filter(Boolean)
+      .join(" and ");
+
+    console.error(`Tailwind CSS check failed: ${summary} in ${files.length} file(s).`);
     process.exitCode = 1;
 
     return;

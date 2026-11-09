@@ -40,6 +40,8 @@ glass effects, and animation that competes with reading.
 - A new token belongs in `packages/ui` only when multiple apps need it.
 - Host-specific fonts, base layers, and `dark` variant setup stay in the host
   stylesheet.
+- Author color literals as `oklch()`. Convert an existing hex color by its exact
+  sRGB result, and do not add hex, `rgb()`, or `hsl()` literals.
 - Do not use arbitrary color values when a semantic token exists.
 
 ## Tailwind Rules
@@ -55,6 +57,8 @@ glass effects, and animation that competes with reading.
   responsibility, move it to a named module.
 - Blume app CSS is Tailwind-first. Write declarations with `@apply`, tokens
   with `@theme inline`, and repeated custom patterns with `@utility`.
+- Author CSS color literals as `oklch()`; the `pnpm check:css` gate rejects hex
+  colors in app and package CSS.
 - Keep raw declarations only in token blocks, `@keyframes`, `@font-face`,
   `@property`, and data-driven custom properties such as `--bar-width`. Use
   `[property:value]` inside `@apply` for a property with no named utility.
@@ -146,7 +150,8 @@ and the keyboard and contrast checks performed.
 - Tokens are semantic and shared.
 - The layout works at 320px and at desktop width.
 - Focus, labels, contrast, and reduced motion are handled.
-- App CSS is Tailwind-first and `pnpm check:css` passes.
+- App CSS is Tailwind-first, uses `oklch()` color literals, and
+  `pnpm check:css` passes.
 - No `<style>` block, inline style shortcut, or `!important` was added.
 - No component exceeds 400 lines.
 - Both docs builds pass when shared UI changes.

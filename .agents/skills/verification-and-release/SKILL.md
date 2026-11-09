@@ -85,9 +85,10 @@ changing the design that made the file too large.
 
 ## CSS Audit
 
-`pnpm check:css` scans app stylesheets for raw declarations. Use `@apply` for
-declarations, `@theme inline` for tokens, and `@utility` for repeated custom
-patterns. Raw declarations are allowed only in token blocks, `@keyframes`,
+`pnpm check:css` scans app stylesheets for raw declarations and app or package
+CSS for hex color literals. Use `@apply` for declarations, `@theme inline` for
+tokens, `@utility` for repeated custom patterns, and `oklch()` for authored
+colors. Raw declarations are allowed only in token blocks, `@keyframes`,
 `@font-face`, `@property`, and data-driven custom properties. A CSS change also
 needs the app build and a light and dark mode review at narrow and wide
 viewports.

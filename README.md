@@ -46,7 +46,7 @@ pnpm test:watch                           # run Vitest in watch mode
 pnpm test:all                             # root Vitest plus workspace test tasks
 pnpm test:workspace                       # every docs app test task
 pnpm check:size                           # enforce the 400-line source limit
-pnpm check:css                            # enforce Tailwind-first app CSS
+pnpm check:css                            # enforce Tailwind-first and oklch CSS
 pnpm build                                # build every workspace member
 pnpm build:uwz                            # build the uWebZockets docs site
 pnpm build:vws                            # build the ventiws docs site
@@ -86,7 +86,9 @@ The package ships the shadcn design tokens in `src/lib/styles/theme.css` (`@farb
 
 Blume inlines an app's `theme.css` into its generated Tailwind entry. App CSS
 files therefore use `@apply`, `@theme inline`, `@utility`, and `@source` rather
-than raw style declarations. Run `pnpm check:css` after a CSS change.
+than raw style declarations. Author color literals as `oklch()`; the
+`pnpm check:css` gate rejects hex colors in app and package CSS. Run it after a
+CSS change.
 
 Add a registry primitive only when no existing primitive fits. Install from
 inside the package with the pinned local
@@ -140,7 +142,7 @@ The short version:
 - Source files target 150 to 400 lines and never exceed 400.
 - Semicolons, double quotes, and trailing commas are mandatory.
 - Files are kebab-case, including Svelte and Astro files; component identifiers are PascalCase.
-- Blume app CSS is Tailwind-first: `@apply`, `@theme inline`, `@utility`, and `@source`; raw declarations stay in token blocks, keyframes, font-face rules, property registrations, and data properties.
+- Blume app CSS is Tailwind-first: `@apply`, `@theme inline`, `@utility`, and `@source`; raw declarations stay in token blocks, keyframes, font-face rules, property registrations, and data properties. Author color literals as `oklch()`; `pnpm check:css` rejects hex colors.
 - Vitest tests live under category directories in `tests/` and import from `vite-plus/test`. See [tests/README.md](tests/README.md).
 - `lefthook` runs the pre-commit gate. Run `pnpm ready` before opening a pull request.
 

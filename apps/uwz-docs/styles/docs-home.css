@@ -16,21 +16,21 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 .docs-home-hero {
-  --hero-paper: #f4f0e6;
-  --hero-ink: #171512;
-  --hero-muted: #5f5a52;
-  --hero-rule: #8a8378;
+  --hero-paper: oklch(0.9555 0.014 88.68);
+  --hero-ink: oklch(0.1969 0.0067 78.16);
+  --hero-muted: oklch(0.4698 0.0142 79.72);
+  --hero-rule: oklch(0.6129 0.0183 79.3);
   /* Vivid orange family from the reading active state; the CTA uses one
    * deeper step so white text stays above 5:1. */
-  --hero-accent: #c2410c;
-  --hero-accent-bright: #8f3500;
-  --hero-ink-on-accent: #ffffff;
-  --hero-hover: #ebe5d8;
-  --hero-eyebrow: #8f3500;
-  --hero-still: #d9480f;
-  --hero-wing-1: #d9480f;
-  --hero-wing-2: #e8752e;
-  --hero-wing-3: #f08c4a;
+  --hero-accent: oklch(0.5534 0.1739 38.4);
+  --hero-accent-bright: oklch(0.4513 0.1334 43.12);
+  --hero-ink-on-accent: oklch(1 0 0);
+  --hero-hover: oklch(0.9231 0.0186 86.15);
+  --hero-eyebrow: oklch(0.4513 0.1334 43.12);
+  --hero-still: oklch(0.5999 0.1905 37.88);
+  --hero-wing-1: oklch(0.5999 0.1905 37.88);
+  --hero-wing-2: oklch(0.685 0.1636 48.32);
+  --hero-wing-3: oklch(0.7351 0.1458 51.89);
   @apply relative grid min-h-screen w-full grid-cols-[minmax(0,6.4fr)_minmax(0,5.6fr)] items-end gap-[clamp(1rem,3vw,3.5rem)] overflow-hidden bg-hero-paper pt-[clamp(4.5rem,10vh,7rem)] pr-[max(clamp(1.25rem,4vw,3rem),calc((100vw_-_70rem)_/_2))] pb-[clamp(3.5rem,8vh,5rem)] pl-[max(clamp(1.25rem,4vw,3rem),calc((100vw_-_70rem)_/_2))] text-hero-ink supports-[height:100svh]:min-h-svh;
 }
 
@@ -40,19 +40,19 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 :root[data-theme="dark"] .docs-home-hero {
-  --hero-paper: #1a1917;
-  --hero-ink: #fff7f0;
-  --hero-muted: #d2c3ae;
-  --hero-rule: #8f6d2a;
-  --hero-accent: #ffb300;
-  --hero-accent-bright: #ffcf66;
-  --hero-ink-on-accent: #160f02;
-  --hero-hover: #2a241b;
-  --hero-eyebrow: #e2bf68;
-  --hero-still: #e9c66b;
-  --hero-wing-1: #ff7a1a;
-  --hero-wing-2: #ffb300;
-  --hero-wing-3: #ffe08a;
+  --hero-paper: oklch(0.2138 0.0042 84.59);
+  --hero-ink: oklch(0.9804 0.0127 63.93);
+  --hero-muted: oklch(0.8239 0.0333 76.4);
+  --hero-rule: oklch(0.5557 0.094 81.4);
+  --hero-accent: oklch(0.8179 0.1705 77.95);
+  --hero-accent-bright: oklch(0.8764 0.1338 84.75);
+  --hero-ink-on-accent: oklch(0.1733 0.03 85.58);
+  --hero-hover: oklch(0.2641 0.0184 77.83);
+  --hero-eyebrow: oklch(0.8173 0.1136 87.89);
+  --hero-still: oklch(0.8383 0.1173 88.74);
+  --hero-wing-1: oklch(0.7236 0.1868 48.9);
+  --hero-wing-2: oklch(0.8179 0.1705 77.95);
+  --hero-wing-3: oklch(0.9142 0.1109 90.28);
 }
 
 :root[data-theme="dark"] .docs-home-hero::after {
