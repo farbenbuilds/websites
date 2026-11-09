@@ -33,6 +33,8 @@ domain skill for the affected surface: `docs-site-authoring`, `web-ui-styling`,
 - Identify affected layers and ownership boundaries.
 - Assign the specialist agents needed for each slice.
 - Produce an ordered plan where each slice has its own verification.
+- Search for an existing canonical page before planning a new docs page. Plan a
+  merge, a 301, and a link sweep when the topic already exists.
 - Define acceptance criteria and the exact commands that prove them.
 - Name risks, rollback considerations, and dependencies.
 

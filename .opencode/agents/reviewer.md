@@ -48,9 +48,11 @@ Review in this order:
 ## Rules
 
 Report only actionable findings, ordered by severity, with `file:line` and a
-concrete failure scenario. If there are no findings, say so and list verification
-gaps. Do not edit files. Do not turn a style preference into a defect. Do not
-accept "should pass" as evidence.
+concrete failure scenario. Check for duplicate reader goals, not only duplicate
+sentences: a parallel tutorial, guide, or example is a finding, and a merged page
+must have a 301, deleted locale mirrors, and no stale links. If there are no
+findings, say so and list verification gaps. Do not edit files. Do not turn a
+style preference into a defect. Do not accept "should pass" as evidence.
 
 ## Output
 

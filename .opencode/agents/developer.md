@@ -56,6 +56,9 @@ concern to the architect.
 - Code samples follow their source language. Zig samples use `snake_case`
   functions, variables, parameters, and fields, `PascalCase` types, and the
   exact public spelling; never camel-case a Zig identifier.
+- One topic has one canonical docs page. Merge unique material into the owning
+  page, delete both locale copies, add a 301, and update every index and link
+  instead of adding a parallel tutorial or guide.
 - Never weaken a lint, test, build, accessibility, or CI gate.
 
 ## Output

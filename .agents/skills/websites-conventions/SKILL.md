@@ -37,6 +37,9 @@ the working checklist.
   Documentation content stays in `docs/` and `docs/vi/` MDX pages under Blume.
   Never add MDX files, page prose, frontmatter, or docs routes to x18n
   resources or locale JSON.
+- One topic has one canonical docs page. Merge unique material into the owning
+  page, delete both locale copies of the duplicate, add a 301 for the old route,
+  and update every index and link. Do not add a parallel tutorial or guide.
 - No file over 400 lines. No `part-2` files.
 - Semicolons, double quotes, and trailing commas are mandatory. Oxfmt settings
   live in `.oxfmtrc.json`.

@@ -46,6 +46,15 @@ description: Install the package, run the first example, and verify the result.
 - Internal links are root-relative, such as `/docs/getting-started`.
 - External links name the destination instead of using "click here".
 - No emoji, exclamation mark, marketing filler, or unverified claim.
+- One topic has one canonical page. Before adding a page, search for an existing
+  page with the same reader goal. If one exists, fold the unique material into
+  it and delete the duplicate instead of creating a parallel tutorial, guide, or
+  example.
+- When pages merge, keep one route: delete the English and Vietnamese MDX, add a
+  301 in the app's Blume redirect config (`blume-redirects.ts` in `uwz-docs`),
+  and repoint every index, card, and prose link.
+- A guide owns only its unique recipe. Do not repeat the program, contract
+  tables, or failure reference of the page that owns the subsystem.
 
 ## CSS
 
@@ -204,7 +213,8 @@ Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
 ## Review Checklist
 
 - Frontmatter is present and accurate.
-- The page answers one reader goal.
+- The page answers one reader goal and does not duplicate a canonical page.
+- A merged page has one route, a 301 from the old route, and no stale links.
 - The English and Vietnamese MDX files exist; docs content was not added to
   x18n resources.
 - Vietnamese pages keep English technical terms and read naturally without
