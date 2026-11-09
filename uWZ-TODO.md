@@ -359,18 +359,20 @@ The current site publishes `/getting-started` and `/vi/getting-started`. The
 new tree moves them under `/docs`. Add these redirects in `blume.config.ts` in
 the same change that creates the new pages:
 
-| From                    | To                                 | Status                       |
-| ----------------------- | ---------------------------------- | ---------------------------- |
-| `/getting-started`      | `/docs/getting-started`            | 301                          |
-| `/getting-started/*`    | `/docs/getting-started/:splat*`    | 301                          |
-| `/vi/getting-started`   | `/vi/docs/getting-started`         | 301                          |
-| `/vi/getting-started/*` | `/vi/docs/getting-started/:splat*` | 301                          |
-| `/docs/examples`        | `/examples`                        | 301                          |
-| `/docs/examples/*`      | `/examples/:splat*`                | 301                          |
-| `/vi/docs/examples`     | `/vi/examples`                     | 301                          |
-| `/vi/docs/examples/*`   | `/vi/examples/:splat*`             | 301                          |
-| `/api`                  | `/reference`                       | 301, if a legacy link exists |
-| `/docs/api`             | `/reference/zig`                   | 301, if a legacy link exists |
+| From                             | To                                 | Status                       |
+| -------------------------------- | ---------------------------------- | ---------------------------- |
+| `/getting-started`               | `/docs/getting-started`            | 301                          |
+| `/getting-started/*`             | `/docs/getting-started/:splat*`    | 301                          |
+| `/vi/getting-started`            | `/vi/docs/getting-started`         | 301                          |
+| `/vi/getting-started/*`          | `/vi/docs/getting-started/:splat*` | 301                          |
+| `/docs/examples`                 | `/examples`                        | 301                          |
+| `/docs/examples/*`               | `/examples/:splat*`                | 301                          |
+| `/vi/docs/examples`              | `/vi/examples`                     | 301                          |
+| `/vi/docs/examples/*`            | `/vi/examples/:splat*`             | 301                          |
+| `/examples/first-http-server`    | `/examples/hello-world`            | 301                          |
+| `/vi/examples/first-http-server` | `/vi/examples/hello-world`         | 301                          |
+| `/api`                           | `/reference`                       | 301, if a legacy link exists |
+| `/docs/api`                      | `/reference/zig`                   | 301, if a legacy link exists |
 
 Do not add a redirect until the target page exists. `blume validate` treats a
 redirect to nowhere as a warning; `blume audit` treats it as a broken redirect.
@@ -528,15 +530,15 @@ What/Why, and every shipped Getting Started page.
 
 | ID      | Route                              | Page                        | Type     | Priority | Milestone | Source                              | Status |
 | ------- | ---------------------------------- | --------------------------- | -------- | -------- | --------- | ----------------------------------- | ------ |
-| UWZ-016 | `/examples/first-http-server`      | Your first HTTP server      | Tutorial | P0       | M1        | examples/hello_world.zig            | Live   |
 | UWZ-017 | `/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | examples/chat_server.zig            | Live   |
 | UWZ-018 | `/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig             | Live   |
 | UWZ-019 | `/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig           | Live   |
 | UWZ-020 | `/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
 | UWZ-021 | `/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig           | Live   |
 
-The shared `/examples` index is UWZ-330 in 5.19. The guided tutorials and the
-canonical programs now live in one Examples tab.
+The shared `/examples` index is UWZ-330 in 5.19. Hello world (UWZ-331) owns the
+first HTTP tutorial; the remaining guided tutorials and canonical programs live
+in the same Examples tab.
 
 ### 5.2.2 Deferred pages
 
@@ -918,9 +920,9 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Guides                |      23 |      0 |      17 |      6 |      23 |
 | Migration             |       8 |      0 |       6 |      2 |       8 |
 | Reference             |      11 |      7 |       4 |      0 |      11 |
-| Examples              |      17 |      4 |      11 |      2 |      17 |
+| Examples              |      16 |      3 |      11 |      2 |      16 |
 | Project               |       9 |      1 |       5 |      3 |       0 |
-| **Total**             | **267** | **95** | **125** | **47** | **258** |
+| **Total**             | **266** | **94** | **125** | **47** | **257** |
 
 The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
 2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
@@ -969,26 +971,25 @@ application pages keep the `zig fetch --save` path. The WASM, eBPF, kTLS, and
 AF_XDP pages now show the consumer `build.zig` step or public module import, with
 the framework checkout command labelled as a shortcut.
 
-On 2026-11-09 the migration, reference, and canonical example sections added 30
-English and 30 Vietnamese pages, bringing the site to 514 documentation pages
-plus the two landing pages (516 pages total). The guided example tutorials were
-folded into the same `/examples` tab, and `/docs/examples` now redirects there,
-so the site has one Examples section instead of two. `blume check` type-checked
-516 pages with 0 errors, 0 warnings, and 0 hints; `blume validate --strict`
-found no broken links; `blume build` built 557 pages including generated `.md`
-mirrors; and `blume audit --fail-on warning` reported 0 errors, 0 warnings, and
-0 notes across 517 audited pages. `pnpm ready` passed lint, format, typecheck,
-file-size, root and workspace tests, strict link validation, and both docs
-builds; the root Vitest suite passed 29 files and 85 tests. The new reference API
-coverage test checks every `src/root.zig` export anchor against a checked-in
-fixture and can compare that fixture with a framework checkout through
-`UWEBZOCKETS_ROOT`; the example source test compares all ten example
-programs with a checked-in hash fixture and can compare them byte-for-byte with
-the same checkout. The docs parity test now covers the top-level `/reference` and
-`/examples` trees and rejects plain-text fences. Browser viewport, axe, keyboard,
-reduced-motion, and search QA for the 60 new routes were not run in this
-environment; the next review should repeat the 320/768/1280 pass before the
-section is treated as launch-verified.
+On 2026-11-09 the migration, reference, and example sections added 30 English
+and 30 Vietnamese pages. The guided tutorial for the first HTTP server was then
+folded into Hello world, and `/examples/first-http-server` redirects there. The
+site now has 512 documentation pages plus the two landing pages (514 pages
+total). `blume check` type-checked 514 pages with 0 errors, 0 warnings, and 0
+hints; `blume validate --strict` found no broken links; `blume build` built 555
+pages including generated `.md` mirrors; and `blume audit --fail-on warning`
+reported 0 errors, 0 warnings, and 0 notes across 515 audited pages. `pnpm ready`
+passed lint, format, typecheck, file-size, root and workspace tests, strict link
+validation, and both docs builds; the root Vitest suite passed 29 files and 85
+tests. The new reference API coverage test checks every `src/root.zig` export
+anchor against a checked-in fixture and can compare that fixture with a
+framework checkout through `UWEBZOCKETS_ROOT`; the example source test compares
+all ten example programs with a checked-in hash fixture and can compare them
+byte-for-byte with the same checkout. The docs parity test now covers the
+top-level `/reference` and `/examples` trees and rejects plain-text fences.
+Browser viewport, axe, keyboard, reduced-motion, and search QA for the new routes
+were not run in this environment; the next review should repeat the
+320/768/1280 pass before the section is treated as launch-verified.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -3499,17 +3500,17 @@ source at the time it is written.
 
 ### 18.6 Appendix F: document change log
 
-| Date       | Change                                                                                                                                                                                     | Author             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
-| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices                                                                                             | Docs planning pass |
-| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                                                                                                              | Docs planning pass |
-| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                                                                                                | Docs planning pass |
-| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                             | Docs writing pass  |
-| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                 | Docs writing pass  |
-| 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
-| 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
-| 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                      | Docs writing pass  |
-| 2026-11-09 | Shipped the migration, reference, and example sections with Vietnamese mirrors; merged the guided tutorials into `/examples`; added reference API coverage and docs parity tests           | Docs writing pass  |
+| Date       | Change                                                                                                                                                                                                       | Author             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices                                                                                                               | Docs planning pass |
+| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                                                                                                                                | Docs planning pass |
+| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                                                                                                                  | Docs planning pass |
+| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                                               | Docs writing pass  |
+| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                                   | Docs writing pass  |
+| 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages                   | Docs writing pass  |
+| 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                                       | Docs writing pass  |
+| 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                                        | Docs writing pass  |
+| 2026-11-09 | Shipped the migration, reference, and example sections; merged the guided tutorials into `/examples` and folded the first HTTP tutorial into Hello world; added reference API coverage and docs parity tests | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.
