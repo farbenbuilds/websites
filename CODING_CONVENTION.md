@@ -151,6 +151,11 @@ every `*.css` file it imports can use Tailwind v4 syntax. This applies to
   arbitrary properties, and variants before reaching for raw CSS. A property
   without a named utility still belongs inside `@apply`, for example
   `@apply [text-orientation:mixed]`.
+- Author color literals as `oklch()`. Convert an existing hex color by its exact
+  sRGB result, not by eye, and keep `transparent` or `currentColor` where they
+  express transparency or inheritance. `pnpm check:css` rejects hex color
+  literals in `apps/**` and `packages/**` CSS, including custom properties and
+  `@apply` arbitrary values.
 - Define host tokens and generated utility names in `@theme inline`. Map an
   existing CSS variable instead of repeating its value.
 - Use `@utility` for a repeated custom pattern that no built-in utility covers.
@@ -168,7 +173,7 @@ every `*.css` file it imports can use Tailwind v4 syntax. This applies to
   circular dependency.
 - Run `pnpm check:css` with the app build. The checker rejects raw declarations
   outside the allowed token, keyframe, font-face, property-registration, and
-  data-property contexts.
+  data-property contexts, and rejects hex color literals in app and package CSS.
 
 ```css
 .docs-home-section {
@@ -348,7 +353,7 @@ it.
   Do not bypass the hook with `--no-verify`.
 - Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
   full workspace gate. `pnpm check:size` enforces the 400-line source limit and
-  `pnpm check:css` enforces Tailwind-first app CSS.
+  `pnpm check:css` enforces Tailwind-first app CSS and oklch color literals.
 - Vitest tests live under `tests/<category>/<subject>.test.ts` and use
   `vite-plus/test`. The category groups related tests; the file names the
   behavior. See [tests/README.md](tests/README.md). Run them with

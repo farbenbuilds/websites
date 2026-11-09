@@ -249,29 +249,33 @@ copy.
 These are starting values, not final brand tokens. Confirm them with a contrast
 check in both themes during M0 before committing them.
 
-| Token                      | Light candidate | Dark candidate | Use                                                                                |
-| -------------------------- | --------------- | -------------- | ---------------------------------------------------------------------------------- |
-| `--blume-background`       | `#f4f0e6`       | `#161513`      | Page and header paper                                                              |
-| `--blume-foreground`       | `#171512`       | `#ece6da`      | Body and display ink                                                               |
-| `--blume-muted`            | `#ebe5d8`       | `#211f1b`      | Callouts, table headers, quiet surfaces                                            |
-| `--blume-muted-foreground` | `#5f5a52`       | `#a39c90`      | Secondary text, labels, metadata                                                   |
-| `--blume-border`           | `#d3ccbe`       | `#2c2a25`      | 1px rules, borders, dividers                                                       |
-| `--blume-radius`           | `0`             | `0`            | Every control, card, code block, and dialog                                        |
-| `--blume-content-width`    | `42rem`         | `42rem`        | Keep the readable prose measure; evaluate 44rem only if line length stays readable |
+| Token                      | Light candidate              | Dark candidate               | Use                                                                                |
+| -------------------------- | ---------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
+| `--blume-background`       | `oklch(0.9555 0.014 88.68)`  | `oklch(0.1961 0.0042 84.59)` | Page and header paper                                                              |
+| `--blume-foreground`       | `oklch(0.1969 0.0067 78.16)` | `oklch(0.9264 0.0173 84.59)` | Body and display ink                                                               |
+| `--blume-muted`            | `oklch(0.9231 0.0186 86.15)` | `oklch(0.24 0.008 84.59)`    | Callouts, table headers, quiet surfaces                                            |
+| `--blume-muted-foreground` | `oklch(0.4698 0.0142 79.72)` | `oklch(0.6952 0.019 81.31)`  | Secondary text, labels, metadata                                                   |
+| `--blume-border`           | `oklch(0.847 0.0206 84.59)`  | `oklch(0.2854 0.0094 88.76)` | 1px rules, borders, dividers                                                       |
+| `--blume-radius`           | `0`                          | `0`                          | Every control, card, code block, and dialog                                        |
+| `--blume-content-width`    | `42rem`                      | `42rem`                      | Keep the readable prose measure; evaluate 44rem only if line length stays readable |
 
-Set the accent through `theme.accent` in the site config: `"orange"` for
-uWebZockets and `"teal"` for ventiws. Blume resolves those presets into
-`--blume-accent` and `--blume-accent-foreground` with per-mode AA values. Do not
-assign a preset name to the CSS token.
+Set the accent through `theme.accent` in the site config with `oklch()` values
+that match the host tokens. Blume resolves them into `--blume-accent` and
+`--blume-accent-foreground` with per-mode AA values. Do not assign a preset name
+to the CSS token.
 
 The values above are the uWebZockets warm candidates. ventiws starts from the
-same structure with a cool cast: background `#f1f4f1`, muted `#e5eae6`, border
-`#cbd4ce`, dark background `#121615`, dark muted `#1b211f`, and dark border
-`#28322e`. Treat those as candidates too, and verify contrast instead of trusting
-the values.
+same structure with a cool cast: background `oklch(0.964 0.0051 145.54)`, muted
+`oklch(0.9321 0.0075 151.88)`, border `oklch(0.8613 0.0127 156.96)`, dark
+background `oklch(0.1955 0.0065 178.89)`, dark muted
+`oklch(0.2409 0.0095 173.38)`, and dark border
+`oklch(0.3063 0.0154 169.1)`. Treat those as candidates too, and verify contrast
+instead of trusting the values.
 
 Rules:
 
+- Author every color literal as `oklch()`. Convert a legacy hex value by its
+  exact sRGB result so the palette stays visually identical.
 - Keep Blume's 4rem header, 17.5rem rails, and 42rem prose measure. The
   editorial feel comes from type, rules, and square geometry, not from forcing
   Vize's grid.
@@ -994,9 +998,10 @@ The shipped uWebZockets hero is a full-screen, procedurally drawn ASCII flight
 field.
 
 - **Composition:** the hero is a full-screen editorial cover in both themes. The
-  dark theme uses a soft `#1a1917` paper instead of pure black; the light theme
-  uses `#f4f0e6`. Copy sits in the left column and stays bottom-left at every
-  viewport; the field fills the viewport behind it. The Blume header is fixed,
+  dark theme uses a soft `oklch(0.2138 0.0042 84.59)` paper instead of pure
+  black; the light theme uses `oklch(0.9555 0.014 88.68)`. Copy sits in the left
+  column and stays bottom-left at every viewport; the field fills the viewport
+  behind it. The Blume header is fixed,
   hidden, and `inert` while the hero is in view; it reveals after the reader
   scrolls past the hero. Docs pages and the no-JS path keep the header visible.
 - **Paper grain:** the repository-owned 100x100 noise tile lives in

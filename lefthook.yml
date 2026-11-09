@@ -27,7 +27,7 @@ pre-commit:
       run: pnpm check:size
 
     - name: css
-      glob: "apps/**/*.css"
+      glob: "{apps,packages}/**/*.css"
       run: pnpm check:css
 
     - name: typecheck

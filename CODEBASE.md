@@ -164,10 +164,11 @@ Blume inlines each app's `theme.css` into the generated Tailwind entry. App CSS
 files therefore use Tailwind v4 syntax: `@apply` for declarations, `@theme
 inline` for host tokens, `@utility` for repeated custom patterns, and `@source`
 for workspace packages. Raw declarations stay limited to token blocks,
-`@keyframes`, `@font-face`, `@property`, and data-driven custom properties. The
-`styles/` directory holds the Blume chrome, reading shell, and landing sections
-that adapt Blume's rendered DOM; component-local CSS lives beside its component.
-Run `pnpm check:css` after a CSS change.
+`@keyframes`, `@font-face`, `@property`, and data-driven custom properties.
+Color literals are authored as `oklch()`; convert an existing hex color by its
+exact sRGB result. The `styles/` directory holds the Blume chrome, reading
+shell, and landing sections that adapt Blume's rendered DOM; component-local CSS
+lives beside its component. Run `pnpm check:css` after a CSS change.
 
 ## Shared UI
 
@@ -241,7 +242,8 @@ template rules are not available; the adapter enables the Astro frontmatter
 rules, and the Svelte rules apply to the extracted `<script>` block. `pnpm
 format:check` runs Oxfmt with `.oxfmtrc.json`. `pnpm check:css` rejects raw
 style declarations outside token, keyframe, font-face, property-registration,
-and data-property contexts. `pnpm typecheck` runs every workspace `check` task,
+and data-property contexts, and rejects hex color literals in app and package
+CSS. `pnpm typecheck` runs every workspace `check` task,
 including `svelte-check` and `blume check`. `pnpm test:all` runs root Vitest and
 every workspace `test` task; `pnpm test:workspace` runs only the docs apps.
 Workspace `test` tasks run `blume validate`; workspace `build` tasks run `blume

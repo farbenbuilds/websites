@@ -82,7 +82,8 @@ the global `vp` cannot load musl native bindings on musl systems.
   for tokens, `@utility` for repeated custom patterns, and `@source` for
   workspace packages. Raw declarations stay limited to token blocks,
   `@keyframes`, `@font-face`, `@property`, and data-driven custom properties.
-  Run `pnpm check:css`.
+  Author color literals as `oklch()`; `pnpm check:css` rejects hex colors in app
+  and package CSS.
 - x18n owns component UI copy only. Documentation content stays in mirrored
   `docs/` and `docs/vi/` MDX pages. Never add MDX files, page prose,
   frontmatter, or docs routes to locale JSON or x18n resources.
@@ -122,6 +123,7 @@ follows its own framework conventions with the same accessibility and evidence
 requirements.
 
 1. Start from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
+   Author any new color literal as `oklch()`.
 2. Compose with Tailwind utilities and existing shadcn-svelte primitives. Check
    `packages/ui/src/lib/components/ui` before installing one.
 3. Write Blume app CSS with `@apply`, `@theme inline`, `@utility`, and

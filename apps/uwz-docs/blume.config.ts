@@ -86,11 +86,14 @@ export default defineConfig({
     },
   },
   theme: {
-    accent: { light: "#a64600", dark: "#ffb300" },
+    accent: {
+      light: "oklch(0.5136 0.1429 46.64)",
+      dark: "oklch(0.8179 0.1705 77.95)",
+    },
     radius: "none",
     background: {
-      light: "#f4f0e6",
-      dark: "#161513",
+      light: "oklch(0.9555 0.014 88.68)",
+      dark: "oklch(0.1961 0.0042 84.59)",
     },
     fonts: {
       display: {

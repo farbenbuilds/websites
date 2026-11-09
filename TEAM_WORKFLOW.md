@@ -169,8 +169,10 @@ A change is done when:
 - Comments explain only non-obvious constraints.
 - Functional style is preserved; no class or hidden mutable state was added.
 - App CSS is Tailwind-first: declarations use `@apply`, tokens use `@theme`,
-  and `pnpm check:css` passes. Raw declarations are limited to token blocks,
-  `@keyframes`, `@font-face`, `@property`, and data-driven custom properties.
+  color literals use `oklch()`, and `pnpm check:css` passes. Raw declarations
+  are limited to token blocks, `@keyframes`, `@font-face`, `@property`, and
+  data-driven custom properties. Hex color literals are rejected in app and
+  package CSS.
 - Component UI copy stays in locale JSON and passes `pnpm i18n:check`;
   documentation pages stay in mirrored MDX and are not x18n resources.
 - One topic has one canonical page. A duplicate tutorial, guide, or example was

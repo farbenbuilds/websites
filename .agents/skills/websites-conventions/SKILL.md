@@ -31,8 +31,9 @@ the working checklist.
 - No `<style>` blocks in Svelte. No legacy Svelte syntax.
 - Blume app CSS is Tailwind-first. Use `@apply`, `@theme inline`, `@utility`,
   and `@source`; keep raw declarations to token blocks, `@keyframes`,
-  `@font-face`, `@property`, and data-driven custom properties. Run
-  `pnpm check:css`.
+  `@font-face`, `@property`, and data-driven custom properties. Author color
+  literals as `oklch()`; convert hex by its exact sRGB result. Run
+  `pnpm check:css`, which rejects hex colors in app and package CSS.
 - x18n owns component UI copy only, in `apps/<app>/locales/{locale}.json`.
   Documentation content stays in `docs/` and `docs/vi/` MDX pages under Blume.
   Never add MDX files, page prose, frontmatter, or docs routes to x18n
@@ -161,7 +162,8 @@ Report the exact command and result. If a command could not run, say so.
 - Comments explain only a non-obvious why.
 - Types are explicit and external input is validated.
 - Svelte uses runes and Tailwind, not `<style>`.
-- App CSS uses Tailwind syntax and passes `pnpm check:css`.
+- App CSS uses Tailwind syntax and `oklch()` color literals, and passes
+  `pnpm check:css`.
 - Component UI copy is in locale JSON; documentation prose is in mirrored MDX
   and not in x18n resources.
 - Formatting follows `.oxfmtrc.json`; lint follows `.oxlintrc.json`.

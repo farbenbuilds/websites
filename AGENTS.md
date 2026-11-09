@@ -54,8 +54,9 @@ rules agents most often break:
   Tailwind v4 syntax: `@apply` for declarations, `@theme inline` for tokens,
   `@utility` for repeated custom patterns, and `@source` for workspace
   packages. Raw declarations stay limited to token blocks, `@keyframes`,
-  `@font-face`, `@property`, and data-driven custom properties. Run
-  `pnpm check:css` after a CSS change.
+  `@font-face`, `@property`, and data-driven custom properties. Author color
+  literals as `oklch()`; convert hex by its exact sRGB result. `pnpm check:css`
+  rejects hex color literals in app and package CSS. Run it after a CSS change.
 - x18n owns component UI copy only. Documentation content stays in mirrored
   `docs/` and `docs/vi/` MDX pages under Blume, including future pages such as
   `getting-started.mdx` and `api.mdx`. Never add MDX files, page prose,
@@ -119,7 +120,7 @@ pnpm test:watch                         # Vitest watch mode
 pnpm test:all                           # root Vitest plus every workspace test task
 pnpm test:workspace                     # every docs app test task
 pnpm check:size                         # enforce the 400-line source limit
-pnpm check:css                          # enforce Tailwind-first app CSS
+pnpm check:css                          # enforce Tailwind-first and oklch CSS
 pnpm build                              # every workspace build
 pnpm check:uwz                          # type-check the uWebZockets docs app
 pnpm check:vws                          # type-check the ventiws docs app

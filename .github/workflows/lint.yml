@@ -109,5 +109,5 @@ jobs:
       - name: Check file size
         run: pnpm check:size
 
-      - name: Check Tailwind-first CSS
+      - name: Check Tailwind-first and oklch CSS
         run: pnpm check:css

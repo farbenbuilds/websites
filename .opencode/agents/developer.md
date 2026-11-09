@@ -52,7 +52,8 @@ concern to the architect.
 - No `any`, unchecked cast, or non-null assertion used as a shortcut.
 - No `<style>` block in Svelte.
 - Blume app CSS is Tailwind-first: use `@apply`, `@theme inline`, `@utility`,
-  and `@source`; run `pnpm check:css` after a CSS change.
+  and `@source`; author color literals as `oklch()` and run `pnpm check:css`
+  after a CSS change.
 - Code samples follow their source language. Zig samples use `snake_case`
   functions, variables, parameters, and fields, `PascalCase` types, and the
   exact public spelling; never camel-case a Zig identifier.
