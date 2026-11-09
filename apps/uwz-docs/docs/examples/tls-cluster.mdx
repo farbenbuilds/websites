@@ -15,7 +15,9 @@ benchmark contract. The program is `examples/tls_cluster.zig` (219 lines).
 
 ## Source [#source]
 
-The complete program is below. No sections are omitted.
+The program is split into four parts. No sections are omitted; concatenate the fences in order to reproduce `examples/tls_cluster.zig`.
+
+### Configuration [#configuration]
 
 ```zig src/main.zig
 //! TLS-enabled shared-nothing worker group: one libxev loop and one TLS
@@ -80,7 +82,11 @@ fn hello(_: *uz.Request, res: *uz.Response) void {
         std.log.err("response failed: {}", .{err});
     };
 }
+```
 
+### Environment parsing [#environment-parsing]
+
+```zig src/main.zig
 fn parse_env_usize(environ: *const std.process.Environ.Map, name: []const u8) !?usize {
     const raw = environ.get(name) orelse return null;
     return std.fmt.parseInt(usize, raw, 10) catch error.InvalidEnvironmentValue;
@@ -115,7 +121,11 @@ fn read_options(environ: *const std.process.Environ.Map) !Options {
     }
     return options;
 }
+```
 
+### Cluster startup [#cluster-startup]
+
+```zig src/main.zig
 fn log_worker_metrics(worker_index: usize, registry: ?*uz.metrics.Registry) void {
     const counters = registry orelse return;
     std.log.info("worker_accepts index={d} accepted={d} closed={d}", .{
@@ -176,7 +186,11 @@ fn serve_cluster(
         log_worker_metrics(index, app_worker.metrics());
     }
 }
+```
 
+### Single application and dispatch [#single-application-and-dispatch]
+
+```zig src/main.zig
 fn serve_single(
     comptime max_clients: usize,
     init: std.process.Init,

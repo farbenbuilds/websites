@@ -982,9 +982,9 @@ file-size, root and workspace tests, strict link validation, and both docs
 builds; the root Vitest suite passed 29 files and 85 tests. The new reference API
 coverage test checks every `src/root.zig` export anchor against a checked-in
 fixture and can compare that fixture with a framework checkout through
-`UWEBZOCKETS_ROOT`; the example source test compares all ten Zig fences with a
-checked-in hash fixture and can compare them byte-for-byte with the same
-checkout. The docs parity test now covers the top-level `/reference` and
+`UWEBZOCKETS_ROOT`; the example source test compares all ten example
+programs with a checked-in hash fixture and can compare them byte-for-byte with
+the same checkout. The docs parity test now covers the top-level `/reference` and
 `/examples` trees and rejects plain-text fences. Browser viewport, axe, keyboard,
 reduced-motion, and search QA for the 60 new routes were not run in this
 environment; the next review should repeat the 320/768/1280 pass before the

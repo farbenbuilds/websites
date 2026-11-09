@@ -32,11 +32,14 @@ const EXPECTED_OUTPUT = new Map<string, readonly string[]>([
 ]);
 
 function fenceOf(source: string): string {
-  const match = /```zig src\/main\.zig\n([\s\S]*?)\n```/.exec(source);
+  const matches = [...source.matchAll(/```zig src\/main\.zig\n([\s\S]*?)\n```/g)];
 
-  if (!match) throw new Error("missing zig src/main.zig fence");
+  if (matches.length === 0) throw new Error("missing zig src/main.zig fence");
 
-  return match[1].trimEnd();
+  return matches
+    .map((match) => match[1].trimEnd())
+    .join("\n\n")
+    .trimEnd();
 }
 
 function digest(value: string): string {
