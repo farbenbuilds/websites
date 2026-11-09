@@ -182,4 +182,27 @@ describe("uwz docs redirects", () => {
       expect(sources.has(redirect.to), `${redirect.from} -> ${redirect.to}`).toBe(false);
     }
   });
+
+  it("gives legacy example and glossary URLs an exact redirect before the wildcard", () => {
+    const bySource = new Map(createRedirects().map((redirect) => [redirect.from, redirect]));
+
+    const exact = [
+      ["/getting-started/first-http3-server", "/examples/http3-server"],
+      ["/getting-started/first-websocket", "/docs/websocket/quickstart"],
+      ["/vi/getting-started/first-http3-server", "/vi/examples/http3-server"],
+      ["/vi/getting-started/first-websocket", "/vi/docs/websocket/quickstart"],
+      ["/getting-started/glossary", "/reference/glossary"],
+      ["/vi/getting-started/glossary", "/vi/reference/glossary"],
+    ] as const;
+
+    for (const [from, to] of exact) {
+      expect(bySource.get(from), from).toEqual({ from, to, status: 301 });
+    }
+
+    expect(bySource.get("/getting-started/:slug*")).toEqual({
+      from: "/getting-started/:slug*",
+      to: "/docs/getting-started/:slug*",
+      status: 301,
+    });
+  });
 });
