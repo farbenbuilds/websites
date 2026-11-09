@@ -4,17 +4,15 @@
  */
 
 .docs-home {
-  width: 100%;
-  margin: 0;
-  padding: 0;
+  @apply m-0 w-full p-0;
 }
 
 html:has(.docs-home) {
-  scroll-behavior: smooth;
+  @apply scroll-smooth;
 }
 
 html:has(.docs-home-hero) #blume-content {
-  padding: 0;
+  @apply p-0;
 }
 
 .docs-home-hero {
@@ -33,32 +31,12 @@ html:has(.docs-home-hero) #blume-content {
   --hero-wing-1: #d9480f;
   --hero-wing-2: #e8752e;
   --hero-wing-3: #f08c4a;
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 6.4fr) minmax(0, 5.6fr);
-  gap: clamp(1rem, 3vw, 3.5rem);
-  align-items: end;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100svh;
-  overflow: hidden;
-  padding: clamp(4.5rem, 10vh, 7rem) max(clamp(1.25rem, 4vw, 3rem), calc((100vw - 70rem) / 2))
-    clamp(3.5rem, 8vh, 5rem);
-  background: var(--hero-paper);
-  color: var(--hero-ink);
+  @apply relative grid min-h-screen w-full grid-cols-[minmax(0,6.4fr)_minmax(0,5.6fr)] items-end gap-[clamp(1rem,3vw,3.5rem)] overflow-hidden bg-hero-paper pt-[clamp(4.5rem,10vh,7rem)] pr-[max(clamp(1.25rem,4vw,3rem),calc((100vw_-_70rem)_/_2))] pb-[clamp(3.5rem,8vh,5rem)] pl-[max(clamp(1.25rem,4vw,3rem),calc((100vw_-_70rem)_/_2))] text-hero-ink supports-[height:100svh]:min-h-svh;
 }
 
 /* The canvas dot matrix stays above the grain at z-index 2. */
 .docs-home-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background-image: var(--farben-noise-texture);
-  background-size: 100px 100px;
-  opacity: 0.12;
-  mix-blend-mode: soft-light;
-  pointer-events: none;
+  @apply pointer-events-none absolute inset-0 z-[1] bg-[image:var(--farben-noise-texture)] bg-[length:100px_100px] opacity-[0.12] mix-blend-soft-light content-[''];
 }
 
 :root[data-theme="dark"] .docs-home-hero {
@@ -78,19 +56,14 @@ html:has(.docs-home-hero) #blume-content {
 }
 
 :root[data-theme="dark"] .docs-home-hero::after {
-  opacity: 0.12;
+  @apply opacity-[0.12];
 }
 
 .docs-home-hero > astro-island:has(> .butterfly-hero) {
-  display: contents;
+  @apply contents;
 }
 
 .docs-home-hero .butterfly-hero {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  min-height: 0;
-  margin: 0;
   --farben-field-paper: var(--hero-paper);
   --farben-field-ink: var(--hero-ink);
   --farben-field-muted: var(--hero-rule);
@@ -98,249 +71,167 @@ html:has(.docs-home-hero) #blume-content {
   --farben-field-wing-1: var(--hero-wing-1);
   --farben-field-wing-2: var(--hero-wing-2);
   --farben-field-wing-3: var(--hero-wing-3);
+  @apply absolute inset-0 z-[2] m-0 min-h-0;
 }
 
 .docs-home-hero .butterfly-hero-still:not(.is-hidden) {
-  color: var(--hero-still);
-  opacity: 0.58;
+  @apply text-hero-still opacity-[0.58];
 }
 
 .docs-home-hero-copy {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  grid-column: 1;
-  align-self: end;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1.1rem;
-  width: min(100%, 36rem);
-  padding-block-end: 0.5rem;
-  text-align: left;
+  @apply relative z-[3] col-start-1 flex w-[min(100%,36rem)] flex-col items-start gap-[1.1rem] self-end pb-2 text-left;
 }
 
 .docs-home-dictionary {
-  position: absolute;
-  right: clamp(1.25rem, 2.5vw, 2rem);
-  bottom: clamp(1.75rem, 4vh, 2.5rem);
-  z-index: 3;
-  max-height: min(24rem, 46vh);
-  padding-inline-end: 0.15rem;
-  color: var(--hero-muted);
-  font-family: var(--blume-font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
-  line-height: 1.6;
-  pointer-events: none;
-  text-orientation: mixed;
-  writing-mode: vertical-rl;
+  @apply pointer-events-none absolute right-[clamp(1.25rem,2.5vw,2rem)] bottom-[clamp(1.75rem,4vh,2.5rem)] z-[3] max-h-[min(24rem,46vh)] pe-[0.15rem] font-mono text-[0.62rem] leading-[1.6] tracking-[0.04em] text-hero-muted [text-orientation:mixed] [writing-mode:vertical-rl];
 }
 
 .docs-home-dictionary p {
-  margin: 0;
+  @apply m-0;
 }
 
 .docs-home-dictionary-status {
-  color: var(--hero-accent-bright);
+  @apply text-hero-accent-bright;
 }
 
 .docs-home-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
+  @apply flex min-w-0 items-center gap-[0.65rem];
 }
 
 .docs-home-mark {
-  position: relative;
-  top: 0.5rem;
-  width: clamp(2.75rem, 3.5vw, 3.25rem);
-  height: auto;
+  @apply relative top-2 h-auto w-[clamp(2.75rem,3.5vw,3.25rem)];
 }
 
 html .prose .docs-home-mark {
-  margin: 0;
+  @apply m-0;
 }
 
 .docs-home-eyebrow {
-  color: var(--hero-eyebrow);
-  text-shadow: 0 1px 2px var(--hero-paper);
+  @apply text-hero-eyebrow [text-shadow:0_1px_2px_var(--hero-paper)];
 }
 
 .docs-home-title {
-  margin: 0;
-  color: var(--hero-ink);
-  text-shadow: 0 1px 2px var(--hero-paper);
-  white-space: nowrap;
-  font-family: var(--blume-font-display);
-  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 0.92;
+  @apply m-0 whitespace-nowrap font-display text-[clamp(2.5rem,5.2vw,4.5rem)] font-semibold leading-[0.92] tracking-[-0.04em] text-hero-ink [text-shadow:0_1px_2px_var(--hero-paper)];
 }
 
 html .prose .docs-home-title {
-  margin: 0;
-  font-size: clamp(2.5rem, 5.2vw, 4.5rem);
-  line-height: 0.92;
+  @apply m-0 text-[clamp(2.5rem,5.2vw,4.5rem)] leading-[0.92];
 }
 
 html .prose .docs-home-eyebrow {
-  margin: 0;
+  @apply m-0;
 }
 
 .docs-home-summary {
-  max-width: 36ch;
-  margin: 0;
-  color: var(--hero-muted);
-  text-shadow: 0 1px 2px var(--hero-paper);
-  font-family: var(--blume-font-body);
-  font-size: 1.0625rem;
-  line-height: 1.7;
+  @apply m-0 max-w-[36ch] font-sans text-[1.0625rem] leading-[1.7] text-hero-muted [text-shadow:0_1px_2px_var(--hero-paper)];
 }
 
 html .prose .docs-home-summary {
-  margin: 0;
+  @apply m-0;
 }
 
 html .prose .docs-home-summary code {
-  border-color: color-mix(in srgb, var(--hero-accent) 45%, transparent);
-  background: var(--hero-paper);
-  color: var(--hero-accent-bright);
+  @apply border-[color-mix(in_srgb,var(--hero-accent)_45%,transparent)] bg-hero-paper text-hero-accent-bright;
 }
 
 .docs-home-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  padding-block-start: 0.4rem;
+  @apply flex flex-wrap gap-[0.6rem] pt-[0.4rem];
 }
 
 html .prose .docs-home-hero .editorial-action {
-  border-color: var(--hero-rule);
-  color: var(--hero-ink);
+  @apply border-hero-rule text-hero-ink;
 }
 
 html .prose .docs-home-hero .editorial-action-primary {
-  border-color: var(--hero-accent);
-  background: var(--hero-accent);
-  color: var(--hero-ink-on-accent);
+  @apply border-hero-accent bg-hero-accent text-hero-ink-on-accent;
 }
 
 html .prose .docs-home-hero .editorial-action-primary:hover {
-  border-color: var(--hero-accent-bright);
-  background: var(--hero-accent-bright);
-  color: var(--hero-ink-on-accent);
+  @apply border-hero-accent-bright bg-hero-accent-bright text-hero-ink-on-accent;
 }
 
 html .prose .docs-home-hero .editorial-action-secondary {
-  background: var(--hero-paper);
-  color: var(--hero-ink);
+  @apply bg-hero-paper text-hero-ink;
 }
 
 html .prose .docs-home-hero .editorial-action-secondary:hover {
-  border-color: var(--hero-accent);
-  background: var(--hero-hover);
-  color: var(--hero-accent-bright);
+  @apply border-hero-accent bg-hero-hover text-hero-accent-bright;
 }
 
 @media (max-width: 56rem) {
   .docs-home-hero {
-    grid-template-columns: minmax(0, 1fr);
-    padding-block: 4rem 5.5rem;
+    @apply grid-cols-1 pt-16 pb-[5.5rem];
   }
 
   .docs-home-dictionary {
-    display: none;
+    @apply hidden;
   }
 
   .docs-home-hero-copy {
-    gap: 0.7rem;
-    width: min(100%, 34rem);
+    @apply w-[min(100%,34rem)] gap-[0.7rem];
   }
 
   .docs-home-mark {
-    top: 0.35rem;
-    width: 2.75rem;
+    @apply top-[0.35rem] w-11;
   }
 
   .docs-home-title,
   html .prose .docs-home-title {
-    font-size: clamp(2.25rem, 11vw, 3.5rem);
+    @apply text-[clamp(2.25rem,11vw,3.5rem)];
   }
 
   .docs-home-summary {
-    max-width: 34ch;
-    font-size: 0.95rem;
-    line-height: 1.5;
+    @apply max-w-[34ch] text-[0.95rem] leading-[1.5];
   }
 
   .docs-home-actions {
-    gap: 0.5rem;
-    padding-block-start: 0.2rem;
+    @apply gap-2 pt-[0.2rem];
   }
 
   .docs-home-hero .editorial-action {
-    min-height: 2.75rem;
-    padding: 0.55rem 0.9rem;
-    font-size: 0.84rem;
+    @apply min-h-11 px-[0.9rem] py-[0.55rem] text-[0.84rem];
   }
 }
 
 @media (max-width: 40rem) {
   .docs-home-hero {
-    gap: 0;
-    padding: 2.5rem 1rem 5rem;
+    @apply gap-0 px-4 pt-10 pb-20;
   }
 
   .docs-home-hero-copy {
-    gap: 0.625rem;
-    width: 100%;
-    padding-block-end: 0;
+    @apply w-full gap-[0.625rem] pb-0;
   }
 
   .docs-home-title,
   html .prose .docs-home-title {
-    font-size: clamp(2rem, 10vw, 2.75rem);
+    @apply text-[clamp(2rem,10vw,2.75rem)];
   }
 
   .docs-home-summary {
-    max-width: 32ch;
-    font-size: 0.9375rem;
+    @apply max-w-[32ch] text-[0.9375rem];
   }
 }
 
 @media (max-width: 26rem) {
   .docs-home-mark {
-    top: 0.3rem;
-    width: 2.5rem;
+    @apply top-[0.3rem] w-10;
   }
 
   .docs-home-actions {
-    width: 100%;
-    gap: 0.4rem;
+    @apply w-full gap-[0.4rem];
   }
 
   .docs-home-actions .editorial-action {
-    flex: 1 1 0;
-    gap: 0.35rem;
-    padding-inline: 0.45rem;
-    font-size: 0.8rem;
+    @apply flex-1 gap-[0.35rem] px-[0.45rem] text-[0.8rem];
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html:has(.docs-home) {
-    scroll-behavior: auto;
+    @apply scroll-auto;
   }
 }
 
 html .prose pre.butterfly-hero-still {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  margin: 0;
-  padding: 1rem;
-  overflow: hidden;
+  @apply m-0 overflow-hidden rounded-none border-0 bg-transparent p-4 shadow-none;
 }

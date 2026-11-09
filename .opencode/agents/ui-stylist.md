@@ -23,6 +23,8 @@ in `packages/ui/src/lib/styles/theme.css` before proposing a visual change.
 ## Rules
 
 - No hard-coded palette when a semantic token exists.
+- Blume app CSS is Tailwind-first: use `@apply`, `@theme inline`, `@utility`,
+  and `@source`; run `pnpm check:css` and review both color modes.
 - No `<style>` block, inline style shortcut, or `!important`.
 - No animation that competes with reading or ignores reduced motion.
 - No custom shared component unless at least two apps use it. A standard registry primitive may be installed when no existing primitive fits; never re-add an existing component.

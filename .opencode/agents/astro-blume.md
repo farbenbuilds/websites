@@ -25,6 +25,8 @@ editing.
 ## Rules
 
 - Do not edit `dist/` or `.blume/`.
+- Keep app CSS Tailwind-first with `@apply`, `@theme inline`, `@utility`, and
+  `@source`; run `pnpm check:css` with the app build.
 - Do not replace a Blume feature with a custom implementation.
 - Do not add Astro integrations without a stated need and a build check.
 - Do not change prose structure without `docs-writer`.

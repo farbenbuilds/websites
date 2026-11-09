@@ -1,50 +1,118 @@
 /*
- * Reading-page shell.
+ * Reading-page navigation.
  *
- * Blume hard-codes a full-bleed three-column grid with 17.5rem rails, which
- * leaves the 42rem prose column floating far from both rails on wide screens.
- * These overrides keep a centered frame with narrower rails and oRPC's rail,
- * gutter, and main padding measurements. The direct-child h1 guard keeps the
- * landing page, including its full-screen hero, on the original shell.
- *
- * Selectors target Blume 2.2.6 data hooks. Re-measure after every Blume upgrade.
+ * The base chrome in blume-chrome.css also styles the landing drawer, so these
+ * rules are scoped to pages with a direct article title. They tighten the
+ * sidebar rhythm and give the current page, its category, and the active TOC
+ * entry the orange (light) or gold (dark) reading indicator.
  */
 
-html:has(#blume-content > article > h1) [data-blume-doc-grid] {
-  width: min(100%, var(--uwz-docs-frame-width));
-  margin-inline: auto;
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  :is(.blume-nav-link, .blume-nav-drill-link) {
+  @apply px-[0.625rem] py-[0.375rem] text-sm leading-[1.4];
 }
 
-@media (min-width: 64rem) {
-  html:has(#blume-content > article > h1) [data-blume-doc-grid] {
-    grid-template-columns: 14.5rem minmax(0, 1fr);
+html:has(#blume-content > article > h1) [data-blume-nav-tree] .blume-nav-summary {
+  @apply min-h-9 gap-2 px-[0.625rem] py-[0.3125rem] text-sm;
+}
+
+html:has(#blume-content > article > h1) [data-blume-nav-tree] .blume-nav-summary-link {
+  @apply my-0 min-h-6 p-0;
+}
+
+html:has(#blume-content > article > h1) [data-blume-nav-tree] li + li {
+  @apply mt-px;
+}
+
+html:has(#blume-content > article > h1) [data-blume-nav-tree] details > div {
+  @apply mt-0.5 ps-3;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  :is(.blume-nav-link, .blume-nav-drill-link)[aria-current="page"] {
+  @apply bg-reading-surface font-semibold text-reading-text shadow-[inset_3px_0_0_var(--docs-active-bar)];
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  :is(.blume-nav-link, .blume-nav-drill-link)[aria-current="page"]:hover {
+  @apply bg-reading-surface text-reading-text;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > summary {
+  @apply border-reading-border bg-reading-surface text-reading-text;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > summary:hover {
+  @apply bg-reading-surface text-reading-text;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > summary
+  .blume-nav-summary-link {
+  @apply font-bold text-reading-text;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > summary
+  :is(svg) {
+  @apply text-reading;
+}
+
+html:has(#blume-content > article > h1)
+  [data-blume-nav-tree]
+  details:has(> div a[aria-current="page"])
+  > div {
+  @apply border-reading-border;
+}
+
+html:has(#blume-content > article > h1) [data-blume-toc] blume-toc a {
+  @apply -ms-2 py-1.5 ps-2 text-[0.8125rem] leading-[1.45];
+}
+
+html:has(#blume-content > article > h1) #blume-content > details blume-toc a {
+  @apply flex min-h-11 items-center py-2 text-sm leading-[1.45];
+}
+
+html:has(#blume-content > article > h1) blume-toc a[aria-current="location"] {
+  @apply font-semibold text-reading-text shadow-[inset_3px_0_0_var(--docs-active-bar)];
+}
+
+html:has(#blume-content > article > h1) #blume-content > details > summary {
+  @apply min-h-11;
+}
+
+@media (max-width: 63.999rem) {
+  html:has(#blume-content > article > h1)
+    [data-blume-nav-tree]
+    :is(.blume-nav-link, .blume-nav-drill-link),
+  html:has(#blume-content > article > h1) [data-blume-nav-tree] .blume-nav-summary {
+    @apply min-h-11 px-3 py-[0.5625rem] text-sm;
   }
 
-  html:has(#blume-content > article > h1) [data-blume-doc-grid] > #blume-content {
-    padding: 3rem 3rem 3.5rem;
-  }
-
-  html:has(#blume-content > article > h1) [data-blume-nav-drawer] {
-    padding: 1.5rem 1.5rem 2rem 1.25rem;
+  html:has(#blume-content > article > h1) [data-blume-nav-tree] .blume-nav-summary-link {
+    @apply p-0;
   }
 }
 
-@media (min-width: 80rem) {
-  html:has(#blume-content > article > h1) [data-blume-doc-grid]:has(> [data-blume-toc]) {
-    grid-template-columns: 14.5rem minmax(0, 1fr) 16.5rem;
-  }
-
-  html:has(#blume-content > article > h1) [data-blume-toc] {
-    padding: 3rem 1rem 2.5rem;
-  }
-
-  html:has(#blume-content > article > h1) [data-blume-header] {
-    padding-inline: max(1.5rem, calc((100% - var(--uwz-docs-frame-width)) / 2));
-  }
-}
-
-@media (min-width: 96rem) {
-  html:has(#blume-content > article > h1) [data-blume-doc-grid]:has(> [data-blume-toc]) {
-    grid-template-columns: 15.875rem minmax(0, 1fr) 16.5rem;
+@media (prefers-reduced-motion: reduce) {
+  html:has(#blume-content > article > h1) [data-blume-nav-tree] a,
+  html:has(#blume-content > article > h1) [data-blume-nav-tree] .blume-nav-summary,
+  html:has(#blume-content > article > h1) [data-blume-nav-tree] summary > span,
+  html:has(#blume-content > article > h1) #blume-content > details > summary svg,
+  html:has(#blume-content > article > h1) blume-toc a {
+    @apply transition-none;
   }
 }

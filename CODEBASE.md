@@ -64,6 +64,7 @@ websites/
 │   │   ├── components.ts        # MDX component and island registration
 │   │   ├── blume.config.ts      # site title, theme, i18n, GitHub edit links
 │   │   ├── x18n.config.ts       # locale resources for uwz-docs
+│   │   ├── styles/              # Blume chrome, reading shell, and landing CSS
 │   │   └── theme.css            # host Tailwind entry and tokens
 │   └── vws-docs/                 # ventiws documentation
 │       ├── components/           # landing and index-cards Astro components
@@ -82,6 +83,7 @@ websites/
 │       ├── src/lib/styles/       # shared theme tokens
 │       └── components.json       # shadcn CLI aliases
 ├── tests/                        # root Vitest suites grouped by category
+├── scripts/                      # repository checks and Oxlint plugin
 ├── tools/oxlint/anti-slop/       # vendored anti-slop Oxlint plugin
 ├── LICENSES/                     # third-party license texts
 ├── THIRD_PARTY_NOTICES.md        # vendored content provenance
@@ -158,6 +160,15 @@ Documentation source is the product. Do not edit generated output under
 `dist/` or generated Blume state under `.blume/`; those directories are
 ignored by Git and recreated by the build.
 
+Blume inlines each app's `theme.css` into the generated Tailwind entry. App CSS
+files therefore use Tailwind v4 syntax: `@apply` for declarations, `@theme
+inline` for host tokens, `@utility` for repeated custom patterns, and `@source`
+for workspace packages. Raw declarations stay limited to token blocks,
+`@keyframes`, `@font-face`, `@property`, and data-driven custom properties. The
+`styles/` directory holds the Blume chrome, reading shell, and landing sections
+that adapt Blume's rendered DOM; component-local CSS lives beside its component.
+Run `pnpm check:css` after a CSS change.
+
 ## Shared UI
 
 `packages/docs-components` is `@farben/docs-components`, the shared `DocsLocale`
@@ -216,6 +227,7 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm check:size
+pnpm check:css
 pnpm test:all
 pnpm validate:docs
 pnpm build
@@ -227,16 +239,19 @@ and a local adapter for `eslint-plugin-astro` under `tools/oxlint/astro-plugin/`
 Oxlint has no custom parser support, so Svelte template rules and Astro
 template rules are not available; the adapter enables the Astro frontmatter
 rules, and the Svelte rules apply to the extracted `<script>` block. `pnpm
-format:check` runs Oxfmt with `.oxfmtrc.json`. `pnpm typecheck` runs every
-workspace `check` task, including `svelte-check` and `blume check`. `pnpm
-test:all` runs root Vitest and every workspace `test` task; `pnpm
-test:workspace` runs only the docs apps. Workspace `test` tasks run `blume
-validate`; workspace `build` tasks run `blume build`. `pnpm validate:docs` runs
-strict link validation, and `pnpm audit:uwz` audits the built uWebZockets site.
+format:check` runs Oxfmt with `.oxfmtrc.json`. `pnpm check:css` rejects raw
+style declarations outside token, keyframe, font-face, property-registration,
+and data-property contexts. `pnpm typecheck` runs every workspace `check` task,
+including `svelte-check` and `blume check`. `pnpm test:all` runs root Vitest and
+every workspace `test` task; `pnpm test:workspace` runs only the docs apps.
+Workspace `test` tasks run `blume validate`; workspace `build` tasks run `blume
+build`. `pnpm validate:docs` runs strict link validation, and `pnpm audit:uwz`
+audits the built uWebZockets site.
 
-`lefthook` runs lint, format, size, typecheck, and tests on pre-commit. The
-GitHub workflows split the same gate into `lint.yml`, `test.yml`, and `ci.yml`.
-Path filters limit each workflow to the files it can affect, and the jobs report
+`lefthook` runs lint, format, size, CSS, typecheck, and tests on pre-commit. The
+GitHub workflows split those checks across `lint.yml`, `test.yml`, and the build
+job in `ci.yml`; `pnpm validate:docs` remains part of the local full gate. Path
+filters limit each workflow to the files it can affect, and the jobs report
 through the `Lint`, `Test`, and `Build` environments.
 
 The full gate is intentionally short. A change that needs a protocol compliance

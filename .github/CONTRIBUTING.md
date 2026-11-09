@@ -111,6 +111,10 @@ requirements.
   existing component.
 - Keep static content in MDX or Astro and interaction in a Svelte island.
 - Include labels, focus states, keyboard behavior, and reduced-motion handling.
+- Blume app CSS is Tailwind-first. Use `@apply`, `@theme inline`, `@utility`,
+  and `@source`; keep raw declarations to token blocks, `@keyframes`,
+  `@font-face`, `@property`, and data-driven custom properties. Run
+  `pnpm check:css`.
 - Verify the shared package type check and every consuming app build.
 
 ## Code Rules

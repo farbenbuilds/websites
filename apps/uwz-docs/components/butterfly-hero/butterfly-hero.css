@@ -4,59 +4,36 @@
  */
 
 .butterfly-hero {
-  position: relative;
-  isolation: isolate;
-  height: 100%;
-  min-height: 18rem;
-  overflow: hidden;
+  @apply relative isolate h-full min-h-72 overflow-hidden;
 }
 
 .butterfly-hero-art {
-  position: absolute;
-  inset: 0;
+  @apply absolute inset-0;
 }
 
 .butterfly-hero-still {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 1rem;
-  overflow: hidden;
-  color: var(--editorial-ink);
-  font-family: var(--editorial-font-label);
-  font-size: clamp(0.3rem, 1.5vw, 0.95rem);
-  line-height: 1;
-  white-space: pre;
-  opacity: 0.64;
-  transition: opacity 240ms ease;
+  @apply m-0 grid size-full place-items-center overflow-hidden p-4 text-[clamp(0.3rem,1.5vw,0.95rem)] leading-none whitespace-pre text-[var(--editorial-ink)] opacity-[0.64] transition-opacity duration-[240ms] ease-[ease] [font-family:var(--editorial-font-label)];
 }
 
 .butterfly-hero-still.is-hidden {
-  opacity: 0;
+  @apply opacity-0;
 }
 
 .butterfly-hero-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  font-family: var(--editorial-font-label);
-  opacity: 0;
-  transition: opacity 240ms ease;
+  @apply absolute inset-0 size-full opacity-0 transition-opacity duration-[240ms] ease-[ease] [font-family:var(--editorial-font-label)];
 }
 
 .butterfly-hero-canvas.is-ready {
-  opacity: 1;
+  @apply opacity-100;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .butterfly-hero-still,
   .butterfly-hero-canvas {
-    transition: none;
+    @apply transition-none;
   }
 }
+
 @keyframes farben-scroll-cue-dot {
   0%,
   100% {
@@ -71,11 +48,11 @@
 }
 
 .farben-scroll-cue-dot {
-  animation: farben-scroll-cue-dot 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  @apply animate-scroll-cue-dot;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .farben-scroll-cue-dot {
-    animation: none;
+    @apply animate-none;
   }
 }

@@ -2,8 +2,9 @@
  * Host theme for the uWebZockets documentation.
  *
  * Blume inlines this file into the site's Tailwind entry, so Tailwind
- * directives work here. The shared UI package ships the shadcn-svelte tokens;
- * the editorial layer maps them to Farben's warm paper palette.
+ * directives work here and in every imported app stylesheet. The shared UI
+ * package ships the shadcn-svelte tokens; the editorial layer maps them to
+ * Farben's warm paper palette.
  */
 @import "@farben/ui/theme.css";
 @import "@farben/ui/editorial.css";
@@ -22,12 +23,40 @@
 @import "../../../styles/docs-home-support.css";
 @import "../../../styles/docs-home-benchmark.css";
 
+@theme inline {
+  --color-rule-strong: var(--farben-border-strong);
+  --color-reading: var(--docs-active-bar);
+  --color-reading-text: var(--docs-active-text);
+  --color-reading-surface: var(--docs-active-surface);
+  --color-reading-border: var(--docs-active-border);
+  --color-accent-line: color-mix(in srgb, var(--blume-accent) 30%, var(--blume-border));
+  --color-accent-border: color-mix(in srgb, var(--blume-accent) 38%, var(--blume-border));
+  --color-accent-surface: color-mix(in srgb, var(--blume-accent) 9%, var(--blume-background));
+
+  --color-hero-paper: var(--hero-paper);
+  --color-hero-ink: var(--hero-ink);
+  --color-hero-muted: var(--hero-muted);
+  --color-hero-rule: var(--hero-rule);
+  --color-hero-accent: var(--hero-accent);
+  --color-hero-accent-bright: var(--hero-accent-bright);
+  --color-hero-ink-on-accent: var(--hero-ink-on-accent);
+  --color-hero-hover: var(--hero-hover);
+  --color-hero-eyebrow: var(--hero-eyebrow);
+  --color-hero-still: var(--hero-still);
+  --color-hero-wing-1: var(--hero-wing-1);
+  --color-hero-wing-2: var(--hero-wing-2);
+  --color-hero-wing-3: var(--hero-wing-3);
+
+  --animate-docs-home-enter: docs-home-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-scroll-cue-dot: farben-scroll-cue-dot 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
 /*
  * Blume enables smooth scrolling on every page. Keep it on the landing page
  * only; documentation pages jump instantly to anchors.
  */
 html {
-  scroll-behavior: auto;
+  @apply scroll-auto;
 }
 
 :root {
