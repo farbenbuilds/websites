@@ -31,8 +31,8 @@ trọn vào slab của worker accept nó và chỉ event loop của worker đó 
 Mỗi worker sở hữu loop, slab và TLS context của chính nó. Kernel phân phối
 connection được accept cho các listener, và mỗi worker chỉ drain inbox của chính
 nó. Một publish đưa message tới mọi inbox; nó không bao giờ ghi vào storage của
-connection. [Mô hình cluster](/docs/concepts/cluster-model) trình bày topology và
-đường publish trong một sơ đồ.
+connection. [Mô hình cluster](/docs/concepts/cluster-model) sở hữu topology
+diagram, active-worker rule và publish semantics.
 
 ## Một port, không chia sẻ connection
 
@@ -73,32 +73,19 @@ Owning loop copy từng message qua scratch thuộc queue. Vì vậy publish kh�
 ghi đè buffer lắp ghép WebSocket đang phân mảnh của một connection, kể cả khi hai
 bên chạy trên worker khác nhau.
 
-## Capacity không phải số worker đang hoạt động
-
-`App.cluster(N)` và `Server.builder(...).build_cluster(allocator, N, options)`
-compile capacity `N` worker. Runtime có thể dùng ít hơn:
-
-- `ClusterOptions.worker_count` chọn số worker hoạt động tường minh.
-- `build_cluster_from_environment` ưu tiên option đó, rồi tới
-  `UWEBZOCKETS_WORKERS`, rồi tới số CPU của platform.
-
-Chỉ worker đang hoạt động mới cấp phát slab, inbox và thread handle, nên capacity
-compile lớn không giữ chỗ cho worker không bao giờ khởi động. `worker_count()`
-báo số đã cấp phát, `worker_capacity()` báo capacity compile, và `worker(i)` trả
-null khi nhóm có ít worker hoạt động hơn.
-
 ## Vì sao không có connection state chia sẻ
 
 Chia sẻ một connection sẽ cần lock cho mọi thao tác read, write, completion và
 timeout, đồng thời đặt hai event loop lên cùng một buffer. Mô hình tránh điều đó
 bằng cách cho mỗi connection đúng một chủ sở hữu:
 
-- Connection slot được carve từ slab của worker accept.
-- Completion của nó là thành viên inline của connection, không phải object trên
-  heap.
-- Async token của nó chỉ được dùng trên event loop.
-- Deadline của nó nằm trên timing wheel của worker.
-- TLS session của nó đến từ `SSL_CTX` của worker.
+| Connection state | Chủ sở hữu                                               |
+| ---------------- | -------------------------------------------------------- |
+| Slot             | Pool và slab của worker accept                           |
+| Completion       | Thành viên inline của connection, không phải object heap |
+| Async token      | Chỉ event loop sở hữu                                    |
+| Deadline         | Timing wheel của worker sở hữu                           |
+| TLS session      | `SSL_CTX` của worker accept                              |
 
 Cái giá là bộ nhớ tăng theo số worker hoạt động chứ không chỉ theo số
 connection: mỗi worker mang một slab, một inbox và, khi có TLS, một context. Lợi
@@ -112,5 +99,5 @@ connection: mỗi worker mang một slab, một inbox và, khi có TLS, một co
 - [Backpressure](/docs/concepts/backpressure) giải thích inbox đầy và write
   ring đầy báo gì.
 - [Mô hình capacity](/docs/concepts/capacity-model) định cỡ slab và inbox.
-- [Topology runtime của worker](/docs/architecture/shared-nothing) ánh xạ cách
-  tách này tới loop, slab và inbox.
+- [Callback lifecycle](/docs/architecture/callback-lifecycle) ánh xạ các loop
+  callback giữ state trong một worker.

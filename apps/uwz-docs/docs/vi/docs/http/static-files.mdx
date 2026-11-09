@@ -4,7 +4,7 @@ description: Mount một thư mục asset được giới hạn với MIME, ETag
 sidebar:
   order: 9
 search:
-  tags: [how-to, static-files]
+  tags: [how-to, guide, static-files]
 ---
 
 `App.static(prefix, root, options)` mount một thư mục lúc startup và phục vụ file
@@ -138,6 +138,17 @@ Capacity là toàn bộ write queue khi queue từ 4096 byte trở xuống; vớ
 định 64 KiB, buffer giữ 60 KiB. File lớn hơn trả `FileTooLarge`, được ánh xạ
 thành `413 Content Too Large`.
 
+| Bound                              | Value                           | Nguồn                     |
+| ---------------------------------- | ------------------------------- | ------------------------- |
+| Mounts                             | 8                               | Route capacity cố định    |
+| Plaintext `GET` và `HEAD`          | kernel `sendfile`, không buffer | `Response.send_file`      |
+| File size trên TLS, HTTP/2, HTTP/3 | `write_queue_size - 4096`       | 60 KiB ở default 64 KiB   |
+| Decoded path                       | 1024 byte                       | Buffer confinement nội bộ |
+| Range mỗi request                  | 1                               | Nhiều range bị từ chối    |
+
+Tăng `write_queue_size` khi asset cần nhiều hơn giới hạn buffered, và tính
+memory cho từng connection.
+
 ## Kiểm tra
 
 Tạo `public/index.html`, khởi động server rồi chạy:
@@ -145,10 +156,14 @@ Tạo `public/index.html`, khởi động server rồi chạy:
 ```sh
 curl -i http://127.0.0.1:3000/assets/
 curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+curl -i -X POST http://127.0.0.1:3000/assets/index.html
+curl -i --path-as-is http://127.0.0.1:3000/assets/../src/main.zig
 ```
 
-Request đầu trả `200 OK`. Request thứ hai trả `206 Partial Content` khi file đủ
-lớn. Field nhiều range trả `416 Range Not Satisfiable`.
+Request đầu trả `200 OK` kèm `ETag`. Request thứ hai trả `206 Partial Content` và
+`Content-Range` khi file đủ lớn. Request thứ ba trả `405 Method Not Allowed` kèm
+`Allow`, request thứ tư trả `403 Forbidden` thay vì source file. Field nhiều
+range trả `416 Range Not Satisfiable`.
 
 Lặp lại request đầu với validator nhận được:
 
@@ -156,10 +171,46 @@ Lặp lại request đầu với validator nhận được:
 curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
 ```
 
-Thay `ETAG` bằng giá trị chính xác và kỳ vọng `304 Not Modified`.
+Thay `ETAG` bằng giá trị chính xác và kỳ vọng `304 Not Modified` không body.
+
+## Failure behavior
+
+| Điều kiện                            | Kết quả                                    |
+| ------------------------------------ | ------------------------------------------ |
+| Segment `..`, NUL, backslash         | `403 Forbidden`                            |
+| Symlink trong bất kỳ component       | `403 Forbidden`                            |
+| File thiếu hoặc không phải directory | `404 Not Found`                            |
+| File vượt capacity buffered          | `413 Content Too Large`                    |
+| Range nhiều hoặc không thoả          | `416 Range Not Satisfiable`                |
+| Method khác `GET` hoặc `HEAD`        | `405 Method Not Allowed` kèm `Allow`       |
+| Mount thứ chín                       | Startup `error.StaticRouteCapacityReached` |
+
+## Variations
+
+### Mount directory thứ hai
+
+Thêm mount download với policy riêng. Index bị tắt và file không cache public:
+
+```zig
+_ = try app.static("/downloads", "downloads", .{
+    .index = null,
+    .etag = true,
+    .max_age = 0,
+});
+```
+
+Prefix phải khác nhau và tổng số vẫn trong giới hạn tám mount.
+
+### Serve file private
+
+Không đặt file private sau `max_age` khác 0: shared cache sẽ giữ chúng. Mount
+chúng dưới prefix riêng với `max_age = 0` và đặt authentication guard trước prefix
+đó. Khi tập file hoàn toàn không public, ưu tiên handler kiểm tra authorization
+theo từng file; static mount trả lời trước khi handler kịp xem request.
 
 ## Tiếp theo
 
 Đọc [caching và ETag](/docs/http/helpers/caching) cho việc tạo validator ngoài
 static mount, sau đó [giới hạn HTTP](/docs/http/limits) cho capacity của body và
-header.
+header. [Thêm authentication](/docs/guides/authentication) trình bày cách guard
+một prefix private.

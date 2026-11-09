@@ -229,6 +229,22 @@ new primitive.
 - Agent-facing documents describe observable behavior, ownership, and
   verification. They do not duplicate the full codebase.
 
+### One canonical page per topic
+
+- Search the docs tree before adding a page. If an existing page teaches the
+  same program, workflow, or reference facts, merge the unique material into
+  that page instead of creating a parallel tutorial, guide, or example.
+- A merged page keeps one route. Delete the English and Vietnamese MDX files,
+  add a 301 from the old route in the app's Blume redirect config
+  (`blume-redirects.ts` in `uwz-docs`), and update every index, card,
+  navigation entry, and prose link in the same change.
+- Do not keep a second page as an "overview" or "quickstart" when it repeats the
+  canonical page. A short cross-link is enough.
+- A guide may own a distinct application recipe, but it must not repeat the
+  program, contract tables, or failure reference of the page that owns the
+  subsystem. Link to the owning page and keep only the unique recipe material.
+- The reviewer checks for duplicate reader goals, not only duplicate sentences.
+
 ### Documentation surfaces
 
 µWebZockets documentation serves two audiences in separate surfaces. Do not mix

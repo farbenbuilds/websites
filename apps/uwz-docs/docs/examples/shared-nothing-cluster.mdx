@@ -1,10 +1,10 @@
 ---
 title: Shared-nothing cluster
-description: Start four shared-nothing workers on one port, verify the response with curl, and inspect the capacities each worker owns.
+description: Start four shared-nothing workers, verify the shared port, and inspect the startup capacities each worker owns.
 sidebar:
-  order: 8
+  order: 3
 search:
-  tags: [reference, tutorial, cluster, http1]
+  tags: [reference, tutorial, getting-started, cluster, http1]
 ---
 
 This example starts four shared-nothing workers. Each worker allocates its own
@@ -60,6 +60,12 @@ pub fn main(init: std.process.Init) !void {
 
 The `zig build shared_nothing_cluster` line in the module header is the
 framework checkout step. In your project, use `zig build run` as shown below.
+
+## Prerequisites
+
+- The project from [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -127,6 +133,22 @@ The Windows cluster binds the shared address with `SO_REUSEADDR` because
 `SO_REUSEPORT` is not available there. Kernel distribution across listeners is
 unspecified on that platform.
 
+Each worker owns its loop, slab, routes, connection slots, inbox, and TLS
+context; no connection state, request buffer, write queue, or completion is
+shared. The [shared-nothing workers](/docs/concepts/shared-nothing) page states
+the full ownership contract and the publish path.
+
+## Worker capacity and active count
+
+| Call                          | Reports                                           |
+| ----------------------------- | ------------------------------------------------- |
+| `worker_capacity()`           | Compiled capacity from `build_cluster`            |
+| `worker_count()`              | Active workers that allocate a loop and slab      |
+| `ClusterOptions.worker_count` | Explicit active count below the compiled capacity |
+| `UWEBZOCKETS_WORKERS`         | Environment override for the environment builder  |
+
+A count above the physical core count wraps over the selected cores.
+
 ## Key APIs [#key-apis]
 
 | Call                                                | Effect                                                        |
@@ -191,7 +213,10 @@ allocated.
 
 - [Hello world](/examples/hello-world) is the single-application starting point.
 - [TLS cluster](/examples/tls-cluster) adds one TLS context per worker.
-- [Your first cluster](/examples/first-cluster) walks through the cluster
-  lifecycle and failure reporting.
 - [Shared-nothing workers](/docs/concepts/shared-nothing) explains the ownership
   model in detail.
+- [Cluster model](/docs/concepts/cluster-model) covers lifecycle, first failure,
+  and publish semantics.
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub) broadcasts a topic across
+  worker inboxes.
+- [TLS clusters](/docs/security/tls-clusters) covers per-worker TLS contexts.

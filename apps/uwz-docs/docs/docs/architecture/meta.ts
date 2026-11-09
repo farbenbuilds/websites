@@ -6,9 +6,7 @@ export default defineMeta({
   order: 14,
   directory: "none",
   pages: [
-    "shared-nothing",
     "event-loop",
-    "memory-model",
     "router-internals",
     "callback-lifecycle",
     "shutdown",

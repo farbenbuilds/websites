@@ -60,6 +60,12 @@ rules agents most often break:
   `docs/` and `docs/vi/` MDX pages under Blume, including future pages such as
   `getting-started.mdx` and `api.mdx`. Never add MDX files, page prose,
   frontmatter, or docs routes to locale JSON or x18n resources.
+- One topic has one canonical docs page. Search the docs tree before writing.
+  When a page already teaches the same program or repeats the same reference
+  facts, fold the unique material into that page and delete the duplicate
+  instead of adding a parallel tutorial, guide, or example. Delete both locale
+  copies, add a 301 for the old route, and update every index and link in the
+  same change.
 - Vietnamese pages keep the core technical vocabulary in English: slab,
   capacity, backpressure, async token, worker, shared-nothing, handler,
   middleware, route, request, response, connection, transport, event loop,

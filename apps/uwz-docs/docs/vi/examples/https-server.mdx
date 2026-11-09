@@ -1,10 +1,10 @@
 ---
 title: HTTPS server
-description: Phục vụ HTTPS bằng chứng chỉ trong bộ nhớ, kiểm tra response bằng curl -k và chuyển sang file PEM trong project của bạn.
+description: Phục vụ HTTPS bằng chứng chỉ trong bộ nhớ, kiểm tra bằng curl -k và chuyển sang file PEM cho credential production.
 sidebar:
-  order: 7
+  order: 2
 search:
-  tags: [reference, tutorial, tls, http1, http2]
+  tags: [reference, tutorial, getting-started, tls, http1, http2]
 ---
 
 Ví dụ này là HTTPS server µWebZockets hoàn chỉnh nhỏ nhất. Nó cấp phát một slab
@@ -35,6 +35,12 @@ pub fn main(init: std.process.Init) !void {
 ```
 
 [Full source](https://github.com/farbenbuilds/uWebZockets/blob/v2.1.6/examples/https_server.zig)
+
+## Điều kiện trước [#prerequisites]
+
+- Project từ [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -140,14 +146,21 @@ defer server.deinit();
 
 Tham số chứng chỉ là PEM chain với leaf đầu tiên. Tham số key là private key
 PEM. BoringSSL kiểm tra cặp khớp khi load, nên lệch cặp fail lúc khởi động với
-`error.KeyMismatch` thay vì trong handshake đầu tiên. Với chain mà
-client tin, bỏ `-k` khỏi lệnh verify.
+`error.PrivateKeyLoadFailed` thay vì trong handshake đầu tiên. Đường dẫn là
+slice Zig kết thúc bằng NUL; trong lệnh gọi literal, string literal đã có kiểu
+cần thiết. Với chain mà client tin, bỏ `-k` khỏi lệnh verify.
 
 ## Next [#next]
 
+- [Mutual TLS](/docs/security/mtls) trình bày client CA bundle, mode `.optional`
+  và `.required`, early-data behavior và giới hạn CRL.
+- [TLS clusters](/docs/security/tls-clusters) trình bày worker lifecycle và
+  cross-worker resumption.
 - [Shared-nothing cluster](/examples/shared-nothing-cluster) giữ một slab và
   một event loop cho mỗi worker.
 - [TLS cluster](/examples/tls-cluster) cấp TLS context riêng cho từng worker.
-- [Your first TLS server](/examples/first-tls-server) thêm mTLS và hướng
-  dẫn credential production.
+- [Ephemeral certificates](/docs/security/ephemeral-certificates) trình bày
+  certificate sinh trong bộ nhớ và giới hạn của nó.
+- [HTTPS deployment](/docs/deployment/tls) trình bày credential production và
+  rotation.
 - [ServerConfig](/reference/server-config) liệt kê mọi capacity và default.

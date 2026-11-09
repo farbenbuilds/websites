@@ -85,6 +85,10 @@ unexpectedly; the environment command is global-only.
 - Lead with the task, then the explanation, then reference detail.
 - Use root-relative internal links and descriptive external link text.
 - Declare a language on every code fence.
+- Search for an existing page before adding one. If a page already teaches the
+  same program or repeats the same reference facts, merge the unique material
+  into that page, delete both locale copies, add a 301 for the old route, and
+  update every index and link instead of keeping two pages.
 - Verify with the app's `check` and `build` tasks.
 - Do not edit generated files under `dist/` or `.blume/`.
 - Write µWebZockets pages for application developers. They install the package

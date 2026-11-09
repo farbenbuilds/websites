@@ -7,11 +7,6 @@ export default defineMeta({
   directory: "none",
   pages: [
     "hello-world",
-    "first-websocket",
-    "first-json-rpc-service",
-    "first-tls-server",
-    "first-cluster",
-    "first-http3-server",
     "https-server",
     "shared-nothing-cluster",
     "tls-cluster",

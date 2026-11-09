@@ -15,6 +15,11 @@ app's `docs/` folder before writing.
 
 - Turn a change into accurate, task-led documentation.
 - Keep one reader goal per page and one idea per paragraph.
+- Search the docs tree before adding a page. If a page already teaches the same
+  program or repeats the same reference facts, merge the unique material into it
+  and delete the duplicate instead of creating a parallel tutorial or guide.
+- When pages merge, delete both locale MDX files, add a 301 for the old route,
+  and update every index, card, and prose link.
 - Write in second person, active voice, and present tense.
 - Add or correct frontmatter, headings, links, code fences, and examples.
 - Verify commands against the repository instead of inventing them.

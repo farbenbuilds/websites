@@ -1,10 +1,10 @@
 ---
 title: HTTP/3 server
-description: Serve one route over QUIC with an in-memory certificate, verify it with curl --http3-only, and review the live HTTP/3 boundaries.
+description: Serve one route over QUIC, verify it with curl --http3-only, and review the live HTTP/3 transport boundaries and policy.
 sidebar:
-  order: 14
+  order: 9
 search:
-  tags: [reference, http3, quic, tls]
+  tags: [reference, tutorial, getting-started, http3, quic, tls]
 ---
 
 This example is the smallest complete µWebZockets HTTP/3 server. It allocates
@@ -47,6 +47,13 @@ ALPN. This program binds only the QUIC endpoint, so every request on UDP 8443
 uses HTTP/3. The TCP context exists in the `App` value but has no listener until
 you add one.
 
+## Prerequisites
+
+- The project from [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- A `curl` build with HTTP/3 support. Check with `curl --version` and look for
+  `HTTP3` in the features list.
+
 ## Build wiring
 
 Copy the program into `src/main.zig` of a project that imports the package. The
@@ -70,8 +77,10 @@ zig build run
 ```
 
 The process binds UDP 8443 and blocks in `run()`. `catch_shutdown_signals` is
-installed before the loop, so Ctrl+C enters the normal drain path. `deinit`
-then verifies that every QUIC engine pool was returned.
+installed before the loop, so Ctrl+C enters the normal drain path. The UDP
+listener, timer, cancellation, close completions, and engine pools drain before
+the application storage is released. `deinit` then verifies that every QUIC
+engine pool was returned.
 
 ## Verify
 
@@ -145,6 +154,12 @@ event loop starts. The [HTTP/3 limits](/docs/http3/limits#memory) page gives the
 formulas. At 128 connections the footprint is much smaller than the default
 1,024-connection sizing, but it is still separate from the application slab.
 
+QPACK state, stream state, packet buffers, and bodies come from the
+startup-allocated pools. Linux transmit batching coalesces equal-sized packets
+for one destination into one `sendmsg` with `UDP_SEGMENT`; mixed sizes and other
+platforms use the per-packet path. Receive-side `UDP_GRO` is disabled because
+the event loop does not expose ancillary segment boundaries.
+
 ## Boundaries
 
 - **Clustering:** HTTP/3 and QUIC have no cluster mode. `init_http3` and
@@ -160,6 +175,9 @@ formulas. At 128 connections the footprint is much smaller than the default
   never reaches a handler. See [early data](/docs/http3/early-data).
 - **Congestion control:** BBRv1 with per-connection pacing. The public API does
   not expose it as a setting.
+- **Request validation:** pseudo-fields must precede regular fields and stay
+  unique. Connection-specific fields are rejected with a stream-scoped
+  `H3_MESSAGE_ERROR`. See [HTTP/3 request path](/docs/http3/request-path).
 
 ## Variation
 
@@ -184,9 +202,13 @@ bind locks route mutation.
 
 ## Next
 
-- [Your first HTTP/3 server](/examples/first-http3-server) teaches the same
-  path step by step.
+- [HTTP/3 quickstart](/docs/http3/getting-started) covers the protocol path,
+  production certificates, and network requirements.
 - [HTTP/3 and QUIC](/docs/http3) covers QPACK, request validation, and the
   engine.
+- [HTTP/3 deployment](/docs/deployment/http3) covers UDP ingress and proxy
+  checks.
+- [Production certificates](/docs/security/production-certificates) covers PEM
+  loading, mismatch failures, and rotation.
 - [Delayed response](/examples/delay-server) is the next example.
 - [ServerConfig](/reference/server-config) lists every H3 capacity and default.

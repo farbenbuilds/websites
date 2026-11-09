@@ -2,7 +2,7 @@
 title: Chat server
 description: Chạy WebSocket chat server với room global, kiểm tra join và broadcast bằng wscat, và xem lại capacity mặc định của message path.
 sidebar:
-  order: 12
+  order: 7
 search:
   tags: [reference, tutorial, websocket, capacity]
 ---
@@ -200,6 +200,9 @@ Preset `Presets.websocket_chat` là lựa chọn lớn hơn: 512 connection, mes
 scratch. Route vẫn phải bật `.permessage_deflate` trước khi compression được
 negotiate.
 
+Các bound này là per worker. Bốn worker mỗi worker giữ được 8.192 subscription,
+và cluster broadcast tiêu một inbox slot mỗi worker, không phải mỗi connection.
+
 ## Variation [#variation]
 
 Bật per-message deflate cho chat route:
@@ -219,14 +222,67 @@ connection, và message processing vẫn không allocate. Message nén có kích
 sau giải nén vượt `max_message_size` bị từ chối thay vì buffer không giới hạn.
 So sánh startup slab trước khi bật cho mọi route.
 
+## Tách room [#separate-rooms]
+
+Đăng ký một route cho mỗi room và chia sẻ callback qua tham số topic:
+
+```zig
+fn join(ws: *uz.WebSocket, topic: []const u8) void {
+    ws.subscribe(topic) catch return ws.terminate();
+    _ = ws.publish(topic, "system: a peer joined", true);
+}
+
+fn on_lobby_open(ws: *uz.WebSocket) void {
+    join(ws, "room:lobby");
+}
+
+fn on_lobby_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room:lobby", message, opcode == .text);
+}
+```
+
+Lặp cặp này cho từng room và đăng ký thành `/chat/lobby`, `/chat/ops`. Giữ danh
+sách room trong code để topic name luôn là literal.
+
+## Thêm history buffer [#history]
+
+Giữ một ring cố định các message đã copy và replay khi open. Copy vào storage cố
+định; giữ slice của callback sẽ đọc memory đã được giải phóng:
+
+```zig
+const Entry = struct { len: usize = 0, bytes: [128]u8 = undefined };
+var history: [50]Entry = undefined;
+var history_len: usize = 0;
+var history_next: usize = 0;
+
+fn remember(message: []const u8) void {
+    if (message.len > 128) return;
+    const entry = &history[history_next];
+    @memcpy(entry.bytes[0..message.len], message);
+    entry.len = message.len;
+    history_next = (history_next + 1) % history.len;
+    history_len = @min(history_len + 1, history.len);
+}
+```
+
+Gọi `remember` từ `on_message` trước khi publish, rồi replay bằng cách đi từ
+entry cũ nhất và gọi `ws.send` cho từng entry. Ring này là process-wide. `Cluster`
+chạy worker dưới dạng thread trong cùng address space, nên ring module-level sẽ bị
+chia sẻ mà không có lock. Giữ history ở client hoặc external store khi cluster,
+hoặc chạy một process cho mỗi worker.
+
 ## Next [#next]
 
 - [Pub/sub](/docs/websocket/pub-sub) trình bày registry bound, delivery count
   và hành vi slow subscriber.
 - [Cluster pub/sub](/docs/websocket/cluster-pub-sub) broadcast cùng topic qua
   các shared-nothing worker.
+- [WebSocket limits](/docs/websocket/limits) liệt kê mọi bound của message,
+  subscription và queue.
+- [Heartbeats](/docs/websocket/heartbeats) trình bày ping và pong timeout cho
+  peer im lặng.
 - [Per-message deflate](/docs/websocket/compression) trình bày negotiation và
   expansion limit.
-- [Your first WebSocket](/examples/first-websocket) dạy upgrade lifecycle
+- [WebSocket quickstart](/docs/websocket/quickstart) dạy upgrade lifecycle
   từng bước.
 - [RPC server](/examples/rpc-server) là example tiếp theo.

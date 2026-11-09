@@ -7,7 +7,6 @@ export default defineMeta({
   directory: "none",
   pages: [
     "handlers",
-    "json",
     "schema-validation",
     "typed-rpc",
     "compile-time-capacities",

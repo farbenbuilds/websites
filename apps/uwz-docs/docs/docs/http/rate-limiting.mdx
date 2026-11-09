@@ -4,7 +4,7 @@ description: Bound requests per key with a caller-owned token bucket, size the i
 sidebar:
   order: 18
 search:
-  tags: [how-to, rate-limit]
+  tags: [how-to, guide, rate-limit, security]
 ---
 
 µWebZockets limits requests with a caller-owned token bucket per key. The
@@ -72,6 +72,23 @@ push other clients out; an evicted client returns to a fresh bucket with zero
 tokens and receives `429`. Prefer `key_fn` with a server-derived value, or
 `key_constant` for one global limit.
 
+A per-tenant budget derives the key from the route, not from a client header:
+
+```zig
+fn tenant_key(req: *const uz.Request) u64 {
+    const tenant = req.get_param("tenant") orelse return 0;
+    return std.hash.Wyhash.hash(0, tenant);
+}
+
+var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+    .rate_per_second = 5,
+    .burst = 10,
+    .key_fn = tenant_key,
+}, &buckets, &slots, &links);
+_ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+_ = try app.get("/api/:tenant/status", api);
+```
+
 ## Size the index table
 
 | Requirement                                   | Checked at construction       |
@@ -83,6 +100,16 @@ tokens and receives `429`. Prefer `key_fn` with a server-derived value, or
 The two-to-one ratio bounds the open-addressing load factor at one half.
 `rate_limit_indexed` rebuilds the index from the bucket array, so a restored
 table keeps its placement and exact-oldest tie break.
+
+| Bound           | Example value | Rule                                    |
+| --------------- | ------------: | --------------------------------------- |
+| Buckets         |           256 | Simultaneously tracked keys             |
+| Index slots     |           512 | `slots.len >= 2 * buckets.len`          |
+| Links           |           256 | `links.len == buckets.len`              |
+| Limiter storage |  About 20 KiB | 8 KiB buckets, 8 KiB slots, 4 KiB links |
+
+The arrays are limiter state, not configuration. Do not move them, copy them, or
+share them with a second limiter, and keep them alive until `app.deinit()`.
 
 `rate_limit(init.io, options, buckets)` is the older constructor for callers
 that only have a bucket array. It scans the table and is the documented linear
@@ -161,10 +188,27 @@ With `burst = 4`, the first four requests print `200` and later ones print
 `429` until the bucket refills at two tokens per second. Use `curl -i` on a
 rejected request to see `Retry-After: 1`.
 
+For a per-tenant table, charge one budget and check that another tenant still
+passes:
+
+```sh
+for i in $(seq 1 12); do
+  curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/acme/status
+done
+curl -i http://127.0.0.1:3000/api/acme/status
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/other/status
+```
+
+The loop prints ten `200` responses and then `429` for a burst of ten. The `-i`
+request shows `Retry-After: 1`. The last request prints `200` because `other` has
+its own bucket.
+
 ## Next
 
 - [Authentication](/docs/http/authentication) decides who may call before the
   limiter counts how often.
+- [Rate limiting controls](/docs/security/rate-limiting) covers key choice and
+  eviction as a security boundary.
 - [Middleware](/docs/http/middleware) covers ordering and per-worker
   registration.
 - [Shared-nothing workers](/docs/concepts/shared-nothing) explains why the

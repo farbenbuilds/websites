@@ -1,10 +1,10 @@
 ---
 title: HTTP/3 server
-description: Phục vụ một route qua QUIC bằng certificate tạo trong bộ nhớ, kiểm tra với curl --http3-only và xem các boundary hiện tại của HTTP/3.
+description: Phục vụ một route qua QUIC, kiểm tra với curl --http3-only và xem các transport boundary cùng policy hiện tại của HTTP/3.
 sidebar:
-  order: 14
+  order: 9
 search:
-  tags: [reference, http3, quic, tls]
+  tags: [reference, tutorial, getting-started, http3, quic, tls]
 ---
 
 Đây là chương trình HTTP/3 hoàn chỉnh nhỏ nhất của µWebZockets. Nó cấp phát một
@@ -47,6 +47,13 @@ chỉ bind endpoint QUIC, nên mọi request trên UDP 8443 đều dùng HTTP/3.
 TCP vẫn nằm trong giá trị `App` nhưng chưa được bind cho tới khi bạn thêm
 listener.
 
+## Điều kiện trước [#prerequisites]
+
+- Project từ [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- Bản `curl` có hỗ trợ HTTP/3. Kiểm tra bằng `curl --version` và tìm `HTTP3`
+  trong danh sách feature.
+
 ## Build wiring [#build-wiring]
 
 Sao chép chương trình vào `src/main.zig` của project đã import package.
@@ -70,8 +77,10 @@ zig build run
 ```
 
 Tiến trình bind UDP 8443 và block trong `run()`. `catch_shutdown_signals` được
-cài trước event loop, nên Ctrl+C đi vào drain path bình thường. Sau đó `deinit`
-kiểm tra mọi QUIC engine pool đã được trả lại.
+cài trước event loop, nên Ctrl+C đi vào drain path bình thường. UDP listener,
+timer, cancellation, close completion và engine pool drain trước khi lưu trữ
+ứng dụng được giải phóng. Sau đó `deinit` kiểm tra mọi QUIC engine pool đã được
+trả lại.
 
 ## Verify [#verify]
 
@@ -142,6 +151,11 @@ chạy. Trang [HTTP/3 limits](/docs/http3/limits#memory) có công thức. Với
 connection, footprint nhỏ hơn nhiều so với kích thước mặc định cho 1.024
 connection, nhưng vẫn tách khỏi application slab.
 
+Trạng thái QPACK, stream, packet buffer và body đến từ pool cấp lúc khởi động.
+Linux gộp packet cùng kích thước cho một đích vào một `sendmsg` với
+`UDP_SEGMENT`; kích thước hỗn hợp và nền tảng khác dùng đường từng packet.
+`UDP_GRO` phía nhận bị tắt vì event loop không expose ranh giới segment phụ.
+
 ## Boundaries [#boundaries]
 
 - **Clustering:** HTTP/3 và QUIC không có cluster mode. `init_http3` và
@@ -157,6 +171,9 @@ connection, nhưng vẫn tách khỏi application slab.
   bao giờ tới handler. Xem [early data](/docs/http3/early-data).
 - **Congestion control:** BBRv1 với pacing theo từng connection. Public API
   không cho cấu hình giá trị này.
+- **Validation request:** pseudo-field phải đứng trước field thường và không
+  trùng. Field riêng của connection bị từ chối với `H3_MESSAGE_ERROR` phạm vi
+  stream. Xem [HTTP/3 request path](/docs/http3/request-path).
 
 ## Variation [#variation]
 
@@ -180,8 +197,12 @@ mọi route trước lệnh listen đầu tiên vì bind đầu tiên sẽ khóa
 
 ## Next [#next]
 
-- [Your first HTTP/3 server](/examples/first-http3-server) hướng dẫn cùng
-  đường đi từng bước.
+- [HTTP/3 quickstart](/docs/http3/getting-started) trình bày protocol path,
+  certificate production và network requirement.
 - [HTTP/3 and QUIC](/docs/http3) trình bày QPACK, request validation và engine.
+- [HTTP/3 deployment](/docs/deployment/http3) trình bày UDP ingress và proxy
+  check.
+- [Production certificates](/docs/security/production-certificates) trình bày
+  PEM loading, mismatch failure và rotation.
 - [Delayed response](/examples/delay-server) là example tiếp theo.
 - [ServerConfig](/reference/server-config) liệt kê mọi H3 capacity và default.

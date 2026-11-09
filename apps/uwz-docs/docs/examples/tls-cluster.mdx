@@ -2,7 +2,7 @@
 title: TLS cluster
 description: Run a TLS-enabled worker group with three listener modes, per-worker certificates, and environment-controlled worker and connection counts.
 sidebar:
-  order: 9
+  order: 4
 search:
   tags: [reference, tutorial, tls, cluster, http1, http2]
 ---
@@ -382,10 +382,11 @@ has no effect in this mode.
 
 ## Next [#next]
 
-- [Your first cluster](/examples/first-cluster) covers the cluster
-  lifecycle and failure reporting.
-- [Your first TLS server](/examples/first-tls-server) covers mTLS and
-  production credentials.
+- [Cluster model](/docs/concepts/cluster-model) covers the cluster lifecycle and
+  failure reporting.
+- [HTTPS server](/examples/https-server) covers in-memory and PEM credentials.
+- [Mutual TLS](/docs/security/mtls) covers client certificates and CA bundles.
+- [TLS deployment](/docs/deployment/tls) covers production rotation.
 - [Shared-nothing workers](/docs/concepts/shared-nothing) explains the ownership
   model behind per-worker TLS contexts.
 - [ServerConfig](/reference/server-config) lists every capacity and default.

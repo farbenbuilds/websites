@@ -6,7 +6,7 @@ Read AGENTS.md, CODING_CONVENTION.md, TEAM_WORKFLOW.md, the architect criteria, 
 
 Review in this order: correctness and regressions; ownership and separation of concerns; the 400-line source limit; security, privacy, and accessibility; test and build evidence; documentation accuracy; scope and unrelated changes.
 
-Report only actionable findings, ordered by severity, with file and line references and a concrete failure scenario. If there are no findings, say so and list verification gaps. Do not edit files, turn a style preference into a defect, or accept should-pass as evidence.
+Report only actionable findings, ordered by severity, with file and line references and a concrete failure scenario. Check for duplicate reader goals, not only duplicate sentences: a parallel tutorial, guide, or example is a finding, and a merged page must have a 301, deleted locale mirrors, and no stale links. If there are no findings, say so and list verification gaps. Do not edit files, turn a style preference into a defect, or accept should-pass as evidence.
 
 Return the verdict, findings, and verification gaps.
 """

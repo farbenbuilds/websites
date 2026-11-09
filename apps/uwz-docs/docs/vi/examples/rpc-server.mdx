@@ -1,10 +1,10 @@
 ---
 title: RPC server
-description: Mount typed JSON-RPC procedure math.add trên /rpc, kiểm tra request và response bằng curl, và xem lại capacity của service.
+description: Mount typed JSON-RPC procedure math.add trên /rpc, kiểm tra bằng curl, thêm parameter lớn hơn và xem lại capacity của service.
 sidebar:
-  order: 13
+  order: 8
 search:
-  tags: [reference, tutorial, json-rpc, capacity]
+  tags: [reference, tutorial, getting-started, json-rpc, capacity]
 ---
 
 Ví dụ này mount một typed JSON-RPC 2.0 service trên `POST /rpc`. Nó định nghĩa
@@ -51,6 +51,12 @@ Handler nhận `AddParams` đã decode và trả `AddResult` hoặc một trong 
 `HandlerError`. `server.rpc` mount một POST route, không copy procedure name lúc
 request và seal registry. Đăng ký mọi procedure trước khi mount; đăng ký sau
 trả `error.RegistryLocked`.
+
+## Điều kiện trước [#prerequisites]
+
+- Project từ [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -163,9 +169,22 @@ chuỗi nguồn có thể là tạm thời; registry sở hữu bản copy đế
 
 Typed adapter dùng 4 KiB fixed stack scratch cho parameter đã decode. Với
 parameter type lớn hơn, dùng API `register` cấp thấp với `Call.parse_params` và
-allocator tường minh. Xem
-[Your first JSON-RPC service](/examples/first-json-rpc-service) cho dạng
-đó.
+allocator tường minh:
+
+```zig
+fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+    try call.result(.{ .sum = parsed.value.left + parsed.value.right });
+}
+
+try rpc.register("math.add_large", custom);
+_ = try server.rpc("/rpc", &rpc);
+```
+
+Đăng ký procedure trước khi `server.rpc` mount service. Đăng ký sau khi mount
+trả `error.RegistryLocked`. Allocator do caller chọn; request path vẫn có giới
+hạn khi procedure dùng lưu trữ cố định hoặc allocator có giới hạn.
 
 ## Capacities [#capacities]
 
@@ -189,7 +208,7 @@ khi error còn vừa, hoặc HTTP 500 khi cả envelope cũng không ghi đượ
 
 Một service đã mount sở hữu một response buffer và thuộc một event loop. Trong
 worker group, tạo một service cho mỗi worker và mount nó bên trong `configure`.
-Chia sẻ service giữa các worker sẽ gây race trên response storage của nó.
+Chia sẻ service giữa các worker sẽ gây race trên response buffer của nó.
 
 ## Variation [#variation]
 
@@ -216,10 +235,15 @@ thường cho workload đó.
 ## Next [#next]
 
 - [JSON-RPC](/docs/json-rpc) trình bày protocol behavior, batch và transport.
+- [JSON-RPC quickstart](/docs/json-rpc/quickstart) kiểm tra một call, một
+  notification và một protocol error.
 - [JSON-RPC capacities](/docs/json-rpc/capacities) liệt kê mọi bound và quy tắc
   sizing.
 - [JSON-RPC errors](/docs/json-rpc/errors) trình bày protocol error và
-  application error object.
-- [Your first JSON-RPC service](/examples/first-json-rpc-service) trình bày
-  parameter lớn hơn và custom decoding.
+  application error object, còn
+  [batches](/docs/json-rpc/batches-and-notifications) phân loại document.
+- [Context và decoding](/docs/json-rpc/context-and-decoding) trình bày typed
+  context và bounded allocator.
+- [Typed procedures](/docs/json-rpc/typed-procedures) trình bày compile-time
+  dispatch.
 - [HTTP/3 server](/examples/http3-server) là example tiếp theo.

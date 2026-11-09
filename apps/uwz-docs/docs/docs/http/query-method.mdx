@@ -4,7 +4,7 @@ description: Register a safe QUERY route, pass the Content-Type syntax gate, and
 sidebar:
   order: 21
 search:
-  tags: [how-to, http]
+  tags: [how-to, http, http3]
 ---
 
 RFC 10008 adds `QUERY` as a safe, idempotent method whose request content
@@ -62,6 +62,14 @@ value is a syntactically valid media type: a token, `/`, a token, and optional
 `;name=value` parameters. Token characters such as `%`, quoted parameter values,
 and whitespace around `;` and `=` are accepted.
 
+| Header state                        | Result                                   |
+| ----------------------------------- | ---------------------------------------- |
+| Missing                             | `400 Bad Request`                        |
+| Duplicated                          | `400 Bad Request`                        |
+| Empty or malformed media type       | `400 Bad Request`                        |
+| `application/json`                  | Accepted; the handler decides the schema |
+| `application/x-www-form-urlencoded` | Accepted; the handler decides the schema |
+
 A missing field, a duplicate field, or malformed syntax receives
 
 ```console
@@ -74,7 +82,10 @@ Because the check is earlier than routing, an unknown path with a bad
 
 This gate checks syntax only. It does not decide whether the media type suits the
 resource, whether the charset is acceptable, or whether the body matches the
-declared type.
+declared type. Return `415 Unsupported Media Type` when the syntax is valid but
+the media type is not supported. That distinction matters to clients: `400`
+means the request is malformed, `415` means the server does not accept this
+representation.
 
 ## Handler-owned media policy
 
@@ -122,6 +133,13 @@ method token:
 The route, the `Content-Type` gate, and the handler are identical. A handler that
 works over HTTP/1.1 needs no transport-specific branch.
 
+## Response notes
+
+A `QUERY` response follows the normal transport response rules. A body is
+allowed, the `HEAD` semantics do not apply, and streaming works as usual. The
+`Content-Location` header is useful when the query identifies a resource that
+can also be fetched with `GET`.
+
 ## Verify
 
 ```sh
@@ -140,9 +158,28 @@ curl -i -X QUERY http://127.0.0.1:3000/search
 
 The response is `400 Bad Request` with `QUERY requires a valid Content-Type`.
 
+The same route answers over HTTP/3 on the QUIC listener:
+
+```sh
+curl --http3-only -k -X QUERY \
+  -H 'Content-Type: application/json' \
+  --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+```sh
+curl --http3-only -k -X QUERY --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+The first request reaches the handler. The second has no `Content-Type` and is
+answered with `400 Bad Request` before the handler runs.
+
 ## Next
 
 - [TRACE](/docs/http/trace) covers the other opt-in extension method.
+- [HTTP/3 request path](/docs/http3/request-path) follows the decode sequence
+  after the transport gate.
 - [HTTP errors](/docs/http/errors) covers typed failure documents.
 - [Query and form parsing](/docs/http/helpers/query-and-forms) covers the
   zero-allocation parsers for request targets and form bodies.

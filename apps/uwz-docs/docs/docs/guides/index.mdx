@@ -1,6 +1,6 @@
 ---
 title: Guides
-description: Follow complete recipes for JSON APIs, authentication, rate limiting, static files, chat, and presence, each with a runnable program and a verification step.
+description: Follow complete recipes for JSON APIs, authentication, presence, uploads, streaming, and deployment tasks, each with a runnable program and a verification step.
 search:
   tags: [guide, cookbook]
 ---
@@ -33,9 +33,6 @@ allocation on the request path.
   <Card title="Build a JSON API" href="/docs/guides/json-api" icon="braces">
     Parse a bounded body, validate it, and answer with a status code and an escaped JSON document.
   </Card>
-  <Card title="Serve files" href="/docs/guides/file-server" icon="folder-open">
-    Mount a confined asset directory with ETag, range, and cache policy.
-  </Card>
   <Card title="Handle uploads" href="/docs/guides/uploads" icon="upload">
     Accept a bounded multipart body and reject an oversized request before the handler.
   </Card>
@@ -45,9 +42,6 @@ allocation on the request path.
   <Card title="Configure CORS" href="/docs/guides/cors" icon="globe">
     Answer preflight requests and match origins exactly.
   </Card>
-  <Card title="Publish OpenAPI" href="/docs/guides/openapi" icon="file-text">
-    Serve a generated OpenAPI 3.1 document next to the routes it describes.
-  </Card>
   <Card title="Receive webhooks" href="/docs/guides/webhooks" icon="webhook">
     Verify a signature before parsing, bound the body, and answer quickly.
   </Card>
@@ -56,14 +50,8 @@ allocation on the request path.
 ## Realtime
 
 <CardGroup cols={2}>
-  <Card title="Build a chat server" href="/docs/guides/chat" icon="message-square">
-    Subscribe sockets to a topic, publish each message, and handle a slow peer.
-  </Card>
   <Card title="Track presence" href="/docs/guides/presence" icon="users">
     Keep a bounded per-process presence table with join, leave, and heartbeat expiry.
-  </Card>
-  <Card title="Stream events with SSE" href="/docs/guides/sse" icon="radio">
-    Push server-sent events with a heartbeat and a bounded close path.
   </Card>
   <Card title="Stream a large response" href="/docs/guides/streaming" icon="waves">
     Produce chunks as the transport drains instead of buffering the whole body.
@@ -73,15 +61,6 @@ allocation on the request path.
 ## Protocols
 
 <CardGroup cols={2}>
-  <Card title="Build an RPC service" href="/docs/guides/rpc-service" icon="workflow">
-    Register typed procedures, map handler errors, and mount the service on a POST route.
-  </Card>
-  <Card title="Serve HTTPS" href="/docs/guides/https" icon="lock">
-    Load a certificate and key, select ALPN, and verify the TLS handshake.
-  </Card>
-  <Card title="Serve HTTP/3" href="/docs/guides/http3" icon="zap">
-    Add a QUIC listener next to the TCP listener and check the advertised protocol.
-  </Card>
   <Card title="Embed from C or C++" href="/docs/guides/c-abi" icon="plug">
     Drive the fixed-capacity C ABI from a non-Zig build and link the archives.
   </Card>
@@ -92,9 +71,6 @@ allocation on the request path.
 <CardGroup cols={2}>
   <Card title="Add authentication" href="/docs/guides/authentication" icon="key-round">
     Protect a route prefix with bearer credentials and answer a 401 challenge.
-  </Card>
-  <Card title="Add rate limiting" href="/docs/guides/rate-limiting" icon="gauge">
-    Charge caller-owned token buckets per key and return 429 with Retry-After.
   </Card>
 </CardGroup>
 
@@ -107,9 +83,6 @@ allocation on the request path.
   <Card title="Add graceful shutdown" href="/docs/guides/graceful-shutdown" icon="power">
     Catch signals, drain connections, and release a cluster with checked teardown.
   </Card>
-  <Card title="Scale across cores" href="/docs/guides/cluster" icon="cpu">
-    Build a worker group, share a port, and publish across worker inboxes.
-  </Card>
   <Card title="Test a µWebZockets app" href="/docs/guides/testing" icon="flask-conical">
     Test pure decisions in process and the wire on loopback.
   </Card>
@@ -121,8 +94,10 @@ allocation on the request path.
 ## What a guide is not
 
 A guide is not the reference for a helper, a status code table, or a capacity
-list. Those live on the page that owns the symbol. When a guide and a reference
-page disagree, the reference page is correct and the guide is a defect.
+list. Those live on the page that owns the symbol. A guide also does not repeat
+the canonical example program or protocol tutorial; it applies them to one
+recipe and links back. When a guide and a reference page disagree, the reference
+page is correct and the guide is a defect.
 
 ## Related
 

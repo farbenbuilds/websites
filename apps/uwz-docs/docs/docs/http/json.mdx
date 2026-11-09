@@ -4,7 +4,7 @@ description: Serialize JSON with json, json_buf, and begin_json, parse request b
 sidebar:
   order: 13
 search:
-  tags: [how-to, json]
+  tags: [how-to, json, schema]
 ---
 
 µWebZockets handles JSON at two boundaries: parsing the bounded request body and
@@ -125,8 +125,39 @@ An allocation failure is `error.OutOfMemory`. Map a parse failure to
 you.
 
 `validate_json(T, allocator)` applies compile-time field rules and
-`validate_json_detailed` reports the first issue. The [type safety
-model](/docs/concepts/type-safety) covers those declarations.
+`validate_json_detailed` reports the first issue:
+
+```zig
+var issue = uz.schema.Issue{};
+
+const parsed = req.validate_json_detailed(CreateUser, std.heap.page_allocator, &issue) catch |err| {
+    if (err == error.ConstraintViolation or err == error.MalformedJson) {
+        res.end_best_effort("422 Unprocessable Entity", @tagName(issue.kind));
+        return;
+    }
+    res.end_best_effort("500 Internal Server Error", "validation failed");
+    return;
+};
+defer parsed.deinit();
+```
+
+`ConstraintViolation` means a declared rule rejected the value.
+`MalformedJson` means parsing failed before a rule ran. An allocation failure is
+`error.OutOfMemory`. See [Schema validation](/docs/type-safety/schema-validation)
+for the rule fields and issue kinds.
+
+## Ownership rules
+
+| Value                        | Owner                              | Lifetime                         |
+| ---------------------------- | ---------------------------------- | -------------------------------- |
+| `Parsed(T)`                  | The allocator passed to `req.json` | Until `deinit`                   |
+| `req.text()` / `req.bytes()` | The connection request             | The handler callback             |
+| `json_buf` buffer            | The caller                         | The call; the queue copies bytes |
+| `res.json` temporary render  | The allocator                      | Freed before the call returns    |
+| `JsonStream`                 | The caller                         | Until `end`; keep it stable      |
+
+Do not store a request slice after the handler returns. Copy it with the same
+explicit allocator when it must outlive the request.
 
 ## Size limits
 
@@ -164,5 +195,6 @@ The streaming route returns a chunked `200 OK` body with 1000 numbers.
 
 Read the [Request API](/docs/http/request) for body access, then
 [streaming responses](/docs/http/streaming) for non-JSON producers.
-[Typed JSON](/docs/type-safety/json) covers parsing into a named Zig type and
-allocator ownership.
+[Schema validation](/docs/type-safety/schema-validation) covers compile-time
+field rules, and [typed RPC](/docs/type-safety/typed-rpc) applies the same
+ownership rules to JSON-RPC.

@@ -4,7 +4,7 @@ description: Send framed SSE events over a chunked response with cache-safe defa
 sidebar:
   order: 11
 search:
-  tags: [how-to, sse]
+  tags: [how-to, guide, sse]
 ---
 
 `res.sse()` starts a `200 OK` event stream with the content type and
@@ -58,10 +58,24 @@ open for later writes.
 
 `no-cache` allows storage but requires revalidation, so a proxy does not serve a
 stale event stream. `X-Accel-Buffering: no` asks nginx-style proxies not to
-buffer the response. Neither header replaces a correct proxy configuration.
+buffer the response. Neither header replaces a correct proxy configuration:
+
+- Disable response buffering for this route in the proxy configuration.
+- Set the proxy read timeout longer than the heartbeat interval.
+- Send a heartbeat more often than the shortest idle timeout on the path.
+- Keep compression off for event streams; a compressing proxy can hold bytes.
 
 On HTTP/1.1 the body uses chunked transfer coding. HTTP/2 and HTTP/3 carry the
 same field bytes in `DATA` frames with no chunk framing.
+
+## Capacity
+
+| Resource           | Bound                                                                       |
+| ------------------ | --------------------------------------------------------------------------- |
+| Write queue        | 64 KiB per connection; a field that does not fit returns `error.WouldBlock` |
+| Total stream size  | No cap; the queue bounds one write, not the stream                          |
+| Connections        | Each open stream holds one slot of `max_clients`                            |
+| Heartbeat interval | Shorter than every proxy and client idle timeout                            |
 
 ## Event framing
 
@@ -143,6 +157,42 @@ curl -N -i http://127.0.0.1:3000/events
 `-N` disables curl buffering. Expect `200 OK`, `Content-Type: text/event-stream`,
 `Cache-Control: no-cache`, and `X-Accel-Buffering: no`, followed by the framed
 events and the heartbeat comment. The connection closes after `close()`.
+
+```sh
+curl -sN http://127.0.0.1:3000/events | grep -c '^event: tick'
+```
+
+The count is `2` for the finite program, which works as a pass/fail check.
+
+## Variation: a periodic producer
+
+The helper cannot wait between writes, so the period must come from the client.
+Emit a bounded window per request and have the client ask for the next one.
+
+```zig
+fn window(req: *uz.Request, res: *uz.Response) void {
+    const query = req.query_params() catch {
+        res.end("400 Bad Request", "") catch {};
+        return;
+    };
+    const from = (query.get_int(u64, "from") catch null) orelse 0;
+    var stream = res.sse() catch return;
+
+    var seq = from;
+    while (seq < from + 3) : (seq += 1) {
+        var buffer: [48]u8 = undefined;
+        const payload = std.fmt.bufPrint(&buffer, "{{\"seq\":{d}}}", .{seq}) catch return;
+        stream.send_event("tick", payload) catch return;
+        if (seq + 1 < from + 3) stream.heartbeat() catch return;
+    }
+    stream.close() catch return;
+}
+```
+
+The cursor travels in the query string. When the stream closes, the client opens
+`/events?from=<next>`; a bare `EventSource` reconnect repeats the same URL and would
+replay the same window. The helper emits no `retry:` field, so the client also
+decides the delay.
 
 ## Next
 

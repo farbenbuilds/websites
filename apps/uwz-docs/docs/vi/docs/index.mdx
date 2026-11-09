@@ -14,9 +14,10 @@ seo:
 WebSocket và JSON-RPC từ các slab có giới hạn được cấp phát một lần lúc khởi
 động.
 
-Trang này dẫn bạn đến tài liệu theo từng tác vụ. Mỗi trang nêu rõ hành vi,
-giới hạn và tính năng chưa được hỗ trợ. Nội dung giới thiệu dự án nằm ở
-[trang chủ](/vi).
+Trang này dẫn bạn đến tài liệu theo từng tác vụ. Bắt đầu với
+[µWebZockets là gì](/docs/what-is-uwebsockets) để nắm runtime model, rồi chọn
+lộ trình bên dưới. Mỗi trang nêu rõ hành vi, giới hạn và tính năng chưa được hỗ
+trợ. Nội dung giới thiệu dự án nằm ở [trang chủ](/vi).
 
 ## Chọn lộ trình đọc
 
@@ -27,25 +28,25 @@ giới hạn và tính năng chưa được hỗ trợ. Nội dung giới thiệ
   <Card title="Tôi đang đánh giá" href="/docs/concepts" icon="search">
     Hiểu mô hình lập trình, protocol surface và các ranh giới có chủ đích.
   </Card>
-  <Card title="Tôi đang vận hành" href="/examples/first-cluster" icon="server">
+  <Card title="Tôi đang vận hành" href="/examples/shared-nothing-cluster" icon="server">
     Khởi động nhóm worker, lập kế hoạch capacity và xử lý shutdown khi nhận tín hiệu.
   </Card>
 </CardGroup>
 
 ## Bắt đầu tại đây
 
-| Tác vụ                                   | Trang                                                         |
-| ---------------------------------------- | ------------------------------------------------------------- |
-| Cài Zig và thêm package                  | [Cài đặt](/docs/getting-started/installation)                 |
-| Tạo và chạy dự án quickstart             | [Quickstart](/docs/getting-started/quickstart)                |
-| Hiểu runtime model                       | [Khái niệm](/docs/concepts)                                   |
-| Thêm route HTTP và kiểm tra bằng `curl`  | [Hello world](/examples/hello-world)                          |
-| Tra cứu HTTP type, helper hoặc limit     | [HTTP/1.1 và application API](/docs/http)                     |
-| Thêm route WebSocket echo                | [WebSocket đầu tiên](/examples/first-websocket)               |
-| Phục vụ procedure JSON-RPC có kiểu       | [JSON-RPC service đầu tiên](/examples/first-json-rpc-service) |
-| Kết thúc TLS bằng chứng chỉ trong bộ nhớ | [TLS server đầu tiên](/examples/first-tls-server)             |
-| Chạy một worker mỗi lõi                  | [Cluster đầu tiên](/examples/first-cluster)                   |
-| Phục vụ HTTP/3 trên QUIC                 | [HTTP/3 server đầu tiên](/examples/first-http3-server)        |
+| Tác vụ                                   | Trang                                                      |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| Cài Zig và thêm package                  | [Cài đặt](/docs/getting-started/installation)              |
+| Tạo và chạy dự án quickstart             | [Quickstart](/docs/getting-started/quickstart)             |
+| Hiểu runtime model                       | [Khái niệm](/docs/concepts)                                |
+| Thêm route HTTP và kiểm tra bằng `curl`  | [Hello world](/examples/hello-world)                       |
+| Tra cứu HTTP type, helper hoặc limit     | [HTTP/1.1 và application API](/docs/http)                  |
+| Thêm route WebSocket echo                | [WebSocket quickstart](/docs/websocket/quickstart)         |
+| Phục vụ procedure JSON-RPC có kiểu       | [RPC server](/examples/rpc-server)                         |
+| Kết thúc TLS bằng chứng chỉ trong bộ nhớ | [HTTPS server](/examples/https-server)                     |
+| Chạy một worker mỗi lõi                  | [Shared-nothing cluster](/examples/shared-nothing-cluster) |
+| Phục vụ HTTP/3 trên QUIC                 | [HTTP/3 server](/examples/http3-server)                    |
 
 :::tip[Tìm kiếm trên site]
 Dùng nút tìm kiếm ở header để tìm trang theo tiêu đề hoặc theo một cụm trong
@@ -98,7 +99,7 @@ tài khoản. Trình duyệt tải search index từ site này trong lần dùng
     TLS 1.3, mTLS, xoay certificate, early data, authentication, rate limiting và threat model.
   </Card>
   <Card title="Kiến trúc" href="/docs/architecture" icon="network">
-    Worker shared-nothing, event loop, bố cục slab, transport, C ABI và thứ tự shutdown.
+    Event loop, router internals, callback lifecycle, transport, C ABI và thứ tự shutdown.
   </Card>
   <Card title="Hiệu năng" href="/docs/performance" icon="gauge">
     Cost model, capacity sizing, benchmark, load test, profiling, tuning và regression policy.
@@ -116,7 +117,8 @@ tài khoản. Trình duyệt tải search index từ site này trong lần dùng
     platform.
   </Card>
   <Card title="Hướng dẫn" href="/docs/guides" icon="compass">
-    Sao chép recipe hoàn chỉnh cho JSON API, WebSocket chat, upload, CORS, health check và hơn nữa.
+    Sao chép recipe hoàn chỉnh cho JSON API, authentication, presence, upload, CORS, health check và
+    hơn nữa.
   </Card>
 </CardGroup>
 
@@ -132,8 +134,7 @@ tài khoản. Trình duyệt tải search index từ site này trong lần dùng
     runtime này.
   </Card>
   <Card title="Ví dụ" href="/vi/examples" icon="boxes">
-    Bắt đầu bằng guided tutorial hoặc đọc canonical program cho từng capability, kèm build wiring,
-    run command và expected output.
+    Đọc canonical program cho từng capability, kèm build wiring, run command và expected output.
   </Card>
 </CardGroup>
 
@@ -142,18 +143,18 @@ tài khoản. Trình duyệt tải search index từ site này trong lần dùng
 Bảng này là ma trận tính năng ra mắt của site. Danh sách ranh giới đầy đủ, gồm
 các module helper-only và experimental, nằm trong roadmap của repository.
 
-| Surface                 | Trạng thái               | Bắt đầu tại                                                   |
-| ----------------------- | ------------------------ | ------------------------------------------------------------- |
-| Định tuyến HTTP/1.1     | Được hỗ trợ              | [Hello world](/examples/hello-world)                          |
-| Định tuyến HTTP/2       | Được hỗ trợ, có giới hạn | [HTTP/2](/docs/http2)                                         |
-| WebSocket server        | Được hỗ trợ              | [WebSocket](/docs/websocket)                                  |
-| JSON-RPC 2.0            | Được hỗ trợ              | [JSON-RPC service đầu tiên](/examples/first-json-rpc-service) |
-| Kết thúc TLS 1.3        | Được hỗ trợ              | [TLS server đầu tiên](/examples/first-tls-server)             |
-| Cluster thread-per-core | Được hỗ trợ trên TCP     | [Cluster đầu tiên](/examples/first-cluster)                   |
-| Định tuyến HTTP/3       | Được hỗ trợ              | [HTTP/3 và QUIC](/docs/http3)                                 |
-| Cluster HTTP/3          | Chưa được hỗ trợ         | [HTTP/3 limits](/docs/http3/limits)                           |
-| WebTransport live       | Chưa được hỗ trợ         | [WebTransport status](/docs/http3/webtransport)               |
-| WebSocket client        | Chưa được hỗ trợ         | [WebSocket](/docs/websocket)                                  |
+| Surface                 | Trạng thái               | Bắt đầu tại                                                |
+| ----------------------- | ------------------------ | ---------------------------------------------------------- |
+| Định tuyến HTTP/1.1     | Được hỗ trợ              | [Hello world](/examples/hello-world)                       |
+| Định tuyến HTTP/2       | Được hỗ trợ, có giới hạn | [HTTP/2](/docs/http2)                                      |
+| WebSocket server        | Được hỗ trợ              | [WebSocket](/docs/websocket)                               |
+| JSON-RPC 2.0            | Được hỗ trợ              | [RPC server](/examples/rpc-server)                         |
+| Kết thúc TLS 1.3        | Được hỗ trợ              | [HTTPS server](/examples/https-server)                     |
+| Cluster thread-per-core | Được hỗ trợ trên TCP     | [Shared-nothing cluster](/examples/shared-nothing-cluster) |
+| Định tuyến HTTP/3       | Được hỗ trợ              | [HTTP/3 và QUIC](/docs/http3)                              |
+| Cluster HTTP/3          | Chưa được hỗ trợ         | [HTTP/3 limits](/docs/http3/limits)                        |
+| WebTransport live       | Chưa được hỗ trợ         | [WebTransport status](/docs/http3/webtransport)            |
+| WebSocket client        | Chưa được hỗ trợ         | [WebSocket](/docs/websocket)                               |
 
 [Đọc roadmap và ranh giới đầy đủ](https://github.com/farbenbuilds/uWebZockets/blob/main/docs/roadmap.md)
 
@@ -166,7 +167,7 @@ các module helper-only và experimental, nằm trong roadmap của repository.
   <Card title="FAQ" href="/docs/getting-started/faq" icon="circle-help">
     Kiểm tra mô hình cấp phát, nền tảng và tính năng chưa hỗ trợ.
   </Card>
-  <Card title="Thuật ngữ" href="/docs/getting-started/glossary" icon="book-marked">
+  <Card title="Thuật ngữ tham chiếu" href="/reference/glossary" icon="book-marked">
     Tra slab, capacity, backpressure và async token.
   </Card>
 </CardGroup>

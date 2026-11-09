@@ -9,12 +9,11 @@ search:
 
 This is the canonical A-Z lookup for terms used across the site. Each entry gives
 the meaning used by µWebZockets and links to the page that owns the behavior.
-The [getting started glossary](/docs/getting-started/glossary) is the onboarding
-tour; this page is the reference index with stable anchors. Link to an entry with
-`/reference/glossary#<term-anchor>`, for example `/reference/glossary#async-token`.
+Link to an entry with `/reference/glossary#<term-anchor>`, for example
+`/reference/glossary#async-token`.
 
-Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
-[Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
+Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [E](#e) [H](#h) [M](#m)
+[P](#p) [Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
 
 ## A [#a]
 
@@ -49,12 +48,19 @@ Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | <a id="drain"></a>**Drain** | The callback invoked when a bounded write queue has room again. See [backpressure](/docs/concepts/backpressure). |
 
+## E [#e]
+
+| Term                                                        | Definition                                                                                                                                           |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <a id="ephemeral-certificate"></a>**Ephemeral certificate** | A self-signed certificate generated in memory at startup for local development. See [Ephemeral certificates](/docs/security/ephemeral-certificates). |
+
 ## H [#h]
 
-| Term                            | Definition                                                                                                           |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| <a id="handler"></a>**Handler** | A function registered on a route and invoked by the dispatcher. See [handler shapes](/docs/concepts/handler-shapes). |
-| <a id="hpack"></a>**HPACK**     | HTTP/2 header compression with a bounded dynamic table. See [HPACK](/docs/http2/hpack).                              |
+| Term                            | Definition                                                                                                                 |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| <a id="handler"></a>**Handler** | A function registered on a route and invoked by the dispatcher. See [handler shapes](/docs/concepts/handler-shapes).       |
+| <a id="hpack"></a>**HPACK**     | HTTP/2 header compression with a bounded dynamic table. See [HPACK](/docs/http2/hpack).                                    |
+| <a id="http3"></a>**HTTP/3**    | The HTTP mapping over QUIC, using QPACK header compression and UDP transport. See [HTTP/3 server](/examples/http3-server). |
 
 ## M [#m]
 
@@ -90,7 +96,7 @@ Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 | <a id="shared-nothing"></a>**Shared-nothing** | A design where each worker owns its event loop, slab, and mutable state. See [shared-nothing](/docs/concepts/shared-nothing).                              |
 | <a id="slab"></a>**Slab**                     | Short for application slab, the single allocation an application carves into its bounded regions. See the [capacity model](/docs/concepts/capacity-model). |
 | <a id="slab-layout"></a>**Slab layout**       | The computed partition of the application slab into pool, buffer, queue, and router regions. See the [capacity model](/docs/concepts/capacity-model).      |
-| <a id="soa"></a>**SoA**                       | Structure of arrays, grouping hot fields into parallel arrays for cache-friendly scans. See the [memory model](/docs/architecture/memory-model).           |
+| <a id="soa"></a>**SoA**                       | Structure of arrays, grouping hot fields into parallel arrays for cache-friendly scans. See the [capacity model](/docs/concepts/capacity-model).           |
 
 ## W [#w]
 
@@ -107,8 +113,6 @@ Jump to a letter: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 
 ## Related
 
-- [Getting started glossary](/docs/getting-started/glossary) introduces the same
-  vocabulary in reading order.
 - [Capacity model](/docs/concepts/capacity-model) explains the slab and every
   bound that shapes an application.
 - [Protocol matrix](/reference/protocol-matrix) applies these terms to each

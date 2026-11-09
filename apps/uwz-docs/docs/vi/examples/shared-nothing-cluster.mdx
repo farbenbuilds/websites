@@ -1,10 +1,10 @@
 ---
 title: Shared-nothing cluster
-description: Khởi động bốn worker shared-nothing trên một port, kiểm tra response bằng curl và xem capacity mà mỗi worker sở hữu.
+description: Khởi động bốn worker shared-nothing, kiểm tra port chia sẻ và xem capacity mà mỗi worker sở hữu cùng cách kernel phân phối connection.
 sidebar:
-  order: 8
+  order: 3
 search:
-  tags: [reference, tutorial, cluster, http1]
+  tags: [reference, tutorial, getting-started, cluster, http1]
 ---
 
 Ví dụ này khởi động bốn worker shared-nothing. Mỗi worker cấp phát slab riêng,
@@ -60,6 +60,12 @@ pub fn main(init: std.process.Init) !void {
 
 Dòng `zig build shared_nothing_cluster` trong module header là bước trong
 framework checkout. Trong project của bạn, dùng `zig build run` như bên dưới.
+
+## Điều kiện trước [#prerequisites]
+
+- Project từ [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -126,6 +132,22 @@ Windows cluster bind địa chỉ chia sẻ bằng `SO_REUSEADDR` vì không có
 `SO_REUSEPORT`. Kernel phân phối connection giữa các listener không được đảm
 bảo trên nền tảng đó.
 
+Mỗi worker sở hữu loop, slab, route, connection slot, inbox và TLS context
+riêng; không connection state, buffer request, write queue hay completion nào
+được chia sẻ. Trang [shared-nothing workers](/docs/concepts/shared-nothing)
+trình bày đầy đủ ownership contract và publish path.
+
+## Worker capacity và active count [#worker-capacity]
+
+| Lệnh gọi                      | Báo cáo                                      |
+| ----------------------------- | -------------------------------------------- |
+| `worker_capacity()`           | Capacity lúc compile từ `build_cluster`      |
+| `worker_count()`              | Active worker có loop và slab                |
+| `ClusterOptions.worker_count` | Active count tường minh dưới capacity        |
+| `UWEBZOCKETS_WORKERS`         | Override environment cho environment builder |
+
+Count lớn hơn physical core sẽ quấn vòng qua các core đã chọn.
+
 ## Key APIs [#key-apis]
 
 | Lệnh gọi                                            | Tác dụng                                                   |
@@ -189,7 +211,10 @@ giá trị vượt capacity fail trước khi slab nào được allocate.
 
 - [Hello world](/examples/hello-world) là điểm bắt đầu cho single application.
 - [TLS cluster](/examples/tls-cluster) thêm một TLS context cho mỗi worker.
-- [Your first cluster](/examples/first-cluster) đi qua cluster lifecycle
-  và failure reporting.
 - [Shared-nothing workers](/docs/concepts/shared-nothing) giải thích ownership
   model chi tiết.
+- [Cluster model](/docs/concepts/cluster-model) trình bày lifecycle, first
+  failure và publish semantics.
+- [Cluster pub/sub](/docs/websocket/cluster-pub-sub) broadcast topic qua worker
+  inbox.
+- [TLS clusters](/docs/security/tls-clusters) trình bày TLS context mỗi worker.

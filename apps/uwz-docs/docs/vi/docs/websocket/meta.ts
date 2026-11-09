@@ -16,7 +16,6 @@ export default defineMeta({
     "pub-sub",
     "cluster-pub-sub",
     "http2-tunnels",
-    "security",
     "testing",
     "limits",
   ],

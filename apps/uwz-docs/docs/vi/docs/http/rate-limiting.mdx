@@ -4,7 +4,7 @@ description: Giới hạn request theo key bằng token bucket do caller sở h�
 sidebar:
   order: 18
 search:
-  tags: [how-to, rate-limit]
+  tags: [how-to, guide, rate-limit, security]
 ---
 
 µWebZockets giới hạn request bằng token bucket theo key, với state do caller sở
@@ -70,6 +70,23 @@ chính nó, nhưng có thể đẩy client khác ra; client bị đẩy quay l�
 rỗng token và nhận `429`. Ưu tiên `key_fn` với giá trị do server tạo, hoặc
 `key_constant` cho một giới hạn toàn cục.
 
+Budget theo tenant suy ra key từ route, không từ header do client chọn:
+
+```zig
+fn tenant_key(req: *const uz.Request) u64 {
+    const tenant = req.get_param("tenant") orelse return 0;
+    return std.hash.Wyhash.hash(0, tenant);
+}
+
+var limiter = try uz.middleware.rate_limit_indexed(init.io, .{
+    .rate_per_second = 5,
+    .burst = 10,
+    .key_fn = tenant_key,
+}, &buckets, &slots, &links);
+_ = try app.use(&limiter, uz.middleware.RateLimit.handler);
+_ = try app.get("/api/:tenant/status", api);
+```
+
 ## Cấp phát bảng index
 
 | Yêu cầu                                         | Được kiểm tra lúc construction |
@@ -81,6 +98,16 @@ rỗng token và nhận `429`. Ưu tiên `key_fn` với giá trị do server t�
 Tỷ lệ hai-một giữ load factor của open addressing ở mức một nửa.
 `rate_limit_indexed` dựng lại index từ mảng bucket, nên bảng được khôi phục vẫn
 giữ placement và tie break exact-oldest.
+
+| Bound           | Giá trị ví dụ | Quy tắc                              |
+| --------------- | ------------: | ------------------------------------ |
+| Buckets         |           256 | Số key được track cùng lúc           |
+| Index slots     |           512 | `slots.len >= 2 * buckets.len`       |
+| Links           |           256 | `links.len == buckets.len`           |
+| Limiter storage | Khoảng 20 KiB | 8 KiB bucket, 8 KiB slot, 4 KiB link |
+
+Các mảng là state của limiter, không phải cấu hình. Không move, copy hay chia sẻ
+chúng với limiter thứ hai, và giữ chúng sống tới `app.deinit()`.
 
 `rate_limit(init.io, options, buckets)` là constructor cũ cho caller chỉ có mảng
 bucket. Nó scan bảng và là đường linear compatibility được ghi nhận cho bảng đã
@@ -157,10 +184,25 @@ Với `burst = 4`, bốn request đầu in `200` và các request sau in `429` c
 khi bucket nạp lại hai token mỗi giây. Dùng `curl -i` trên một request bị từ
 chối để thấy `Retry-After: 1`.
 
+Với bảng theo tenant, charge một budget và kiểm tra tenant khác vẫn qua:
+
+```sh
+for i in $(seq 1 12); do
+  curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/acme/status
+done
+curl -i http://127.0.0.1:3000/api/acme/status
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/other/status
+```
+
+Loop in ra mười `200` rồi `429` với burst mười. Request `-i` cho thấy
+`Retry-After: 1`. Request cuối in `200` vì `other` có bucket riêng.
+
 ## Tiếp theo
 
 - [Xác thực](/docs/http/authentication) quyết định ai được gọi trước khi
   limiter đếm số lần.
+- [Rate limiting controls](/docs/security/rate-limiting) trình bày key choice
+  và eviction như một security boundary.
 - [Middleware](/docs/http/middleware) trình bày thứ tự đăng ký và đăng ký
   theo worker.
 - [Worker shared-nothing](/docs/concepts/shared-nothing) giải thích vì sao
