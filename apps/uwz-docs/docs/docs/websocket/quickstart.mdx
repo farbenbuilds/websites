@@ -1,10 +1,10 @@
 ---
 title: WebSocket quickstart
-description: Add an echo route with open, message, drain, and close callbacks, then verify a message round trip with wscat or a browser.
+description: Add an echo route with open, message, drain, and close callbacks, verify it with wscat, and review pub/sub and the message bounds.
 sidebar:
   order: 2
 search:
-  tags: [tutorial, websocket]
+  tags: [tutorial, getting-started, websocket]
 ---
 
 This tutorial turns an HTTP application into one that accepts WebSocket upgrades
@@ -130,6 +130,50 @@ The console prints `welcome` and then `from the browser`.
    returns `error.WouldBlock` instead of growing memory.
 5. A peer close completes the closing handshake, then `close` runs once.
 
+## What the callbacks own
+
+| Callback  | Signature                                        | Lifetime rule                                  |
+| --------- | ------------------------------------------------ | ---------------------------------------------- |
+| `open`    | `fn (*uz.WebSocket) void`                        | Runs after the upgrade succeeds.               |
+| `message` | `fn (*uz.WebSocket, []const u8, uz.Opcode) void` | The message slice is valid only for this call. |
+| `close`   | `fn (*uz.WebSocket) void`                        | Runs once when the socket closes.              |
+
+Copy a message into application-owned storage before starting work that outlives
+the callback. `ws.send` copies the bytes into the bounded write queue before it
+returns, so the send itself does not borrow the message slice.
+
+A production producer keeps its unsent bytes in bounded application storage and
+retries from `drain`. The write queue is per connection and sized by the
+application configuration.
+
+## Pub/sub
+
+The WebSocket object also exposes the bounded pub/sub engine:
+
+```zig
+fn on_chat_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("global", message, opcode == .text);
+}
+```
+
+`subscribe`, `publish`, and `unsubscribe` operate on fixed-capacity topics. A
+publish reports how many subscribers it reached. `App.cluster` coordinates
+cross-worker publishes through bounded per-worker inboxes.
+
+## Boundaries
+
+- The library has no WebSocket client yet. Use a browser, `wscat`, or another
+  client for testing.
+- Per-message deflate is opt-in with `.compression = .permessage_deflate` and
+  requires compression scratch. The HTTP/2 tunnel path carries uncompressed
+  frames.
+- Incoming messages are capped by `max_frame_size` and `max_message_size`. The
+  defaults are 16 KiB.
+- A route whose limits exceed the configured message capacity fails
+  registration with `error.InvalidWebSocketLimits` before the listener starts.
+  The process never accepts a peer it cannot serve, and no HTTP status is sent
+  for the configuration error.
+
 ## Verify the failure path
 
 Stop the server, keep `wscat` open, and restart. The peer sees a closed socket
@@ -138,6 +182,8 @@ the connection instead of leaving it half-open.
 
 ## Next
 
+- [Chat server](/examples/chat-server) mounts a pub/sub room with the same
+  callbacks.
 - [Backpressure and draining](/docs/websocket/backpressure) to retry instead of
   dropping.
 - [Messages and framing](/docs/websocket/messages) for text, binary, ping, and

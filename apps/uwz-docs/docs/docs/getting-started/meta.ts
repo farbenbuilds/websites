@@ -5,13 +5,5 @@ export default defineMeta({
   icon: "rocket",
   order: 3,
   directory: "none",
-  pages: [
-    "motivation",
-    "philosophy",
-    "installation",
-    "quickstart",
-    "project-structure",
-    "faq",
-    "glossary",
-  ],
+  pages: ["motivation", "philosophy", "installation", "quickstart", "project-structure", "faq"],
 });

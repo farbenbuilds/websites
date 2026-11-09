@@ -1,10 +1,10 @@
 ---
 title: HTTPS server
-description: Serve HTTPS with an in-memory certificate, verify the response with curl -k, and switch to PEM files in your own project.
+description: Serve HTTPS with an in-memory certificate, verify it with curl -k, and switch to PEM files for production credentials.
 sidebar:
-  order: 7
+  order: 2
 search:
-  tags: [reference, tutorial, tls, http1, http2]
+  tags: [reference, tutorial, getting-started, tls, http1, http2]
 ---
 
 This example is the smallest complete µWebZockets HTTPS server. It allocates one
@@ -35,6 +35,12 @@ pub fn main(init: std.process.Init) !void {
 ```
 
 [Full source](https://github.com/farbenbuilds/uWebZockets/blob/v2.1.6/examples/https_server.zig)
+
+## Prerequisites
+
+- The project from [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -140,15 +146,22 @@ defer server.deinit();
 
 The certificate argument is a PEM chain with the leaf first. The key argument is
 a PEM private key. BoringSSL checks that the pair matches while loading, so a
-mismatch fails at startup with `error.KeyMismatch` instead of during the
-first handshake. With a chain that the client trusts, drop `-k` from the verify
-command.
+mismatch fails at startup with `error.PrivateKeyLoadFailed` instead of during the
+first handshake. Paths are NUL-terminated Zig slices; in a literal call, string
+literals already have the required type. With a chain that the client trusts,
+drop `-k` from the verify command.
 
 ## Next [#next]
 
+- [Mutual TLS](/docs/security/mtls) covers the client CA bundle, `.optional`
+  and `.required` modes, early-data behavior, and CRL limits.
+- [TLS clusters](/docs/security/tls-clusters) covers the worker lifecycle and
+  cross-worker resumption.
 - [Shared-nothing cluster](/examples/shared-nothing-cluster) keeps one slab and
   one event loop per worker.
 - [TLS cluster](/examples/tls-cluster) gives every worker its own TLS context.
-- [Your first TLS server](/examples/first-tls-server) adds mTLS and
-  production credential guidance.
+- [Ephemeral certificates](/docs/security/ephemeral-certificates) covers the
+  generated certificate and its limits.
+- [HTTPS deployment](/docs/deployment/tls) covers production credentials and
+  rotation.
 - [ServerConfig](/reference/server-config) lists every capacity and default.

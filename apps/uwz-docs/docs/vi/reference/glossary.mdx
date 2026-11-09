@@ -8,13 +8,12 @@ search:
 ---
 
 Đây là lookup A-Z chuẩn cho các thuật ngữ dùng trong toàn site. Mỗi entry nêu
-nghĩa mà µWebZockets dùng và link tới trang sở hữu behavior.
-[Thuật ngữ nhập môn](/docs/getting-started/glossary) là phần giới thiệu ban đầu;
-trang này là reference index với anchor ổn định. Link tới một entry bằng
-`/reference/glossary#<term-anchor>`, ví dụ `/reference/glossary#async-token`.
+nghĩa mà µWebZockets dùng và link tới trang sở hữu behavior. Link tới một entry
+bằng `/reference/glossary#<term-anchor>`, ví dụ
+`/reference/glossary#async-token`.
 
-Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
-[Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
+Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [E](#e) [H](#h) [M](#m)
+[P](#p) [Q](#q) [R](#r) [S](#s) [W](#w) [0](#zero)
 
 ## A [#a]
 
@@ -49,12 +48,19 @@ Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 | --------------------------- | ---------------------------------------------------------------------------------------------------- |
 | <a id="drain"></a>**Drain** | Callback được gọi khi write queue có bound còn chỗ. Xem [backpressure](/docs/concepts/backpressure). |
 
+## E [#e]
+
+| Thuật ngữ                                                   | Định nghĩa                                                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <a id="ephemeral-certificate"></a>**Ephemeral certificate** | Certificate self-signed được tạo trong bộ nhớ lúc khởi động cho phát triển local. Xem [Ephemeral certificates](/docs/security/ephemeral-certificates). |
+
 ## H [#h]
 
-| Thuật ngữ                       | Định nghĩa                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| <a id="handler"></a>**Handler** | Hàm được đăng ký trên route và được dispatcher gọi. Xem [handler shape](/docs/concepts/handler-shapes). |
-| <a id="hpack"></a>**HPACK**     | Header compression của HTTP/2 với dynamic table có bound. Xem [HPACK](/docs/http2/hpack).               |
+| Thuật ngữ                       | Định nghĩa                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| <a id="handler"></a>**Handler** | Hàm được đăng ký trên route và được dispatcher gọi. Xem [handler shape](/docs/concepts/handler-shapes).              |
+| <a id="hpack"></a>**HPACK**     | Header compression của HTTP/2 với dynamic table có bound. Xem [HPACK](/docs/http2/hpack).                            |
+| <a id="http3"></a>**HTTP/3**    | HTTP mapping trên QUIC, dùng QPACK header compression và UDP transport. Xem [HTTP/3 server](/examples/http3-server). |
 
 ## M [#m]
 
@@ -90,7 +96,7 @@ Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 | <a id="shared-nothing"></a>**Shared-nothing** | Thiết kế trong đó mỗi worker sở hữu event loop, slab và mutable state riêng. Xem [shared-nothing](/docs/concepts/shared-nothing).               |
 | <a id="slab"></a>**Slab**                     | Tên ngắn của application slab, vùng cấp phát duy nhất được chia thành các region có bound. Xem [capacity model](/docs/concepts/capacity-model). |
 | <a id="slab-layout"></a>**Slab layout**       | Cách application slab được chia thành pool, buffer, queue và router region. Xem [capacity model](/docs/concepts/capacity-model).                |
-| <a id="soa"></a>**SoA**                       | Structure of arrays, nhóm hot field thành mảng song song để scan thân thiện với cache. Xem [memory model](/docs/architecture/memory-model).     |
+| <a id="soa"></a>**SoA**                       | Structure of arrays, nhóm hot field thành mảng song song để scan thân thiện với cache. Xem [capacity model](/docs/concepts/capacity-model).     |
 
 ## W [#w]
 
@@ -107,8 +113,6 @@ Nhảy tới chữ cái: [A](#a) [B](#b) [C](#c) [D](#d) [H](#h) [M](#m) [P](#p)
 
 ## Trang liên quan [#related]
 
-- [Thuật ngữ nhập môn](/docs/getting-started/glossary) giới thiệu cùng
-  vocabulary theo thứ tự đọc.
 - [Capacity model](/docs/concepts/capacity-model) giải thích slab và mọi bound
   định hình một application.
 - [Protocol matrix](/reference/protocol-matrix) áp dụng các thuật ngữ này cho

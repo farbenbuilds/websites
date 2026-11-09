@@ -1,52 +1,18 @@
 ---
 title: Examples
-description: Start with a guided tutorial or read the canonical program for each µWebZockets capability, with build wiring, run commands, and expected output.
+description: Read the canonical program for each µWebZockets capability, with build wiring, run commands, expected output, and capacity choices.
 search:
   tags: [tutorial, reference, http1, websocket, json-rpc, tls, cluster, http3]
 ---
 
-This section has two tracks. The guided tutorials build one capability at a time
-from the project created in [Quickstart](/docs/getting-started/quickstart). The
-canonical programs show the exact source in the framework `examples/` directory,
-with the capacities it chooses and a variation worth trying. Both tracks use the
-same consumer project and run with `zig build run`.
+Each page documents one program from the framework `examples/` directory. It
+gives the complete source, the consumer `build.zig` wiring, the run command, the
+expected output, the capacities the example chooses, and one variation. Start
+with [Hello world](/examples/hello-world), which also carries the first HTTP
+tutorial. Protocol quickstarts live in the Docs tab when you want a step-by-step
+path for WebSocket, JSON-RPC, HTTP/2, or HTTP/3.
 
-## Choose a track [#choose-a-track]
-
-<CardGroup cols={2}>
-  <Card title="Guided tutorials" href="#guided-tutorials" icon="route">
-    Learn the request path, upgrade handshake, RPC mount, TLS context, worker group, and QUIC
-    listener step by step.
-  </Card>
-  <Card title="Canonical programs" href="#canonical-programs" icon="file-code">
-    Read the exact shipped program, its build wiring, expected output, and capacity choices.
-  </Card>
-</CardGroup>
-
-## Guided tutorials [#guided-tutorials]
-
-<CardGroup cols={2}>
-  <Card title="Hello world" href="/examples/hello-world" icon="server">
-    Build the canonical server, add a route parameter, verify it, and drain on a signal.
-  </Card>
-  <Card title="Your first WebSocket" href="/examples/first-websocket" icon="messages-square">
-    Add an echo route with open, message, and close callbacks.
-  </Card>
-  <Card title="Your first JSON-RPC service" href="/examples/first-json-rpc-service" icon="braces">
-    Mount a typed `math.add` procedure and call it with `curl`.
-  </Card>
-  <Card title="Your first TLS server" href="/examples/first-tls-server" icon="lock">
-    Generate a local certificate in memory, then switch to PEM files.
-  </Card>
-  <Card title="Your first cluster" href="/examples/first-cluster" icon="cpu">
-    Run one worker per core with a shared port and per-worker slabs.
-  </Card>
-  <Card title="Your first HTTP/3 server" href="/examples/first-http3-server" icon="zap">
-    Serve the same handler over QUIC on UDP port 8443.
-  </Card>
-</CardGroup>
-
-### Before you start [#before-you-start]
+## Before you start [#before-you-start]
 
 Complete [Installation](/docs/getting-started/installation) and
 [Quickstart](/docs/getting-started/quickstart) first. The examples assume:
@@ -58,15 +24,10 @@ Complete [Installation](/docs/getting-started/installation) and
 
 ## Canonical programs [#canonical-programs]
 
-Each page documents one program from the framework `examples/` directory. It
-gives the complete source, the consumer `build.zig` wiring, the run command, the
-expected output, the capacities the example chooses, and one variation. Start
-with [Hello world](/examples/hello-world), which also carries the first HTTP
-tutorial; the table lists the larger programs.
-
 | Example                                                    | Shows                                            | Protocol                | Default port |
 | ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
-| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate and ALPN               | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
+| [Hello world](/examples/hello-world)                       | Smallest server, route parameter, POST, shutdown | HTTP/1.1                |         3000 |
+| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate and PEM files          | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
 | [Shared-nothing cluster](/examples/shared-nothing-cluster) | Four workers, one slab and loop each             | HTTP/1.1                |         3000 |
 | [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS contexts and runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
 | [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing      | HTTP/1.1                |         3000 |

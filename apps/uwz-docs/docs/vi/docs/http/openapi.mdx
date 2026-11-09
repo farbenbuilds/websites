@@ -4,7 +4,7 @@ description: Phục vụ tài liệu OpenAPI 3.1 sinh từ route đã đăng ký
 sidebar:
   order: 19
 search:
-  tags: [how-to, openapi]
+  tags: [how-to, guide, openapi]
 ---
 
 `app.openapi(path)` đăng ký một route `GET` render bảng route hiện tại thành
@@ -145,6 +145,38 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
 ```
 
 Lệnh đầu in tài liệu compact. Lệnh thứ hai in `200 application/json`.
+
+Assertion shape làm job fail khi một route biến mất:
+
+```sh
+set -eu
+zig build run &
+server_pid=$!
+trap 'kill "$server_pid"' EXIT
+
+curl -sS --retry 10 --retry-connrefused -o openapi.json \
+  http://127.0.0.1:3000/openapi.json
+
+jq -e '.openapi == "3.1.0"' openapi.json > /dev/null
+jq -e '.paths["/users/{id}"].get.responses["200"]' openapi.json > /dev/null
+```
+
+Thêm một dòng `jq -e` cho mỗi route bạn không thể để mất.
+
+## Biến thể: public docs route
+
+Publish tài liệu ở path ổn định có version và link nó từ API docs. Giữ nó không cần
+authentication để generator đọc được, và giữ route table nhỏ để tài liệu nằm trong
+buffer.
+
+```zig
+_ = try app.get("/v1/items", list_items);
+_ = try app.get("/v1/items/:id", show_item);
+_ = try app.openapi("/v1/openapi.json");
+```
+
+Path có version cho phép publish tài liệu mới mà không phá client hiện có; mọi path
+trong đó vẫn đến từ cùng router.
 
 ## Tiếp theo
 

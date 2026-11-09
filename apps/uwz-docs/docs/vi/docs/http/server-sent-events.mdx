@@ -4,7 +4,7 @@ description: Gửi event SSE có framing qua chunked response với default an t
 sidebar:
   order: 11
 search:
-  tags: [how-to, sse]
+  tags: [how-to, guide, sse]
 ---
 
 `res.sse()` bắt đầu event stream `200 OK` với content type và header chống
@@ -57,10 +57,24 @@ mà không hoàn tất sẽ không giữ response mở cho lần ghi sau.
 
 `no-cache` cho phép lưu nhưng buộc revalidate, nên proxy không phục vụ event
 stream cũ. `X-Accel-Buffering: no` yêu cầu proxy kiểu nginx không buffer
-response. Không header nào thay thế cấu hình proxy đúng.
+response. Không header nào thay thế cấu hình proxy đúng:
+
+- Tắt response buffering cho route này trong cấu hình proxy.
+- Đặt proxy read timeout dài hơn heartbeat interval.
+- Gửi heartbeat thường xuyên hơn idle timeout ngắn nhất trên đường đi.
+- Giữ compression tắt cho event stream; proxy có nén có thể giữ byte lại.
 
 Trên HTTP/1.1 body dùng chunked transfer coding. HTTP/2 và HTTP/3 mang cùng các
 byte field trong frame `DATA`, không có chunk framing.
+
+## Giả định capacity
+
+| Tài nguyên         | Giới hạn                                                      |
+| ------------------ | ------------------------------------------------------------- |
+| Write queue        | 64 KiB mỗi connection; field không vừa trả `error.WouldBlock` |
+| Tổng stream size   | Không cap; queue giới hạn một lần ghi, không giới hạn stream  |
+| Connection         | Mỗi stream mở giữ một slot của `max_clients`                  |
+| Heartbeat interval | Ngắn hơn mọi idle timeout của proxy và client                 |
 
 ## Event framing
 
@@ -138,6 +152,41 @@ curl -N -i http://127.0.0.1:3000/events
 `-N` tắt buffer của curl. Kỳ vọng `200 OK`, `Content-Type: text/event-stream`,
 `Cache-Control: no-cache` và `X-Accel-Buffering: no`, sau đó là các event đã
 framing và comment heartbeat. Connection đóng sau `close()`.
+
+```sh
+curl -sN http://127.0.0.1:3000/events | grep -c '^event: tick'
+```
+
+Count là `2` với chương trình finite, dùng được như check pass/fail.
+
+## Biến thể: periodic producer
+
+Helper không thể chờ giữa các lần ghi, nên period phải đến từ client. Phát một
+window có bound cho mỗi request và để client hỏi window tiếp theo.
+
+```zig
+fn window(req: *uz.Request, res: *uz.Response) void {
+    const query = req.query_params() catch {
+        res.end("400 Bad Request", "") catch {};
+        return;
+    };
+    const from = (query.get_int(u64, "from") catch null) orelse 0;
+    var stream = res.sse() catch return;
+
+    var seq = from;
+    while (seq < from + 3) : (seq += 1) {
+        var buffer: [48]u8 = undefined;
+        const payload = std.fmt.bufPrint(&buffer, "{{\"seq\":{d}}}", .{seq}) catch return;
+        stream.send_event("tick", payload) catch return;
+        if (seq + 1 < from + 3) stream.heartbeat() catch return;
+    }
+    stream.close() catch return;
+}
+```
+
+Cursor đi qua query string. Khi stream đóng, client mở `/events?from=<next>`; một
+`EventSource` reconnect thuần sẽ lặp lại đúng URL cũ và phát lại cùng window. Helper
+không ghi field `retry:`, nên client cũng tự quyết định delay.
 
 ## Tiếp theo
 

@@ -94,7 +94,7 @@ block bởi file I/O.
 
 `verify = false` tắt chain và name check. Nó vẫn dùng TLS 1.3 và vẫn gửi SNI. Chỉ
 dùng với ephemeral development certificate trong
-[Your first TLS server](/examples/first-tls-server); không ship production.
+[HTTPS server](/examples/https-server); không ship production.
 
 :::danger[Không tắt verification trong production]
 `verify = false` chấp nhận mọi certificate, kể cả certificate do attacker kiểm
@@ -120,5 +120,5 @@ thể được gọi bởi client này.
 
 - [Timeouts và errors](/docs/client/timeouts-and-errors) map failure kind.
 - [Client limits](/docs/client/limits) liệt kê TLS staging bound.
-- [Your first TLS server](/examples/first-tls-server) trình bày server
+- [HTTPS server](/examples/https-server) trình bày server
   certificate model.

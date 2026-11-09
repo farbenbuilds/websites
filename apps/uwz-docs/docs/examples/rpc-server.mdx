@@ -1,10 +1,10 @@
 ---
 title: RPC server
-description: Mount a typed JSON-RPC math.add procedure on /rpc, verify the request and response with curl, and review the service capacities.
+description: Mount a typed JSON-RPC math.add procedure on /rpc, verify it with curl, add larger parameters, and review the service capacities.
 sidebar:
-  order: 13
+  order: 8
 search:
-  tags: [reference, tutorial, json-rpc, capacity]
+  tags: [reference, tutorial, getting-started, json-rpc, capacity]
 ---
 
 This example mounts a typed JSON-RPC 2.0 service on `POST /rpc`. It defines one
@@ -52,6 +52,12 @@ The handler receives a decoded `AddParams` value and returns an `AddResult` or
 one of the `HandlerError` values. `server.rpc` mounts a POST route, copies no
 procedure names at request time, and seals the registry. Register every
 procedure before the mount; a later registration returns `error.RegistryLocked`.
+
+## Prerequisites
+
+- The project from [Hello world](/examples/hello-world).
+- Zig 0.16.0.
+- `curl`.
 
 ## Build wiring [#build-wiring]
 
@@ -165,9 +171,23 @@ until it is sealed.
 
 The typed adapter uses 4 KiB of fixed stack scratch for decoded parameters. For
 a larger parameter type, use the lower-level `register` API with
-`Call.parse_params` and an explicit allocator. See
-[Your first JSON-RPC service](/examples/first-json-rpc-service) for that
-form.
+`Call.parse_params` and an explicit allocator:
+
+```zig
+fn custom(call: *uz.json_rpc.Call) uz.json_rpc.HandlerError!void {
+    const parsed = try call.parse_params(AddParams, std.heap.page_allocator);
+    defer parsed.deinit();
+    try call.result(.{ .sum = parsed.value.left + parsed.value.right });
+}
+
+try rpc.register("math.add_large", custom);
+_ = try server.rpc("/rpc", &rpc);
+```
+
+Register the procedure before `server.rpc` mounts the service. Registering after
+the mount returns `error.RegistryLocked`. The allocator is the caller's choice;
+the request path stays bounded when the procedure uses fixed storage or a bounded
+allocator.
 
 ## Capacities [#capacities]
 
@@ -219,10 +239,15 @@ through JSON-RPC; use a normal HTTP stream for that workload.
 ## Next [#next]
 
 - [JSON-RPC](/docs/json-rpc) covers protocol behavior, batches, and transports.
+- [JSON-RPC quickstart](/docs/json-rpc/quickstart) verifies a call, a
+  notification, and a protocol error.
 - [JSON-RPC capacities](/docs/json-rpc/capacities) lists every bound and sizing
   rule.
 - [JSON-RPC errors](/docs/json-rpc/errors) covers protocol and application
-  error objects.
-- [Your first JSON-RPC service](/examples/first-json-rpc-service) teaches
-  larger parameters and custom decoding.
+  error objects, and [batches](/docs/json-rpc/batches-and-notifications) covers
+  document classification.
+- [Context and decoding](/docs/json-rpc/context-and-decoding) covers typed
+  context objects and bounded allocators.
+- [Typed procedures](/docs/json-rpc/typed-procedures) covers compile-time
+  dispatch.
 - [HTTP/3 server](/examples/http3-server) is the next example.

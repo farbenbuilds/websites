@@ -38,6 +38,7 @@ files for the same scope.
 | `Planned`  | Scoped here but not started                                                |
 | `Blocked`  | Cannot proceed until a named decision or upstream change lands             |
 | `Deferred` | Deliberately outside the current milestone; keep the row for visibility    |
+| `Merged`   | Removed as a separate page; the route 301s to the canonical page           |
 
 Priority vocabulary:
 
@@ -81,7 +82,11 @@ task report. Do not silently choose the friendlier claim.
 ### 0.4 Definition of done for any docs change
 
 - The page has a unique reader goal, a `title`, and a one-sentence
-  `description` in frontmatter.
+  `description` in frontmatter. No second page teaches the same program or
+  repeats the same reference material under a different title.
+- When two pages overlap, merge the unique material into the canonical page,
+  delete both locale copies of the duplicate, add a 301 from the old route, and
+  update every link and index entry in the same change.
 - The first paragraph states the outcome, not the history of the framework.
 - Every command is copy-pasteable and was run against the stated version.
 - Every Zig, C, C++, JSON, or shell fence declares a language.
@@ -356,23 +361,48 @@ The site should tell one story in this order:
 ### 4.3 Redirect map for the migration
 
 The current site publishes `/getting-started` and `/vi/getting-started`. The
-new tree moves them under `/docs`. Add these redirects in `blume.config.ts` in
-the same change that creates the new pages:
+new tree moves them under `/docs`. Add these redirects in
+`apps/uwz-docs/blume-redirects.ts` in the same change that creates the new
+pages. `vws-docs` uses its own app config when it needs a redirect.
 
-| From                             | To                                 | Status                       |
-| -------------------------------- | ---------------------------------- | ---------------------------- |
-| `/getting-started`               | `/docs/getting-started`            | 301                          |
-| `/getting-started/*`             | `/docs/getting-started/:splat*`    | 301                          |
-| `/vi/getting-started`            | `/vi/docs/getting-started`         | 301                          |
-| `/vi/getting-started/*`          | `/vi/docs/getting-started/:splat*` | 301                          |
-| `/docs/examples`                 | `/examples`                        | 301                          |
-| `/docs/examples/*`               | `/examples/:splat*`                | 301                          |
-| `/vi/docs/examples`              | `/vi/examples`                     | 301                          |
-| `/vi/docs/examples/*`            | `/vi/examples/:splat*`             | 301                          |
-| `/examples/first-http-server`    | `/examples/hello-world`            | 301                          |
-| `/vi/examples/first-http-server` | `/vi/examples/hello-world`         | 301                          |
-| `/api`                           | `/reference`                       | 301, if a legacy link exists |
-| `/docs/api`                      | `/reference/zig`                   | 301, if a legacy link exists |
+| From                                | To                                  | Status                       |
+| ----------------------------------- | ----------------------------------- | ---------------------------- |
+| `/getting-started`                  | `/docs/getting-started`             | 301                          |
+| `/getting-started/*`                | `/docs/getting-started/:splat*`     | 301                          |
+| `/vi/getting-started`               | `/vi/docs/getting-started`          | 301                          |
+| `/vi/getting-started/*`             | `/vi/docs/getting-started/:splat*`  | 301                          |
+| `/docs/examples`                    | `/examples`                         | 301                          |
+| `/vi/docs/examples`                 | `/vi/examples`                      | 301                          |
+| `/examples/first-http-server`       | `/examples/hello-world`             | 301                          |
+| `/examples/first-websocket`         | `/docs/websocket/quickstart`        | 301                          |
+| `/examples/first-json-rpc-service`  | `/examples/rpc-server`              | 301                          |
+| `/examples/first-tls-server`        | `/examples/https-server`            | 301                          |
+| `/examples/first-cluster`           | `/examples/shared-nothing-cluster`  | 301                          |
+| `/examples/first-http3-server`      | `/examples/http3-server`            | 301                          |
+| `/docs/architecture/shared-nothing` | `/docs/concepts/shared-nothing`     | 301                          |
+| `/docs/architecture/memory-model`   | `/docs/concepts/capacity-model`     | 301                          |
+| `/docs/guides/openapi`              | `/docs/http/openapi`                | 301                          |
+| `/docs/guides/sse`                  | `/docs/http/server-sent-events`     | 301                          |
+| `/docs/guides/file-server`          | `/docs/http/static-files`           | 301                          |
+| `/docs/guides/rate-limiting`        | `/docs/http/rate-limiting`          | 301                          |
+| `/docs/http3/query-method`          | `/docs/http/query-method`           | 301                          |
+| `/docs/type-safety/json`            | `/docs/http/json`                   | 301                          |
+| `/docs/getting-started/glossary`    | `/reference/glossary`               | 301                          |
+| `/docs/websocket/security`          | `/docs/security/websocket-security` | 301                          |
+| `/docs/guides/chat`                 | `/examples/chat-server`             | 301                          |
+| `/docs/guides/cluster`              | `/examples/shared-nothing-cluster`  | 301                          |
+| `/docs/guides/https`                | `/examples/https-server`            | 301                          |
+| `/docs/guides/http3`                | `/examples/http3-server`            | 301                          |
+| `/docs/guides/rpc-service`          | `/examples/rpc-server`              | 301                          |
+| `/api`                              | `/reference`                        | 301, if a legacy link exists |
+| `/docs/api`                         | `/reference/zig`                    | 301, if a legacy link exists |
+
+Every row also has a `/vi` mirror in `blume-redirects.ts`. The six removed
+example slugs use exact `/getting-started/<slug>`, `/docs/getting-started/<slug>`,
+and `/docs/examples/<slug>` sources, plus exact `/examples/<slug>` sources for
+each locale; there is no `/docs/examples/*` wildcard. The root example and
+glossary redirects are registered before the legacy `/getting-started/:slug*`
+wildcard, so no request follows two redirects.
 
 Do not add a redirect until the target page exists. `blume validate` treats a
 redirect to nowhere as a warning; `blume audit` treats it as a broken redirect.
@@ -430,6 +460,11 @@ goal changes. A page may link to a reference table instead of owning it.
 
 ### 4.6 Cross-linking rules
 
+- One topic has one canonical page. Search the tree before writing; when a page
+  already teaches the same program or reference facts, merge the unique material
+  into that page instead of adding a parallel tutorial or guide.
+- A merged page keeps one route. Delete the duplicate English and Vietnamese
+  MDX, add a 301 for both locales, and repoint every index, card, and prose link.
 - Every protocol page links to the shared `Request`/`Response` pages and to the
   capacity model.
 - Every tutorial ends with one "next step" and two related links, not a link
@@ -515,30 +550,32 @@ What/Why, and every shipped Getting Started page.
 
 ### 5.2 Getting Started
 
-| ID      | Route                                     | Page              | Type           | Priority | Milestone | Source                      | Status |
-| ------- | ----------------------------------------- | ----------------- | -------------- | -------- | --------- | --------------------------- | ------ |
-| UWZ-010 | `/docs/getting-started`                   | Getting started   | Tutorial index | P0       | M1        | `docs/getting_started.md`   | Live   |
-| UWZ-011 | `/docs/getting-started/motivation`        | Motivation        | Explanation    | P0       | M1        | README, roadmap             | Live   |
-| UWZ-012 | `/docs/getting-started/philosophy`        | Philosophy        | Explanation    | P0       | M1        | CODEBASE, CODING_CONVENTION | Live   |
-| UWZ-013 | `/docs/getting-started/installation`      | Installation      | Tutorial       | P0       | M1        | README, operations          | Live   |
-| UWZ-014 | `/docs/getting-started/quickstart`        | Quickstart        | Tutorial       | P0       | M1        | README                      | Live   |
-| UWZ-015 | `/docs/getting-started/project-structure` | Project structure | Explanation    | P1       | M1        | CODEBASE                    | Live   |
-| UWZ-023 | `/docs/getting-started/faq`               | FAQ               | Reference      | P0       | M1        | README, roadmap             | Live   |
-| UWZ-024 | `/docs/getting-started/glossary`          | Glossary          | Reference      | P1       | M1        | CODEBASE, docs              | Live   |
+| ID      | Route                                     | Page              | Type           | Priority | Milestone | Source                                         | Status |
+| ------- | ----------------------------------------- | ----------------- | -------------- | -------- | --------- | ---------------------------------------------- | ------ |
+| UWZ-010 | `/docs/getting-started`                   | Getting started   | Tutorial index | P0       | M1        | `docs/getting_started.md`                      | Live   |
+| UWZ-011 | `/docs/getting-started/motivation`        | Motivation        | Explanation    | P0       | M1        | README, roadmap                                | Live   |
+| UWZ-012 | `/docs/getting-started/philosophy`        | Philosophy        | Explanation    | P0       | M1        | CODEBASE, CODING_CONVENTION                    | Live   |
+| UWZ-013 | `/docs/getting-started/installation`      | Installation      | Tutorial       | P0       | M1        | README, operations                             | Live   |
+| UWZ-014 | `/docs/getting-started/quickstart`        | Quickstart        | Tutorial       | P0       | M1        | README                                         | Live   |
+| UWZ-015 | `/docs/getting-started/project-structure` | Project structure | Explanation    | P1       | M1        | CODEBASE                                       | Live   |
+| UWZ-023 | `/docs/getting-started/faq`               | FAQ               | Reference      | P0       | M1        | README, roadmap                                | Live   |
+| UWZ-024 | `/docs/getting-started/glossary`          | Glossary          | Reference      | P1       | M1        | CODEBASE, docs merged into /reference/glossary | Merged |
 
 ### 5.2.1 Guided examples
 
-| ID      | Route                              | Page                        | Type     | Priority | Milestone | Source                              | Status |
-| ------- | ---------------------------------- | --------------------------- | -------- | -------- | --------- | ----------------------------------- | ------ |
-| UWZ-017 | `/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | examples/chat_server.zig            | Live   |
-| UWZ-018 | `/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig             | Live   |
-| UWZ-019 | `/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig           | Live   |
-| UWZ-020 | `/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
-| UWZ-021 | `/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig           | Live   |
+| ID      | Route                              | Page                        | Type     | Priority | Milestone | Source                                                                           | Status |
+| ------- | ---------------------------------- | --------------------------- | -------- | -------- | --------- | -------------------------------------------------------------------------------- | ------ |
+| UWZ-017 | `/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | `docs/websocket.md` merged into /docs/websocket/quickstart                       | Merged |
+| UWZ-018 | `/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig merged into /examples/rpc-server                         | Merged |
+| UWZ-019 | `/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig merged into /examples/https-server                     | Merged |
+| UWZ-020 | `/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig merged into /examples/shared-nothing-cluster | Merged |
+| UWZ-021 | `/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig merged into /examples/http3-server                     | Merged |
 
 The shared `/examples` index is UWZ-330 in 5.19. Hello world (UWZ-331) owns the
-first HTTP tutorial; the remaining guided tutorials and canonical programs live
-in the same Examples tab.
+first HTTP tutorial. Every other guided example is merged into its canonical
+program page: WebSocket into `/docs/websocket/quickstart`, and JSON-RPC, TLS,
+cluster, and HTTP/3 into the matching `/examples/*` page. Do not add a second
+tutorial page for a program that already has a canonical page.
 
 ### 5.2.2 Deferred pages
 
@@ -620,22 +657,22 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.5 WebSocket
 
-| ID      | Route                             | Page                      | Type        | Priority | Milestone | Source                             | Status |
-| ------- | --------------------------------- | ------------------------- | ----------- | -------- | --------- | ---------------------------------- | ------ |
-| UWZ-100 | `/docs/websocket`                 | WebSocket                 | Index       | P0       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-101 | `/docs/websocket/quickstart`      | WebSocket quickstart      | Tutorial    | P0       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-102 | `/docs/websocket/handshake`       | Handshake and upgrade     | Explanation | P1       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-103 | `/docs/websocket/messages`        | Messages and framing      | How-to      | P1       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-104 | `/docs/websocket/backpressure`    | Backpressure and draining | How-to      | P0       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-105 | `/docs/websocket/compression`     | Per-message deflate       | How-to      | P1       | M3        | `docs/websocket.md`                | Live   |
-| UWZ-106 | `/docs/websocket/heartbeats`      | Heartbeats and idle peers | How-to      | P1       | M2        | `docs/websocket.md`                | Live   |
-| UWZ-107 | `/docs/websocket/close-codes`     | Close codes and shutdown  | Reference   | P1       | M3        | `docs/websocket.md`                | Live   |
-| UWZ-108 | `/docs/websocket/pub-sub`         | Pub/sub                   | How-to      | P1       | M3        | `docs/websocket.md`                | Live   |
-| UWZ-109 | `/docs/websocket/cluster-pub-sub` | Cluster pub/sub           | How-to      | P1       | M4        | `docs/architecture.md`             | Live   |
-| UWZ-110 | `/docs/websocket/http2-tunnels`   | RFC 8441 tunnels          | Explanation | P1       | M3        | `docs/http2.md`                    | Live   |
-| UWZ-111 | `/docs/websocket/security`        | WebSocket security        | How-to      | P0       | M2        | `SECURITY.md`, `docs/websocket.md` | Live   |
-| UWZ-112 | `/docs/websocket/testing`         | Testing a WebSocket route | How-to      | P1       | M4        | `tests/autobahn`                   | Live   |
-| UWZ-113 | `/docs/websocket/limits`          | WebSocket limits          | Reference   | P1       | M2        | `docs/memory_model.md`             | Live   |
+| ID      | Route                               | Page                      | Type        | Priority | Milestone | Source                                                                           | Status |
+| ------- | ----------------------------------- | ------------------------- | ----------- | -------- | --------- | -------------------------------------------------------------------------------- | ------ |
+| UWZ-100 | `/docs/websocket`                   | WebSocket                 | Index       | P0       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-101 | `/docs/websocket/quickstart`        | WebSocket quickstart      | Tutorial    | P0       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-102 | `/docs/websocket/handshake`         | Handshake and upgrade     | Explanation | P1       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-103 | `/docs/websocket/messages`          | Messages and framing      | How-to      | P1       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-104 | `/docs/websocket/backpressure`      | Backpressure and draining | How-to      | P0       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-105 | `/docs/websocket/compression`       | Per-message deflate       | How-to      | P1       | M3        | `docs/websocket.md`                                                              | Live   |
+| UWZ-106 | `/docs/websocket/heartbeats`        | Heartbeats and idle peers | How-to      | P1       | M2        | `docs/websocket.md`                                                              | Live   |
+| UWZ-107 | `/docs/websocket/close-codes`       | Close codes and shutdown  | Reference   | P1       | M3        | `docs/websocket.md`                                                              | Live   |
+| UWZ-108 | `/docs/websocket/pub-sub`           | Pub/sub                   | How-to      | P1       | M3        | `docs/websocket.md`                                                              | Live   |
+| UWZ-109 | `/docs/websocket/cluster-pub-sub`   | Cluster pub/sub           | How-to      | P1       | M4        | `docs/architecture.md`                                                           | Live   |
+| UWZ-110 | `/docs/websocket/http2-tunnels`     | RFC 8441 tunnels          | Explanation | P1       | M3        | `docs/http2.md`                                                                  | Live   |
+| UWZ-111 | `/docs/security/websocket-security` | WebSocket security        | How-to      | P0       | M2        | `SECURITY.md`, `docs/websocket.md` merged into /docs/security/websocket-security | Merged |
+| UWZ-112 | `/docs/websocket/testing`           | Testing a WebSocket route | How-to      | P1       | M4        | `tests/autobahn`                                                                 | Live   |
+| UWZ-113 | `/docs/websocket/limits`            | WebSocket limits          | Reference   | P1       | M2        | `docs/memory_model.md`                                                           | Live   |
 
 ### 5.6 HTTP/2
 
@@ -654,20 +691,20 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.7 HTTP/3 and QUIC
 
-| ID      | Route                         | Page                    | Type        | Priority | Milestone | Source                        | Status |
-| ------- | ----------------------------- | ----------------------- | ----------- | -------- | --------- | ----------------------------- | ------ |
-| UWZ-130 | `/docs/http3`                 | HTTP/3 and QUIC         | Index       | P0       | M3        | `docs/quic.md`                | Live   |
-| UWZ-131 | `/docs/http3/getting-started` | HTTP/3 quickstart       | Tutorial    | P0       | M3        | `docs/quic.md`                | Live   |
-| UWZ-132 | `/docs/http3/configuration`   | HTTP/3 configuration    | Reference   | P1       | M3        | `docs/quic.md`                | Live   |
-| UWZ-133 | `/docs/http3/quic-transport`  | QUIC transport          | Explanation | P1       | M3        | `docs/architecture.md`        | Live   |
-| UWZ-134 | `/docs/http3/qpack`           | QPACK                   | Explanation | P2       | M5        | `src/quic/stream.zig`         | Live   |
-| UWZ-135 | `/docs/http3/request-path`    | HTTP/3 request path     | Explanation | P1       | M3        | `docs/quic.md`                | Live   |
-| UWZ-136 | `/docs/http3/early-data`      | Early data policy       | Explanation | P2       | M5        | `docs/tls.md`, `docs/quic.md` | Live   |
-| UWZ-137 | `/docs/http3/query-method`    | QUERY over HTTP/3       | How-to      | P2       | M5        | `docs/quic.md`                | Live   |
-| UWZ-138 | `/docs/http3/webtransport`    | WebTransport status     | Explanation | P1       | M4        | `docs/quic.md`, ADR 0001      | Live   |
-| UWZ-139 | `/docs/http3/limits`          | HTTP/3 limits           | Reference   | P1       | M3        | `docs/memory_model.md`        | Live   |
-| UWZ-140 | `/docs/http3/observability`   | HTTP/3 observability    | How-to      | P2       | M5        | `docs/quic.md`                | Live   |
-| UWZ-141 | `/docs/http3/testing`         | Testing an HTTP/3 route | How-to      | P1       | M4        | `CI_CD_PIPELINE.md`           | Live   |
+| ID      | Route                         | Page                    | Type        | Priority | Milestone | Source                                             | Status |
+| ------- | ----------------------------- | ----------------------- | ----------- | -------- | --------- | -------------------------------------------------- | ------ |
+| UWZ-130 | `/docs/http3`                 | HTTP/3 and QUIC         | Index       | P0       | M3        | `docs/quic.md`                                     | Live   |
+| UWZ-131 | `/docs/http3/getting-started` | HTTP/3 quickstart       | Tutorial    | P0       | M3        | `docs/quic.md`                                     | Live   |
+| UWZ-132 | `/docs/http3/configuration`   | HTTP/3 configuration    | Reference   | P1       | M3        | `docs/quic.md`                                     | Live   |
+| UWZ-133 | `/docs/http3/quic-transport`  | QUIC transport          | Explanation | P1       | M3        | `docs/architecture.md`                             | Live   |
+| UWZ-134 | `/docs/http3/qpack`           | QPACK                   | Explanation | P2       | M5        | `src/quic/stream.zig`                              | Live   |
+| UWZ-135 | `/docs/http3/request-path`    | HTTP/3 request path     | Explanation | P1       | M3        | `docs/quic.md`                                     | Live   |
+| UWZ-136 | `/docs/http3/early-data`      | Early data policy       | Explanation | P2       | M5        | `docs/tls.md`, `docs/quic.md`                      | Live   |
+| UWZ-137 | `/docs/http/query-method`     | QUERY over HTTP/3       | How-to      | P2       | M5        | `docs/quic.md` merged into /docs/http/query-method | Merged |
+| UWZ-138 | `/docs/http3/webtransport`    | WebTransport status     | Explanation | P1       | M4        | `docs/quic.md`, ADR 0001                           | Live   |
+| UWZ-139 | `/docs/http3/limits`          | HTTP/3 limits           | Reference   | P1       | M3        | `docs/memory_model.md`                             | Live   |
+| UWZ-140 | `/docs/http3/observability`   | HTTP/3 observability    | How-to      | P2       | M5        | `docs/quic.md`                                     | Live   |
+| UWZ-141 | `/docs/http3/testing`         | Testing an HTTP/3 route | How-to      | P1       | M4        | `CI_CD_PIPELINE.md`                                | Live   |
 
 ### 5.8 JSON-RPC
 
@@ -686,17 +723,17 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.9 Type safety
 
-| ID      | Route                                       | Page                       | Type        | Priority | Milestone | Source                                 | Status |
-| ------- | ------------------------------------------- | -------------------------- | ----------- | -------- | --------- | -------------------------------------- | ------ |
-| UWZ-160 | `/docs/type-safety`                         | Type safety                | Index       | P0       | M2        | `CODING_CONVENTION.md`, `src/root.zig` | Live   |
-| UWZ-161 | `/docs/type-safety/handlers`                | Typed handlers             | Explanation | P0       | M2        | `docs/api.md`                          | Live   |
-| UWZ-162 | `/docs/type-safety/json`                    | Typed JSON                 | How-to      | P0       | M2        | `docs/http.md`                         | Live   |
-| UWZ-163 | `/docs/type-safety/schema-validation`       | Schema validation          | How-to      | P1       | M3        | `src/http/schema.zig`                  | Live   |
-| UWZ-164 | `/docs/type-safety/typed-rpc`               | Typed RPC                  | How-to      | P0       | M3        | `docs/json_rpc.md`                     | Live   |
-| UWZ-165 | `/docs/type-safety/compile-time-capacities` | Compile-time capacities    | Explanation | P0       | M2        | `docs/memory_model.md`                 | Live   |
-| UWZ-166 | `/docs/type-safety/error-sets`              | Error sets and failures    | Explanation | P1       | M3        | `src/root.zig`                         | Live   |
-| UWZ-167 | `/docs/type-safety/c-abi-types`             | C ABI types                | Reference   | P1       | M4        | `include/uWebZockets.h`                | Live   |
-| UWZ-168 | `/docs/type-safety/design-rules`            | Design rules for consumers | Explanation | P2       | M5        | `CODING_CONVENTION.md`                 | Live   |
+| ID      | Route                                       | Page                       | Type        | Priority | Milestone | Source                                     | Status |
+| ------- | ------------------------------------------- | -------------------------- | ----------- | -------- | --------- | ------------------------------------------ | ------ |
+| UWZ-160 | `/docs/type-safety`                         | Type safety                | Index       | P0       | M2        | `CODING_CONVENTION.md`, `src/root.zig`     | Live   |
+| UWZ-161 | `/docs/type-safety/handlers`                | Typed handlers             | Explanation | P0       | M2        | `docs/api.md`                              | Live   |
+| UWZ-162 | `/docs/type-safety/json`                    | Typed JSON                 | How-to      | P0       | M2        | `docs/http.md` merged into /docs/http/json | Merged |
+| UWZ-163 | `/docs/type-safety/schema-validation`       | Schema validation          | How-to      | P1       | M3        | `src/http/schema.zig`                      | Live   |
+| UWZ-164 | `/docs/type-safety/typed-rpc`               | Typed RPC                  | How-to      | P0       | M3        | `docs/json_rpc.md`                         | Live   |
+| UWZ-165 | `/docs/type-safety/compile-time-capacities` | Compile-time capacities    | Explanation | P0       | M2        | `docs/memory_model.md`                     | Live   |
+| UWZ-166 | `/docs/type-safety/error-sets`              | Error sets and failures    | Explanation | P1       | M3        | `src/root.zig`                             | Live   |
+| UWZ-167 | `/docs/type-safety/c-abi-types`             | C ABI types                | Reference   | P1       | M4        | `include/uWebZockets.h`                    | Live   |
+| UWZ-168 | `/docs/type-safety/design-rules`            | Design rules for consumers | Explanation | P2       | M5        | `CODING_CONVENTION.md`                     | Live   |
 
 ### 5.10 Client
 
@@ -733,22 +770,22 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.12 Architecture and internals
 
-| ID      | Route                                   | Page                       | Type        | Priority | Milestone | Source                       | Status |
-| ------- | --------------------------------------- | -------------------------- | ----------- | -------- | --------- | ---------------------------- | ------ |
-| UWZ-200 | `/docs/architecture`                    | Architecture               | Index       | P0       | M4        | `docs/architecture.md`       | Live   |
-| UWZ-201 | `/docs/architecture/shared-nothing`     | Worker runtime topology    | Explanation | P0       | M4        | `docs/architecture.md`       | Live   |
-| UWZ-202 | `/docs/architecture/event-loop`         | Event loop and completions | Explanation | P0       | M4        | `docs/callback_lifecycle.md` | Live   |
-| UWZ-203 | `/docs/architecture/memory-model`       | Slab and memory model      | Explanation | P0       | M4        | `docs/memory_model.md`       | Live   |
-| UWZ-204 | `/docs/architecture/router-internals`   | Router internals           | Explanation | P2       | M5        | `src/router/radix.zig`       | Live   |
-| UWZ-205 | `/docs/architecture/callback-lifecycle` | Callback lifecycle         | Reference   | P1       | M4        | `docs/callback_lifecycle.md` | Live   |
-| UWZ-206 | `/docs/architecture/transports`         | Transports                 | Explanation | P1       | M4        | `docs/architecture.md`       | Live   |
-| UWZ-207 | `/docs/architecture/cluster-internals`  | Cluster internals          | Explanation | P2       | M5        | ADR 0007                     | Live   |
-| UWZ-208 | `/docs/architecture/shutdown`           | Shutdown ordering          | Explanation | P1       | M4        | `docs/architecture.md`       | Live   |
-| UWZ-209 | `/docs/architecture/backends`           | Runtime backends           | Explanation | P2       | M5        | `docs/architecture.md`       | Live   |
-| UWZ-210 | `/docs/architecture/edge-and-wasm`      | Edge and WASM              | Explanation | P2       | M5        | `docs/operations.md`         | Live   |
-| UWZ-211 | `/docs/architecture/c-abi`              | C ABI architecture         | Explanation | P1       | M4        | `include/uWebZockets.h`      | Live   |
-| UWZ-212 | `/docs/architecture/dependencies`       | Dependency policy          | Explanation | P2       | M5        | `docs/dependency_forks.md`   | Live   |
-| UWZ-213 | `/docs/architecture/ktls-and-xdp`       | kTLS and AF_XDP            | Explanation | P2       | M5        | `docs/operations.md`         | Live   |
+| ID      | Route                                   | Page                       | Type        | Priority | Milestone | Source                                                           | Status |
+| ------- | --------------------------------------- | -------------------------- | ----------- | -------- | --------- | ---------------------------------------------------------------- | ------ |
+| UWZ-200 | `/docs/architecture`                    | Architecture               | Index       | P0       | M4        | `docs/architecture.md`                                           | Live   |
+| UWZ-201 | `/docs/architecture/shared-nothing`     | Worker runtime topology    | Explanation | P0       | M4        | `docs/architecture.md` merged into /docs/concepts/shared-nothing | Merged |
+| UWZ-202 | `/docs/architecture/event-loop`         | Event loop and completions | Explanation | P0       | M4        | `docs/callback_lifecycle.md`                                     | Live   |
+| UWZ-203 | `/docs/architecture/memory-model`       | Slab and memory model      | Explanation | P0       | M4        | `docs/memory_model.md` merged into /docs/concepts/capacity-model | Merged |
+| UWZ-204 | `/docs/architecture/router-internals`   | Router internals           | Explanation | P2       | M5        | `src/router/radix.zig`                                           | Live   |
+| UWZ-205 | `/docs/architecture/callback-lifecycle` | Callback lifecycle         | Reference   | P1       | M4        | `docs/callback_lifecycle.md`                                     | Live   |
+| UWZ-206 | `/docs/architecture/transports`         | Transports                 | Explanation | P1       | M4        | `docs/architecture.md`                                           | Live   |
+| UWZ-207 | `/docs/architecture/cluster-internals`  | Cluster internals          | Explanation | P2       | M5        | ADR 0007                                                         | Live   |
+| UWZ-208 | `/docs/architecture/shutdown`           | Shutdown ordering          | Explanation | P1       | M4        | `docs/architecture.md`                                           | Live   |
+| UWZ-209 | `/docs/architecture/backends`           | Runtime backends           | Explanation | P2       | M5        | `docs/architecture.md`                                           | Live   |
+| UWZ-210 | `/docs/architecture/edge-and-wasm`      | Edge and WASM              | Explanation | P2       | M5        | `docs/operations.md`                                             | Live   |
+| UWZ-211 | `/docs/architecture/c-abi`              | C ABI architecture         | Explanation | P1       | M4        | `include/uWebZockets.h`                                          | Live   |
+| UWZ-212 | `/docs/architecture/dependencies`       | Dependency policy          | Explanation | P2       | M5        | `docs/dependency_forks.md`                                       | Live   |
+| UWZ-213 | `/docs/architecture/ktls-and-xdp`       | kTLS and AF_XDP            | Explanation | P2       | M5        | `docs/operations.md`                                             | Live   |
 
 ### 5.13 Performance
 
@@ -810,31 +847,31 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.16 Guides and cookbook
 
-| ID      | Route                            | Page                      | Type   | Priority | Milestone | Source                                | Status |
-| ------- | -------------------------------- | ------------------------- | ------ | -------- | --------- | ------------------------------------- | ------ |
-| UWZ-270 | `/docs/guides`                   | Guides                    | Index  | P1       | M5        | This file                             | Live   |
-| UWZ-271 | `/docs/guides/json-api`          | Build a JSON API          | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
-| UWZ-272 | `/docs/guides/authentication`    | Add authentication        | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
-| UWZ-273 | `/docs/guides/rate-limiting`     | Add rate limiting         | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
-| UWZ-274 | `/docs/guides/file-server`       | Serve files               | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
-| UWZ-275 | `/docs/guides/chat`              | Build a chat server       | Recipe | P1       | M5        | `examples/chat_server.zig`            | Live   |
-| UWZ-276 | `/docs/guides/presence`          | Track presence            | Recipe | P2       | M5        | `docs/websocket.md`                   | Live   |
-| UWZ-277 | `/docs/guides/rpc-service`       | Build an RPC service      | Recipe | P1       | M5        | `examples/rpc_server.zig`             | Live   |
-| UWZ-278 | `/docs/guides/sse`               | Stream events with SSE    | Recipe | P1       | M5        | `src/http/response.zig`               | Live   |
-| UWZ-279 | `/docs/guides/streaming`         | Stream a large response   | Recipe | P1       | M5        | `docs/http.md`                        | Live   |
-| UWZ-280 | `/docs/guides/uploads`           | Handle uploads            | Recipe | P2       | M5        | `docs/http.md`                        | Live   |
-| UWZ-281 | `/docs/guides/cookies`           | Use cookies safely        | Recipe | P1       | M5        | `src/http/cookie.zig`                 | Live   |
-| UWZ-282 | `/docs/guides/cors`              | Configure CORS            | Recipe | P1       | M5        | `src/http/middleware.zig`             | Live   |
-| UWZ-283 | `/docs/guides/openapi`           | Publish OpenAPI           | Recipe | P2       | M5        | `src/http/openapi.zig`                | Live   |
-| UWZ-284 | `/docs/guides/webhooks`          | Receive webhooks          | Recipe | P2       | M5        | `docs/http.md`                        | Live   |
-| UWZ-285 | `/docs/guides/health-checks`     | Add health checks         | Recipe | P1       | M5        | This file                             | Live   |
-| UWZ-286 | `/docs/guides/graceful-shutdown` | Add graceful shutdown     | Recipe | P1       | M5        | `docs/operations.md`                  | Live   |
-| UWZ-287 | `/docs/guides/cluster`           | Scale across cores        | Recipe | P1       | M5        | `examples/shared_nothing_cluster.zig` | Live   |
-| UWZ-288 | `/docs/guides/https`             | Serve HTTPS               | Recipe | P1       | M5        | `examples/https_server.zig`           | Live   |
-| UWZ-289 | `/docs/guides/http3`             | Serve HTTP/3              | Recipe | P1       | M5        | `examples/http3_server.zig`           | Live   |
-| UWZ-290 | `/docs/guides/c-abi`             | Embed from C or C++       | Recipe | P2       | M5        | `include/uWebZockets.h`               | Live   |
-| UWZ-291 | `/docs/guides/testing`           | Test a µWebZockets app    | Recipe | P1       | M5        | `tests/`                              | Live   |
-| UWZ-292 | `/docs/guides/benchmarking`      | Benchmark your deployment | Recipe | P2       | M5        | `benchmarks/`                         | Live   |
+| ID      | Route                            | Page                      | Type   | Priority | Milestone | Source                                                                             | Status |
+| ------- | -------------------------------- | ------------------------- | ------ | -------- | --------- | ---------------------------------------------------------------------------------- | ------ |
+| UWZ-270 | `/docs/guides`                   | Guides                    | Index  | P1       | M5        | This file                                                                          | Live   |
+| UWZ-271 | `/docs/guides/json-api`          | Build a JSON API          | Recipe | P1       | M5        | `docs/http.md`                                                                     | Live   |
+| UWZ-272 | `/docs/guides/authentication`    | Add authentication        | Recipe | P1       | M5        | `docs/http.md`                                                                     | Live   |
+| UWZ-273 | `/docs/guides/rate-limiting`     | Add rate limiting         | Recipe | P1       | M5        | `docs/http.md` merged into /docs/http/rate-limiting                                | Merged |
+| UWZ-274 | `/docs/guides/file-server`       | Serve files               | Recipe | P1       | M5        | `docs/http.md` merged into /docs/http/static-files                                 | Merged |
+| UWZ-275 | `/docs/guides/chat`              | Build a chat server       | Recipe | P1       | M5        | `examples/chat_server.zig` merged into /examples/chat-server                       | Merged |
+| UWZ-276 | `/docs/guides/presence`          | Track presence            | Recipe | P2       | M5        | `docs/websocket.md`                                                                | Live   |
+| UWZ-277 | `/docs/guides/rpc-service`       | Build an RPC service      | Recipe | P1       | M5        | `examples/rpc_server.zig` merged into /examples/rpc-server                         | Merged |
+| UWZ-278 | `/docs/guides/sse`               | Stream events with SSE    | Recipe | P1       | M5        | `src/http/response.zig` merged into /docs/http/server-sent-events                  | Merged |
+| UWZ-279 | `/docs/guides/streaming`         | Stream a large response   | Recipe | P1       | M5        | `docs/http.md`                                                                     | Live   |
+| UWZ-280 | `/docs/guides/uploads`           | Handle uploads            | Recipe | P2       | M5        | `docs/http.md`                                                                     | Live   |
+| UWZ-281 | `/docs/guides/cookies`           | Use cookies safely        | Recipe | P1       | M5        | `src/http/cookie.zig`                                                              | Live   |
+| UWZ-282 | `/docs/guides/cors`              | Configure CORS            | Recipe | P1       | M5        | `src/http/middleware.zig`                                                          | Live   |
+| UWZ-283 | `/docs/guides/openapi`           | Publish OpenAPI           | Recipe | P2       | M5        | `src/http/openapi.zig` merged into /docs/http/openapi                              | Merged |
+| UWZ-284 | `/docs/guides/webhooks`          | Receive webhooks          | Recipe | P2       | M5        | `docs/http.md`                                                                     | Live   |
+| UWZ-285 | `/docs/guides/health-checks`     | Add health checks         | Recipe | P1       | M5        | This file                                                                          | Live   |
+| UWZ-286 | `/docs/guides/graceful-shutdown` | Add graceful shutdown     | Recipe | P1       | M5        | `docs/operations.md`                                                               | Live   |
+| UWZ-287 | `/docs/guides/cluster`           | Scale across cores        | Recipe | P1       | M5        | `examples/shared_nothing_cluster.zig` merged into /examples/shared-nothing-cluster | Merged |
+| UWZ-288 | `/docs/guides/https`             | Serve HTTPS               | Recipe | P1       | M5        | `examples/https_server.zig` merged into /examples/https-server                     | Merged |
+| UWZ-289 | `/docs/guides/http3`             | Serve HTTP/3              | Recipe | P1       | M5        | `examples/http3_server.zig` merged into /examples/http3-server                     | Merged |
+| UWZ-290 | `/docs/guides/c-abi`             | Embed from C or C++       | Recipe | P2       | M5        | `include/uWebZockets.h`                                                            | Live   |
+| UWZ-291 | `/docs/guides/testing`           | Test a µWebZockets app    | Recipe | P1       | M5        | `tests/`                                                                           | Live   |
+| UWZ-292 | `/docs/guides/benchmarking`      | Benchmark your deployment | Recipe | P2       | M5        | `benchmarks/`                                                                      | Live   |
 
 ### 5.17 Migration
 
@@ -1749,12 +1786,16 @@ Required content:
 - Explanation of the capacities chosen and why.
 - One variation or next step.
 - For cluster/TLS/HTTP3 examples, the shutdown and verification commands.
+- A tutorial that teaches the same program is folded into this page, not kept as
+  a second page. Prerequisites, the extra walkthrough, and the unique variations
+  move into the canonical page; the old route gets a 301.
 
 Acceptance:
 
 - Every page builds from the current repository.
 - The example source and page code do not drift; a CI check compares them.
 - Examples are not used as a substitute for reference pages.
+- No two pages present the same example program as separate tutorials.
 
 ### 6.20 Project
 
@@ -2460,7 +2501,7 @@ These queries must return the intended page in the top three at launch:
 | `stream adapter`         | `/docs/http/helpers/websocket-streams`                 |
 | `websocket backpressure` | `/docs/websocket/backpressure`                         |
 | `HTTP/2 streams`         | `/docs/http2/frames-and-streams`                       |
-| `HTTP/3 QUERY`           | `/docs/http3/query-method`                             |
+| `HTTP/3 QUERY`           | `/docs/http/query-method`                              |
 | `JSON-RPC typed`         | `/docs/json-rpc/typed-procedures`                      |
 | `JSON-RPC batch`         | `/docs/json-rpc/batches-and-notifications`             |
 | `JSON-RPC cluster`       | `/docs/json-rpc/cluster-deployment`                    |
@@ -3291,7 +3332,7 @@ Status vocabulary: `Supported`, `Helper-only`, `Experimental`,
 | Cluster pub/sub                                       | Supported                            | `Cluster.publish`                              | `/docs/websocket/cluster-pub-sub`            | ADR 0007                          |
 | RFC 8441 HTTP/2 tunnel                                | Supported, one per connection        | extended CONNECT                               | `/docs/websocket/http2-tunnels`              | `docs/http2.md`                   |
 | WebSocket client                                      | Not supported                        | none                                           | `/docs/websocket`                            | roadmap                           |
-| WebSocket origin/subprotocol negotiation              | Application-owned                    | `Request` headers                              | `/docs/websocket/security`                   | `docs/websocket.md`               |
+| WebSocket origin/subprotocol negotiation              | Application-owned                    | `Request` headers                              | `/docs/security/websocket-security`          | `docs/websocket.md`               |
 | HTTP/2 request routing                                | Supported, bounded                   | `init_https`, plaintext preface                | `/docs/http2`                                | `docs/http2.md`                   |
 | HTTP/2 HPACK                                          | Supported, bounded                   | `uz.http2_hpack`                               | `/docs/http2/hpack`                          | `src/http2/hpack.zig`             |
 | HTTP/2 flow control                                   | Supported                            | transparent                                    | `/docs/http2/flow-control`                   | `src/http2`                       |
@@ -3500,17 +3541,18 @@ source at the time it is written.
 
 ### 18.6 Appendix F: document change log
 
-| Date       | Change                                                                                                                                                                                                       | Author             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
-| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices                                                                                                               | Docs planning pass |
-| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                                                                                                                                | Docs planning pass |
-| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                                                                                                                  | Docs planning pass |
-| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                                               | Docs writing pass  |
-| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                                   | Docs writing pass  |
-| 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages                   | Docs writing pass  |
-| 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                                       | Docs writing pass  |
-| 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                                        | Docs writing pass  |
-| 2026-11-09 | Shipped the migration, reference, and example sections; merged the guided tutorials into `/examples` and folded the first HTTP tutorial into Hello world; added reference API coverage and docs parity tests | Docs writing pass  |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                       | Author             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 2026-10-31 | Initial comprehensive roadmap; page register, milestones, contracts, templates, and appendices                                                                                                                                                                                                                                                                               | Docs planning pass |
+| 2026-10-31 | Renamed from `DOCS-TODO.md` to `uWZ-TODO.md` and moved to the repository root                                                                                                                                                                                                                                                                                                | Docs planning pass |
+| 2026-10-31 | Added the nested Helpers category after the Hono comparison; total page register is now 269                                                                                                                                                                                                                                                                                  | Docs planning pass |
+| 2026-10-31 | Shipped `/docs`, What/Why, and all Getting Started pages with Vietnamese mirrors and redirects                                                                                                                                                                                                                                                                               | Docs writing pass  |
+| 2026-11-01 | Applied the production origin and accessible accents; corrected source-backed tutorial claims; audit clean                                                                                                                                                                                                                                                                   | Docs writing pass  |
+| 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages                                                                                                                                                                                   | Docs writing pass  |
+| 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                                                                                                                                                                                                       | Docs writing pass  |
+| 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                                                                                                                                                                                                        | Docs writing pass  |
+| 2026-11-09 | Shipped the migration, reference, and example sections; merged the guided tutorials into `/examples` and folded the first HTTP tutorial into Hello world; added reference API coverage and docs parity tests                                                                                                                                                                 | Docs writing pass  |
+| 2026-11-09 | Merged every remaining guided example into its canonical program page and merged repeated architecture, guide, glossary, JSON, and WebSocket-security pages into their owning topics; removed 20 duplicate pages in both locales, added direct 301s, and recorded the merge-not-duplicate rule. The site now has 474 documentation pages, 515 built pages, and 86 redirects. | Docs consolidation |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

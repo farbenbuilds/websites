@@ -2,7 +2,7 @@
 title: Chat server
 description: Run a WebSocket chat server with a global room, verify join and broadcast behavior with wscat, and review the default message capacities.
 sidebar:
-  order: 12
+  order: 7
 search:
   tags: [reference, tutorial, websocket, capacity]
 ---
@@ -204,6 +204,58 @@ connections, 32 KiB messages, a 32 KiB queue, a 4 KiB body, a 120 s idle
 timeout, and reserved compression scratch. The route still has to opt into
 `.permessage_deflate` before compression is negotiated.
 
+These bounds are per worker. Four workers can each hold 8,192 subscriptions, and
+a cluster broadcast consumes one inbox slot per worker, not one per connection.
+
+## Separate rooms [#separate-rooms]
+
+Register one route per room and share the callbacks through a topic parameter:
+
+```zig
+fn join(ws: *uz.WebSocket, topic: []const u8) void {
+    ws.subscribe(topic) catch return ws.terminate();
+    _ = ws.publish(topic, "system: a peer joined", true);
+}
+
+fn on_lobby_open(ws: *uz.WebSocket) void {
+    join(ws, "room:lobby");
+}
+
+fn on_lobby_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room:lobby", message, opcode == .text);
+}
+```
+
+Repeat the pair for each room and register them as `/chat/lobby` and
+`/chat/ops`. Keep the room list in code so topic names stay literals.
+
+## Add a history buffer [#history]
+
+Keep a fixed ring of copied messages and replay it on open. Copy into fixed
+storage; retaining the callback slice would read freed memory:
+
+```zig
+const Entry = struct { len: usize = 0, bytes: [128]u8 = undefined };
+var history: [50]Entry = undefined;
+var history_len: usize = 0;
+var history_next: usize = 0;
+
+fn remember(message: []const u8) void {
+    if (message.len > 128) return;
+    const entry = &history[history_next];
+    @memcpy(entry.bytes[0..message.len], message);
+    entry.len = message.len;
+    history_next = (history_next + 1) % history.len;
+    history_len = @min(history_len + 1, history.len);
+}
+```
+
+Call `remember` from `on_message` before publishing, then replay from the oldest
+entry with `ws.send`. This ring is process-wide. A `Cluster` runs workers as
+threads in one address space, so a module-level ring would be shared without a
+lock. Keep history in the client or an external store when you cluster, or run
+one process per worker.
+
 ## Variation [#variation]
 
 Enable per-message deflate on the chat route:
@@ -229,8 +281,12 @@ without a bound. Compare the startup slab before enabling it for every route.
   count, and slow-subscriber behavior.
 - [Cluster pub/sub](/docs/websocket/cluster-pub-sub) broadcasts the same topic
   across shared-nothing workers.
+- [WebSocket limits](/docs/websocket/limits) lists every message, subscription,
+  and queue bound.
+- [Heartbeats](/docs/websocket/heartbeats) covers ping and pong timeouts for
+  silent peers.
 - [Per-message deflate](/docs/websocket/compression) covers negotiation and
   expansion limits.
-- [Your first WebSocket](/examples/first-websocket) teaches the upgrade
+- [WebSocket quickstart](/docs/websocket/quickstart) teaches the upgrade
   lifecycle step by step.
 - [RPC server](/examples/rpc-server) is the next example.

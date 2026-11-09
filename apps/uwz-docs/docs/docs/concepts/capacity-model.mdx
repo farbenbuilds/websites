@@ -1,15 +1,15 @@
 ---
 title: Capacity model
-description: Read one ServerConfig, predict the startup slab, and know which limit rejects a request when capacity runs out.
+description: Read one ServerConfig, predict the startup slab region by region, compute each stride, and know which limit rejects a request when capacity runs out.
 sidebar:
   order: 9
 search:
-  tags: [concept, capacity]
+  tags: [concept, capacity, memory]
 ---
 
 Capacity is chosen before the first listener starts and is never grown at
-runtime. This page shows how `ServerConfig` becomes one slab, how to read its
-exact size, which presets exist, and what a client sees when a limit is reached.
+runtime. This page shows how `ServerConfig` becomes one slab, how each stride is
+computed, which presets exist, and what a client sees when a limit is reached.
 The exhaustive field table is [ServerConfig](/reference/server-config).
 
 ## One slab, carved once
@@ -17,59 +17,65 @@ The exhaustive field table is [ServerConfig](/reference/server-config).
 `App.init` allocates the block through `std.heap.page_allocator`;
 `App.init_configured` and `Server.builder(...).build` use the allocator you pass.
 `App.init_from_slab` accepts caller-owned storage with the same contract. The
-block is partitioned in the order below; an optional region has zero length when
-its feature is off.
+block is partitioned in the order below, and an optional region has zero length
+when its feature is off.
 
-| #   | Region               | Bytes per connection                              |
-| --- | -------------------- | ------------------------------------------------- |
-| 1   | Connection pool      | `sizeof(TcpConnection)`                           |
-| 2   | Freelist indices     | `sizeof(usize)`                                   |
-| 3   | Request buffers      | `request_stride`                                  |
-| 4   | Header extras        | `extra_header_stride`                             |
-| 5   | Route-capture extras | `extra_route_param_stride`                        |
-| 6   | HTTP/2 sessions      | `h2_session_stride`                               |
-| 7   | Write queues         | `write_queue_size`                                |
-| 8   | WebSocket messages   | `max_ws_message_size`                             |
-| 9   | RFC 7692 scratch     | `2 * worst_case_scratch` when `compression` is on |
-| 10  | Datagram rings       | `datagram_stride` when datagrams are on           |
+| #   | Region               | Bytes                                                         |
+| --- | -------------------- | ------------------------------------------------------------- |
+| 1   | Connection pool      | `max_connections * sizeof(TcpConnection)`                     |
+| 2   | Freelist indices     | `max_connections * sizeof(usize)`                             |
+| 3   | Request buffers      | `max_connections * request_stride`                            |
+| 4   | Header extras        | `max_connections * extra_header_stride`                       |
+| 5   | Route-capture extras | `max_connections * extra_route_param_stride`                  |
+| 6   | HTTP/2 sessions      | `max_connections * h2_session_stride`                         |
+| 7   | Write queues         | `max_connections * write_queue_size`                          |
+| 8   | WebSocket messages   | `max_connections * max_ws_message_size`                       |
+| 9   | RFC 7692 scratch     | `max_connections * compression_stride` when compression is on |
+| 10  | Datagram rings       | `max_connections * datagram_stride` when datagrams are on     |
 
-The per-connection regions are followed by page-aligned AF_XDP UMEM when kernel
-bypass is selected, then application-wide storage. Multiply each per-connection
-row by `max_connections`.
+Page-aligned AF_XDP UMEM follows the per-connection regions when kernel bypass
+is selected. Application-wide storage follows it: router arrays sized by
+`router_storage_bytes()`, and one cache-line-aligned metrics registry when
+observability is on. `TcpConnection` is an internal type; its size is not part of
+the public contract. The datagram row shows the payload stride only; the session
+id, sequence, length, and ring arrays also scale with
+`max_connections * datagram_slots`.
 
-| Application-wide region | Size                                      |
-| ----------------------- | ----------------------------------------- |
-| Router storage          | Nodes, patterns, middleware, and registry |
-| Metrics registry        | One cache-line-aligned registry           |
+## Strides and alignment
 
-`request_stride` is `max_request_line_size + max_header_size + max_body_size`
-plus 1024 bytes of framing slack, rounded up to 16 bytes. Write queues start on
-a 64-byte cache line. Datagram and AF_XDP regions have zero length unless those
-features are selected.
+Both the size computation and the carve use one layout planner, so sizing and
+partitioning cannot disagree.
 
-The HTTP/2 session dominates the per-connection footprint. It embeds eight
-streams with request, body, and response storage, which is why presets spend
-bytes on the dimensions a workload actually uses instead of maximizing all of
-them.
+| Stride                     | Formula                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `request_stride`           | `align16(max_request_line_size + max_header_size + 1024 + max_body_size)`                |
+| `extra_header_stride`      | `align16((max_header_count - 64) * 2 * sizeof([]const u8))`, zero at the inline capacity |
+| `extra_route_param_stride` | `align((max_route_params - 16) * 2 * sizeof([]const u8), alignOf([]const u8))`           |
+| `h2_session_stride`        | `align(h2_session_bytes, Http2Session.storage_alignment)`                                |
+| `compression_stride`       | `align16(2 * worst_case_scratch_bound(max_ws_message_size))`                             |
+
+Request buffers start on a 16-byte boundary. Write queues start on a 64-byte
+cache line. WebSocket message regions use 16-byte alignment. The slab itself
+requires `max(64, alignOf(TcpConnection))`, or page alignment when kernel bypass
+is selected. The 1024-byte term in `request_stride` is framing slack, not a user
+capacity.
 
 ## Start from a preset
 
-| Preset                   | Connections | Idle timeout |
-| ------------------------ | ----------: | -----------: |
-| `Presets.microservice`   |         256 |         30 s |
-| `Presets.websocket_chat` |         512 |        120 s |
-| `Presets.file_server`    |         128 |        300 s |
-
-The workload capacities for the same presets:
-
-| Preset                   | WS message | Write queue | Request body |
-| ------------------------ | ---------: | ----------: | -----------: |
-| `Presets.microservice`   |      8 KiB |      16 KiB |       64 KiB |
-| `Presets.websocket_chat` |     32 KiB |      32 KiB |        4 KiB |
-| `Presets.file_server`    |      4 KiB |     512 KiB |        8 KiB |
-
 Every preset is a plain `ServerConfig`, so a preset is a starting point rather
 than a closed profile.
+
+| Preset                          | Connections | Idle timeout | WS message | Write queue | Request body |
+| ------------------------------- | ----------: | -----------: | ---------: | ----------: | -----------: |
+| `Presets.microservice`          |         256 |         30 s |      8 KiB |      16 KiB |       64 KiB |
+| `Presets.websocket_chat`        |         512 |        120 s |     32 KiB |      32 KiB |        4 KiB |
+| `Presets.file_server`           |         128 |        300 s |      4 KiB |     512 KiB |        8 KiB |
+| `Presets.kernel_bypass`         |         512 |         60 s |      8 KiB |      32 KiB |       16 KiB |
+| `Presets.webtransport_realtime` |         512 |         60 s |      8 KiB |      32 KiB |        4 KiB |
+
+The embedded HTTP/2 session dominates the per-connection footprint. Each preset
+therefore spends bytes on the capacity its workload exercises instead of
+maximizing every dimension.
 
 ## Override individual fields
 
@@ -120,10 +126,36 @@ the RFC 7692 compression engines created by `compression = true`, per-worker
 cluster inboxes, per-worker `SSL_CTX` objects, and the QUIC engine pools created
 by `listen_udp`.
 
+## Structure of arrays
+
+Large collections are stored as parallel arrays so a hot scan touches only the
+fields it needs.
+
+| Collection      | Layout                                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| Connection pool | Contiguous `TcpConnection` slab, LIFO freelist indices, and an activity bitmap                                  |
+| Router          | Node segments, child and sibling links, route bits, method handlers, and WebSocket behaviors as separate arrays |
+| HTTP/2 session  | Per-stream request, body, and response state, plus connection-wide HPACK storage                                |
+| Cluster inbox   | Topic, payload, length, and flag arrays behind a sequence ring                                                  |
+| Query and form  | Four fixed 32-entry arrays of pointers and lengths, all borrowed from the request target                        |
+| Cookies         | Four fixed 32-entry arrays populated by a vectorized scan                                                       |
+
+Acquire and release on the connection pool are O(1) and range-checked. Each slot
+embeds one idle timer node and nine parking slots, so a deadline never allocates.
+
+## Per-worker inbox memory
+
+A cluster adds memory outside the slab. Each active worker reserves 64 messages
+of `max_ws_message_size` plus one message-sized scratch buffer for its inbox.
+At the 16 KiB default that is 1,064,960 bytes, about 1.0 MiB per worker. Only
+active workers allocate an inbox, so a large compiled capacity does not reserve
+memory for workers that never start.
+
 ## What exhaustion looks like
 
 | Resource exhausted                 | Result                                                                       |
 | ---------------------------------- | ---------------------------------------------------------------------------- |
+| Connection pool                    | The accepted socket is closed immediately; no queue waits for a slot         |
 | Request line or header block       | `431 Request Header Fields Too Large` with a structured document             |
 | Request body                       | `413 Payload Too Large` on HTTP/1.1 and HTTP/3; HTTP/2 closes the connection |
 | WebSocket tunnel or capacity limit | `503 Service Unavailable`                                                    |
@@ -133,15 +165,9 @@ by `listen_udp`.
 
 Oversized input is rejected, never expanded. The rejection document names the
 limit and its value, so a client can tell a 64 KiB body limit apart from a
-header limit without reading the server log.
-
-## Per-worker inbox memory
-
-A cluster adds memory outside the slab. Each active worker reserves 64 messages
-of `max_ws_message_size` plus one message-sized scratch buffer for its inbox,
-which is about 1.0 MiB per worker at the 16 KiB default. Only active workers
-allocate an inbox, so a large compiled capacity does not reserve memory for
-workers that never start.
+header limit without reading the server log. A full ring applies backpressure
+instead of growing memory; the [Backpressure](/docs/concepts/backpressure) page
+shows how a producer resumes.
 
 ## Next
 

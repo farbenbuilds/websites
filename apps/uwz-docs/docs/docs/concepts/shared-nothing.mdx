@@ -32,8 +32,8 @@ worker's loop.
 Each worker owns its loop, slab, and TLS context. The kernel distributes accepted
 connections across their listeners, and each worker drains only its own inbox. A
 publish offers the message to every inbox; it never writes into connection
-storage. The [cluster model](/docs/concepts/cluster-model) shows the topology and
-the publish path in one diagram.
+storage. The [cluster model](/docs/concepts/cluster-model) owns the topology
+diagram, the active-worker rules, and the publish semantics.
 
 ## One port, no shared connection
 
@@ -76,32 +76,19 @@ The owning loop copies each message through queue-owned scratch. A publish
 therefore cannot overwrite a connection's fragmented WebSocket assembly buffer,
 even when the two run on different workers.
 
-## Capacity is not the active worker count
-
-`App.cluster(N)` and `Server.builder(...).build_cluster(allocator, N, options)`
-compile a capacity of `N` workers. The runtime may use fewer:
-
-- `ClusterOptions.worker_count` selects the active count explicitly.
-- `build_cluster_from_environment` prefers that option, then
-  `UWEBZOCKETS_WORKERS`, then the platform CPU count.
-
-Only active workers allocate a slab, an inbox, and a thread handle, so a large
-compiled capacity does not reserve memory for workers that never start.
-`worker_count()` reports the allocated count, `worker_capacity()` reports the
-compiled capacity, and `worker(i)` returns null once the group has fewer active
-workers.
-
 ## Why no shared connection state
 
 Sharing a connection would need a lock on every read, write, completion, and
 timeout, and it would put two event loops on one buffer. The model avoids that
 by giving every connection exactly one owner:
 
-- A connection slot is carved from the accepting worker's slab.
-- Its completions are inline members of the connection, not heap objects.
-- Its async token is event-loop confined.
-- Its deadlines live on the worker's timing wheel.
-- Its TLS session comes from the worker's `SSL_CTX`.
+| Connection state | Owner                                              |
+| ---------------- | -------------------------------------------------- |
+| Slot             | Accepting worker's pool and slab                   |
+| Completions      | Inline members of the connection, not heap objects |
+| Async token      | Owning event loop only                             |
+| Deadlines        | Owning worker's timing wheel                       |
+| TLS session      | Accepting worker's `SSL_CTX`                       |
 
 The cost is that memory scales with active workers rather than with connection
 count alone: each one carries a slab, an inbox, and, with TLS, a context. The
@@ -115,5 +102,5 @@ benefit is that the hot path has no cross-thread coordination. See
 - [Backpressure](/docs/concepts/backpressure) explains what a full inbox and a
   full write ring report.
 - [Capacity model](/docs/concepts/capacity-model) sizes the slab and the inbox.
-- [Worker runtime topology](/docs/architecture/shared-nothing) maps the same split
-  to loops, slabs, and inboxes.
+- [Callback lifecycle](/docs/architecture/callback-lifecycle) maps the loop
+  callbacks that keep state inside one worker.

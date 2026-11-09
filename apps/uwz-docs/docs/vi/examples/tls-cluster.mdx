@@ -2,7 +2,7 @@
 title: TLS worker group
 description: Chạy worker group bật TLS với ba listener mode, chứng chỉ riêng cho từng worker và worker count cùng connection count điều khiển qua environment.
 sidebar:
-  order: 9
+  order: 4
 search:
   tags: [reference, tutorial, tls, cluster, http1, http2]
 ---
@@ -380,10 +380,11 @@ tạo credential ephemeral. `UWZ_CPU_AFFINITY` không có tác dụng trong mode
 
 ## Next [#next]
 
-- [Your first cluster](/examples/first-cluster) đi qua cluster lifecycle
-  và failure reporting.
-- [Your first TLS server](/examples/first-tls-server) đi qua mTLS và
-  credential production.
+- [Cluster model](/docs/concepts/cluster-model) đi qua cluster lifecycle và
+  failure reporting.
+- [HTTPS server](/examples/https-server) đi qua credential trong bộ nhớ và PEM.
+- [Mutual TLS](/docs/security/mtls) trình bày client certificate và CA bundle.
+- [TLS deployment](/docs/deployment/tls) trình bày rotation production.
 - [Shared-nothing workers](/docs/concepts/shared-nothing) giải thích ownership
   model đằng sau TLS context riêng cho từng worker.
 - [ServerConfig](/reference/server-config) liệt kê mọi capacity và default.

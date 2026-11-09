@@ -4,7 +4,7 @@ description: Đăng ký route QUERY an toàn, vượt qua gate cú pháp Content
 sidebar:
   order: 21
 search:
-  tags: [how-to, http]
+  tags: [how-to, http, http3]
 ---
 
 RFC 10008 thêm `QUERY` như một method an toàn, idempotent, với request content
@@ -61,6 +61,14 @@ type hợp lệ về cú pháp: một token, `/`, một token, và các tham s�
 `;name=value` tùy chọn. Ký tự token như `%`, giá trị tham số trong quote và
 whitespace quanh `;` và `=` đều được chấp nhận.
 
+| Trạng thái header                   | Kết quả                              |
+| ----------------------------------- | ------------------------------------ |
+| Thiếu                               | `400 Bad Request`                    |
+| Trùng                               | `400 Bad Request`                    |
+| Media type rỗng hoặc sai            | `400 Bad Request`                    |
+| `application/json`                  | Chấp nhận; handler quyết định schema |
+| `application/x-www-form-urlencoded` | Chấp nhận; handler quyết định schema |
+
 Field bị thiếu, field bị trùng hoặc cú pháp sai sẽ nhận
 
 ```console
@@ -73,7 +81,9 @@ cũng nhận `400`, không phải `404`.
 
 Gate này chỉ kiểm tra cú pháp. Nó không quyết định media type có phù hợp với
 resource hay không, charset có chấp nhận được hay không, hoặc body có khớp với
-type đã khai báo hay không.
+type đã khai báo hay không. Trả `415 Unsupported Media Type` khi syntax hợp lệ
+nhưng media type không hỗ trợ. Khác biệt này quan trọng với client: `400` nghĩa
+request sai, `415` nghĩa server không nhận representation này.
 
 ## Media policy do handler sở hữu
 
@@ -119,6 +129,12 @@ phải bảo đảm.
 Route, gate `Content-Type` và handler hoàn toàn giống nhau. Handler chạy được
 trên HTTP/1.1 không cần nhánh riêng theo transport.
 
+## Ghi chú response
+
+Response `QUERY` theo quy tắc response thường của transport. Body được phép, ngữ
+nghĩa `HEAD` không áp dụng, và streaming hoạt động như cũ. Header `Content-Location`
+hữu ích khi query xác định resource cũng fetch được bằng `GET`.
+
 ## Kiểm tra
 
 ```sh
@@ -137,9 +153,28 @@ curl -i -X QUERY http://127.0.0.1:3000/search
 
 Response là `400 Bad Request` với `QUERY requires a valid Content-Type`.
 
+Route tương tự trả lời qua HTTP/3 trên QUIC listener:
+
+```sh
+curl --http3-only -k -X QUERY \
+  -H "Content-Type: application/json" \
+  --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+```sh
+curl --http3-only -k -X QUERY --data '{"filter":"active"}' \
+  https://127.0.0.1:8443/search
+```
+
+Request đầu tới handler. Request thứ hai không có `Content-Type` và nhận
+`400 Bad Request` trước khi handler chạy.
+
 ## Tiếp theo
 
 - [TRACE](/docs/http/trace) trình bày method mở rộng opt-in còn lại.
+- [HTTP/3 request path](/docs/http3/request-path) theo chuỗi decode sau
+  transport gate.
 - [Lỗi HTTP](/docs/http/errors) trình bày error document có kiểu.
 - [Query và form parsing](/docs/http/helpers/query-and-forms) trình bày parser
   zero-allocation cho request target và form body.

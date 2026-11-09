@@ -12,7 +12,6 @@ export default defineMeta({
     "request-path",
     "qpack",
     "early-data",
-    "query-method",
     "webtransport",
     "limits",
     "observability",

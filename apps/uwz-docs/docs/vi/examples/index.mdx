@@ -1,52 +1,18 @@
 ---
 title: Ví dụ
-description: Bắt đầu bằng tutorial từng bước hoặc đọc chương trình canonical cho từng capability của µWebZockets, kèm build wiring, run command và expected output.
+description: Đọc chương trình canonical cho từng capability của µWebZockets, kèm build wiring, run command, expected output và capacity choice.
 search:
   tags: [tutorial, reference, http1, websocket, json-rpc, tls, cluster, http3]
 ---
 
-Phần này có hai track. Guided tutorial xây từng capability một từ project đã tạo
-trong [Quickstart](/docs/getting-started/quickstart). Canonical program cho thấy
-chính xác source trong thư mục `examples/` của framework, capacity mà nó chọn và
-một variation đáng thử. Cả hai track dùng cùng consumer project và chạy bằng
-`zig build run`.
+Mỗi trang document một chương trình trong thư mục `examples/` của framework.
+Trang cung cấp complete source, consumer `build.zig` wiring, run command,
+expected output, capacity mà example chọn và một variation. Bắt đầu với
+[Hello world](/examples/hello-world), trang cũng chứa tutorial HTTP đầu tiên.
+Protocol quickstart nằm trong tab Docs khi bạn cần lộ trình từng bước cho
+WebSocket, JSON-RPC, HTTP/2 hoặc HTTP/3.
 
-## Chọn track [#choose-a-track]
-
-<CardGroup cols={2}>
-  <Card title="Guided tutorial" href="#guided-tutorials" icon="route">
-    Học request path, upgrade handshake, RPC mount, TLS context, worker group và QUIC listener từng
-    bước.
-  </Card>
-  <Card title="Canonical program" href="#canonical-programs" icon="file-code">
-    Đọc chương trình đã ship, build wiring, expected output và capacity choice.
-  </Card>
-</CardGroup>
-
-## Guided tutorials [#guided-tutorials]
-
-<CardGroup cols={2}>
-  <Card title="Hello world" href="/examples/hello-world" icon="server">
-    Build server canonical, thêm route parameter, verify và drain khi nhận signal.
-  </Card>
-  <Card title="WebSocket đầu tiên" href="/examples/first-websocket" icon="messages-square">
-    Thêm route echo với callback open, message và close.
-  </Card>
-  <Card title="JSON-RPC service đầu tiên" href="/examples/first-json-rpc-service" icon="braces">
-    Mount procedure `math.add` có kiểu và gọi bằng `curl`.
-  </Card>
-  <Card title="TLS server đầu tiên" href="/examples/first-tls-server" icon="lock">
-    Tạo chứng chỉ local trong bộ nhớ, rồi chuyển sang file PEM.
-  </Card>
-  <Card title="Cluster đầu tiên" href="/examples/first-cluster" icon="cpu">
-    Chạy một worker mỗi lõi với port chia sẻ và slab riêng.
-  </Card>
-  <Card title="HTTP/3 server đầu tiên" href="/examples/first-http3-server" icon="zap">
-    Phục vụ cùng handler qua QUIC tại UDP port 8443.
-  </Card>
-</CardGroup>
-
-### Trước khi bắt đầu [#before-you-start]
+## Trước khi bắt đầu [#before-you-start]
 
 Hoàn thành [Cài đặt](/docs/getting-started/installation) và
 [Quickstart](/docs/getting-started/quickstart) trước. Ví dụ giả định:
@@ -58,23 +24,18 @@ Hoàn thành [Cài đặt](/docs/getting-started/installation) và
 
 ## Canonical programs [#canonical-programs]
 
-Mỗi trang document một chương trình trong thư mục `examples/` của framework.
-Trang cung cấp complete source, consumer `build.zig` wiring, run command,
-expected output, capacity mà example chọn và một variation. Bắt đầu với
-[Hello world](/examples/hello-world), trang cũng chứa tutorial HTTP đầu tiên;
-bảng bên dưới liệt kê các chương trình lớn hơn.
-
-| Example                                                    | Shows                                          | Protocol                | Default port |
-| ---------------------------------------------------------- | ---------------------------------------------- | ----------------------- | -----------: |
-| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate và ALPN              | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
-| [Shared-nothing cluster](/examples/shared-nothing-cluster) | Bốn worker, mỗi worker một slab và loop        | HTTP/1.1                |         3000 |
-| [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS context và runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
-| [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing    | HTTP/1.1                |         3000 |
-| [Custom builder](/examples/custom-builder)                 | Fluent capacity và `slab_bytes()`              | HTTP/1.1                |         3001 |
-| [Chat server](/examples/chat-server)                       | WebSocket open, message, close và pub/sub      | WebSocket               |         3000 |
-| [RPC server](/examples/rpc-server)                         | Typed JSON-RPC procedure                       | JSON-RPC                |         3000 |
-| [HTTP/3 server](/examples/http3-server)                    | QUIC listener và in-memory TLS                 | HTTP/3                  |     8443 UDP |
-| [Delayed response](/examples/delay-server)                 | Async token và timing wheel                    | HTTP/1.1                |         3000 |
+| Example                                                    | Shows                                            | Protocol                | Default port |
+| ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
+| [Hello world](/examples/hello-world)                       | Server nhỏ nhất, route parameter, POST, shutdown | HTTP/1.1                |         3000 |
+| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate và PEM file            | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
+| [Shared-nothing cluster](/examples/shared-nothing-cluster) | Bốn worker, mỗi worker một slab và loop          | HTTP/1.1                |         3000 |
+| [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS context và runtime worker count   | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
+| [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing      | HTTP/1.1                |         3000 |
+| [Custom builder](/examples/custom-builder)                 | Fluent capacity và `slab_bytes()`                | HTTP/1.1                |         3001 |
+| [Chat server](/examples/chat-server)                       | WebSocket open, message, close và pub/sub        | WebSocket               |         3000 |
+| [RPC server](/examples/rpc-server)                         | Typed JSON-RPC procedure                         | JSON-RPC                |         3000 |
+| [HTTP/3 server](/examples/http3-server)                    | QUIC listener và in-memory TLS                   | HTTP/3                  |     8443 UDP |
+| [Delayed response](/examples/delay-server)                 | Async token và timing wheel                      | HTTP/1.1                |         3000 |
 
 ## Chạy example trong project của bạn [#run-an-example-in-your-project]
 

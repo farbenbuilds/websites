@@ -4,7 +4,7 @@ description: Mount a confined asset directory with MIME detection, ETag, conditi
 sidebar:
   order: 9
 search:
-  tags: [how-to, static-files]
+  tags: [how-to, guide, static-files]
 ---
 
 `App.static(prefix, root, options)` mounts one directory at startup and serves
@@ -138,6 +138,17 @@ time as `write_queue_size - 4096`.
 The capacity is the full write queue at 4096 bytes or smaller; at the default
 64 KiB queue it holds 60 KiB. A larger file returns `FileTooLarge`, mapped to `413 Content Too Large`.
 
+| Bound                         | Value                           | Source                       |
+| ----------------------------- | ------------------------------- | ---------------------------- |
+| Mounts                        | 8                               | Fixed route capacity         |
+| Plaintext `GET` and `HEAD`    | Kernel `sendfile`, not buffered | `Response.send_file`         |
+| TLS, HTTP/2, HTTP/3 file size | `write_queue_size - 4096`       | 60 KiB at the 64 KiB default |
+| Decoded path                  | 1024 bytes                      | Internal confinement buffer  |
+| Ranges per request            | 1                               | Multiple ranges rejected     |
+
+Raise `write_queue_size` when assets need more than the buffered limit, and
+account for the memory per connection.
+
 ## Verify
 
 Create `public/index.html`, start the server, then run:
@@ -145,10 +156,14 @@ Create `public/index.html`, start the server, then run:
 ```sh
 curl -i http://127.0.0.1:3000/assets/
 curl -i -H 'Range: bytes=0-99' http://127.0.0.1:3000/assets/index.html
+curl -i -X POST http://127.0.0.1:3000/assets/index.html
+curl -i --path-as-is http://127.0.0.1:3000/assets/../src/main.zig
 ```
 
-The first request returns `200 OK`. The second returns `206 Partial Content`
-when the file is large enough. A multiple-range field returns
+The first request returns `200 OK` with an `ETag`. The second returns
+`206 Partial Content` and `Content-Range` when the file is large enough. The
+third returns `405 Method Not Allowed` with `Allow`, and the fourth returns
+`403 Forbidden` instead of the source file. A multiple-range field returns
 `416 Range Not Satisfiable`.
 
 Repeat the first request with the returned validator:
@@ -157,10 +172,48 @@ Repeat the first request with the returned validator:
 curl -i -H 'If-None-Match: ETAG' http://127.0.0.1:3000/assets/index.html
 ```
 
-Replace `ETAG` with the exact value and expect `304 Not Modified`.
+Replace `ETAG` with the exact value and expect `304 Not Modified` with no body.
+
+## Failure behavior
+
+| Condition                         | Result                                     |
+| --------------------------------- | ------------------------------------------ |
+| `..` segment, NUL, backslash      | `403 Forbidden`                            |
+| Symlink in any path component     | `403 Forbidden`                            |
+| Missing file or non-directory     | `404 Not Found`                            |
+| File above the buffered capacity  | `413 Content Too Large`                    |
+| Multiple or unsatisfiable range   | `416 Range Not Satisfiable`                |
+| Method other than `GET` or `HEAD` | `405 Method Not Allowed` with `Allow`      |
+| Ninth mount                       | Startup `error.StaticRouteCapacityReached` |
+
+## Variations
+
+### Mount a second directory
+
+Add a download mount with its own policy. The index is disabled and the files
+are not publicly cacheable:
+
+```zig
+_ = try app.static("/downloads", "downloads", .{
+    .index = null,
+    .etag = true,
+    .max_age = 0,
+});
+```
+
+Prefixes must differ, and the total stays within the eight-mount limit.
+
+### Serve private files
+
+Do not put private files behind a nonzero `max_age`: shared caches will keep
+them. Mount them under a separate prefix with `max_age = 0` and put an
+authentication guard in front of that prefix. Prefer a handler that checks
+authorization per file over a static mount when the file set is not public at
+all; a static mount answers before your handler can inspect the request.
 
 ## Next
 
 Read [caching and ETags](/docs/http/helpers/caching) for validator generation
 outside static mounts, then [HTTP limits](/docs/http/limits) for body and header
-capacities.
+capacities. [Add authentication](/docs/guides/authentication) shows how to guard
+a private prefix.

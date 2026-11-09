@@ -29,22 +29,15 @@ API, và không trang nào yêu cầu bạn đọc source của framework để 
 
 ## Bản đồ runtime
 
-Trang này là trang đầu trong 14 trang của phần. Các card bên dưới bao phủ 13
+Trang này là trang đầu trong 12 trang của phần. Các card bên dưới bao phủ 11
 trang còn lại: phần lõi của runtime trước, rồi các ranh giới và tích hợp dựng
 trên đó.
 
 ### Runtime lõi
 
 <CardGroup cols={2}>
-  <Card title="Worker shared-nothing" href="/docs/architecture/shared-nothing" icon="share-2">
-    Xem mỗi worker sở hữu gì, cách một port nuôi mọi loop và vì sao connection state không vượt
-    thread.
-  </Card>
   <Card title="Event loop và completion" href="/docs/architecture/event-loop" icon="activity">
     Theo dõi chọn backend libxev, quyền sở hữu completion, release gate và nhịp timer.
-  </Card>
-  <Card title="Slab và memory model" href="/docs/architecture/memory-model" icon="database">
-    Đọc các region của slab, stride chính xác, preset, SoA layout và hành vi khi cạn capacity.
   </Card>
   <Card title="Router internals" href="/docs/architecture/router-internals" icon="route">
     Xem parallel array, static index, radix walk và các pattern table có giới hạn.
@@ -85,15 +78,15 @@ trên đó.
 
 ## Cách đọc phần này
 
-Bắt đầu với [Worker shared-nothing](/docs/architecture/shared-nothing) và
-[Slab và memory model](/docs/architecture/memory-model) để biết mỗi worker sở
+Bắt đầu với [Worker shared-nothing](/docs/concepts/shared-nothing) và
+[Capacity model](/docs/concepts/capacity-model) để biết mỗi worker sở
 hữu gì và quyền sở hữu đó được định cỡ ra sao. Sau đó đọc
 [Event loop và completion](/docs/architecture/event-loop) cùng
 [Callback lifecycle](/docs/architecture/callback-lifecycle) để theo work đi qua
 loop. Đọc [Thứ tự shutdown](/docs/architecture/shutdown) khi drain hoặc release
 gặp lỗi.
 
-Nếu bạn đang chọn capacity, đi thẳng tới memory model rồi tới
+Nếu bạn đang chọn capacity, đi thẳng tới
 [Mô hình capacity](/docs/concepts/capacity-model). Nếu bạn đang debug một
 request, bắt đầu từ [Vòng đời request](/docs/concepts/request-lifecycle).
 

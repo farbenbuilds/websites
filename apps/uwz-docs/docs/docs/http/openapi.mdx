@@ -4,7 +4,7 @@ description: Serve a generated OpenAPI 3.1 document from registered routes, read
 sidebar:
   order: 19
 search:
-  tags: [how-to, openapi]
+  tags: [how-to, guide, openapi]
 ---
 
 `app.openapi(path)` registers a `GET` route that renders the current route
@@ -148,6 +148,38 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
 
 The first command prints the compact document. The second prints
 `200 application/json`.
+
+A shape assertion fails the job when a route disappears:
+
+```sh
+set -eu
+zig build run &
+server_pid=$!
+trap 'kill "$server_pid"' EXIT
+
+curl -sS --retry 10 --retry-connrefused -o openapi.json \
+  http://127.0.0.1:3000/openapi.json
+
+jq -e '.openapi == "3.1.0"' openapi.json > /dev/null
+jq -e '.paths["/users/{id}"].get.responses["200"]' openapi.json > /dev/null
+```
+
+Add one `jq -e` line per route you cannot afford to drop.
+
+## Variation: a versioned public path
+
+Publish the document at a stable, versioned path and link it from your API docs.
+Keep it unauthenticated so generators can read it, and keep the route table small
+so the document stays inside the buffer.
+
+```zig
+_ = try app.get("/v1/items", list_items);
+_ = try app.get("/v1/items/:id", show_item);
+_ = try app.openapi("/v1/openapi.json");
+```
+
+A versioned path lets you publish a new document without breaking an existing
+client; every path in it still comes from the same router.
 
 ## Next
 
