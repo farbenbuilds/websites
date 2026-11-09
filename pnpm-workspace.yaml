@@ -15,7 +15,7 @@ catalog:
   eslint-plugin-astro: 3.2.1
   eslint-plugin-svelte: 3.24.0
   lefthook: ^2.2.2
-  oxfmt: 0.76.0
+  oxfmt: 0.77.0
   oxlint: 1.91.0
   svelte: ^5.57.3
   takumi-js: ^2.19.0
