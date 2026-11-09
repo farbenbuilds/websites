@@ -8,7 +8,7 @@ catalogMode: prefer
 catalog:
   "@astrojs/compiler-rs": 0.5.2
   "@astrojs/svelte": ^9.1.2
-  "@x18n/cli": 0.1.8
+  "@x18n/cli": 0.1.13
   "@x18n/core": 0.1.8
   blume: ^2.2.6
   eslint: 10.14.0
