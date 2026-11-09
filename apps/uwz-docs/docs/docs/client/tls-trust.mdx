@@ -96,7 +96,7 @@ callback, so the event loop is not blocked by file I/O.
 
 `verify = false` disables chain and name checks. It still uses TLS 1.3 and still
 sends SNI. Use it only with the ephemeral development certificates described in
-[Your first TLS server](/docs/examples/first-tls-server); never ship it.
+[Your first TLS server](/examples/first-tls-server); never ship it.
 
 :::danger[Do not disable verification in production]
 `verify = false` accepts any certificate, including one controlled by an
@@ -123,5 +123,5 @@ requires client certificates cannot be called by this client.
 
 - [Timeouts and errors](/docs/client/timeouts-and-errors) maps the failure kinds.
 - [Client limits](/docs/client/limits) lists the TLS staging bounds.
-- [Your first TLS server](/docs/examples/first-tls-server) covers the server
+- [Your first TLS server](/examples/first-tls-server) covers the server
   certificate model.

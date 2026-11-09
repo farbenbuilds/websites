@@ -332,7 +332,6 @@ The site should tell one story in this order:
 | `/`                       | Editorial landing page       | Existing landing components | Keep `mode: custom`; update the primary CTA to `/docs/getting-started` |
 | `/docs`                   | Documentation home           | Docs                        | Reader routing page: start, concepts, protocols, operate               |
 | `/docs/getting-started/*` | Onboarding                   | Docs                        | First success path                                                     |
-| `/docs/examples/*`        | Protocol examples            | Docs                        | First HTTP, WebSocket, JSON-RPC, TLS, cluster, and HTTP/3 routes       |
 | `/docs/concepts/*`        | Mental model                 | Docs                        | Cross-protocol explanations                                            |
 | `/docs/http/*`            | HTTP/1.1 and application API | Docs                        | Largest section; includes a nested Helpers group                       |
 | `/docs/websocket/*`       | WebSocket                    | Docs                        | RFC 6455/7692, pub/sub, tunnels                                        |
@@ -349,7 +348,7 @@ The site should tell one story in this order:
 | `/docs/guides/*`          | Recipes                      | Docs                        | Task-shaped cookbook                                                   |
 | `/docs/migration/*`       | Migration                    | Docs                        | uWebSockets, std.http, C, version upgrades                             |
 | `/reference/*`            | Reference tab                | Docs + DX                   | API index, config, limits, errors, C ABI                               |
-| `/examples/*`             | Examples tab                 | Docs                        | One page per runnable example                                          |
+| `/examples/*`             | Examples tab                 | Docs                        | Guided tutorials and canonical programs                                |
 | `/changelog`              | Release history              | Docs                        | Generated from the repository changelog or release notes               |
 | `/security`               | Security policy              | Docs                        | Public summary linking to `SECURITY.md`                                |
 | `/contributing`           | Contribution guide           | Docs                        | Public summary linking to `CONTRIBUTE.md`                              |
@@ -366,6 +365,10 @@ the same change that creates the new pages:
 | `/getting-started/*`    | `/docs/getting-started/:splat*`    | 301                          |
 | `/vi/getting-started`   | `/vi/docs/getting-started`         | 301                          |
 | `/vi/getting-started/*` | `/vi/docs/getting-started/:splat*` | 301                          |
+| `/docs/examples`        | `/examples`                        | 301                          |
+| `/docs/examples/*`      | `/examples/:splat*`                | 301                          |
+| `/vi/docs/examples`     | `/vi/examples`                     | 301                          |
+| `/vi/docs/examples/*`   | `/vi/examples/:splat*`             | 301                          |
 | `/api`                  | `/reference`                       | 301, if a legacy link exists |
 | `/docs/api`             | `/reference/zig`                   | 301, if a legacy link exists |
 
@@ -521,17 +524,19 @@ What/Why, and every shipped Getting Started page.
 | UWZ-023 | `/docs/getting-started/faq`               | FAQ               | Reference      | P0       | M1        | README, roadmap             | Live   |
 | UWZ-024 | `/docs/getting-started/glossary`          | Glossary          | Reference      | P1       | M1        | CODEBASE, docs              | Live   |
 
-### 5.2.1 Examples
+### 5.2.1 Guided examples
 
-| ID      | Route                                   | Page                        | Type     | Priority | Milestone | Source                              | Status |
-| ------- | --------------------------------------- | --------------------------- | -------- | -------- | --------- | ----------------------------------- | ------ |
-| UWZ-026 | `/docs/examples`                        | Examples                    | Index    | P0       | M1        | This file                           | Live   |
-| UWZ-016 | `/docs/examples/first-http-server`      | Your first HTTP server      | Tutorial | P0       | M1        | examples/hello_world.zig            | Live   |
-| UWZ-017 | `/docs/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | examples/chat_server.zig            | Live   |
-| UWZ-018 | `/docs/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig             | Live   |
-| UWZ-019 | `/docs/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig           | Live   |
-| UWZ-020 | `/docs/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
-| UWZ-021 | `/docs/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig           | Live   |
+| ID      | Route                              | Page                        | Type     | Priority | Milestone | Source                              | Status |
+| ------- | ---------------------------------- | --------------------------- | -------- | -------- | --------- | ----------------------------------- | ------ |
+| UWZ-016 | `/examples/first-http-server`      | Your first HTTP server      | Tutorial | P0       | M1        | examples/hello_world.zig            | Live   |
+| UWZ-017 | `/examples/first-websocket`        | Your first WebSocket        | Tutorial | P0       | M1        | examples/chat_server.zig            | Live   |
+| UWZ-018 | `/examples/first-json-rpc-service` | Your first JSON-RPC service | Tutorial | P0       | M1        | examples/rpc_server.zig             | Live   |
+| UWZ-019 | `/examples/first-tls-server`       | Your first TLS server       | Tutorial | P1       | M2        | examples/https_server.zig           | Live   |
+| UWZ-020 | `/examples/first-cluster`          | Your first cluster          | Tutorial | P1       | M2        | examples/shared_nothing_cluster.zig | Live   |
+| UWZ-021 | `/examples/first-http3-server`     | Your first HTTP/3 server    | Tutorial | P1       | M3        | examples/http3_server.zig           | Live   |
+
+The shared `/examples` index is UWZ-330 in 5.19. The guided tutorials and the
+canonical programs now live in one Examples tab.
 
 ### 5.2.2 Deferred pages
 
@@ -895,7 +900,7 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Section               |   Pages |     P0 |      P1 |     P2 |    Live |
 | --------------------- | ------: | -----: | ------: | -----: | ------: |
 | Landing and docs home |       4 |      3 |       1 |      0 |       4 |
-| Getting Started       |      15 |     10 |       5 |      0 |      15 |
+| Getting Started       |       8 |      6 |       2 |      0 |       8 |
 | Concepts              |      19 |     15 |       3 |      1 |      19 |
 | HTTP                  |      24 |     15 |       7 |      2 |      24 |
 | Helpers               |       9 |      0 |       7 |      2 |       9 |
@@ -913,9 +918,9 @@ This dashboard is the at-a-glance scope. Update it when a page changes status.
 | Guides                |      23 |      0 |      17 |      6 |      23 |
 | Migration             |       8 |      0 |       6 |      2 |       8 |
 | Reference             |      11 |      7 |       4 |      0 |      11 |
-| Examples              |      11 |      1 |       8 |      2 |      11 |
+| Examples              |      17 |      4 |      11 |      2 |      17 |
 | Project               |       9 |      1 |       5 |      3 |       0 |
-| **Total**             | **268** | **96** | **125** | **47** | **259** |
+| **Total**             | **267** | **95** | **125** | **47** | **258** |
 
 The Concepts, HTTP, Helpers, WebSocket, HTTP/2, and HTTP/3 rows are `Live`. On
 2026-11-03 the built site passed 320 px, 768 px, and 1280 px layout checks across
@@ -965,22 +970,25 @@ AF_XDP pages now show the consumer `build.zig` step or public module import, wit
 the framework checkout command labelled as a shortcut.
 
 On 2026-11-09 the migration, reference, and canonical example sections added 30
-English and 30 Vietnamese pages, bringing the site to 516 documentation pages
-plus the two landing pages (518 pages total). `blume check` type-checked 518
-pages with 0 errors, 0 warnings, and 0 hints; `blume validate --strict` found no
-broken links; `blume build` built 561 pages including generated `.md` mirrors;
-and `blume audit --fail-on warning` reported 0 errors, 0 warnings, and 0 notes
-across 519 audited pages. `pnpm ready` passed lint, format, typecheck, file-size,
-root and workspace tests, strict link validation, and both docs builds; the root
-Vitest suite passed 29 files and 85 tests. The new reference API coverage test
-checks every `src/root.zig` export anchor against a checked-in fixture and can
-compare that fixture with a framework checkout through `UWEBZOCKETS_ROOT`; the
-example source test compares all ten Zig fences with a checked-in hash fixture
-and can compare them byte-for-byte with the same checkout. The docs parity test
-now covers the top-level `/reference` and `/examples` trees and rejects
-plain-text fences. Browser viewport, axe, keyboard, reduced-motion, and search QA
-for the 60 new routes were not run in this environment; the next review should
-repeat the 320/768/1280 pass before the section is treated as launch-verified.
+English and 30 Vietnamese pages, bringing the site to 514 documentation pages
+plus the two landing pages (516 pages total). The guided example tutorials were
+folded into the same `/examples` tab, and `/docs/examples` now redirects there,
+so the site has one Examples section instead of two. `blume check` type-checked
+516 pages with 0 errors, 0 warnings, and 0 hints; `blume validate --strict`
+found no broken links; `blume build` built 557 pages including generated `.md`
+mirrors; and `blume audit --fail-on warning` reported 0 errors, 0 warnings, and
+0 notes across 517 audited pages. `pnpm ready` passed lint, format, typecheck,
+file-size, root and workspace tests, strict link validation, and both docs
+builds; the root Vitest suite passed 29 files and 85 tests. The new reference API
+coverage test checks every `src/root.zig` export anchor against a checked-in
+fixture and can compare that fixture with a framework checkout through
+`UWEBZOCKETS_ROOT`; the example source test compares all ten Zig fences with a
+checked-in hash fixture and can compare them byte-for-byte with the same
+checkout. The docs parity test now covers the top-level `/reference` and
+`/examples` trees and rejects plain-text fences. Browser viewport, axe, keyboard,
+reduced-motion, and search QA for the 60 new routes were not run in this
+environment; the next review should repeat the 320/768/1280 pass before the
+section is treated as launch-verified.
 
 The counts are deliberately larger than the launch gate. M1 through M6 ship
 every P0 row and enough P1 rows to make the site coherent. P2 rows may remain
@@ -1038,7 +1046,7 @@ Required content:
 - `Project structure`: the consumer's `build.zig`, `build.zig.zon`, `src/`, and
   `tests/`; where handlers, domain code, and assets belong. Do not document the
   framework repository internals.
-- `Examples` category: an index at `/docs/examples` and the first HTTP,
+- `Examples` category: an index at `/examples` and the first HTTP,
   WebSocket, JSON-RPC, TLS, cluster, and HTTP/3 tutorials beneath it.
 - `First HTTP server`: `App(128)`, route, `listen`, `run`, graceful shutdown,
   what happens on startup, how to change the port, how to test with `curl`.
@@ -3406,7 +3414,7 @@ discoverable only by reading the source.
 | `SECURITY.md`                | `/security`, `/docs/security/*`                                                     |
 | `CONTRIBUTE.md`              | `/contributing`                                                                     |
 | `CI_CD_PIPELINE.md`          | `/docs/operations/*`, `/docs/performance/benchmarking`                              |
-| `examples/*.zig`             | `/examples/*`, `/docs/examples/first-*`                                             |
+| `examples/*.zig`             | `/examples/*`, `/examples/first-*`                                                  |
 | `src/root.zig`               | `/reference/zig`                                                                    |
 | `include/uWebZockets.h`      | `/reference/c-abi`                                                                  |
 | `builds/*.zig`               | `/reference/build-steps`, `/docs/operations/*`                                      |
@@ -3501,7 +3509,7 @@ source at the time it is written.
 | 2026-11-01 | Moved protocol tutorials into Examples, simplified installation to the Zig download and pinned archive, and added collapsible glowing sidebar groups plus the landing footer on docs pages | Docs writing pass  |
 | 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                     | Docs writing pass  |
 | 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                      | Docs writing pass  |
-| 2026-11-09 | Shipped the migration, reference, and canonical example sections with Vietnamese mirrors; added reference API coverage and docs parity tests                                               | Docs writing pass  |
+| 2026-11-09 | Shipped the migration, reference, and example sections with Vietnamese mirrors; merged the guided tutorials into `/examples`; added reference API coverage and docs parity tests           | Docs writing pass  |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.

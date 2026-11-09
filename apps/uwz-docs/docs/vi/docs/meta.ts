@@ -9,7 +9,6 @@ export default defineMeta({
     "what-is-uwebsockets",
     "why-uwebsockets",
     "getting-started",
-    "examples",
     "concepts",
     "http",
     "websocket",

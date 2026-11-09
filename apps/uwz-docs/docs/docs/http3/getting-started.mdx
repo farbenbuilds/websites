@@ -14,7 +14,7 @@ then verifies the QUIC path with an HTTP/3 client.
 ## Prerequisites
 
 - A µWebZockets project with an HTTP route. Start from
-  [Your first HTTP server](/docs/examples/first-http-server).
+  [Your first HTTP server](/examples/first-http-server).
 - Zig 0.16.0.
 - A `curl` build with HTTP/3 support. `curl --version` lists `HTTP3` in its
   features.
@@ -96,7 +96,7 @@ try server.run();
 `init_http3` loads the same PEM pair into the TCP and QUIC contexts. The QUIC
 context still advertises `h3` only. Certificate chain order and key matching
 follow the TCP TLS rules, so use the working PEM example from
-[Your first TLS server](/docs/examples/first-tls-server).
+[Your first TLS server](/examples/first-tls-server).
 
 ## What the QUIC path uses
 

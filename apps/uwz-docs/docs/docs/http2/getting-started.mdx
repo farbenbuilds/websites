@@ -14,7 +14,7 @@ the routes you already registered.
 ## Prerequisites
 
 - A µWebZockets project with an HTTP route. Start from
-  [Your first HTTP server](/docs/examples/first-http-server).
+  [Your first HTTP server](/examples/first-http-server).
 - Zig 0.16.0.
 - A `curl` build with HTTP/2 support. `curl --version` lists `HTTP2` in its
   features.
@@ -55,7 +55,7 @@ pub fn main(init: std.process.Init) !void {
 `init_https_ephemeral` generates an in-memory ECDSA certificate for local work.
 It advertises `h2` and `http/1.1` in that order. For production certificates, use
 `init_https` with PEM paths; see
-[Your first TLS server](/docs/examples/first-tls-server).
+[Your first TLS server](/examples/first-tls-server).
 
 ## Run it
 

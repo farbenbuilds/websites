@@ -1,21 +1,66 @@
 ---
-title: Canonical examples
-description: Read the canonical program for each µWebZockets capability, with build wiring, run command, expected output, and capacity notes.
+title: Examples
+description: Start with a guided tutorial or read the canonical program for each µWebZockets capability, with build wiring, run commands, and expected output.
 search:
-  tags: [reference, tutorial, http1, websocket, json-rpc, tls, cluster, http3]
+  tags: [tutorial, reference, http1, websocket, json-rpc, tls, cluster, http3]
 ---
 
-Each page documents one canonical program from the framework `examples/`
-directory. The page gives the complete source, the consumer `build.zig` wiring,
-the run command, the expected output, the capacities the example chooses, and
-one variation worth trying.
+This section has two tracks. The guided tutorials build one capability at a time
+from the project created in [Quickstart](/docs/getting-started/quickstart). The
+canonical programs show the exact source in the framework `examples/` directory,
+with the capacities it chooses and a variation worth trying. Both tracks use the
+same consumer project and run with `zig build run`.
 
-These pages are not a substitute for the task tutorials. Start with
-[Your first HTTP server](/docs/examples/first-http-server) when you are learning
-the lifecycle, and use an example page when you want the exact program that the
-framework ships.
+## Choose a track [#choose-a-track]
 
-## Example index
+<CardGroup cols={2}>
+  <Card title="Guided tutorials" href="#guided-tutorials" icon="route">
+    Learn the request path, upgrade handshake, RPC mount, TLS context, worker group, and QUIC
+    listener step by step.
+  </Card>
+  <Card title="Canonical programs" href="#canonical-programs" icon="file-code">
+    Read the exact shipped program, its build wiring, expected output, and capacity choices.
+  </Card>
+</CardGroup>
+
+## Guided tutorials [#guided-tutorials]
+
+<CardGroup cols={2}>
+  <Card title="Your first HTTP server" href="/examples/first-http-server" icon="server">
+    Register routes, read a capture, and verify the listener with `curl`.
+  </Card>
+  <Card title="Your first WebSocket" href="/examples/first-websocket" icon="messages-square">
+    Add an echo route with open, message, and close callbacks.
+  </Card>
+  <Card title="Your first JSON-RPC service" href="/examples/first-json-rpc-service" icon="braces">
+    Mount a typed `math.add` procedure and call it with `curl`.
+  </Card>
+  <Card title="Your first TLS server" href="/examples/first-tls-server" icon="lock">
+    Generate a local certificate in memory, then switch to PEM files.
+  </Card>
+  <Card title="Your first cluster" href="/examples/first-cluster" icon="cpu">
+    Run one worker per core with a shared port and per-worker slabs.
+  </Card>
+  <Card title="Your first HTTP/3 server" href="/examples/first-http3-server" icon="zap">
+    Serve the same handler over QUIC on UDP port 8443.
+  </Card>
+</CardGroup>
+
+### Before you start [#before-you-start]
+
+Complete [Installation](/docs/getting-started/installation) and
+[Quickstart](/docs/getting-started/quickstart) first. The examples assume:
+
+- Zig 0.16.0 is installed from [ziglang.org/download](https://ziglang.org/download/).
+- Your project already depends on `uWebZockets` version 2.1.6.
+- `src/main.zig` contains the program you want to run.
+- `zig build run` starts the project.
+
+## Canonical programs [#canonical-programs]
+
+Each page documents one program from the framework `examples/` directory. It
+gives the complete source, the consumer `build.zig` wiring, the run command, the
+expected output, the capacities the example chooses, and one variation.
 
 | Example                                                    | Shows                                            | Protocol                | Default port |
 | ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
@@ -30,7 +75,7 @@ framework ships.
 | [HTTP/3 server](/examples/http3-server)                    | QUIC listener and in-memory TLS                  | HTTP/3                  |     8443 UDP |
 | [Delayed response](/examples/delay-server)                 | Async token and timing wheel                     | HTTP/1.1                |         3000 |
 
-## Run an example in your project
+## Run an example in your project [#run-an-example-in-your-project]
 
 <Steps>
   <Step title="Add the dependency">
@@ -68,8 +113,8 @@ framework ships.
 
   </Step>
   <Step title="Copy the program">
-    Copy the page source into `src/main.zig`. The full source link on each page
-    points at the framework file the page mirrors.
+    Copy the page source into `src/main.zig`. The full source link on each
+    canonical page points at the framework file the page mirrors.
   </Step>
   <Step title="Build and run">
     ```sh
@@ -83,14 +128,14 @@ framework ships.
   </Step>
 </Steps>
 
-## Upstream build steps
+## Upstream build steps [#upstream-build-steps]
 
-The framework repository also exposes each program as a named build step, such
-as `zig build hello_world` or `zig build tls_cluster`. Those commands run inside
-a framework checkout and are contributor shortcuts; they are not the consumer
-path. In your project, use `zig build run` after copying the source.
+The framework repository also exposes each canonical program as a named build
+step, such as `zig build hello_world` or `zig build tls_cluster`. Those commands
+run inside a framework checkout and are contributor shortcuts; they are not the
+consumer path. In your project, use `zig build run` after copying the source.
 
-## Capacities chosen by the examples
+## Capacities chosen by the examples [#capacities-chosen-by-the-examples]
 
 | Example                |    Connections | Write queue |   Body | Message | Why                              |
 | ---------------------- | -------------: | ----------: | -----: | ------: | -------------------------------- |
@@ -107,8 +152,8 @@ path. In your project, use `zig build run` after copying the source.
 
 ## Related
 
-- [Your first HTTP server](/docs/examples/first-http-server) teaches the request
-  and response lifecycle step by step.
+- [Quickstart](/docs/getting-started/quickstart) creates the project these
+  examples extend.
 - [Capacity model](/docs/concepts/capacity-model) explains how these values
   become one startup slab.
 - [ServerConfig](/reference/server-config) lists every field and default.

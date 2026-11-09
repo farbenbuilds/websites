@@ -14,7 +14,7 @@ và application plaintext phát hiện HTTP/2 preface. Cả hai chạy các rout
 ## Điều kiện trước
 
 - Project µWebZockets có HTTP route. Bắt đầu từ
-  [Your first HTTP server](/docs/examples/first-http-server).
+  [Your first HTTP server](/examples/first-http-server).
 - Zig 0.16.0.
 - `curl` build có HTTP/2. `curl --version` liệt kê `HTTP2` trong features.
 
@@ -54,7 +54,7 @@ pub fn main(init: std.process.Init) !void {
 `init_https_ephemeral` tạo certificate ECDSA trong memory cho công việc cục bộ. Nó
 quảng bá `h2` và `http/1.1` theo thứ tự đó. Với production certificate, dùng
 `init_https` với PEM path; xem
-[Your first TLS server](/docs/examples/first-tls-server).
+[Your first TLS server](/examples/first-tls-server).
 
 ## Chạy
 

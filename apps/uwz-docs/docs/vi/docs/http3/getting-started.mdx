@@ -14,7 +14,7 @@ TCP và UDP để bạn so sánh hai protocol trên cùng application value, r�
 ## Điều kiện trước
 
 - Project µWebZockets có HTTP route. Bắt đầu từ
-  [Your first HTTP server](/docs/examples/first-http-server).
+  [Your first HTTP server](/examples/first-http-server).
 - Zig 0.16.0.
 - `curl` build có HTTP/3. `curl --version` liệt kê `HTTP3`.
 
@@ -95,7 +95,7 @@ try server.run();
 `init_http3` load cùng cặp PEM vào TCP và QUIC context. QUIC context vẫn chỉ quảng
 bá `h3`. Thứ tự certificate chain và key matching theo quy tắc TLS của TCP, nên
 dùng ví dụ PEM đang chạy từ
-[Your first TLS server](/docs/examples/first-tls-server).
+[Your first TLS server](/examples/first-tls-server).
 
 ## QUIC path dùng gì
 

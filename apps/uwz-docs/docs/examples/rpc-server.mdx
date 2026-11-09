@@ -2,7 +2,7 @@
 title: RPC server
 description: Mount a typed JSON-RPC math.add procedure on /rpc, verify the request and response with curl, and review the service capacities.
 sidebar:
-  order: 8
+  order: 14
 search:
   tags: [reference, tutorial, json-rpc, capacity]
 ---
@@ -166,7 +166,7 @@ until it is sealed.
 The typed adapter uses 4 KiB of fixed stack scratch for decoded parameters. For
 a larger parameter type, use the lower-level `register` API with
 `Call.parse_params` and an explicit allocator. See
-[Your first JSON-RPC service](/docs/examples/first-json-rpc-service) for that
+[Your first JSON-RPC service](/examples/first-json-rpc-service) for that
 form.
 
 ## Capacities [#capacities]
@@ -223,6 +223,6 @@ through JSON-RPC; use a normal HTTP stream for that workload.
   rule.
 - [JSON-RPC errors](/docs/json-rpc/errors) covers protocol and application
   error objects.
-- [Your first JSON-RPC service](/docs/examples/first-json-rpc-service) teaches
+- [Your first JSON-RPC service](/examples/first-json-rpc-service) teaches
   larger parameters and custom decoding.
 - [HTTP/3 server](/examples/http3-server) is the next example.
