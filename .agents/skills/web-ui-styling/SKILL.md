@@ -13,6 +13,7 @@ behavior, motion, accessibility, and shared component work.
 - Shared tokens: `packages/ui/src/lib/styles/theme.css`.
 - Shared components: `packages/ui/src/lib/components/ui`.
 - Host theme entry: `apps/uwz-docs/theme.css`.
+- Host CSS: `apps/uwz-docs/styles/` and component-local CSS.
 - Installed design skills: `ui-ux-pro-max`, `impeccable`,
   `tailwind-design-system`, `shadcn-svelte`, `gsap-core`.
 - Project rules: [CODING_CONVENTION.md](../../../CODING_CONVENTION.md).
@@ -52,6 +53,14 @@ glass effects, and animation that competes with reading.
   dynamic value that cannot be expressed as a class.
 - Keep class strings readable. If a variant map grows beyond the component's
   responsibility, move it to a named module.
+- Blume app CSS is Tailwind-first. Write declarations with `@apply`, tokens
+  with `@theme inline`, and repeated custom patterns with `@utility`.
+- Keep raw declarations only in token blocks, `@keyframes`, `@font-face`,
+  `@property`, and data-driven custom properties such as `--bar-width`. Use
+  `[property:value]` inside `@apply` for a property with no named utility.
+- Target Blume's rendered DOM with a scoped selector. Do not add classes to
+  generated markup when the selector can carry the utilities.
+- Run `pnpm check:css` and the app build after changing app CSS.
 
 ## Svelte Component Contract
 
@@ -125,6 +134,7 @@ needs at least two consumers. Keep app-specific composition in the app.
 pnpm exec vp run @farben/ui#check
 pnpm exec vp run uwz-docs#build
 pnpm exec vp run vws-docs#build
+pnpm check:css
 ```
 
 For visual changes, include before and after screenshots, the viewports tested,
@@ -136,6 +146,7 @@ and the keyboard and contrast checks performed.
 - Tokens are semantic and shared.
 - The layout works at 320px and at desktop width.
 - Focus, labels, contrast, and reduced motion are handled.
+- App CSS is Tailwind-first and `pnpm check:css` passes.
 - No `<style>` block, inline style shortcut, or `!important` was added.
 - No component exceeds 400 lines.
 - Both docs builds pass when shared UI changes.

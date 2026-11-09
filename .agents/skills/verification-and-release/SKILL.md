@@ -17,9 +17,10 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm check:size
-pnpm test
-vp run -r test
-vp run -r build
+pnpm check:css
+pnpm test:all
+pnpm validate:docs
+pnpm build
 ```
 
 Run the narrowest check while iterating, then the full gate before review.
@@ -34,6 +35,7 @@ pnpm format
 pnpm format:check
 pnpm typecheck
 pnpm check:size
+pnpm check:css
 pnpm test
 pnpm test:watch
 pnpm exec vp run -r test
@@ -50,9 +52,10 @@ Use `pnpm exec vp ...` on every host. The global `vp` cannot load musl native
 bindings on musl systems. Run `pnpm exec vp env doctor` when the toolchain
 behavior is unexpected.
 
-`lefthook` runs the same lint, format, size, typecheck, and test commands on
-pre-commit. The GitHub workflows split the gate into `lint.yml`, `test.yml`, and
-the aggregate `ci.yml`.
+`lefthook` runs the same lint, format, size, CSS, typecheck, and test commands
+on pre-commit. The GitHub workflows split those checks across `lint.yml`,
+`test.yml`, and the build job in `ci.yml`; `pnpm validate:docs` stays in the
+local full gate.
 
 ## Evidence Format
 
@@ -80,6 +83,15 @@ pnpm check:size
 Split by responsibility. Do not create a `part-2` file or move code without
 changing the design that made the file too large.
 
+## CSS Audit
+
+`pnpm check:css` scans app stylesheets for raw declarations. Use `@apply` for
+declarations, `@theme inline` for tokens, and `@utility` for repeated custom
+patterns. Raw declarations are allowed only in token blocks, `@keyframes`,
+`@font-face`, `@property`, and data-driven custom properties. A CSS change also
+needs the app build and a light and dark mode review at narrow and wide
+viewports.
+
 ## Regression Coverage
 
 - A behavior change needs a test, a content fixture, or a build-level check that
@@ -104,7 +116,9 @@ expectation was incorrect and keep the bar at least as strong.
 
 ## CI
 
-`.github/workflows/ci.yml` runs the same `pnpm ready` gate on Node.js 24 with
+`.github/workflows/lint.yml` runs lint, format, typecheck, size, and CSS checks.
+`.github/workflows/test.yml` runs the root and workspace tests.
+`.github/workflows/ci.yml` builds the workspace. All three use Node.js 24 with
 pnpm 12.4.2. A local failure is a CI failure. A CI-only failure needs its exact
 runner, command, and log excerpt in the report.
 

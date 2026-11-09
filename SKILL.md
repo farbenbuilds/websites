@@ -49,6 +49,7 @@ pnpm test
 pnpm test:watch
 pnpm test:all
 pnpm check:size
+pnpm check:css
 pnpm build
 pnpm dev:uwz
 pnpm dev:vws
@@ -77,6 +78,11 @@ the global `vp` cannot load musl native bindings on musl systems.
 - For Svelte and Astro code in the current docs apps: Svelte 5 runes only, no
   `<style>` blocks, Tailwind utilities, and shared tokens. A future app on
   another framework follows its own conventions.
+- Blume app CSS is Tailwind-first: `@apply` for declarations, `@theme inline`
+  for tokens, `@utility` for repeated custom patterns, and `@source` for
+  workspace packages. Raw declarations stay limited to token blocks,
+  `@keyframes`, `@font-face`, `@property`, and data-driven custom properties.
+  Run `pnpm check:css`.
 - x18n owns component UI copy only. Documentation content stays in mirrored
   `docs/` and `docs/vi/` MDX pages. Never add MDX files, page prose,
   frontmatter, or docs routes to locale JSON or x18n resources.
@@ -118,14 +124,16 @@ requirements.
 1. Start from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
 2. Compose with Tailwind utilities and existing shadcn-svelte primitives. Check
    `packages/ui/src/lib/components/ui` before installing one.
-3. Add a registry primitive when no existing primitive fits. Add a custom shared
+3. Write Blume app CSS with `@apply`, `@theme inline`, `@utility`, and
+   `@source`; run `pnpm check:css` after the change.
+4. Add a registry primitive when no existing primitive fits. Add a custom shared
    component only when at least two apps use it. Install from inside `packages/ui`
    with the local CLI, and never re-add or update an existing component.
-4. Keep interaction inside a Svelte island; keep static content in MDX or Astro.
-5. Keep component UI copy in `locales/{locale}.json` and run `pnpm i18n:check`;
+5. Keep interaction inside a Svelte island; keep static content in MDX or Astro.
+6. Keep component UI copy in `locales/{locale}.json` and run `pnpm i18n:check`;
    keep documentation prose in MDX.
-6. Add labels, focus states, keyboard behavior, and reduced-motion handling.
-7. Verify the shared package type check and every consuming app build.
+7. Add labels, focus states, keyboard behavior, and reduced-motion handling.
+8. Verify the shared package type check and every consuming app build.
 
 ## Refactor Workflow
 

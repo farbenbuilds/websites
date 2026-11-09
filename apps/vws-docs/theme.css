@@ -3,15 +3,15 @@
  * only; documentation pages jump instantly to anchors.
  */
 html {
-  scroll-behavior: auto;
+  @apply scroll-auto;
 }
 
 html:has([data-vws-landing]) {
-  scroll-behavior: smooth;
+  @apply scroll-smooth;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html:has([data-vws-landing]) {
-    scroll-behavior: auto;
+    @apply scroll-auto;
   }
 }

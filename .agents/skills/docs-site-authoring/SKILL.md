@@ -15,6 +15,7 @@ generated documentation output.
 - `apps/vws-docs`: ventiws documentation.
 - `blume.config.ts`: site title, description, theme, GitHub edit links.
 - `theme.css`: host Tailwind entry and token overrides.
+- `styles/`: Blume chrome, reading shell, and landing CSS.
 - `components/`: Svelte components registered for MDX in `components.ts`.
 
 Blume owns routing, search, `llms.txt`, `llms-full.txt`, OpenAPI output, and the
@@ -45,6 +46,30 @@ description: Install the package, run the first example, and verify the result.
 - Internal links are root-relative, such as `/docs/getting-started`.
 - External links name the destination instead of using "click here".
 - No emoji, exclamation mark, marketing filler, or unverified claim.
+
+## CSS
+
+Blume inlines `theme.css` into its generated Tailwind entry. Every app CSS file
+can use Tailwind v4 syntax.
+
+- Use `@apply` for declarations, including arbitrary values and arbitrary
+  properties when no named utility exists.
+- Define host tokens in `@theme inline` and repeated custom patterns in
+  `@utility`.
+- Keep raw declarations only in token blocks, `@keyframes`, `@font-face`,
+  `@property`, and data-driven custom properties such as `--bar-width`.
+- Target Blume's rendered DOM with a scoped selector and apply utilities inside
+  it. Do not add classes to generated markup.
+- Keep `theme.css` imports relative to its generated location and use `@source`
+  for workspace packages.
+- Run `pnpm check:css` and the app build after a CSS change. Review light and
+  dark mode at narrow and wide viewports.
+
+```css
+.docs-home-section {
+  @apply mx-auto w-[min(100%_-_2.5rem,70rem)] border-t border-border py-12;
+}
+```
 
 ## Documentation Surfaces
 
@@ -168,6 +193,7 @@ pnpm exec vp run uwz-docs#check
 pnpm exec vp run vws-docs#check
 pnpm exec vp run uwz-docs#build
 pnpm exec vp run vws-docs#build
+pnpm check:css
 pnpm --filter uwz-docs exec blume validate --strict
 pnpm --filter uwz-docs exec blume audit --fail-on warning
 pnpm i18n:check
@@ -187,5 +213,6 @@ Use the app's own scripts. Blume/Astro dev servers are not started by `vp dev`.
 - Links resolve and external links are descriptive.
 - Code fences have a language and no secrets.
 - Navigation and search reach the page.
+- App CSS uses Tailwind syntax and passes `pnpm check:css`.
 - The build succeeds and generated output is not edited by hand.
 - No emoji, filler, or unverified claim was added.

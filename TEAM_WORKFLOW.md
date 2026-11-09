@@ -103,16 +103,17 @@ suppress a finding, reclassify a failure, or weaken a check to close the phase.
 
 ## 3. Routing by Change Type
 
-| Change                                      | Primary core role | Required specialists            | Minimum evidence                                        |
-| ------------------------------------------- | ----------------- | ------------------------------- | ------------------------------------------------------- |
-| Documentation page or guide                 | Developer         | docs-writer, astro-blume        | `vp run <app>#check`, `vp run <app>#build`, link review |
-| Visual redesign or component styling        | Developer         | ui-stylist, svelte-engineer     | Both docs builds, keyboard and responsive review        |
-| New shared Svelte component                 | Developer         | svelte-engineer, ui-stylist     | `@farben/ui#check`, consuming app build                 |
-| Blume configuration or content pipeline     | Developer         | astro-blume, docs-writer        | Docs check, build, generated `llms.txt` review          |
-| Agent, skill, or template change            | Developer         | docs-writer, verification       | JSON/TOML parse, command contract review                |
-| Whole-codebase behavior-preserving refactor | Architect         | reviewer, verification          | Decision log, `pnpm ready`, behavior parity evidence    |
-| Dependency or toolchain update              | Developer         | verification, security-reviewer | `pnpm ready`, lockfile review, advisory check           |
-| Security-sensitive surface                  | Architect         | security-reviewer, verification | Threat model, validation tests, explicit review         |
+| Change                                      | Primary core role | Required specialists            | Minimum evidence                                         |
+| ------------------------------------------- | ----------------- | ------------------------------- | -------------------------------------------------------- |
+| Documentation page or guide                 | Developer         | docs-writer, astro-blume        | `vp run <app>#check`, `vp run <app>#build`, link review  |
+| Visual redesign or component styling        | Developer         | ui-stylist, svelte-engineer     | Both docs builds, keyboard and responsive review         |
+| Blume CSS or theme change                   | Developer         | ui-stylist, astro-blume         | `pnpm check:css`, app build, visual and dark-mode review |
+| New shared Svelte component                 | Developer         | svelte-engineer, ui-stylist     | `@farben/ui#check`, consuming app build                  |
+| Blume configuration or content pipeline     | Developer         | astro-blume, docs-writer        | Docs check, build, generated `llms.txt` review           |
+| Agent, skill, or template change            | Developer         | docs-writer, verification       | JSON/TOML parse, command contract review                 |
+| Whole-codebase behavior-preserving refactor | Architect         | reviewer, verification          | Decision log, `pnpm ready`, behavior parity evidence     |
+| Dependency or toolchain update              | Developer         | verification, security-reviewer | `pnpm ready`, lockfile review, advisory check            |
+| Security-sensitive surface                  | Architect         | security-reviewer, verification | Threat model, validation tests, explicit review          |
 
 This table covers the two current Blume docs apps. A new marketing or shop app on
 another framework is an architecture decision with its own stack specialist and
@@ -144,6 +145,7 @@ pnpm format:check
 pnpm typecheck
 pnpm i18n:check
 pnpm check:size
+pnpm check:css
 pnpm test
 pnpm test:all
 pnpm build
@@ -166,6 +168,9 @@ A change is done when:
 - No emoji, dead code, commented-out code, or unexplained `TODO` was added.
 - Comments explain only non-obvious constraints.
 - Functional style is preserved; no class or hidden mutable state was added.
+- App CSS is Tailwind-first: declarations use `@apply`, tokens use `@theme`,
+  and `pnpm check:css` passes. Raw declarations are limited to token blocks,
+  `@keyframes`, `@font-face`, `@property`, and data-driven custom properties.
 - Component UI copy stays in locale JSON and passes `pnpm i18n:check`;
   documentation pages stay in mirrored MDX and are not x18n resources.
 - Vietnamese pages keep the core technical terms in English and read as natural

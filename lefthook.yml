@@ -26,6 +26,10 @@ pre-commit:
     - name: size
       run: pnpm check:size
 
+    - name: css
+      glob: "apps/**/*.css"
+      run: pnpm check:css
+
     - name: typecheck
       glob: "**/*.{ts,tsx,mts,cts,svelte,astro}"
       exclude:

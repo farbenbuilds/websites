@@ -141,6 +141,45 @@ rules with its own framework conventions.
 - Blume owns documentation routing, search, `llms.txt`, and build output. Do
   not hand-roll replacements for features it already provides.
 
+### Blume app CSS
+
+Blume inlines a project's `theme.css` into the generated Tailwind entry, so
+every `*.css` file it imports can use Tailwind v4 syntax. This applies to
+`theme.css`, `styles/*.css`, and component CSS in the current docs apps.
+
+- Write declarations with `@apply` and Tailwind utilities, arbitrary values,
+  arbitrary properties, and variants before reaching for raw CSS. A property
+  without a named utility still belongs inside `@apply`, for example
+  `@apply [text-orientation:mixed]`.
+- Define host tokens and generated utility names in `@theme inline`. Map an
+  existing CSS variable instead of repeating its value.
+- Use `@utility` for a repeated custom pattern that no built-in utility covers.
+  Apply utilities inside it; do not hide raw declarations there.
+- Use `@source` when utility classes live in another workspace package. Keep the
+  path relative to `theme.css`.
+- Raw declarations are limited to token blocks such as `:root` and
+  `[data-theme="dark"]`, `@keyframes` frames, `@font-face` descriptors,
+  `@property` registrations, and data-driven custom properties such as
+  `--bar-width`. They are not a fallback for a utility that already exists.
+- Target Blume's rendered DOM with a scoped selector and apply utilities inside
+  it. Do not add a class to generated markup when the selector can carry the
+  utility.
+- Do not `@apply` a selector class declared in the same file; that creates a
+  circular dependency.
+- Run `pnpm check:css` with the app build. The checker rejects raw declarations
+  outside the allowed token, keyframe, font-face, property-registration, and
+  data-property contexts.
+
+```css
+.docs-home-section {
+  @apply mx-auto w-[min(100%_-_2.5rem,70rem)] border-t border-border py-12;
+}
+
+@theme inline {
+  --color-reading: var(--docs-active-bar);
+}
+```
+
 ### Shared UI components
 
 `@farben/ui` owns the shared shadcn-svelte source. Reach for it before writing a
@@ -289,10 +328,11 @@ it.
   support custom parsers, so Svelte and Astro template rules stay out of scope.
 - The anti-slop plugin is vendored under `tools/oxlint/anti-slop/`. Update it
   through the `install-anti-slop` skill, not by editing rule files in place.
-- `lefthook` runs lint, format, size, typecheck, and tests before a commit. Do
-  not bypass the hook with `--no-verify`.
+- `lefthook` runs lint, format, size, CSS, typecheck, and tests before a commit.
+  Do not bypass the hook with `--no-verify`.
 - Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
-  full workspace gate. `pnpm check:size` enforces the 400-line source limit.
+  full workspace gate. `pnpm check:size` enforces the 400-line source limit and
+  `pnpm check:css` enforces Tailwind-first app CSS.
 - Vitest tests live under `tests/<category>/<subject>.test.ts` and use
   `vite-plus/test`. The category groups related tests; the file names the
   behavior. See [tests/README.md](tests/README.md). Run them with

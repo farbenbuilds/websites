@@ -29,6 +29,10 @@ the working checklist.
 - No commented-out code and no `TODO`, `FIXME`, `XXX`, or `HACK`.
 - No `any`, unchecked casts, or non-null assertions used to silence uncertainty.
 - No `<style>` blocks in Svelte. No legacy Svelte syntax.
+- Blume app CSS is Tailwind-first. Use `@apply`, `@theme inline`, `@utility`,
+  and `@source`; keep raw declarations to token blocks, `@keyframes`,
+  `@font-face`, `@property`, and data-driven custom properties. Run
+  `pnpm check:css`.
 - x18n owns component UI copy only, in `apps/<app>/locales/{locale}.json`.
   Documentation content stays in `docs/` and `docs/vi/` MDX pages under Blume.
   Never add MDX files, page prose, frontmatter, or docs routes to x18n
@@ -134,13 +138,14 @@ pnpm format:check
 pnpm typecheck
 pnpm i18n:check
 pnpm test
+pnpm check:css
 pnpm exec vp run <workspace>#check
 pnpm exec vp run <workspace>#build
 pnpm ready
 ```
 
-`lefthook` runs the same lint, format, size, typecheck, and test commands on
-pre-commit. The anti-slop rules live in `.oxlintrc.json` and
+`lefthook` runs the same lint, format, size, CSS, typecheck, and test commands
+on pre-commit. The anti-slop rules live in `.oxlintrc.json` and
 `tools/oxlint/anti-slop/`; formatting lives in `.oxfmtrc.json`.
 
 Report the exact command and result. If a command could not run, say so.
@@ -153,6 +158,7 @@ Report the exact command and result. If a command could not run, say so.
 - Comments explain only a non-obvious why.
 - Types are explicit and external input is validated.
 - Svelte uses runes and Tailwind, not `<style>`.
+- App CSS uses Tailwind syntax and passes `pnpm check:css`.
 - Component UI copy is in locale JSON; documentation prose is in mirrored MDX
   and not in x18n resources.
 - Formatting follows `.oxfmtrc.json`; lint follows `.oxlintrc.json`.

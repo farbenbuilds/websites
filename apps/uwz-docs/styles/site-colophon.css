@@ -1,47 +1,21 @@
 .site-colophon {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem 2rem;
-  width: min(100% - 2.5rem, 70rem);
-  margin-inline: auto;
-  border-top: 1px solid var(--blume-border);
-  margin-block-start: 2rem;
-  padding-block: 1.5rem 0.5rem;
-  color: var(--blume-muted-foreground);
-  font-family: var(--blume-font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  line-height: 1.6;
+  @apply mx-auto mt-8 flex w-[min(100%_-_2.5rem,70rem)] flex-wrap items-baseline justify-between gap-x-8 gap-y-3 border-t border-border pt-6 pb-2 font-mono text-[0.68rem] leading-[1.6] tracking-[0.04em] text-muted-foreground;
 }
 
 .site-colophon-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  @apply m-0 flex list-none flex-wrap gap-x-5 gap-y-2 p-0;
 }
 
 .site-colophon a {
-  display: inline-block;
-  padding-block: 0.3rem;
-  color: inherit;
-  text-decoration-line: underline;
-  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
+  @apply inline-block py-[0.3rem] text-inherit underline decoration-[color-mix(in_srgb,currentColor_40%,transparent)] decoration-1 underline-offset-[0.22em];
 }
 
 .site-colophon a:hover {
-  color: var(--blume-foreground);
-  text-decoration-color: currentColor;
+  @apply text-foreground decoration-current;
 }
 
 @media (max-width: 56rem) {
   .site-colophon {
-    width: min(100% - 2rem, 70rem);
+    @apply w-[min(100%_-_2rem,70rem)];
   }
 }

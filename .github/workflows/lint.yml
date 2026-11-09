@@ -78,7 +78,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint, format, typecheck, and size
+    name: Lint, format, typecheck, size, and CSS
     environment: Lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -108,3 +108,6 @@ jobs:
 
       - name: Check file size
         run: pnpm check:size
+
+      - name: Check Tailwind-first CSS
+        run: pnpm check:css
