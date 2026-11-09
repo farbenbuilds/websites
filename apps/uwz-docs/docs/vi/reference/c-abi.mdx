@@ -1,0 +1,385 @@
+---
+title: C ABI reference
+description: Tra cứu mọi handle, enum, function, fixed capacity, ownership rule và link requirement trong header C của µWebZockets.
+sidebar:
+  order: 5
+search:
+  tags: [reference, c-abi]
+---
+
+`include/uWebZockets.h` cung cấp một server HTTP và WebSocket fixed-capacity cho C
+và C++. Dùng trang này để tra cứu declaration đầy đủ. Walkthrough build-and-run
+là [Embed from C or C++](/docs/guides/c-abi); archive production và installation
+là [C ABI operations](/docs/operations/c-abi).
+
+C surface không có entry point cho `ServerConfig`, `uz.schema`, `uz.json_rpc`,
+`uz.client`, điều khiển HTTP/2 frame hoặc HPACK, HTTP/3 extension, WebTransport,
+mTLS hoặc certificate rotation. Async HTTP route và per-route WebSocket
+compression được expose.
+
+## Header and version [#header-and-version]
+
+Include `<uWebZockets.h>`. Header include `stdbool.h`, `stddef.h` và `stdint.h`, và
+bọc mọi declaration trong `extern "C"` cho C++.
+
+Header định nghĩa `UWZ_VERSION_MAJOR` là `2`, `UWZ_VERSION_MINOR` là `1` và
+`UWZ_VERSION_PATCH` là `6`. `uwz_version()` trả runtime string, ví dụ `2.1.6`.
+Dùng header và archive từ cùng release; cặp lệch có thể compile với một enum
+layout rồi gọi vào layout khác.
+
+## Handles and value types [#handles-and-value-types]
+
+| Handle               | Kind          | Meaning                                                       |
+| -------------------- | ------------- | ------------------------------------------------------------- |
+| `uwz_app`            | Opaque        | Application, listener, event loop và fixed storage            |
+| `uwz_request`        | Opaque        | Request view chỉ sống trong callback                          |
+| `uwz_response`       | Opaque        | Response writer cho một request                               |
+| `uwz_websocket`      | Opaque        | Một WebSocket connection đã upgrade                           |
+| `uwz_async_response` | Public struct | Async token complete một lần, copy được; coi field là private |
+
+```c
+typedef struct uwz_slice {
+    const uint8_t *data;
+    size_t length;
+} uwz_slice;
+```
+
+Slice zero-length có thể dùng `NULL` data. Slice khác rỗng chỉ được borrow trong
+call trừ khi registration function nói rõ là copy byte: `uwz_app_route` và
+`uwz_app_ws` copy route path; `user_data` vẫn thuộc caller.
+
+`uwz_async_response` là public struct với field `void *state` và
+`uint64_t generation`; coi cả hai là private. Token chỉ sống trong callback.
+Handler trả `UWZ_HANDLER_PENDING` phải copy toàn bộ struct vào storage của
+mình. Bản copy dùng được trên event loop sở hữu connection cho đến completion
+hoặc app shutdown, và không bao giờ sau destruction.
+
+### Callback typedefs [#callback-typedefs]
+
+| Typedef                  | Signature                                                                   | Contract                                           |
+| ------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------- |
+| `uwz_http_handler`       | `void (*)(const uwz_request *, uwz_response *, void *)`                     | Hoàn tất response trước khi trả về                 |
+| `uwz_async_handler`      | `uwz_handler_result (*)(const uwz_request *, uwz_async_response *, void *)` | Copy token trước khi trả `UWZ_HANDLER_PENDING`     |
+| `uwz_middleware`         | `uwz_middleware_result (*)(const uwz_request *, uwz_response *, void *)`    | Có thứ tự và synchronous; có thể kết thúc response |
+| `uwz_ws_upgrade_handler` | `bool (*)(const uwz_request *, void *)`                                     | Trả `false` để từ chối upgrade với `403`           |
+| `uwz_ws_open_handler`    | `void (*)(uwz_websocket *, void *)`                                         | Chạy sau response `101`                            |
+| `uwz_ws_message_handler` | `void (*)(uwz_websocket *, uwz_slice, uwz_ws_opcode, void *)`               | Nhận một message đã decode đầy đủ                  |
+| `uwz_ws_event_handler`   | `void (*)(uwz_websocket *, void *)`                                         | Dùng cho `drain` và `close`                        |
+
+### `uwz_ws_behavior` [#uwz_ws_behavior]
+
+```c
+typedef struct uwz_ws_behavior {
+    uwz_ws_upgrade_handler upgrade;
+    uwz_ws_open_handler open;
+    uwz_ws_message_handler message;
+    uwz_ws_event_handler drain;
+    uwz_ws_event_handler close;
+    void *user_data;
+    uwz_ws_compression compression;
+    uint64_t max_frame_size;
+    uint64_t max_message_size;
+} uwz_ws_behavior;
+```
+
+`upgrade` callback authorize handshake trước `101`; `false` gửi `403`. `open`,
+`message`, `drain` và `close` theo lifecycle của connection. `user_data` thuộc
+caller. Cả hai size bound phải khác `0`, frame size không vượt message size, và
+message size phải vừa WebSocket buffer của app.
+
+Field order, field type và size được header freeze. Behavior mới được expose qua
+entry point mới, không thêm field.
+
+## Enums [#enums]
+
+### `uwz_error` [#uwz_error]
+
+Các giá trị âm là append-only và thuộc ABI.
+
+| Value                        | Number | `uwz_error_name`   |
+| ---------------------------- | -----: | ------------------ |
+| `UWZ_OK`                     |    `0` | `ok`               |
+| `UWZ_ERROR_INVALID_ARGUMENT` |   `-1` | `invalid argument` |
+| `UWZ_ERROR_OUT_OF_MEMORY`    |   `-2` | `out of memory`    |
+| `UWZ_ERROR_INVALID_STATE`    |   `-3` | `invalid state`    |
+| `UWZ_ERROR_ALREADY_EXISTS`   |   `-4` | `already exists`   |
+| `UWZ_ERROR_CAPACITY`         |   `-5` | `capacity reached` |
+| `UWZ_ERROR_WOULD_BLOCK`      |   `-6` | `would block`      |
+| `UWZ_ERROR_PROTOCOL`         |   `-7` | `protocol error`   |
+| `UWZ_ERROR_IO`               |   `-8` | `I/O error`        |
+| `UWZ_ERROR_UNSUPPORTED`      |   `-9` | `unsupported`      |
+| `UWZ_ERROR_INTERNAL`         |  `-10` | `internal error`   |
+
+### `uwz_http_method` [#uwz_http_method]
+
+|   Number | Values                              |
+| -------: | ----------------------------------- |
+| `0`, `1` | `UWZ_HTTP_GET`, `UWZ_HTTP_HEAD`     |
+| `2`, `3` | `UWZ_HTTP_POST`, `UWZ_HTTP_PUT`     |
+| `4`, `5` | `UWZ_HTTP_DELETE`, `UWZ_HTTP_PATCH` |
+| `6`, `7` | `UWZ_HTTP_OPTIONS`, `UWZ_HTTP_ANY`  |
+| `8`, `9` | `UWZ_HTTP_QUERY`, `UWZ_HTTP_TRACE`  |
+
+`UWZ_HTTP_ANY` là fallback method, và `UWZ_HTTP_QUERY` là RFC 10008 `QUERY`.
+Không có giá trị `CONNECT`; RFC 8441 extended CONNECT do HTTP/2 và HTTP/3
+dispatcher xử lý, không qua route enum này.
+
+### Results, opcodes, and compression [#results-opcodes-and-compression]
+
+| Enum                    | Value                                   | Number | Meaning                                         |
+| ----------------------- | --------------------------------------- | -----: | ----------------------------------------------- |
+| `uwz_handler_result`    | `UWZ_HANDLER_COMPLETE`                  |    `0` | Callback đã complete token trước khi trả về     |
+| `uwz_handler_result`    | `UWZ_HANDLER_PENDING`                   |    `1` | Callback đã copy token và sẽ complete sau       |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_CONTINUE`               |    `0` | Tiếp tục sang middleware hoặc route kế tiếp     |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_COMPLETE`               |    `1` | Dừng chain dispatch; response có thể đã end     |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_PENDING`                |    `2` | Reserved; middleware synchronous và fail closed |
+| `uwz_ws_opcode`         | `UWZ_WS_TEXT`                           |  `0x1` | UTF-8 text frame                                |
+| `uwz_ws_opcode`         | `UWZ_WS_BINARY`                         |  `0x2` | Binary frame                                    |
+| `uwz_ws_opcode`         | `UWZ_WS_CLOSE`                          |  `0x8` | Close frame                                     |
+| `uwz_ws_opcode`         | `UWZ_WS_PING`                           |  `0x9` | Ping frame                                      |
+| `uwz_ws_opcode`         | `UWZ_WS_PONG`                           |  `0xa` | Pong frame                                      |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_DISABLED`           |    `0` | Không compression                               |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE` |    `1` | RFC 7692 per-message deflate                    |
+
+`uwz_websocket_send` chỉ nhận `UWZ_WS_TEXT` và `UWZ_WS_BINARY`. Dùng
+`uwz_websocket_send_close` cho close frame; opcode khác trả
+`UWZ_ERROR_INVALID_ARGUMENT`.
+
+## Functions [#functions]
+
+Mọi function dưới đây dùng C calling convention. Call fail trả `uwz_error`; các
+call còn lại trả slice, count hoặc `void`.
+
+### Version and error text [#version-and-error-text]
+
+| Function                                     | Returns       | Contract                                     |
+| -------------------------------------------- | ------------- | -------------------------------------------- |
+| `const char *uwz_version(void)`              | Static string | Version của library được link                |
+| `const char *uwz_error_name(uwz_error code)` | Static string | Tên cho một code; `unknown error` ngoài enum |
+
+### Application lifecycle [#application-lifecycle]
+
+| Function                                                                               | Returns     | Contract                                                 |
+| -------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------- |
+| `uwz_error uwz_app_create(uwz_app **out_app)`                                          | `uwz_error` | App plaintext; `*out_app` phải là `NULL`                 |
+| `uwz_error uwz_app_create_tls(const char *cert, const char *key, uwz_app **out_app)`   | `uwz_error` | HTTPS app từ PEM path kết thúc bằng NUL                  |
+| `uwz_error uwz_app_create_http3(const char *cert, const char *key, uwz_app **out_app)` | `uwz_error` | HTTP/1.1 và HTTP/3 app từ PEM path                       |
+| `uwz_error uwz_app_create_tls_ephemeral(uwz_app **out_app)`                            | `uwz_error` | HTTPS app với certificate localhost trong memory         |
+| `uwz_error uwz_app_create_http3_ephemeral(uwz_app **out_app)`                          | `uwz_error` | HTTP/1.1 và HTTP/3 app với certificate trong memory      |
+| `uwz_error uwz_app_shutdown(uwz_app *app)`                                             | `uwz_error` | Dừng listener và drain; từ callback thì request shutdown |
+| `uwz_error uwz_app_destroy(uwz_app **app)`                                             | `uwz_error` | Drain và release; ghi `NULL` khi thành công              |
+
+Mọi create function yêu cầu `*out_app == NULL`, nên handle đang sống không bị ghi
+đè. Ephemeral certificate chỉ dành cho local development. `uwz_app_destroy` từ
+callback trả `UWZ_ERROR_INVALID_STATE` và giữ handle valid; destroy sau khi
+`uwz_app_run` trả về.
+
+### Registration [#registration]
+
+| Function                                                                                                                                                | Returns     | Contract                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------ |
+| `uwz_error uwz_app_route(uwz_app *app, uwz_http_method method, const char *path, size_t path_length, uwz_http_handler handler, void *user_data)`        | `uwz_error` | Đăng ký synchronous route; copy `path`                 |
+| `uwz_error uwz_app_route_async(uwz_app *app, uwz_http_method method, const char *path, size_t path_length, uwz_async_handler handler, void *user_data)` | `uwz_error` | Đăng ký deferred route; copy `path`                    |
+| `uwz_error uwz_app_use(uwz_app *app, uwz_middleware middleware, void *user_data)`                                                                       | `uwz_error` | Append middleware theo thứ tự                          |
+| `uwz_error uwz_app_ws(uwz_app *app, const char *path, size_t path_length, const uwz_ws_behavior *behavior)`                                             | `uwz_error` | Đăng ký WebSocket route; copy `path` và behavior field |
+
+Đăng ký mọi route, middleware entry và WebSocket route trước lần gọi listener đầu
+tiên. Path không được chứa NUL. `user_data` thuộc caller và phải sống đến khi
+shutdown drain xong callback.
+
+### Serving and publish [#serving-and-publish]
+
+| Function                                                                                                | Returns        | Contract                                                            |
+| ------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------- |
+| `uwz_error uwz_app_listen(uwz_app *app, const char *address, size_t address_length, uint16_t port)`     | `uwz_error`    | Bind TCP listener và lock route registration                        |
+| `uwz_error uwz_app_listen_udp(uwz_app *app, const char *address, size_t address_length, uint16_t port)` | `uwz_error`    | Start QUIC listener; yêu cầu HTTP/3 app                             |
+| `uwz_error uwz_app_run(uwz_app *app)`                                                                   | `uwz_error`    | Block đến khi shutdown drain xong loop                              |
+| `size_t uwz_app_publish(uwz_app *app, uwz_slice topic, uwz_slice message, bool is_text)`                | Delivery count | Publish đến local subscriber; `0` khi input sai hoặc không có match |
+
+`uwz_app_run` không cài signal watcher. Supervisor hoặc host program gọi
+`uwz_app_shutdown` khi SIGINT hoặc SIGTERM. Shutdown request từ callback trả
+`UWZ_OK`; run đang active drain trước khi trả về.
+
+### Request access [#request-access]
+
+Mọi request slice được borrow trong callback invocation. Copy field nào cần sống
+sau callback, kể cả khi callback trả pending.
+
+| Function                                                                                                                                                                                                                                                           | Returns                   | Contract                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------ |
+| `uwz_slice uwz_request_method(const uwz_request *)`, `uwz_slice uwz_request_target(const uwz_request *)`, `uwz_slice uwz_request_path(const uwz_request *)`, `uwz_slice uwz_request_query(const uwz_request *)`, `uwz_slice uwz_request_body(const uwz_request *)` | Borrowed slices           | Method token nhận được, target kèm query, path không query, raw query và body đầy đủ |
+| `uwz_slice uwz_request_header(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                         | Borrowed slice hoặc empty | Match đầu tiên không phân biệt hoa thường cho `name`                                 |
+| `size_t uwz_request_header_count(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                      | Count                     | Số field cùng tên                                                                    |
+| `uwz_slice uwz_request_parameter(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                      | Borrowed slice hoặc empty | Capture `:name` hoặc `*name` cuối path, phân biệt hoa thường                         |
+| `size_t uwz_request_parameter_count(const uwz_request *request)`                                                                                                                                                                                                   | Count                     | Tổng capture trên request này                                                        |
+
+Handle null hoặc slice sai trả empty slice hoặc `0`. Không có indexed header
+accessor; dùng `header_count` để phát hiện duplicate và `uwz_request_header` cho
+value đầu tiên.
+
+### Response [#response]
+
+Status string là raw line như `200 OK`; ba byte đầu phải là code từ `200` đến
+`599`. Header string là raw field `Name: value\r\n` không có blank line cuối. ABI
+thêm framing trước body.
+
+| Function                                                                                                               | Returns     | Contract                                  |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------- |
+| `uwz_error uwz_response_end(uwz_response *response, uwz_slice status, uwz_slice body)`                                 | `uwz_error` | Complete response không thêm header       |
+| `uwz_error uwz_response_end_with_headers(uwz_response *response, uwz_slice status, uwz_slice headers, uwz_slice body)` | `uwz_error` | Complete với raw header field đã validate |
+| `uwz_error uwz_response_begin_chunked(uwz_response *response, uwz_slice status, uwz_slice headers)`                    | `uwz_error` | Bắt đầu chunked response                  |
+| `uwz_error uwz_response_write_chunk(uwz_response *response, uwz_slice chunk)`                                          | `uwz_error` | Append một chunk vào streaming response   |
+| `uwz_error uwz_response_end_chunks(uwz_response *response)`                                                            | `uwz_error` | Kết thúc chunked response                 |
+
+Slice status, header và body chỉ borrow trong call; byte được copy vào bounded
+transport storage trước khi function trả về. Complete lần thứ hai trả
+`UWZ_ERROR_INVALID_STATE`.
+
+### Async response [#async-response]
+
+| Function                                                                                                                           | Returns     | Contract                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------- |
+| `uwz_error uwz_async_response_end(uwz_async_response *response, uwz_slice status, uwz_slice body)`                                 | `uwz_error` | Complete một token đã copy, không thêm header   |
+| `uwz_error uwz_async_response_end_with_headers(uwz_async_response *response, uwz_slice status, uwz_slice headers, uwz_slice body)` | `uwz_error` | Complete một token đã copy với raw header field |
+
+Slice status, header và body được borrow cho completion call. Token được
+generation-check; token cũ hoặc duplicate trả `UWZ_ERROR_INVALID_STATE`.
+
+### WebSocket [#websocket]
+
+| Function                                                                                                | Returns        | Contract                                            |
+| ------------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------------------- |
+| `uwz_error uwz_websocket_send(uwz_websocket *socket, uwz_slice message, uwz_ws_opcode opcode)`          | `uwz_error`    | Gửi một text hoặc binary message                    |
+| `uwz_error uwz_websocket_send_close(uwz_websocket *socket, uint16_t code, uwz_slice reason)`            | `uwz_error`    | Gửi close frame và đóng sau khi byte đã queue drain |
+| `size_t uwz_websocket_buffered_amount(const uwz_websocket *socket)`                                     | Bytes          | Output đang queue cho socket này                    |
+| `uwz_error uwz_websocket_subscribe(uwz_websocket *socket, uwz_slice topic)`                             | `uwz_error`    | Subscribe một bounded topic đã copy                 |
+| `bool uwz_websocket_unsubscribe(uwz_websocket *socket, uwz_slice topic)`                                | Boolean        | Báo subscription có tồn tại không                   |
+| `size_t uwz_websocket_publish(uwz_websocket *socket, uwz_slice topic, uwz_slice message, bool is_text)` | Delivery count | Publish qua registry của socket                     |
+| `void uwz_websocket_terminate(uwz_websocket *socket)`                                                   | None           | Terminate transport ngay                            |
+
+WebSocket send có thể trả `UWZ_ERROR_WOULD_BLOCK` khi write queue đầy. Chờ
+callback `drain` của route trước khi tiếp tục producer.
+
+## Fixed capacities [#fixed-capacities]
+
+| Limit                       |    Value | Source                                           |
+| --------------------------- | -------: | ------------------------------------------------ |
+| `UWZ_MAX_ROUTES`            |     `64` | Macro cố định; route hoặc WebSocket registration |
+| `UWZ_MAX_MIDDLEWARE`        |     `32` | Macro cố định; `uwz_app_use`                     |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |     `16` | Macro cố định; inline capture                    |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` |   `2048` | Macro cố định; route registration                |
+| Connection slots            |   `1024` | App default cố định; không override từ C         |
+| Radix route nodes           |    `256` | App default cố định; không override từ C         |
+| Pattern routes              |     `64` | App default cố định; không override từ C         |
+| Route registry bytes        | `64 KiB` | App default cố định; không override từ C         |
+| WebSocket message           | `16 KiB` | App default cố định; không override từ C         |
+| Request body                | `16 KiB` | App default cố định; không override từ C         |
+| Write queue                 | `64 KiB` | App default cố định; không override từ C         |
+
+64 route path dài tối đa không vừa registry `64 KiB`, nên app dùng path dài có
+thể gặp `UWZ_ERROR_CAPACITY` trước route thứ 65. Zig API là đường cho slab, route
+table hoặc body limit khác.
+
+## Ownership and lifetimes [#ownership-and-lifetimes]
+
+| Value                         | Valid until                                               | Rule                                                        |
+| ----------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
+| `uwz_app`                     | `uwz_app_destroy` thành công                              | Một handle sở hữu slab, listener và loop                    |
+| `uwz_request`                 | Callback trả về                                           | Copy field cần dùng sau callback, kể cả từ async callback   |
+| `uwz_response`                | Callback trả về                                           | Kết thúc đúng một response; async dùng `uwz_async_response` |
+| `uwz_websocket`               | Callback nhận message hoặc event sau trên cùng connection | Không giữ sau close                                         |
+| `uwz_async_response` copy     | Completion hoặc app shutdown                              | Không dùng sau `uwz_app_destroy`                            |
+| Route path                    | Copy lúc registration                                     | Caller có thể release buffer của mình                       |
+| `user_data`                   | Shutdown đã drain callback                                | Giữ nó sống cho app lifetime                                |
+| WebSocket message slice       | Callback nhận trả về                                      | Copy byte để giữ lại                                        |
+| Status, header, body argument | Response call trả về                                      | Copy vào bounded storage                                    |
+
+Route path được copy vào C storage rồi vào router registry, nên stack buffer an
+toàn sau khi `uwz_app_route` trả về. Giá trị `uwz_ws_behavior` được đọc lúc
+registration; callback pointer và `user_data` được lưu.
+
+## Async token rules [#async-token-rules]
+
+- `uwz_async_response *` truyền vào async callback chỉ sống trong callback.
+  Trả `UWZ_HANDLER_PENDING` nghĩa là callback đã copy toàn bộ struct, gồm
+  `state` và `generation`, vào storage của mình.
+- Hoàn tất bản copy trên event loop sở hữu connection. Không có cross-thread
+  wake. Complete đúng một lần; token cũ hoặc duplicate trả
+  `UWZ_ERROR_INVALID_STATE`.
+- Token còn valid đến completion hoặc app shutdown, và không bao giờ sau
+  `uwz_app_destroy`.
+- Copy token không kéo dài lifetime của request field, route capture hoặc
+  WebSocket message slice. Copy riêng những giá trị đó.
+
+`UWZ_HANDLER_COMPLETE` nghĩa là callback đã complete token trước khi trả về.
+Không được vừa trả giá trị này vừa giữ token để dùng sau.
+
+## Linking requirements [#linking]
+
+Liệt kê từng archive trước archive mà nó gọi vào. Undefined symbol thường nghĩa
+là order bị đảo, thiếu C++ runtime hoặc thiếu platform library.
+
+```sh
+cc -std=c11 -O2 -o server main.c \
+  zig-out/lib/libuWebZockets.a zig-out/lib/liblsquic.a \
+  zig-out/lib/libssl.a zig-out/lib/libcrypto.a \
+  zig-out/lib/libdeflate.a zig-out/lib/libz.a \
+  -lstdc++ -lc -lm -lpthread
+```
+
+| Platform        | Runtime libraries                                                                |
+| --------------- | -------------------------------------------------------------------------------- |
+| Linux với GCC   | `-lstdc++ -lc -lm -lpthread`                                                     |
+| macOS với Clang | `-lc++ -lc -lm -lpthread`                                                        |
+| Windows         | Thêm `-lws2_32 -lmswsock -lcrypt32 -ladvapi32`, và link C++ runtime của compiler |
+
+Năm dependency archive là `libssl.a`, `libcrypto.a`, `liblsquic.a`,
+`libdeflate.a` và `libz.a`. Bộ cài đặt cũng gồm `libuWebZockets.a` và
+`zig-out/include/uWebZockets.h`.
+
+## Consumer `build.zig` [#consumer-buildzig]
+
+Thêm package tagged vào project của bạn. Bạn không clone hoặc build framework
+repository.
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{ .target = target, .optimize = optimize });
+    const module = b.createModule(.{
+        .target = target, .optimize = optimize, .link_libc = true, .link_libcpp = true,
+    });
+    module.addIncludePath(uz.path("include"));
+    module.addCSourceFile(.{ .file = b.path("src/main.c"), .flags = &.{"-std=c11"} });
+    module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        module.linkLibrary(uz.artifact(name));
+    }
+    const exe = b.addExecutable(.{ .name = "c-server", .root_module = module });
+    b.installArtifact(exe);
+}
+```
+
+```sh
+zig build
+./zig-out/bin/c-server
+```
+
+`uz.path("include")` cung cấp header đã cài. `uz.artifact("uWebZockets")` link
+ABI archive, và vòng lặp link năm dependency archive. Direct archive linking
+được trình bày trong [C ABI operations](/docs/operations/c-abi); chương trình C
+đầy đủ ở [Embed from C or C++](/docs/guides/c-abi).
+
+## Related [#related]
+
+- [Embed from C or C++](/docs/guides/c-abi) build một chương trình đầy đủ.
+- [C ABI operations](/docs/operations/c-abi) produce và install archive.
+- [C ABI architecture](/docs/architecture/c-abi) giải thích handle model.
+- [Errors](/reference/errors) map mọi C code sang nguyên nhân.

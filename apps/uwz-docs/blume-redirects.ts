@@ -32,14 +32,24 @@ const MOVED_EXAMPLE_SLUGS = [
 
 const EXAMPLE_MOVES: readonly RouteMove[] = MOVED_EXAMPLE_SLUGS.map((slug) => ({
   from: `/docs/getting-started/${slug}`,
-  to: `/docs/examples/${slug}`,
+  to: `/examples/${slug}`,
 }));
+
+const SECTION_MOVES: readonly RouteMove[] = [
+  { from: "/docs/examples", to: "/examples" },
+  ...MOVED_EXAMPLE_SLUGS.map((slug) => ({
+    from: `/docs/examples/${slug}`,
+    to: `/examples/${slug}`,
+  })),
+];
 
 const MOVE_GROUPS: readonly LocalizedMoveGroup[] = [
   { locale: "en", moves: GETTING_STARTED_MOVES },
   { locale: "vi", moves: GETTING_STARTED_MOVES },
   { locale: "en", moves: EXAMPLE_MOVES },
   { locale: "vi", moves: EXAMPLE_MOVES },
+  { locale: "en", moves: SECTION_MOVES },
+  { locale: "vi", moves: SECTION_MOVES },
 ];
 
 function toRedirects({ locale, moves }: LocalizedMoveGroup): Redirect[] {

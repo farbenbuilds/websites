@@ -62,15 +62,15 @@ hình không biểu diễn được sẽ fail validation thay vì bị cắt b�
 
 ## Giới hạn HTTP/2 và HTTP/3
 
-| Giới hạn                       |                               Mặc định | Ghi đè builder                                | Khi vượt giới hạn                         |
-| ------------------------------ | -------------------------------------: | --------------------------------------------- | ----------------------------------------- |
-| Header block HTTP/2            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` với `ENHANCE_YOUR_CALM`          |
-| Request body HTTP/2            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Connection đóng mà không có HTTP response |
-| Header block response HTTP/2   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                     |
-| Field header response HTTP/2   |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                     |
-| Request body HTTP/3            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                   |
-| Storage header response HTTP/3 |                                4.096 B | `with_max_h3_response_header_size`            | Response fails closed; tối đa 65.535      |
-| Field header response HTTP/3   |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; tối đa 4.096       |
+| Giới hạn                       |                               Mặc định | Ghi đè builder                                | Khi vượt giới hạn                                            |
+| ------------------------------ | -------------------------------------: | --------------------------------------------- | ------------------------------------------------------------ |
+| Header block HTTP/2            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` với `ENHANCE_YOUR_CALM`                             |
+| Request body HTTP/2            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Stream bị reset hoặc connection đóng, không có HTTP response |
+| Header block response HTTP/2   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                                        |
+| Field header response HTTP/2   |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                                        |
+| Request body HTTP/3            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                                      |
+| Storage header response HTTP/3 |                                4.096 B | `with_max_h3_response_header_size`            | Response fails closed; tối đa 65.535                         |
+| Field header response HTTP/3   |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; tối đa 4.096                          |
 
 Giới hạn request body HTTP/2 là giá trị nhỏ hơn giữa `max_body_size` và
 `max_h2_body_size`: connection đặt `request_body_limit` từ `max_body_size`, còn

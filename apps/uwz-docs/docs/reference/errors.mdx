@@ -1,0 +1,286 @@
+---
+title: Errors
+description: Look up every µWebZockets error name by subsystem, with its cause, HTTP consequence, fix, and owning source module.
+sidebar:
+  order: 4
+search:
+  tags: [reference, troubleshooting]
+---
+
+Use this page to identify a Zig error, a JSON-RPC fault, a WebSocket rejection,
+or a C ABI code. [Errors and failure modes](/docs/concepts/errors) explains the
+two reporting channels; [HTTP errors](/docs/http/errors) covers response
+documents. The tables below own the name-to-cause lookup.
+
+## How to read an error [#how-to-read-an-error]
+
+A Zig error is a value in an error union. It carries a stable name, not a
+formatted message, and `@errorName` returns that name. Startup and registration
+errors happen before a request exists, so they have no HTTP status. Request-time
+errors either become a response status, a WebSocket close code, or a transport
+abort chosen by the code that catches them.
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| {
+        std.debug.print("response: {s}\n", .{@errorName(err)});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = app.get("/", hello) catch |err| {
+        std.debug.print("route registration: {s}\n", .{@errorName(err)});
+        return err;
+    };
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+| Form                         | Meaning                                          |
+| ---------------------------- | ------------------------------------------------ |
+| `error.RouteCapacityReached` | The Zig error tag returned by a call             |
+| `@errorName(err)`            | The tag as a string, suitable for logs and tests |
+| `uwz_error_name(code)`       | The static C ABI name, including `unknown error` |
+| `4xx` or `5xx`               | A peer-facing status, not an error tag           |
+
+Match on the error value with `switch`; do not parse a log line or a status
+string to recover the name. A terminal error needs a configuration or code
+change, not a retry loop.
+
+## ServerConfig validation [#serverconfig-validation]
+
+`ServerConfig.validate` returns this set before the slab is allocated. All
+failures are startup errors. [ServerConfig](/reference/server-config) lists the
+fields and defaults.
+
+| Zig error name                          | Cause                                                                                                                                                                                                                                       | HTTP status                   | Fix                                                                 | Source module                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `error.InvalidConnectionCapacity`       | `max_connections` is `0`                                                                                                                                                                                                                    | None, startup                 | Set at least one connection slot                                    | `src/router/config.zig`                       |
+| `error.InvalidWebSocketMessageCapacity` | `max_ws_message_size` is `0`                                                                                                                                                                                                                | None, startup                 | Set a nonzero WebSocket message bound                               | `src/router/config.zig`                       |
+| `error.InvalidWriteQueueCapacity`       | `write_queue_size` is `0`                                                                                                                                                                                                                   | None, startup                 | Reserve at least one write byte per connection                      | `src/router/config.zig`                       |
+| `error.InvalidBodyCapacity`             | `max_body_size` is `0`                                                                                                                                                                                                                      | None, startup                 | Set a nonzero body limit                                            | `src/router/config.zig`                       |
+| `error.InvalidRequestLineCapacity`      | `max_request_line_size` is `0`                                                                                                                                                                                                              | None, startup                 | Set a nonzero request-line limit                                    | `src/router/config.zig`                       |
+| `error.InvalidHeaderCapacity`           | `max_header_size` is `0`, or `max_header_count` is below the inline 64 fields                                                                                                                                                               | None, startup                 | Raise the header byte and field limits                              | `src/router/config.zig`                       |
+| `error.InvalidHttp2Capacity`            | The HTTP/2 session planner rejects the shared header, body, response-header size or count, or dynamic-table combination                                                                                                                     | None, startup                 | Lower the H2 capacities or raise the slab plan                      | `src/router/config.zig`                       |
+| `error.InvalidHttp3Capacity`            | H3 body, response-header size, or field count is `0`; count exceeds `4096`; response size exceeds `65535`; shared headers exceed `u32`, or exceed `65535` when `listen_udp` activates H3; body plus headers overflow; engine bytes overflow | None, startup or `listen_udp` | Bring each H3 value into range                                      | `src/router/config.zig`, `src/router/app.zig` |
+| `error.InvalidRouterCapacity`           | `max_route_params` is below the inline `16`, or router nodes, patterns, path, or registry cannot be represented in `u16` or `u32`                                                                                                           | None, startup                 | Raise route params to at least `16` and keep router values in range | `src/router/config.zig`                       |
+| `error.InvalidIdleTimeout`              | `idle_timeout_ms` exceeds `maxInt(i64)`                                                                                                                                                                                                     | None, startup                 | Use a smaller timeout, or `0` to disable it                         | `src/router/config.zig`                       |
+| `error.InvalidHeaderReadTimeout`        | `header_read_timeout_ms` exceeds `maxInt(i64)`                                                                                                                                                                                              | None, startup                 | Use a smaller timeout, or `0` to disable it                         | `src/router/config.zig`                       |
+| `error.InvalidDatagramCapacity`         | `max_datagram_size` and `datagram_slots` are not both zero or both nonzero, or either exceeds `u32`                                                                                                                                         | None, startup                 | Set both to `0`, or both nonzero within `u32`                       | `src/router/config.zig`                       |
+| `error.InvalidTransportConfiguration`   | `.kernel_bypass` frame size is not a power of two or is outside `1024..65536`; frame count is not a power of two or exceeds `4096`                                                                                                          | None, startup                 | Correct the AF_XDP frame size and count                             | `src/router/config.zig`                       |
+| `error.InvalidMetricsPath`              | `observability` is enabled and `metrics_path` is empty or not rooted at `/`                                                                                                                                                                 | None, startup                 | Use an absolute path such as `/metrics`                             | `src/router/config.zig`                       |
+| `error.InvalidWatchConfiguration`       | `watch_paths` has more than eight roots, an empty path, or a path of `4096` bytes or more                                                                                                                                                   | None, startup                 | Watch at most eight shorter roots                                   | `src/router/config.zig`                       |
+| `error.WatchRequiresDevLog`             | `watch_paths` is nonempty while `enable_dev_log` is `false`                                                                                                                                                                                 | None, startup                 | Enable the development log or clear the watch list                  | `src/router/config.zig`                       |
+| `error.MisalignedSlab`                  | A caller-provided slab does not meet `required_alignment`                                                                                                                                                                                   | None, startup                 | Allocate through the builder, or page-align a `.kernel_bypass` slab | `src/router/config.zig`                       |
+| `error.SlabSizeOverflow`                | Checked slab-layout arithmetic overflowed `usize`                                                                                                                                                                                           | None, startup                 | Lower the capacities that multiply the slab                         | `src/router/config.zig`                       |
+| `error.SlabTooSmall`                    | A caller-provided slab is shorter than `slab_bytes()`                                                                                                                                                                                       | None, startup                 | Allocate `slab_bytes()` or let the builder allocate                 | `src/router/config.zig`                       |
+
+## Route registration [#route-registration]
+
+These errors occur while registering routes, middleware, WebSocket handlers, or
+static mounts. The default capacities are `256` nodes, `64` pattern routes, `32`
+middleware callbacks, `2 KiB` per path, and `64 KiB` for the route registry.
+
+| Zig error name                        | Cause                                                                                                                                                                                                   | HTTP status        | Fix                                                                                                    | Source module                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| `error.InvalidRoutePath`              | Empty, not rooted at `/`, longer than `max_route_path_size`, or contains `?`, `#`, CR, or LF. A static mount prefix also rejects `:` and `*`                                                            | None, registration | Use a rooted literal path without query, fragment, or control bytes                                    | `src/router/radix_pattern.zig`, `src/router/app.zig` |
+| `error.InvalidRoutePattern`           | A capture name is empty or outside `[A-Za-z0-9_-]`, a wildcard is not the final segment, or two captures share a name                                                                                   | None, registration | Name each capture once and end with `*` only at the path tail                                          | `src/router/radix_pattern.zig`                       |
+| `error.RouteCapacityReached`          | No radix node, pattern slot, or route record remains                                                                                                                                                    | None, registration | Simplify shared prefixes, or raise `max_route_nodes` and `max_pattern_routes`                          | `src/router/radix.zig`                               |
+| `error.RouteStorageCapacityReached`   | The retained route paths exceed `max_route_registry_size`, `64 KiB` by default                                                                                                                          | None, registration | Raise `max_route_registry_size`, or shorten paths                                                      | `src/router/radix.zig`                               |
+| `error.RouteParameterCapacityReached` | A pattern needs more captures than `max_route_params`, `16` by default                                                                                                                                  | None, registration | Raise `max_route_params`, or flatten the pattern                                                       | `src/router/radix_pattern.zig`                       |
+| `error.RoutePatternConflicts`         | Two patterns have the same shape but different capture names, such as `/users/:id` and `/users/:name`                                                                                                   | None, registration | Keep one capture spelling for one route shape                                                          | `src/router/radix.zig`                               |
+| `error.RouteAlreadyRegistered`        | The same method and path are registered twice                                                                                                                                                           | None, registration | Remove the duplicate, or register a different method                                                   | `src/router/radix.zig`                               |
+| `error.MiddlewareCapacityReached`     | More than `max_middleware`, `32` by default, callbacks are registered                                                                                                                                   | None, registration | Raise `max_middleware`, or combine middleware                                                          | `src/router/radix.zig`                               |
+| `error.StaticRouteCapacityReached`    | More than eight `app.static` mounts are registered                                                                                                                                                      | None, registration | Serve several trees from one mount, or raise the fixed limit in source                                 | `src/router/app.zig`                                 |
+| `error.RoutesLocked`                  | A route or middleware registration follows a successful `listen`, `listen_all`, or `listen_udp`                                                                                                         | None, registration | Register every route before the first listener call                                                    | `src/router/app.zig`                                 |
+| `error.InvalidWebSocketLimits`        | A frame or message bound is `0`, frame size exceeds message size, one heartbeat timeout is set without the other, a timeout exceeds `i64`, or the message bound exceeds the configured WebSocket buffer | None, registration | Set a nonzero frame and message bound, keep frame at or below message, and pair the heartbeat timeouts | `src/router/app.zig`                                 |
+
+`app.datagram` and `app.datagram_context` use a separate 16-path table in
+`src/router/datagram.zig`. They reuse the names `error.RouteCapacityReached` and
+`error.RouteAlreadyRegistered`, and also return `error.InvalidPath` for a
+non-rooted path.
+
+## Lifecycle [#lifecycle]
+
+| Zig error name                        | Cause                                                                                                               | HTTP status         | Fix                                                                                               | Source module        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- | -------------------- |
+| `error.ApplicationAlreadyRunning`     | `run` is entered while the same application is already running                                                      | None, program state | Call `run` once per application                                                                   | `src/router/app.zig` |
+| `error.AlreadyListening`              | A second `listen`, `listen_all`, or `listen_udp` runs after a listener is bound                                     | None, program state | Bind once, or pass every endpoint to `listen_all`                                                 | `src/router/app.zig` |
+| `error.ShutdownIncomplete`            | Shutdown returned while a connection, completion, timer, watch root, listener, or QUIC transport was still draining | None, program state | Let completions finish and avoid blocking the event loop; the active run drains the transport     | `src/router/app.zig` |
+| `error.ApplicationUnavailable`        | `run`, `listen`, registration, or `catch_shutdown_signals` is called after shutdown starts or after `deinit`        | None, program state | Finish registration and listener setup before `run`, and do not reuse a deinitialized application | `src/router/app.zig` |
+| `error.ApplicationDeinitialized`      | `shutdown` is called after `deinit`                                                                                 | None, program state | Call shutdown before `deinit`; `deinit` is terminal                                               | `src/router/app.zig` |
+| `error.SignalWatcherAlreadyInstalled` | A process-wide shutdown watcher already exists                                                                      | None, program state | Install one watcher, or use the cluster watcher for a worker group                                | `src/router/app.zig` |
+
+## Response and async completion [#response-and-async]
+
+| Zig error name                        | Cause                                                                                                                | HTTP status                              | Fix                                                                                              | Source module                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `error.ResponseAlreadyStarted`        | `end`, `end_with_headers`, `begin_chunked`, `end_gzip`, or a JSON helper runs after the response left the idle state | None; the response is already committed  | Send exactly one response, and check `is_started()` before a fallback                            | `src/http/response.zig`                   |
+| `error.ResponseNotStreaming`          | `write_chunk` or `end_chunks` runs before `begin_chunked`                                                            | None; no chunked response is open        | Start the streaming response first                                                               | `src/http/response.zig`                   |
+| `error.WouldBlock`                    | The bounded write queue or socket send window is full                                                                | None; the write cannot be queued         | Raise `write_queue_size`, stream with backpressure, or resume after a WebSocket `drain` callback | `src/core/tcp.zig`, `src/quic/stream.zig` |
+| `error.AsyncResponseExpired`          | The token generation no longer matches because the peer left or the slot was reused                                  | None; the peer may be gone               | Drop the work; do not retry a stale token                                                        | `src/http/response.zig`                   |
+| `error.AsyncResponseAlreadyCompleted` | The same async token is completed twice                                                                              | None; the response was already completed | Complete exactly once and copy the token only before returning pending                           | `src/http/response.zig`                   |
+
+## Cluster and workers [#cluster-and-workers]
+
+`publish` returns the accepted count and `publish_report` exposes dropped
+inboxes, so a full per-worker inbox is a report field on the cluster path. The
+queue error exists when a caller uses the inbox directly.
+
+| Zig error name                    | Cause                                                                           | HTTP status          | Fix                                                                                          | Source module                                           |
+| --------------------------------- | ------------------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `error.ClusterDeinitialized`      | Cluster storage is releasing or released                                        | None, worker control | Do not call the cluster after `deinit` or `deinit_checked`                                   | `src/router/worker_group.zig`                           |
+| `error.ClusterRunning`            | `run` starts an already running group, or release runs while workers are active | None, worker control | Run once, and join before releasing                                                          | `src/router/worker_group.zig`                           |
+| `error.ClusterStopped`            | Publish, run, or listen runs after every worker joined                          | None, worker control | Create a new cluster; stopped is terminal                                                    | `src/router/worker_group.zig`                           |
+| `error.ClusterWorkerFailed`       | A worker event loop or post-run cleanup returned an error                       | None, worker control | Read `first_failure()` or `failure_count()`, fix the worker error, then create a new cluster | `src/router/cluster.zig`                                |
+| `error.InvalidWorkerCount`        | The requested count is `0` or exceeds the compiled capacity                     | None, worker control | Select a count from `1` through the capacity                                                 | `src/router/cluster.zig`, `src/router/worker_group.zig` |
+| `error.ClusterQueueFull`          | One per-worker inbox already holds `64` unread messages                         | None, worker control | Consume faster, or observe `dropped` and `first_dropped_worker` from `publish_report`        | `src/router/cluster.zig`                                |
+| `error.EmptyTopic`                | The topic is empty                                                              | None, worker control | Publish a nonempty topic                                                                     | `src/router/cluster.zig`                                |
+| `error.TopicTooLong`              | The topic exceeds `127` bytes                                                   | None, worker control | Shorten the topic name                                                                       | `src/router/cluster.zig`                                |
+| `error.ClusterMessageTooLarge`    | The payload exceeds the compiled message bound                                  | None, worker control | Raise the queue message capacity, or send less                                               | `src/router/cluster.zig`                                |
+| `error.WorkerGroupAlreadyRunning` | The lower-level group receives `start` after it started                         | None, worker control | Start one worker set per group run                                                           | `src/router/worker_group.zig`                           |
+| `error.WorkerGroupNotRunning`     | The lower-level group receives `start` outside the running state                | None, worker control | Begin the group run before starting its threads                                              | `src/router/worker_group.zig`                           |
+
+## JSON-RPC [#json-rpc]
+
+A handler error becomes a JSON-RPC error object; the HTTP status stays `200`
+unless dispatch itself fails. The standard codes are `-32700` parse error,
+`-32600` invalid request, `-32601` method not found, `-32602` invalid params,
+and `-32603` internal error.
+
+| Zig error name                       | Cause                                                                     | HTTP status                                                                         | Fix                                                       | Source module          |
+| ------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------- |
+| `error.Aborted`                      | The abort signal fired because the request, timeout, or socket is gone    | `500` only while the transport is still writable; no response when the peer is gone | Stop work and do not write a result                       | `src/rpc/json_rpc.zig` |
+| `error.ApplicationError`             | The handler returned `Call.fail(code, message)`                           | `200` with the application fault code                                               | Use a stable application code and a short message         | `src/rpc/json_rpc.zig` |
+| `error.InternalError`                | The handler returned `error.InternalError`                                | `200`, JSON-RPC `-32603`                                                            | Fix the procedure or return a typed application fault     | `src/rpc/json_rpc.zig` |
+| `error.InvalidParams`                | Parameters are absent, or the JSON does not match the typed shape         | `200`, JSON-RPC `-32602`                                                            | Validate the client payload and keep the Zig type aligned | `src/rpc/json_rpc.zig` |
+| `error.OutOfMemory`                  | The parameter allocator failed                                            | `200`, JSON-RPC `-32603`                                                            | Reduce the parameter size, or use fixed storage           | `src/rpc/json_rpc.zig` |
+| `error.ResultAlreadyWritten`         | `Call.result` runs more than once                                         | `200`, JSON-RPC `-32603`                                                            | Return exactly one result                                 | `src/rpc/json_rpc.zig` |
+| `error.ResultTooLarge`               | The encoded result does not fit the service response buffer               | `200`, JSON-RPC `-32603`                                                            | Raise `response_capacity`, or return fewer bytes          | `src/rpc/json_rpc.zig` |
+| `error.ResponseTooLarge`             | The dispatch document does not fit the response buffer                    | `500` from `rpc.http`                                                               | Raise the service response capacity                       | `src/rpc/json_rpc.zig` |
+| `error.DuplicateProcedure`           | Two procedures share a method name                                        | None, registration                                                                  | Register each method once                                 | `src/rpc/json_rpc.zig` |
+| `error.InvalidMethodName`            | The name is empty, over `255` bytes, invalid UTF-8, or starts with `rpc.` | None, registration                                                                  | Use a shorter valid name without the reserved prefix      | `src/rpc/json_rpc.zig` |
+| `error.MethodStorageCapacityReached` | Method names exceed the `4 KiB` storage                                   | None, registration                                                                  | Shorten names, or raise `method_storage_capacity`         | `src/rpc/json_rpc.zig` |
+| `error.ProcedureCapacityReached`     | More than `64` procedures are registered                                  | None, registration                                                                  | Raise `max_procedures`, or split the service              | `src/rpc/json_rpc.zig` |
+| `error.RegistryLocked`               | A procedure is registered after `seal`; `app.rpc` seals the service       | None, registration                                                                  | Register every procedure before mounting the service      | `src/rpc/json_rpc.zig` |
+
+## WebSocket handshake [#websocket-handshake]
+
+The HTTP/1.1 upgrade maps handshake validation to `400 Bad Request` or
+`426 Upgrade Required`. A route `upgrade` callback that returns `false` sends
+`403 Forbidden` without setting an error name.
+
+| Zig error name                   | Cause                                               | HTTP status | Fix                                        | Source module          |
+| -------------------------------- | --------------------------------------------------- | ----------- | ------------------------------------------ | ---------------------- |
+| `error.InvalidMethod`            | The upgrade request is not `GET`                    | `400`       | Send a `GET` upgrade request               | `src/ws/handshake.zig` |
+| `error.MissingConnectionUpgrade` | `Connection` is absent or lacks the `upgrade` token | `400`       | Send `Connection: Upgrade`                 | `src/ws/handshake.zig` |
+| `error.MissingUpgradeWebSocket`  | `Upgrade` is absent or is not `websocket`           | `400`       | Send `Upgrade: websocket`                  | `src/ws/handshake.zig` |
+| `error.MissingVersion`           | `Sec-WebSocket-Version` is absent or duplicated     | `426`       | Send one `Sec-WebSocket-Version: 13` field | `src/ws/handshake.zig` |
+| `error.UnsupportedVersion`       | The version is not `13`                             | `426`       | Use RFC 6455 version `13`                  | `src/ws/handshake.zig` |
+| `error.MissingKey`               | `Sec-WebSocket-Key` is absent or duplicated         | `400`       | Send one key field                         | `src/ws/handshake.zig` |
+| `error.InvalidKey`               | The key is not canonical base64 for 16 bytes        | `400`       | Send a fresh 16-byte base64 key            | `src/ws/handshake.zig` |
+
+`handshake.validate_extended_connect` reuses `error.MissingVersion` and
+`error.UnsupportedVersion` for RFC 8441. The caller chooses the rejection; the
+helper does not write a response.
+
+## WebSocket compression [#websocket-compression]
+
+| Zig error name                | Cause                                                                                 | HTTP status                                | Fix                                                                        | Source module        |
+| ----------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- | -------------------- |
+| `error.OutOfMemory`           | The compression context allocation failed                                             | None, startup                              | Reduce the message bound, or free memory before startup                    | `src/ws/deflate.zig` |
+| `error.InitFailed`            | libdeflate could not allocate a compressor or decompressor                            | None, startup                              | Check the allocator and the libdeflate build                               | `src/ws/deflate.zig` |
+| `error.SizeOverflow`          | The paired scratch bound overflowed `usize`                                           | None, startup                              | Lower `max_ws_message_size`                                                | `src/ws/deflate.zig` |
+| `error.BufferTooSmall`        | The scratch or output buffer is smaller than the compressed message needs             | WebSocket close `1007` on the receive path | Reserve the paired scratch; do not shrink below `worst_case_scratch_bound` | `src/ws/deflate.zig` |
+| `error.InvalidCompressedData` | The payload is malformed deflate, uses the wrong window, or fails the sync-flush tail | WebSocket close `1007`                     | Send valid RFC 7692 frames with the negotiated window                      | `src/ws/deflate.zig` |
+| `error.OutputTooLarge`        | The decoded message exceeds the route message bound                                   | WebSocket close `1009`                     | Raise `max_message_size`, or send a smaller message                        | `src/ws/deflate.zig` |
+
+## TLS initialization [#tls-initialization]
+
+These errors occur while loading a server context or generating ephemeral
+credentials. They are startup errors and never reach a request handler.
+
+| Zig error name                              | Cause                                                         | HTTP status   | Fix                                             | Source module        |
+| ------------------------------------------- | ------------------------------------------------------------- | ------------- | ----------------------------------------------- | -------------------- |
+| `error.CertificateLoadFailed`               | The certificate chain is unreadable or malformed              | None, startup | Pass a readable PEM chain, leaf first           | `src/crypto/tls.zig` |
+| `error.PrivateKeyLoadFailed`                | The private key is unreadable or malformed                    | None, startup | Pass the matching PEM private key               | `src/crypto/tls.zig` |
+| `error.KeyMismatch`                         | The certificate and private key do not belong together        | None, startup | Load the pair from the same issuance            | `src/crypto/tls.zig` |
+| `error.TlsContextCreationFailed`            | BoringSSL could not allocate or configure the context         | None, startup | Check the BoringSSL build and process memory    | `src/crypto/tls.zig` |
+| `error.ProtocolConfigurationFailed`         | TLS 1.3 could not be pinned as the minimum or maximum version | None, startup | Use the supported BoringSSL build               | `src/crypto/tls.zig` |
+| `error.InvalidClientAuthConfig`             | mTLS is enabled with an empty CA path                         | None, startup | Supply the client CA bundle, or use `.none`     | `src/crypto/tls.zig` |
+| `error.TrustStoreLoadFailed`                | The client CA bundle cannot be loaded                         | None, startup | Pass a readable PEM trust store                 | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateInstallFailed`   | Generated credentials could not be installed on the context   | None, startup | Check the BoringSSL build                       | `src/crypto/tls.zig` |
+| `error.EphemeralKeyGenerationFailed`        | P-256 key generation failed                                   | None, startup | Check the BoringSSL build and entropy source    | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateCreationFailed`  | The self-signed certificate could not be built                | None, startup | Check the BoringSSL build                       | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateSigningFailed`   | The self-signed certificate could not be signed               | None, startup | Check the BoringSSL build                       | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateExtensionFailed` | A subject alternative name extension could not be added       | None, startup | Check the certificate names and BoringSSL build | `src/crypto/tls.zig` |
+
+## Client [#client]
+
+Client setup failures return a Zig error from `fetch`; completed fetches report
+a `FailureKind` of `connect`, `tls`, `protocol`, `timeout`, `closed`, or
+`capacity` in `FetchOutcome`. [Client](/docs/client) covers the request and
+response contract.
+
+| Zig error name                       | Cause                                                                    | HTTP status                         | Fix                                                               | Source module               |
+| ------------------------------------ | ------------------------------------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------- | --------------------------- |
+| `error.CaPathRequired`               | `verify` is true and `ca_path` is null                                   | Not applicable; failure kind `.tls` | Pass a PEM CA bundle, or disable verification for local work only | `src/client/client.zig`     |
+| `error.CaPathTooLong`                | The CA path exceeds the fixed client bound                               | Not applicable; `.tls`              | Use a shorter path                                                | `src/client/client.zig`     |
+| `error.CertificateLoadFailed`        | The client CA bundle is unreadable or malformed                          | Not applicable; `.tls`              | Pass a readable PEM bundle                                        | `src/crypto/tls_client.zig` |
+| `error.TlsContextCreationFailed`     | The client TLS context could not be created                              | Not applicable; `.tls`              | Check the BoringSSL build and memory                              | `src/crypto/tls_client.zig` |
+| `error.TlsConfigurationMismatch`     | One client is reused with different trust rules                          | Not applicable; `.tls`              | Reuse a client with one fixed TLS policy                          | `src/client/client.zig`     |
+| `error.TlsUnavailable`               | The connection has no TLS context                                        | Not applicable; `.tls`              | Pass `FetchOptions.tls` for an HTTPS fetch                        | `src/client/connection.zig` |
+| `error.ServerNameEmpty`              | The TLS server name is empty                                             | Not applicable; `.tls`              | Set `TlsOptions.server_name`                                      | `src/crypto/tls_client.zig` |
+| `error.ServerNameTooLong`            | The server name exceeds the fixed bound                                  | Not applicable; `.tls`              | Use a shorter DNS name                                            | `src/crypto/tls_client.zig` |
+| `error.SslAllocationFailed`          | The BoringSSL session allocation failed                                  | Not applicable; `.tls`              | Check process memory                                              | `src/crypto/tls_client.zig` |
+| `error.BioAllocationFailed`          | The memory BIO allocation failed                                         | Not applicable; `.tls`              | Check process memory                                              | `src/crypto/tls_client.zig` |
+| `error.SniConfigurationFailed`       | SNI could not be configured                                              | Not applicable; `.tls`              | Check the server name and BoringSSL build                         | `src/crypto/tls_client.zig` |
+| `error.AlpnConfigurationFailed`      | ALPN could not be configured                                             | Not applicable; `.tls`              | Use the supported BoringSSL build                                 | `src/crypto/tls_client.zig` |
+| `error.HostnameVerificationFailed`   | Hostname verification could not be armed                                 | Not applicable; `.tls`              | Check the server name and trust policy                            | `src/crypto/tls_client.zig` |
+| `error.TlsHandshakeStalled`          | The handshake made no progress before the read deadline                  | Not applicable; `.tls`              | Raise `read_timeout_ms`, or check the peer and network            | `src/core/tcp.zig`          |
+| `error.InvalidHostAddress`           | `Request.host` is not a numeric IP address                               | Not applicable; `.connect`          | Pass the numeric address, not a DNS name                          | `src/client/connection.zig` |
+| `error.InflightCapacityReached`      | Every client request slot is busy                                        | Not applicable; `.capacity`         | Raise `client(max_inflight)`, or wait for a completion            | `src/client/client.zig`     |
+| `error.ResponseBodyCapacityExceeded` | `response_body_capacity` exceeds the `64 KiB` client maximum             | Not applicable; `.capacity`         | Lower the bound, or use a smaller response                        | `src/client/client.zig`     |
+| `error.InvalidPath`                  | The request target is empty or malformed                                 | Not applicable; `.protocol`         | Send an origin-form path such as `/status`                        | `src/client/request.zig`    |
+| `error.InvalidHost`                  | The `Host` field is malformed                                            | Not applicable; `.protocol`         | Use a valid host or numeric address                               | `src/client/request.zig`    |
+| `error.InvalidHeaderName`            | A caller header name is not an HTTP token                                | Not applicable; `.protocol`         | Use a valid field name                                            | `src/client/request.zig`    |
+| `error.InvalidHeaderValue`           | A caller header value contains CR or LF                                  | Not applicable; `.protocol`         | Remove control bytes from the value                               | `src/client/request.zig`    |
+| `error.ReservedHeader`               | A caller sets `Host`, `Content-Length`, `Transfer-Encoding`, or `Expect` | Not applicable; `.protocol`         | Let the builder generate those fields                             | `src/client/request.zig`    |
+| `error.HeadTooLarge`                 | The generated request head exceeds `8 KiB`                               | Not applicable; `.protocol`         | Send fewer or shorter headers                                     | `src/client/request.zig`    |
+| `error.BufferOverflow`               | `FetchStorage` cannot hold the response head or body                     | Not applicable; `.capacity`         | Raise the storage bound, or use the callback client               | `src/client/http1.zig`      |
+
+## C ABI codes [#c-abi-codes]
+
+The negative values are append-only and part of the ABI.
+[`uwz_error_name`](/reference/c-abi#uwz_error) returns a static string for each
+code, and `unknown error` outside the enum.
+
+|  Code | Constant                     | Name string        | Reported when                                                               |
+| ----: | ---------------------------- | ------------------ | --------------------------------------------------------------------------- |
+|   `0` | `UWZ_OK`                     | `ok`               | The call completed                                                          |
+|  `-1` | `UWZ_ERROR_INVALID_ARGUMENT` | `invalid argument` | Bad slice, occupied out-handle, invalid route, invalid method or limits     |
+|  `-2` | `UWZ_ERROR_OUT_OF_MEMORY`    | `out of memory`    | Slab, TLS context, or QUIC engine allocation failed                         |
+|  `-3` | `UWZ_ERROR_INVALID_STATE`    | `invalid state`    | Wrong lifecycle step, started response, stale token, HTTP/3 not initialized |
+|  `-4` | `UWZ_ERROR_ALREADY_EXISTS`   | `already exists`   | Duplicate route pattern or bound listener                                   |
+|  `-5` | `UWZ_ERROR_CAPACITY`         | `capacity reached` | Route, middleware, parameter, storage, or peer capacity reached             |
+|  `-6` | `UWZ_ERROR_WOULD_BLOCK`      | `would block`      | Output queue or write path is full                                          |
+|  `-7` | `UWZ_ERROR_PROTOCOL`         | `protocol error`   | Framing, handshake, or oversized output                                     |
+|  `-8` | `UWZ_ERROR_IO`               | `I/O error`        | Socket, bind, or TLS read and write failure                                 |
+|  `-9` | `UWZ_ERROR_UNSUPPORTED`      | `unsupported`      | HTTP/3 unavailable, or the backend is unavailable                           |
+| `-10` | `UWZ_ERROR_INTERNAL`         | `internal error`   | A failure with no narrower mapping                                          |
+
+## Related [#related]
+
+- [Errors and failure modes](/docs/concepts/errors) explains the two channels.
+- [HTTP errors](/docs/http/errors) covers structured rejection documents.
+- [ServerConfig](/reference/server-config) owns the fields and defaults that
+  produce the startup errors.
+- [C ABI](/reference/c-abi) lists every C function and enum value.
+- [Troubleshooting](/docs/operations/troubleshooting) maps symptoms to fixes.

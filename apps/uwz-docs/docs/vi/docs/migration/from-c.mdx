@@ -1,0 +1,365 @@
+---
+title: Chuyển từ server C
+description: Chuyển một C HTTP service sang C ABI của µWebZockets với consumer build graph, capacity cố định, borrowed callback view và async token một lần.
+sidebar:
+  order: 4
+search:
+  tags: [migration, c-abi, http1, websocket]
+---
+
+C ABI là binding server với capacity cố định dành cho host C hoặc C++ không muốn
+viết Zig application code. Nó thay listener, parser, router và response writer
+trong khi giữ chương trình bằng C. Trang này bao phủ build graph, một chương
+trình hoàn chỉnh và các quy tắc lifetime. Danh sách declaration đầy đủ nằm trong
+[C ABI reference](/reference/c-abi); build recipe nằm trong
+[Embed from C or C++](/docs/guides/c-abi).
+
+## Khi nào dùng C ABI [#when-to-use-the-abi]
+
+| Dùng C ABI khi                                                              | Dùng Zig API khi                                                      |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Host là C hoặc C++ và sẽ giữ nguyên                                         | Service có thể viết bằng Zig                                          |
+| Deployment vừa 1.024 connection và 64 route                                 | Connection, body hoặc route capacity phải lớn hơn                     |
+| HTTP/1.1, WebSocket và một TLS hoặc HTTP/3 listener cố định phủ được client | Cần HTTP/2 tuning, JSON-RPC, mTLS, client hoặc TLS theo từng listener |
+| Một application slab cố định là chấp nhận được                              | Cần `ServerConfig`, preset hoặc per-route limit                       |
+| Callback model khớp code hiện tại                                           | Handler cần context rõ ràng hoặc typed state                          |
+
+C ABI không có `ServerConfig`, schema, JSON-RPC, client, HTTP/2 frame hoặc HPACK
+control, hay mTLS. HTTP/2 thông thường vẫn chạy qua TLS application vì shared
+server negotiate nó bằng ALPN; chỉ các HTTP/2 module cấp thấp và tuning là
+Zig-only. Đường HTTP/3 của nó là initializer cố định `uwz_app_create_http3` cùng
+`uwz_app_listen_udp`, không có certificate theo từng listener hay protocol tuning.
+Kiểm tra [Feature matrix](/reference/feature-matrix) trước khi cam kết với tập
+tính năng cố định.
+
+## Thêm dependency [#add-the-dependency]
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Consumer project sở hữu `build.zig`, `build.zig.zon` và `src/main.c`. Dependency
+expose header đã cài và mọi archive mà C link cần:
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "c_server",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .link_libcpp = true,
+        }),
+    });
+    exe.root_module.addIncludePath(uz.path("include"));
+    exe.root_module.addCSourceFile(.{
+        .file = b.path("src/main.c"),
+        .flags = &.{"-std=c11"},
+    });
+    exe.root_module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        exe.root_module.linkLibrary(uz.artifact(name));
+    }
+    b.installArtifact(exe);
+}
+```
+
+`uz.path("include")` cung cấp `uWebZockets.h`. `uz.artifact("uWebZockets")` là
+archive C ABI; vòng lặp link năm dependency archive mà archive đó gọi vào.
+
+## Chương trình C hoàn chỉnh [#complete-c-program]
+
+```c src/main.c
+#include "uWebZockets.h"
+#include <stdio.h>
+#include <string.h>
+
+static uwz_slice slice_of(const char *text) {
+    uwz_slice value = { (const uint8_t *) text, strlen(text) };
+    return value;
+}
+
+static void log_error(const char *step, uwz_error err) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(err));
+}
+
+static void health(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) request;
+    (void) user_data;
+    uwz_error err = uwz_response_end(response, slice_of("200 OK"), slice_of("ok"));
+    if (err != UWZ_OK) log_error("health", err);
+}
+
+static void greet(const uwz_request *request, uwz_response *response, void *user_data) {
+    (void) user_data;
+    uwz_slice name = uwz_request_parameter(request, slice_of("name"));
+    if (name.length == 0) name = slice_of("world");
+
+    char body[192];
+    int length = snprintf(
+        body,
+        sizeof body,
+        "hello %.*s",
+        (int) name.length,
+        (const char *) name.data
+    );
+    if (length < 0 || (size_t) length >= sizeof body) {
+        log_error("greet", uwz_response_end(
+            response,
+            slice_of("500 Internal Server Error"),
+            slice_of("name too long")
+        ));
+        return;
+    }
+
+    uwz_slice body_slice = { (const uint8_t *) body, (size_t) length };
+    uwz_error err = uwz_response_end_with_headers(
+        response,
+        slice_of("200 OK"),
+        slice_of("content-type: text/plain\r\n"),
+        body_slice
+    );
+    if (err != UWZ_OK) log_error("greet", err);
+}
+
+static void ws_open(uwz_websocket *socket, void *user_data) {
+    (void) user_data;
+    uwz_error err = uwz_websocket_subscribe(socket, slice_of("room"));
+    if (err != UWZ_OK) log_error("subscribe", err);
+}
+
+static void ws_message(
+    uwz_websocket *socket,
+    uwz_slice message,
+    uwz_ws_opcode opcode,
+    void *user_data
+) {
+    (void) user_data;
+    (void) uwz_websocket_publish(
+        socket,
+        slice_of("room"),
+        message,
+        opcode == UWZ_WS_TEXT
+    );
+}
+
+static void ws_close(uwz_websocket *socket, void *user_data) {
+    (void) socket;
+    (void) user_data;
+}
+
+static const uwz_ws_behavior chat = {
+    .upgrade = NULL,
+    .open = ws_open,
+    .message = ws_message,
+    .drain = NULL,
+    .close = ws_close,
+    .user_data = NULL,
+    .compression = UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE,
+    .max_frame_size = 16 * 1024,
+    .max_message_size = 16 * 1024,
+};
+
+static int fail(uwz_app **app, uwz_error err, const char *step) {
+    fprintf(stderr, "%s: %s\n", step, uwz_error_name(err));
+    if (*app != NULL) uwz_app_destroy(app);
+    return 1;
+}
+
+int main(void) {
+    static const char address[] = "0.0.0.0";
+    static const char health_path[] = "/health";
+    static const char greet_path[] = "/hello/:name";
+    static const char ws_path[] = "/chat";
+
+    uwz_app *app = NULL;
+    uwz_error err = uwz_app_create(&app);
+    if (err != UWZ_OK) return fail(&app, err, "create");
+
+    err = uwz_app_route(
+        app,
+        UWZ_HTTP_GET,
+        health_path,
+        sizeof health_path - 1,
+        health,
+        NULL
+    );
+    if (err != UWZ_OK) return fail(&app, err, "route health");
+
+    err = uwz_app_route(
+        app,
+        UWZ_HTTP_GET,
+        greet_path,
+        sizeof greet_path - 1,
+        greet,
+        NULL
+    );
+    if (err != UWZ_OK) return fail(&app, err, "route greet");
+
+    err = uwz_app_ws(app, ws_path, sizeof ws_path - 1, &chat);
+    if (err != UWZ_OK) return fail(&app, err, "websocket");
+
+    err = uwz_app_listen(app, address, sizeof address - 1, 3000);
+    if (err != UWZ_OK) return fail(&app, err, "listen");
+
+    err = uwz_app_run(app);
+    uwz_error released = uwz_app_destroy(&app);
+    if (err != UWZ_OK) return fail(&app, err, "run");
+    if (released != UWZ_OK) return fail(&app, released, "destroy");
+    return 0;
+}
+```
+
+Build và chạy:
+
+```sh
+zig build
+./zig-out/bin/c_server
+```
+
+## Kiểm tra [#verify-it]
+
+```sh
+curl -s http://127.0.0.1:3000/health
+```
+
+```console
+ok
+```
+
+```sh
+curl -s http://127.0.0.1:3000/hello/Ada
+```
+
+```console
+hello Ada
+```
+
+```sh
+wscat -c ws://127.0.0.1:3000/chat
+```
+
+Mở client `wscat` thứ hai. Open callback subscribe mọi connection vào `room`;
+gửi message từ một client và xác nhận client còn lại nhận được.
+
+## Linking notes [#linking-notes]
+
+| Archive                   | Cung cấp                                    |
+| ------------------------- | ------------------------------------------- |
+| `libuWebZockets.a`        | C ABI entry point, router, event loop, slab |
+| `libssl.a`, `libcrypto.a` | BoringSSL TLS record và cryptography        |
+| `liblsquic.a`             | QUIC và HTTP/3 engine                       |
+| `libdeflate.a`            | Deflate và gzip codec                       |
+| `libz.a`                  | zlib, gồm HTTP gzip path                    |
+
+`build.zig` link cả sáu archive qua dependency. Không link riêng
+`libuWebZockets.a`: symbol chưa resolve từ TLS, QUIC hoặc compression nghĩa là
+thiếu dependency archive hoặc thứ tự ngược so với archive cần nó.
+`link_libcpp = true` là bắt buộc vì dependency chứa thành phần C++. Host C++ include
+cùng header bên trong `extern "C"`, và header đã cung cấp sẵn điều đó.
+
+Link graph gồm QUIC/HTTP/3 engine và TLS archive ngay cả khi chương trình C chỉ
+gọi `uwz_app_listen`. Listener của ABI là HTTP/1.1 và TLS, cùng
+`uwz_app_listen_udp` cho HTTP/3 khi application được tạo bằng
+`uwz_app_create_http3`.
+
+## Capacity cố định [#fixed-capacities]
+
+| Capacity             |    Giá trị | Áp dụng tại                              |
+| -------------------- | ---------: | ---------------------------------------- |
+| Connection           |      1.024 | `uwz_app_create`; không override từ C    |
+| Route                |         64 | `uwz_app_route` trả `UWZ_ERROR_CAPACITY` |
+| Middleware           |         32 | `uwz_app_use` trả `UWZ_ERROR_CAPACITY`   |
+| Inline route capture |         16 | Registration fail khi vượt số inline     |
+| Route path           | 2.048 byte | Registration fail khi vượt limit         |
+
+Slab 1.024 connection là ràng buộc chính. Service cần 4.000 connection hoặc body
+limit lớn hơn thì phải dùng Zig API, không phải C ABI. Route path được copy vào
+fixed storage; `user_data` được borrow và phải còn hiệu lực đến khi shutdown
+drain. ABI không có signal watcher: gọi `uwz_app_shutdown` từ application code,
+sau đó destroy handle khi `uwz_app_run` trả về.
+
+## Borrowed views [#borrowed-views]
+
+| Giá trị                 | Valid đến                                                 |
+| ----------------------- | --------------------------------------------------------- |
+| Field của `uwz_request` | Callback trả về; copy trước khi trả `UWZ_HANDLER_PENDING` |
+| Route parameter         | Callback trả về; copy trước khi trả pending               |
+| WebSocket message       | Callback nhận message trả về                              |
+| `user_data`             | `uwz_app_destroy` sau khi run loop trả về                 |
+| `uwz_async_response`    | Completion hoặc shutdown; copy nếu cần giữ                |
+
+Handler `greet` minh họa quy tắc: nó format parameter vào local buffer trước khi
+`uwz_response_end_with_headers` trả về. Nó không lưu parameter borrow. Quy tắc
+tương tự áp dụng cho header và message slice.
+
+## Async token [#async-tokens]
+
+Async route nhận một `uwz_async_response` chỉ có hiệu lực trong callback. Để hoàn
+tất sau, copy toàn bộ struct và trả `UWZ_HANDLER_PENDING`:
+
+```c
+struct pending {
+    uwz_async_response token;
+};
+
+static uwz_handler_result defer(
+    const uwz_request *request,
+    uwz_async_response *response,
+    void *user_data
+) {
+    struct pending *slot = user_data;
+    (void) request;
+    slot->token = *response;
+    return UWZ_HANDLER_PENDING;
+}
+
+static void finish(struct pending *slot) {
+    uwz_error err = uwz_async_response_end(
+        &slot->token,
+        slice_of("200 OK"),
+        slice_of("later")
+    );
+    if (err != UWZ_OK) log_error("finish", err);
+}
+```
+
+Đăng ký route bằng `uwz_app_route_async`. Gọi `finish` từ một callback khác trên
+owning loop, ví dụ WebSocket message hoặc một route sau đó. ABI không có timer hay
+cross-thread wake API; công việc trên thread khác phải marshal kết quả về trước
+khi complete token. Token stale hoặc duplicate trả `UWZ_ERROR_INVALID_STATE`.
+Không complete token sau `uwz_app_destroy`.
+
+## Migration checklist [#migration-checklist]
+
+| Bước | Hành động                                                           | Bằng chứng                                  |
+| ---- | ------------------------------------------------------------------- | ------------------------------------------- |
+| 1    | Xác nhận service vừa 1.024 connection và 64 route                   | Capacity table trong thiết kế               |
+| 2    | Giữ `user_data` và mọi callback context sống đến khi shutdown drain | Không callback nào đọc caller state đã free |
+| 3    | Chuyển handler sang chữ ký `uwz_http_handler`                       | Compile với `-std=c11 -Wall`                |
+| 4    | Thay request pointer bằng giá trị đã copy                           | Không slice borrow nào sống ngoài callback  |
+| 5    | Chuyển WebSocket state sang `user_data` hoặc application table      | Không giả định per-socket struct            |
+| 6    | Thay timer và thread bằng loop-owned completion                     | Async token complete trên loop              |
+| 7    | Thêm `uwz_app_destroy` sau `uwz_app_run`                            | Thoát sạch, không destroy trong callback    |
+| 8    | Chạy bộ client cũ với cả hai server                                 | Cùng assertion status và body               |
+
+## Tiếp theo [#next]
+
+- [Embed from C or C++](/docs/guides/c-abi) build server C đầu tiên.
+- [C ABI reference](/reference/c-abi) liệt kê mọi function, enum và error.
+- [C ABI operations](/docs/operations/c-abi) bao phủ archive layout và link
+  requirement.
+- [Async responses](/docs/concepts/async-responses) giải thích token model theo
+  góc nhìn Zig.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  liệt kê release chứa từng public API.

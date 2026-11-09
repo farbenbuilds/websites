@@ -11,7 +11,9 @@ helpers as HTTP/1.1, so a route written for one transport works on the other. Th
 difference is the wire: streams, HPACK header blocks, and flow-control windows.
 
 The session is deliberately bounded. It handles request/response routing well and
-does not aim for full RFC 9113 feature parity.
+does not aim for full RFC 9113 feature parity. The
+[HTTPS server example](/examples/https-server) shows the ALPN path on one
+application.
 
 ## Start here
 

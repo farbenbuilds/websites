@@ -46,6 +46,11 @@ export default defineConfig({
     ],
   },
   navigation: {
+    tabs: [
+      { label: "Docs", path: "/docs" },
+      { label: "Reference", path: "/reference" },
+      { label: "Examples", path: "/examples" },
+    ],
     sidebar: {
       display: "group",
     },
@@ -64,6 +69,10 @@ export default defineConfig({
   },
   integrations: [svelte(), accessibleScrollRegions],
   agents: {
+    llmsTxt: {
+      details:
+        "Use µWebZockets when a Zig 0.16.0 service needs bounded memory, predictable latency, and one `Request`/`Response` API across HTTP/1.1, HTTP/2, HTTP/3, WebSocket, and JSON-RPC. Add the package with `zig fetch --save` and start at `/docs/getting-started/quickstart`.\n\nImportant boundaries: WebTransport helpers are not live, HTTP/3 clustering is not supported, TLS is 1.3 only, and the client is HTTP/1.1 only. Look up exact names, defaults, limits, errors, and C ABI declarations in `/reference`; read the canonical programs in `/examples`.",
+    },
     markdownComponents: {
       LandingShell: landingShellMarkdown,
       LandingHero: markdownFor(renderLandingHeroMarkdown),

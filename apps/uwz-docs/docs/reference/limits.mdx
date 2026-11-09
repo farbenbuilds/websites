@@ -1,0 +1,133 @@
+---
+title: Limits
+description: Compare every HTTP/1.1, HTTP/2, HTTP/3, WebSocket, JSON-RPC, client, cluster, and C ABI limit with its overflow behavior.
+sidebar:
+  order: 3
+search:
+  tags: [reference, capacity, http]
+---
+
+Every limit is fixed before the listener starts. This table answers three
+questions for each protocol surface: what the bound is, which configuration or
+compile-time value sets it, and what the caller observes when input crosses it.
+The HTTP-only rejection document shape and status detail live in
+[HTTP limits](/docs/http/limits); this page owns the cross-protocol matrix.
+
+## How to read the table [#how-to-read]
+
+- `Value` is the default for µWebZockets 2.1.6. `Fixed` means no builder
+  override exists.
+- `Set by` names the `ServerConfig` field, compile-time constant, or fixed ABI
+  value that owns the bound.
+- `On overflow` describes the caller-visible result. A closed connection has no
+  application callback and no HTTP response.
+- `Source` names the module that enforces the bound, not the page that explains
+  it.
+
+## Where the bounds apply [#where-the-bounds-apply]
+
+```mermaid
+flowchart LR
+    accTitle: Limits diagram
+    accDescr: Compare every HTTP/1.1, HTTP/2, HTTP/3, WebSocket, JSON-RPC, client, cluster, and C ABI limit with its overflow behavior.
+    A[Connection admission] --> B[Protocol head]
+    B --> C[Request body]
+    C --> D[Router and middleware]
+    D --> E[Handler]
+    E --> F[Response]
+```
+
+The HTTP and WebSocket rows follow this path. A bound in an earlier layer prevents
+the later layers from running, so one request usually reports the first limit it
+crosses. The client, cluster, and C ABI rows are separate surfaces.
+
+## Limits [#limits-table]
+
+| Surface      | Limit                          |                                                            Value | Set by                                      | On overflow                                                                          | Source                         |
+| ------------ | ------------------------------ | ---------------------------------------------------------------: | ------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------ |
+| HTTP/1.1     | Request line                   |                                                            8 KiB | `max_request_line_size`                     | `431` with a JSON document                                                           | `src/http/parser.zig`          |
+| HTTP/1.1     | Header block                   |                                                           16 KiB | `max_header_size`                           | `431` with a JSON document                                                           | `src/http/parser.zig`          |
+| HTTP/1.1     | Header count                   |                                          64 inline; configurable | `max_header_count`                          | Extras spill into slab storage; beyond the cap, `431` with a JSON document           | `src/http/request.zig`         |
+| HTTP/1.1     | Request body                   |                                                           16 KiB | `max_body_size`                             | `413` with a JSON document                                                           | `src/http/parser.zig`          |
+| HTTP/1.1     | Header read deadline           |                                                             30 s | `header_read_timeout_ms`                    | Connection closed                                                                    | `src/core/tcp.zig`             |
+| HTTP/1.1     | Idle keep-alive deadline       |                                                            120 s | `idle_timeout_ms`                           | Connection closed                                                                    | `src/core/tcp.zig`             |
+| Connection   | Concurrent connections         |                                                            1,024 | `max_connections`                           | New TCP connection closed                                                            | `src/core/pool.zig`            |
+| Connection   | Write queue                    |                                                           64 KiB | `write_queue_size`                          | `error.WouldBlock`; a streaming producer pauses and resumes on drain                 | `src/core/tcp.zig`             |
+| Router       | Radix nodes                    |                                                              256 | `max_route_nodes`                           | `error.RouteCapacityReached` at registration                                         | `src/router/radix.zig`         |
+| Router       | Pattern routes                 |                                                               64 | `max_pattern_routes`                        | `error.RouteCapacityReached` at registration                                         | `src/router/radix.zig`         |
+| Router       | Route captures                 |                                          16 inline; configurable | `max_route_params`                          | `error.RouteParameterCapacityReached` at registration                                | `src/router/radix.zig`         |
+| Router       | Route path                     |                                                            2 KiB | `max_route_path_size`                       | `error.InvalidRoutePath` at registration                                             | `src/router/radix_pattern.zig` |
+| Router       | Middleware callbacks           |                                                               32 | `max_middleware`                            | `error.MiddlewareCapacityReached`                                                    | `src/router/radix.zig`         |
+| Router       | Route registry                 |                                                           64 KiB | `max_route_registry_size`                   | `error.RouteStorageCapacityReached`                                                  | `src/router/radix.zig`         |
+| Router       | OpenAPI route records          |                                                              320 | `max_route_nodes` plus `max_pattern_routes` | `error.RouteCapacityReached`                                                         | `src/router/radix.zig`         |
+| Static files | Mounted directories            |                                                                8 | Fixed                                       | `error.StaticRouteCapacityReached`                                                   | `src/router/app.zig`           |
+| HTTP/2       | Header block                   |                                                           16 KiB | `max_h2_header_block_size`                  | `GOAWAY` with `ENHANCE_YOUR_CALM`                                                    | `src/http2/server.zig`         |
+| HTTP/2       | Request body                   |                   16 KiB; `min(max_body_size, max_h2_body_size)` | `max_body_size`, `max_h2_body_size`         | Stream or connection fails; no HTTP response                                         | `src/http2/server.zig`         |
+| HTTP/2       | Response header block          |                                                            4 KiB | `max_h2_response_header_size`               | Response fails closed                                                                | `src/http2/server.zig`         |
+| HTTP/2       | Response header fields         |                                                               32 | `max_h2_response_header_count`              | Response fails closed                                                                | `src/http2/server.zig`         |
+| HTTP/2       | Concurrent streams             |                                                                8 | Fixed `max_http2_streams`                   | `RST_STREAM` with `REFUSED_STREAM` on the extra stream                               | `src/core/tcp.zig`             |
+| HTTP/2       | WebSocket tunnel               |                                                 1 per connection | Fixed                                       | Second `CONNECT` receives `503 Service Unavailable`                                  | `src/core/tcp.zig`             |
+| HTTP/3       | Request body                   |                                                           16 KiB | `max_h3_body_size`                          | `413 Payload Too Large`                                                              | `src/quic/stream.zig`          |
+| HTTP/3       | Response header storage        |                                          4,096 B; maximum 65,535 | `max_h3_response_header_size`               | Response fails closed                                                                | `src/quic/stream.zig`          |
+| HTTP/3       | Response header fields         |                                                64; maximum 4,096 | `max_h3_response_header_count`              | Response fails closed                                                                | `src/quic/stream.zig`          |
+| HTTP/3       | Decoded request headers        | 16 KiB and 64 fields; at most 65,535 bytes when HTTP/3 is active | `max_header_size`, `max_header_count`       | Stream fails closed with an H3 message error                                         | `src/quic/stream.zig`          |
+| QUIC         | UDP payload                    |                                                            2 KiB | Fixed                                       | Datagram larger than 2 KiB is dropped                                                | `src/quic/lsquic_api.zig`      |
+| QUIC         | Connections and active streams |                                                `max_connections` | `max_connections`                           | New connection or stream is refused                                                  | `src/quic/engine.zig`          |
+| WebSocket    | Message                        |                                                           16 KiB | `max_ws_message_size`                       | Connection closes with a protocol failure                                            | `src/ws/socket.zig`            |
+| WebSocket    | Control-frame payload          |                                                            125 B | Fixed by RFC 6455                           | Control frame rejected; connection closes                                            | `src/ws/socket.zig`            |
+| JSON-RPC     | Procedures                     |                                                               64 | Default `default_max_procedures`            | `error.ProcedureCapacityReached` at registration                                     | `src/rpc/json_rpc.zig`         |
+| JSON-RPC     | Method storage                 |                                                            4 KiB | Default `default_method_storage_capacity`   | `error.MethodStorageCapacityReached` at registration                                 | `src/rpc/json_rpc.zig`         |
+| JSON-RPC     | Response document              |                                                           16 KiB | Default `default_response_capacity`         | `error.ResponseTooLarge`; no JSON-RPC document                                       | `src/rpc/json_rpc.zig`         |
+| Client       | Response head                  |                                                           16 KiB | Fixed                                       | Fetch fails with `FailureKind.capacity`                                              | `src/client/types.zig`         |
+| Client       | Response body                  |                             64 KiB default; lower values allowed | `FetchOptions.response_body_capacity`       | Fetch fails with `FailureKind.capacity`                                              | `src/client/types.zig`         |
+| Client       | Response header fields         |                                                               64 | Fixed                                       | Fetch fails with `FailureKind.capacity`                                              | `src/client/types.zig`         |
+| Client       | Request head                   |                                                            8 KiB | Fixed                                       | `error.HeadTooLarge`; `fetch_blocking` reports `FailureKind.protocol`                | `src/client/request.zig`       |
+| Client       | Connect timeout                |                                                              5 s | `FetchOptions.connect_timeout_ms`           | Fetch fails with `FailureKind.timeout`                                               | `src/client/types.zig`         |
+| Client       | Read timeout                   |                                                             10 s | `FetchOptions.read_timeout_ms`              | Fetch fails with `FailureKind.timeout`                                               | `src/client/types.zig`         |
+| Cluster      | Worker inbox                   |                                                      64 messages | Fixed `queue_capacity`                      | `PublishReport` records `dropped` and `first_dropped_worker`; publish does not block | `src/router/cluster.zig`       |
+| C ABI        | Concurrent connections         |                                                            1,024 | Fixed                                       | New connection closed                                                                | `src/c_api/types.zig`          |
+| C ABI        | Routes                         |                                                               64 | Fixed                                       | `UWZ_ERROR_CAPACITY`                                                                 | `src/c_api/app.zig`            |
+| C ABI        | Middleware callbacks           |                                                               32 | Fixed                                       | `UWZ_ERROR_CAPACITY`                                                                 | `src/c_api/app.zig`            |
+| C ABI        | Inline route parameters        |                                                               16 | Fixed                                       | `UWZ_ERROR_CAPACITY` at registration                                                 | `src/c_api/app.zig`            |
+| C ABI        | Route path                     |                                                          2,048 B | Fixed                                       | `UWZ_ERROR_INVALID_ARGUMENT`                                                         | `src/c_api/app.zig`            |
+
+## Layered limits [#layered-limits]
+
+Several bounds are composed from more than one value. The smaller bound wins.
+
+| Limit                       | Composition                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| HTTP/2 request body         | `min(max_body_size, max_h2_body_size)`; the first sets the runtime ceiling and the second sizes the stream slab |
+| HTTP/3 request header bytes | Shared `max_header_size`; `listen_udp` rejects a value above 65,535 even though HTTP/1.1 and HTTP/2 accept it   |
+| Static file body            | `write_queue_size - 4096` when the queue is larger than 4 KiB, otherwise `write_queue_size`                     |
+| OpenAPI route records       | `max_route_nodes + max_pattern_routes`, which is 320 at the defaults                                            |
+| Cluster inbox memory        | `64 * max_ws_message_size` plus one message-sized scratch buffer per active worker                              |
+| C ABI capacity              | Fixed 1,024 connections, 64 routes, 32 middleware callbacks, 16 inline captures, and 2,048-byte paths           |
+
+## Notes [#notes]
+
+On HTTP/1.1, a rejection document is part of the HTTP surface, not a handler
+result. The transport formats the document into fixed stack storage and writes it
+through the bounded response path, so an oversized request never reaches
+middleware or a route callback. The document names the limit and the byte value.
+HTTP/3 returns a compact `413` body; HTTP/2 fails the stream or connection. See
+[HTTP limits](/docs/http/limits) for the exact JSON shape and status codes.
+
+The HTTP/2 body cap is enforced twice: the session rejects a declared
+`content-length` above `request_body_limit`, and it resets a stream whose DATA
+frames cross the per-stream slab. The HTTP/3 engine applies its body limit per
+stream and returns `413` before dispatch.
+
+Capacity changes are not hot-reloadable. Restart the process after changing a
+`ServerConfig` field; the generated application type, the slab layout, and every
+table on this page change together.
+
+## Related [#related]
+
+- [ServerConfig](/reference/server-config) lists every field, default,
+  constraint, and validation error.
+- [HTTP limits](/docs/http/limits) owns the HTTP-only rejection detail.
+- [Capacity model](/docs/concepts/capacity-model) explains how the slab is
+  carved.
+- [Zig API index](/reference/zig) maps each module named in the source column to
+  its task page.

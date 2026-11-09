@@ -1,0 +1,391 @@
+---
+title: TLS cluster
+description: Run a TLS-enabled worker group with three listener modes, per-worker certificates, and environment-controlled worker and connection counts.
+sidebar:
+  order: 10
+search:
+  tags: [reference, tutorial, tls, cluster, http1, http2]
+---
+
+This example is a TLS-enabled shared-nothing worker group with runtime controls.
+It selects one of three listener modes, creates one TLS context per worker, and
+reads its listener shape, worker count, and connection capacity from the
+environment. The module header describes the modes as controls for the derived
+benchmark contract. The program is `examples/tls_cluster.zig` (219 lines).
+
+## Source [#source]
+
+The program is split into four parts. No sections are omitted; concatenate the fences in order to reproduce `examples/tls_cluster.zig`.
+
+### Configuration [#configuration]
+
+```zig src/main.zig
+//! TLS-enabled shared-nothing worker group: one libxev loop and one TLS
+//! context per core.
+//!
+//! Build and run:
+//!   zig build tls_cluster -Doptimize=ReleaseSafe
+//!   curl -sk https://127.0.0.1:8443/
+//!
+//! Optional environment overrides:
+//!   UWZ_MODE          tls-cluster (default), plaintext-cluster, or tls-single
+//!   UWZ_TLS_BIND      listen address (default 0.0.0.0)
+//!   UWZ_TLS_PORT      listen port (default 8443)
+//!   UWZ_WORKERS       active worker count (default: platform CPU count;
+//!                     UWEBZOCKETS_WORKERS is the canonical spelling and
+//!                     UWZ_WORKERS remains a compatibility alias)
+//!   UWZ_MAX_CLIENTS   connection capacity: 128, 1024, or 2048 (default 128)
+//!   UWZ_CPU_AFFINITY  1 to pin workers to physical cores, 0 to leave them
+//!                     unpinned for SMT benchmark hosts (default 1)
+//!   UWZ_TLS_CERT      PEM certificate path, paired with UWZ_TLS_KEY
+//!   UWZ_TLS_KEY       PEM private key path, paired with UWZ_TLS_CERT
+//!
+//! The derived benchmark contract uses the three modes as controls. Without
+//! credential variables the cluster modes generate one ephemeral self-signed
+//! certificate each, which is development-only; the single-application TLS
+//! control always requires the PEM files. Each worker terminates TLS on the
+//! same SO_REUSEPORT port with its own context, so no handshake state or
+//! session cache is shared between loops.
+
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+/// Listener shape used by the scaling contract controls.
+const Mode = enum {
+    tls_cluster,
+    plaintext_cluster,
+    tls_single,
+};
+
+/// Parsed environment overrides for one example run.
+const Options = struct {
+    mode: Mode = .tls_cluster,
+    bind: []const u8 = "0.0.0.0",
+    port: u16 = 8443,
+    /// Zero selects the CPU-count default or `UWEBZOCKETS_WORKERS`.
+    workers: usize = 0,
+    max_clients: usize = 128,
+    cpu_affinity: bool = true,
+    certificate: ?[]const u8 = null,
+    private_key: ?[]const u8 = null,
+};
+
+fn parse_mode(value: []const u8) !Mode {
+    if (std.mem.eql(u8, value, "tls-cluster")) return .tls_cluster;
+    if (std.mem.eql(u8, value, "plaintext-cluster")) return .plaintext_cluster;
+    if (std.mem.eql(u8, value, "tls-single")) return .tls_single;
+    return error.InvalidEnvironmentValue;
+}
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("hello from a TLS worker group") catch |err| {
+        std.log.err("response failed: {}", .{err});
+    };
+}
+```
+
+### Environment parsing [#environment-parsing]
+
+```zig src/main.zig
+fn parse_env_usize(environ: *const std.process.Environ.Map, name: []const u8) !?usize {
+    const raw = environ.get(name) orelse return null;
+    return std.fmt.parseInt(usize, raw, 10) catch error.InvalidEnvironmentValue;
+}
+
+fn read_options(environ: *const std.process.Environ.Map) !Options {
+    var options = Options{};
+    if (environ.get("UWZ_MODE")) |value| options.mode = try parse_mode(value);
+    if (environ.get("UWZ_TLS_BIND")) |value| options.bind = value;
+    if (environ.get("UWZ_TLS_PORT")) |value| {
+        options.port = std.fmt.parseInt(u16, value, 10) catch return error.InvalidEnvironmentValue;
+    }
+    if (try parse_env_usize(environ, uz.cluster.workers_environment_variable)) |workers| {
+        options.workers = workers;
+    } else if (try parse_env_usize(environ, "UWZ_WORKERS")) |workers| {
+        options.workers = workers;
+    }
+    if (try parse_env_usize(environ, "UWZ_MAX_CLIENTS")) |clients| options.max_clients = clients;
+    if (environ.get("UWZ_CPU_AFFINITY")) |value| {
+        if (std.mem.eql(u8, value, "1")) {
+            options.cpu_affinity = true;
+        } else if (std.mem.eql(u8, value, "0")) {
+            options.cpu_affinity = false;
+        } else {
+            return error.InvalidEnvironmentValue;
+        }
+    }
+    options.certificate = environ.get("UWZ_TLS_CERT");
+    options.private_key = environ.get("UWZ_TLS_KEY");
+    if ((options.certificate == null) != (options.private_key == null)) {
+        return error.IncompleteTlsCredentials;
+    }
+    return options;
+}
+```
+
+### Cluster startup [#cluster-startup]
+
+```zig src/main.zig
+fn log_worker_metrics(worker_index: usize, registry: ?*uz.metrics.Registry) void {
+    const counters = registry orelse return;
+    std.log.info("worker_accepts index={d} accepted={d} closed={d}", .{
+        worker_index,
+        counters.get(.connections_accepted),
+        counters.get(.connections_closed),
+    });
+}
+
+fn serve_cluster(
+    comptime worker_capacity: usize,
+    comptime max_clients: usize,
+    workers: usize,
+    init: std.process.Init,
+    options: Options,
+) !void {
+    var group = try uz.Server.builder(init.io)
+        .with_max_clients(max_clients)
+        .with_observability(true)
+        .build_cluster_with_worker_count(
+        std.heap.page_allocator,
+        worker_capacity,
+        workers,
+        .{ .cpu_affinity = options.cpu_affinity },
+    );
+    defer group.deinit();
+
+    const Cluster = @TypeOf(group);
+    try group.configure(struct {
+        fn routes(worker: *Cluster.Worker, worker_index: usize) !void {
+            _ = worker_index;
+            _ = try worker.get("/", hello);
+        }
+    }.routes);
+
+    switch (options.mode) {
+        .tls_cluster => {
+            if (options.certificate) |certificate| {
+                const arena = init.arena.allocator();
+                const cert_path = try arena.dupeZ(u8, certificate);
+                const key_path = try arena.dupeZ(u8, options.private_key.?);
+                try group.enable_https(cert_path, key_path);
+            } else {
+                try group.enable_https_ephemeral();
+            }
+        },
+        .plaintext_cluster => {
+            if (options.certificate != null) return error.CredentialsRequireTlsMode;
+        },
+        .tls_single => return error.WrongListenerMode,
+    }
+
+    try group.catch_shutdown_signals();
+    try group.listen(options.bind, options.port);
+    try group.run();
+    for (0..workers) |index| {
+        const app_worker = group.worker(index) orelse continue;
+        log_worker_metrics(index, app_worker.metrics());
+    }
+}
+```
+
+### Single application and dispatch [#single-application-and-dispatch]
+
+```zig src/main.zig
+fn serve_single(
+    comptime max_clients: usize,
+    init: std.process.Init,
+    options: Options,
+) !void {
+    const certificate = options.certificate orelse return error.MissingTlsCredentials;
+    const private_key = options.private_key orelse return error.MissingTlsCredentials;
+    const arena = init.arena.allocator();
+    const cert_path = try arena.dupeZ(u8, certificate);
+    const key_path = try arena.dupeZ(u8, private_key);
+
+    var application = try uz.App(max_clients).init_https(init.io, cert_path, key_path);
+    defer application.deinit();
+
+    _ = try application.get("/", hello);
+    try application.catch_shutdown_signals();
+    try application.listen(options.bind, options.port);
+    try application.run();
+}
+
+fn dispatch_clients(
+    comptime worker_capacity: usize,
+    init: std.process.Init,
+    options: Options,
+) !void {
+    switch (options.max_clients) {
+        128 => try dispatch_mode(worker_capacity, 128, init, options),
+        256 => try dispatch_mode(worker_capacity, 256, init, options),
+        512 => try dispatch_mode(worker_capacity, 512, init, options),
+        1024 => try dispatch_mode(worker_capacity, 1024, init, options),
+        2048 => try dispatch_mode(worker_capacity, 2048, init, options),
+        else => return error.UnsupportedMaxClients,
+    }
+}
+
+fn dispatch_mode(
+    comptime worker_capacity: usize,
+    comptime max_clients: usize,
+    init: std.process.Init,
+    options: Options,
+) !void {
+    const workers = if (options.workers != 0)
+        options.workers
+    else if (options.mode == .tls_single)
+        1
+    else
+        try uz.cluster.worker_count_from_environment(init.environ_map, worker_capacity);
+    if (workers == 0 or workers > worker_capacity) return error.InvalidWorkerCount;
+
+    if (options.mode == .tls_single) {
+        if (workers != 1) return error.SingleModeRequiresOneWorker;
+        return serve_single(max_clients, init, options);
+    }
+    return serve_cluster(worker_capacity, max_clients, workers, init, options);
+}
+
+pub fn main(init: std.process.Init) !void {
+    const options = try read_options(init.environ_map);
+    try dispatch_clients(uz.cluster.default_worker_capacity, init, options);
+}
+```
+
+[Full source](https://github.com/farbenbuilds/uWebZockets/blob/v2.1.6/examples/tls_cluster.zig)
+
+The `zig build tls_cluster` line in the module header is the framework checkout
+step. In your project, use `zig build run` as shown below.
+
+## Build wiring [#build-wiring]
+
+Add the dependency to your own project:
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Wire the module into your `build.zig` as shown in
+[Run an example in your project](/examples#run-an-example-in-your-project), copy
+the program above into `src/main.zig`, and run `zig build run`. The build adds
+the `uWebZockets` module import and does not need a framework checkout.
+
+## Run [#run]
+
+```sh
+zig build run
+```
+
+With no environment overrides, the process starts one worker per CPU, up to the
+compiled capacity of 256, in `tls-cluster` mode. Each worker generates its own
+self-signed certificate, so certificate pinning cannot work in this mode. That
+default is development-only; pass `UWZ_TLS_CERT` and `UWZ_TLS_KEY` for a shared
+environment. When you pass the pair, each worker loads it once at startup, so
+rotating credentials requires a rolling restart. The group arms
+`catch_shutdown_signals` before `listen`, so Ctrl+C drains the workers.
+
+In a framework checkout only, `zig build tls_cluster -Doptimize=ReleaseSafe`
+runs the same program. That is a contributor shortcut, not the application path.
+
+## Verify [#verify]
+
+```sh
+curl -sk https://127.0.0.1:8443/
+```
+
+```console
+hello from a TLS worker group
+```
+
+The body is 29 bytes. `-s` hides the progress meter, and `-k` skips verification
+of the generated certificate. With a PEM chain that the client trusts, use
+`curl -s` without `-k`.
+
+## Modes [#modes]
+
+| `UWZ_MODE`              | Listeners                                              | Credentials                                                                 |
+| ----------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `tls-cluster` (default) | One TLS listener per worker on one `SO_REUSEPORT` port | `UWZ_TLS_CERT` and `UWZ_TLS_KEY`, or one ephemeral certificate per worker   |
+| `plaintext-cluster`     | The same worker group without TLS                      | Must be absent; a credential pair returns `error.CredentialsRequireTlsMode` |
+| `tls-single`            | One `App`, one event loop, one TLS context             | PEM pair required; an absent pair returns `error.MissingTlsCredentials`     |
+
+`tls-single` forces the active worker count to one. Setting the worker count to
+any other value returns `error.SingleModeRequiresOneWorker`.
+
+## Environment overrides [#environment-overrides]
+
+| Variable              | Default                  | Accepted                                         | Effect                                                               |
+| --------------------- | ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------- |
+| `UWZ_MODE`            | `tls-cluster`            | `tls-cluster`, `plaintext-cluster`, `tls-single` | Selects the listener shape                                           |
+| `UWZ_TLS_BIND`        | `0.0.0.0`                | Address string                                   | Listen address for every listener                                    |
+| `UWZ_TLS_PORT`        | `8443`                   | `u16`                                            | Listen port                                                          |
+| `UWEBZOCKETS_WORKERS` | CPU count, capped at 256 | `1` to compiled capacity                         | Canonical active worker count                                        |
+| `UWZ_WORKERS`         | Unset                    | `1` to compiled capacity                         | Compatibility alias, read only when the canonical variable is absent |
+| `UWZ_MAX_CLIENTS`     | `128`                    | `128`, `256`, `512`, `1024`, `2048`              | Per-worker connection capacity                                       |
+| `UWZ_CPU_AFFINITY`    | `1`                      | `1`, `0`                                         | Pins cluster workers to physical cores                               |
+| `UWZ_TLS_CERT`        | Unset                    | PEM path                                         | Certificate chain, paired with `UWZ_TLS_KEY`                         |
+| `UWZ_TLS_KEY`         | Unset                    | PEM path                                         | Private key, paired with `UWZ_TLS_CERT`                              |
+
+A bad mode, port, or affinity value returns `error.InvalidEnvironmentValue`. A
+lone certificate or key returns `error.IncompleteTlsCredentials`. A numeric
+connection capacity outside the accepted set returns
+`error.UnsupportedMaxClients`.
+
+The module header lists `UWZ_MAX_CLIENTS` as 128, 1024, or 2048, but
+`dispatch_clients` also accepts 256 and 512. The table follows the code.
+
+## Key APIs [#key-apis]
+
+| Call                                                                  | Effect                                                               |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `read_options(init.environ_map)`                                      | Parses and validates every override at the startup boundary          |
+| `uz.Server.builder(init.io).with_observability(true)`                 | Enables the per-worker counter registry                              |
+| `.build_cluster_with_worker_count(allocator, capacity, workers, .{})` | Compiles a fixed capacity and starts a runtime-selected active count |
+| `group.configure(...)`                                                | Registers routes once per worker before any thread starts            |
+| `group.enable_https(cert_path, key_path)`                             | Loads the PEM pair into one TLS context per worker                   |
+| `group.enable_https_ephemeral()`                                      | Generates one self-signed certificate per worker                     |
+| `group.catch_shutdown_signals()`                                      | Installs one process-wide SIGINT and SIGTERM watcher                 |
+| `group.listen(bind, port)`                                            | Binds every worker to the same port                                  |
+| `group.run()`                                                         | Spawns, joins, and returns the first worker failure                  |
+| `group.worker(index)`                                                 | Returns one worker, or null when that worker is not active           |
+| `app_worker.metrics()`                                                | Returns the per-worker counters used by the final log line           |
+
+## Capacities [#capacities]
+
+| Capacity               |            Value | Set by                          | Consequence                                                    |
+| ---------------------- | ---------------: | ------------------------------- | -------------------------------------------------------------- |
+| Workers                |        CPU count | `worker_count_from_environment` | Capped at the compiled capacity of 256                         |
+| Connections per worker |              128 | `UWZ_MAX_CLIENTS`               | Accepted set is 128, 256, 512, 1024, 2048                      |
+| Write queue            |           64 KiB | Default                         | A full queue returns `error.WouldBlock`                        |
+| Body                   |           16 KiB | Default                         | Larger bodies receive `413`                                    |
+| Idle timeout           |            120 s | Default                         | A drained keep-alive connection closes                         |
+| HTTP/2 streams         | 8 per connection | Default                         | A ninth concurrent stream receives `RST_STREAM REFUSED_STREAM` |
+| Cluster inbox          |      64 messages | Default                         | A full inbox returns `error.ClusterQueueFull`                  |
+| TLS context            |   One per worker | `enable_https*`                 | No handshake state or session cache is shared                  |
+
+## Variation [#variation]
+
+Run the single-application TLS control with PEM files:
+
+```sh
+UWZ_MODE=tls-single \
+UWZ_TLS_CERT=certs/fullchain.pem \
+UWZ_TLS_KEY=certs/privkey.pem \
+zig build run
+```
+
+This removes the worker group: one `App(max_clients)`, one event loop, and one
+TLS context. The single-application control always requires the PEM pair, even
+though the cluster modes can generate ephemeral credentials. `UWZ_CPU_AFFINITY`
+has no effect in this mode.
+
+## Next [#next]
+
+- [Your first cluster](/examples/first-cluster) covers the cluster
+  lifecycle and failure reporting.
+- [Your first TLS server](/examples/first-tls-server) covers mTLS and
+  production credentials.
+- [Shared-nothing workers](/docs/concepts/shared-nothing) explains the ownership
+  model behind per-worker TLS contexts.
+- [ServerConfig](/reference/server-config) lists every capacity and default.

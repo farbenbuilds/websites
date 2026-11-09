@@ -51,6 +51,78 @@ html [data-blume-header] a[href="/vi/"] :is(img, svg) {
   object-fit: contain;
 }
 
+/*
+ * Section tabs: attach Docs / Reference / Examples to the brand instead of
+ * centering them in Blume's three-column header grid. The labels use the same
+ * mono label system as the sidebar, TOC, and footer, and the active section
+ * carries the reading indicator rule rather than a pill.
+ */
+@media (min-width: 64rem) {
+  html [data-blume-header] {
+    @apply flex gap-4;
+  }
+
+  html [data-blume-header] > nav {
+    @apply flex self-stretch items-stretch gap-6 ms-1 ps-5 border-s;
+    border-color: var(--blume-border);
+  }
+
+  html [data-blume-header] > nav :is(a, summary) {
+    @apply relative inline-flex self-stretch items-center rounded-none bg-transparent p-0 font-mono font-medium text-[0.68rem] tracking-[0.08em] uppercase;
+    color: var(--blume-muted-foreground);
+    transition:
+      color 140ms ease,
+      box-shadow 140ms ease;
+  }
+
+  html [data-blume-header] > nav :is(a, summary) > svg {
+    display: none;
+  }
+
+  html [data-blume-header] > nav :is(a, summary):hover {
+    color: var(--blume-foreground);
+    box-shadow: inset 0 -1px 0 var(--blume-border);
+  }
+
+  html [data-blume-header] > nav :is(a, summary)[aria-current="page"],
+  html [data-blume-header] > nav :is(a, summary)[aria-current="true"] {
+    color: var(--docs-active-text);
+    box-shadow: inset 0 -2px 0 var(--docs-active-bar);
+  }
+
+  html [data-blume-header] > div:last-child {
+    @apply ms-auto;
+  }
+}
+
+/*
+ * Below the desktop header, the tabs live in the drawer. Keep the same label
+ * and active-rule language there so opening the menu does not switch systems.
+ */
+@media (max-width: 63.999rem) {
+  html [data-blume-header] > nav {
+    display: none;
+  }
+
+  html [data-blume-nav-drawer] > nav[aria-label] {
+    @apply block;
+  }
+
+  html [data-blume-nav-drawer] > nav[aria-label] a {
+    @apply rounded-none font-mono font-medium text-[0.68rem] tracking-[0.08em] uppercase;
+  }
+
+  html [data-blume-nav-drawer] > nav[aria-label] a > svg {
+    display: none;
+  }
+
+  html [data-blume-nav-drawer] > nav[aria-label] a[aria-current="page"] {
+    box-shadow: inset 3px 0 0 var(--docs-active-bar);
+    background: var(--docs-active-surface);
+    color: var(--docs-active-text);
+  }
+}
+
 html [data-blume-header] a[data-blume-locale-choice],
 html [data-blume-nav-drawer] a[data-blume-locale-choice] {
   font-family: var(--blume-font-mono);

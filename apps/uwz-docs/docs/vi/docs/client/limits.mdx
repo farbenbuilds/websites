@@ -10,7 +10,7 @@ search:
 Client là slab cố định gồm các request slot. Mỗi slot nhúng response accumulator,
 request head, socket read buffer và TLS ciphertext buffer. Lựa chọn compile-time
 duy nhất là `max_inflight`; giới hạn body theo response là runtime option bị chặn
-trên bởi 64 KiB.
+trên bởi 64 KiB. Bảng cross-protocol là [Limits](/reference/limits).
 
 ## Capacity request
 

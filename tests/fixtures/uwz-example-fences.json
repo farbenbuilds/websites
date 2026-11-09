@@ -1,0 +1,102 @@
+[
+  {
+    "page": "apps/uwz-docs/docs/examples/hello-world.mdx",
+    "source": "hello_world.zig",
+    "sha256": "67088c52cda536185ff17031725d7783ac46d6024de7891bad871ac7030296e4"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/hello-world.mdx",
+    "source": "hello_world.zig",
+    "sha256": "67088c52cda536185ff17031725d7783ac46d6024de7891bad871ac7030296e4"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/https-server.mdx",
+    "source": "https_server.zig",
+    "sha256": "d6da5145dd1990f682de1d411b35c008e3ea9af16837de9f4341dd4720fbdf29"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/https-server.mdx",
+    "source": "https_server.zig",
+    "sha256": "d6da5145dd1990f682de1d411b35c008e3ea9af16837de9f4341dd4720fbdf29"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/shared-nothing-cluster.mdx",
+    "source": "shared_nothing_cluster.zig",
+    "sha256": "4bc0ee269b324444236db394fa6a91bbf2c63efaec3c763f6b305a9b7431fe0d"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/shared-nothing-cluster.mdx",
+    "source": "shared_nothing_cluster.zig",
+    "sha256": "4bc0ee269b324444236db394fa6a91bbf2c63efaec3c763f6b305a9b7431fe0d"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/tls-cluster.mdx",
+    "source": "tls_cluster.zig",
+    "sha256": "095cb9babace974504a3024da06738ef2b6017ead8521a2b356619b29c54bd66"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/tls-cluster.mdx",
+    "source": "tls_cluster.zig",
+    "sha256": "095cb9babace974504a3024da06738ef2b6017ead8521a2b356619b29c54bd66"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/basic-microservice.mdx",
+    "source": "basic_microservice.zig",
+    "sha256": "d74c804db1aff89860c9385462a6974875a27f85ab2f476f72d4dae50f081ce9"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/basic-microservice.mdx",
+    "source": "basic_microservice.zig",
+    "sha256": "d74c804db1aff89860c9385462a6974875a27f85ab2f476f72d4dae50f081ce9"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/custom-builder.mdx",
+    "source": "custom_builder.zig",
+    "sha256": "d6ef4809acd4404ca44156d6379fbed1de6d2bccf33a40f46056b7c1580f826a"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/custom-builder.mdx",
+    "source": "custom_builder.zig",
+    "sha256": "d6ef4809acd4404ca44156d6379fbed1de6d2bccf33a40f46056b7c1580f826a"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/chat-server.mdx",
+    "source": "chat_server.zig",
+    "sha256": "a104bddccaa173a60383ef260c3ae82b6f17273645d07801d80356b390d6f008"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/chat-server.mdx",
+    "source": "chat_server.zig",
+    "sha256": "a104bddccaa173a60383ef260c3ae82b6f17273645d07801d80356b390d6f008"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/rpc-server.mdx",
+    "source": "rpc_server.zig",
+    "sha256": "eedc6ce43e6ff770dff4f1bde196fcf72e70a6e245890dbce9184bd156712825"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/rpc-server.mdx",
+    "source": "rpc_server.zig",
+    "sha256": "eedc6ce43e6ff770dff4f1bde196fcf72e70a6e245890dbce9184bd156712825"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/http3-server.mdx",
+    "source": "http3_server.zig",
+    "sha256": "30046a099c6db77a06b34269cdd0bf45041b4ae85063de7d226b0d2ddb6d6c63"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/http3-server.mdx",
+    "source": "http3_server.zig",
+    "sha256": "30046a099c6db77a06b34269cdd0bf45041b4ae85063de7d226b0d2ddb6d6c63"
+  },
+  {
+    "page": "apps/uwz-docs/docs/examples/delay-server.mdx",
+    "source": "delay_server.zig",
+    "sha256": "14d7ecd8287a536e01fe01c219e1d347ee676b2dc85ac3cab9e3fa04cf79c476"
+  },
+  {
+    "page": "apps/uwz-docs/docs/vi/examples/delay-server.mdx",
+    "source": "delay_server.zig",
+    "sha256": "14d7ecd8287a536e01fe01c219e1d347ee676b2dc85ac3cab9e3fa04cf79c476"
+  }
+]

@@ -9,7 +9,9 @@ search:
 
 Every capacity is fixed before the listener starts. This page lists the
 `ServerConfig` defaults, the builder method that changes each value, and what the
-transport does when input exceeds it.
+transport does when input exceeds it. The cross-protocol table is
+[Limits](/reference/limits), and the exhaustive field list is
+[ServerConfig](/reference/server-config).
 
 ## Set a limit
 
@@ -63,15 +65,15 @@ truncating.
 
 ## HTTP/2 and HTTP/3 limits
 
-| Limit                          |                                Default | Builder override                              | On overflow                                |
-| ------------------------------ | -------------------------------------: | --------------------------------------------- | ------------------------------------------ |
-| HTTP/2 header block            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` with `ENHANCE_YOUR_CALM`          |
-| HTTP/2 request body            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Connection closed without an HTTP response |
-| HTTP/2 response header block   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                      |
-| HTTP/2 response fields         |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                      |
-| HTTP/3 request body            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                    |
-| HTTP/3 response header storage |                                4,096 B | `with_max_h3_response_header_size`            | Response fails closed; maximum 65,535      |
-| HTTP/3 response fields         |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; maximum 4,096       |
+| Limit                          |                                Default | Builder override                              | On overflow                                                 |
+| ------------------------------ | -------------------------------------: | --------------------------------------------- | ----------------------------------------------------------- |
+| HTTP/2 header block            |                                 16 KiB | `with_max_h2_header_block_size`               | `GOAWAY` with `ENHANCE_YOUR_CALM`                           |
+| HTTP/2 request body            | `min(max_body_size, max_h2_body_size)` | `with_max_body_size`, `with_max_h2_body_size` | Stream reset or connection closed, without an HTTP response |
+| HTTP/2 response header block   |                                  4 KiB | `with_max_h2_response_header_size`            | Response fails closed                                       |
+| HTTP/2 response fields         |                                     32 | `with_max_h2_response_header_count`           | Response fails closed                                       |
+| HTTP/3 request body            |                                 16 KiB | `with_max_h3_body_size`                       | `413 Payload Too Large`                                     |
+| HTTP/3 response header storage |                                4,096 B | `with_max_h3_response_header_size`            | Response fails closed; maximum 65,535                       |
+| HTTP/3 response fields         |                                     64 | `with_max_h3_response_header_count`           | Response fails closed; maximum 4,096                        |
 
 The HTTP/2 request body cap is the smaller of `max_body_size` and
 `max_h2_body_size`: the connection sets `request_body_limit` from

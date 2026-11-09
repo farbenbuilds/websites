@@ -1,0 +1,168 @@
+---
+title: Zig API index
+description: Look up every public µWebZockets export by area, kind, and the page that owns its task, with stable anchors for direct links.
+sidebar:
+  order: 1
+search:
+  tags: [reference]
+---
+
+`src/root.zig` defines the supported Zig surface. This page lists all 79 public
+exports, groups them by area, and sends each one to the page that explains its
+task. A name that is absent here is not part of the supported surface, even when
+the module that owns it is importable from the repository.
+
+## How to use this index [#how-to-use-this-index]
+
+| You need                        | Read                           | Then open                                        |
+| ------------------------------- | ------------------------------ | ------------------------------------------------ |
+| A constructor or a value        | The export row                 | The primary page column                          |
+| A helper module                 | The module row                 | The concept or guide page for that module        |
+| A stable link to one export     | The `<a id="Name"></a>` anchor | `/reference/zig#Name`                            |
+| The wire behavior behind a name | The primary page               | [Limits](/reference/limits) or the protocol page |
+
+The kind column uses four values: `type` is a struct, enum, union, or
+function-pointer type; `function` is a comptime type constructor; `module` is a
+public import with its own functions and types; `value` is a constant.
+
+## Application and cluster [#application-and-cluster]
+
+| Export                                                          | Kind     | What it is                                                       | Primary page                                          |
+| --------------------------------------------------------------- | -------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| <a id="App"></a>`App`                                           | function | Comptime constructor for the default bounded application type    | [Application model](/docs/concepts/application-model) |
+| <a id="ConfiguredApp"></a>`ConfiguredApp`                       | function | Application type with explicit WebSocket and write capacities    | [Application model](/docs/concepts/application-model) |
+| <a id="ConfiguredAppWithTimeout"></a>`ConfiguredAppWithTimeout` | function | Application type with explicit capacities and idle timeout       | [Application model](/docs/concepts/application-model) |
+| <a id="Server"></a>`Server`                                     | type     | Fluent compile-time builder that performs one startup allocation | [ServerConfig](/reference/server-config)              |
+| <a id="ClusterOptions"></a>`ClusterOptions`                     | type     | Startup policy for a thread-per-core worker group                | [Shared-nothing](/docs/concepts/shared-nothing)       |
+| <a id="ClusterState"></a>`ClusterState`                         | type     | Lifecycle state of a worker group                                | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="WorkerFailure"></a>`WorkerFailure`                       | type     | First worker, spawn, or cleanup error reported by a cluster      | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="FailurePhase"></a>`FailurePhase`                         | type     | Phase that produced a worker failure                             | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="PublishReport"></a>`PublishReport`                       | type     | Per-worker acceptance and wakeup outcome of one publish          | [Cluster model](/docs/concepts/cluster-model)         |
+| <a id="ServerConfig"></a>`ServerConfig`                         | type     | High-level server capacities, timeouts, and presets              | [ServerConfig](/reference/server-config)              |
+| <a id="Presets"></a>`Presets`                                   | type     | Named `ServerConfig` presets                                     | [Presets](/reference/server-config#presets)           |
+| <a id="SlabLayout"></a>`SlabLayout`                             | type     | Typed views over the single contiguous startup slab              | [Capacity model](/docs/concepts/capacity-model)       |
+| <a id="default_idle_timeout_ms"></a>`default_idle_timeout_ms`   | value    | Default keep-alive idle timeout, 120,000 ms                      | [Timeouts](/reference/server-config#timeouts)         |
+| <a id="http3_available"></a>`http3_available`                   | value    | Whether the build includes the HTTP/3 transport                  | [HTTP/3](/docs/http3)                                 |
+| <a id="cluster"></a>`cluster`                                   | module   | Worker-group runtime, inbox, publish, and failure reporting      | [Cluster model](/docs/concepts/cluster-model)         |
+
+## Request and response [#request-and-response]
+
+| Export                                                | Kind | What it is                                                         | Primary page                                                      |
+| ----------------------------------------------------- | ---- | ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| <a id="Request"></a>`Request`                         | type | Borrowed fixed-capacity request metadata passed to callbacks       | [HTTP request](/docs/http/request)                                |
+| <a id="OwnedRequest"></a>`OwnedRequest`               | type | Allocator-owned request metadata for deferred or cross-thread work | [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) |
+| <a id="Response"></a>`Response`                       | type | Bounded response writer passed to route callbacks                  | [HTTP response](/docs/http/response)                              |
+| <a id="AsyncResponse"></a>`AsyncResponse`             | type | Copyable, generation-checked one-shot asynchronous response token  | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="StreamProducer"></a>`StreamProducer`           | type | Drain-driven chunked response producer callback                    | [Streaming](/docs/http/streaming)                                 |
+| <a id="StreamStatus"></a>`StreamStatus`               | type | Outcome of one drain-driven producer invocation                    | [Streaming](/docs/http/streaming)                                 |
+| <a id="JsonStream"></a>`JsonStream`                   | type | Streaming JSON body writer returned by `Response.begin_json`       | [JSON](/docs/http/json)                                           |
+| <a id="AsyncResponseState"></a>`AsyncResponseState`   | type | Connection-owned state backing asynchronous response tokens        | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="AsyncResponseStatus"></a>`AsyncResponseStatus` | type | Lifecycle of a connection-owned asynchronous response slot         | [Async responses](/docs/concepts/async-responses)                 |
+| <a id="ServerSentEvents"></a>`ServerSentEvents`       | type | Server-Sent Events stream returned by `Response.sse`               | [Server-Sent Events](/docs/http/server-sent-events)               |
+
+## HTTP helpers [#http-helpers]
+
+| Export                                                | Kind   | What it is                                                            | Primary page                                                            |
+| ----------------------------------------------------- | ------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| <a id="chunked"></a>`chunked`                         | module | Low-level HTTP/1.1 chunked response helpers                           | [Chunked responses](/docs/http/chunked)                                 |
+| <a id="fetch"></a>`fetch`                             | module | WHATWG Fetch Standard helper primitives                               | [Fetch, streams, and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="client"></a>`client`                           | module | Bounded HTTP/1.1 and WebSocket client over TCP and TLS                | [Client](/docs/client)                                                  |
+| <a id="streams"></a>`streams`                         | module | WHATWG Streams Standard primitives                                    | [Fetch, streams, and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="abort"></a>`abort`                             | module | Cooperative WinterCG cancellation shared by transports and async work | [Fetch, streams, and abort](/docs/http/helpers/fetch-streams-and-abort) |
+| <a id="compression_stream"></a>`compression_stream`   | module | libdeflate-backed `CompressionStream` and `DecompressionStream`       | [Compression](/docs/http/helpers/compression)                           |
+| <a id="compression_pool"></a>`compression_pool`       | module | Reusable per-worker gzip codec pool for `Response.end_gzip`           | [Compression](/docs/http/helpers/compression)                           |
+| <a id="multipart"></a>`multipart`                     | module | Zero-allocation RFC 7578 multipart parsing primitives                 | [Multipart](/docs/http/helpers/multipart)                               |
+| <a id="query"></a>`query`                             | module | Zero-allocation query-string slicing and percent decoding             | [Query and forms](/docs/http/helpers/query-and-forms)                   |
+| <a id="form"></a>`form`                               | module | Zero-allocation form-urlencoded body parsing                          | [Query and forms](/docs/http/helpers/query-and-forms)                   |
+| <a id="cookie"></a>`cookie`                           | module | RFC 6265 parsing, formatting, and HMAC-SHA256 signing helpers         | [Cookies](/docs/http/helpers/cookies)                                   |
+| <a id="middleware"></a>`middleware`                   | module | Fixed-state CORS and browser security-header middleware               | [Middleware](/docs/http/middleware)                                     |
+| <a id="schema"></a>`schema`                           | module | Comptime-tagged JSON schema validation                                | [Schema validation](/docs/type-safety/schema-validation)                |
+| <a id="status"></a>`status`                           | module | Canonical HTTP status codes and status lines                          | [HTTP response](/docs/http/response)                                    |
+| <a id="errors"></a>`errors`                           | module | Typed JSON error responses for HTTP handlers                          | [HTTP errors](/docs/http/errors)                                        |
+| <a id="negotiate"></a>`negotiate`                     | module | Accept-header content negotiation over caller-supplied offers         | [Content negotiation](/docs/http/helpers/content-negotiation)           |
+| <a id="cache"></a>`cache`                             | module | ETag and conditional-GET helpers for bounded responses                | [Caching](/docs/http/helpers/caching)                                   |
+| <a id="openapi"></a>`openapi`                         | module | Route registry and OpenAPI document helpers                           | [OpenAPI](/docs/http/openapi)                                           |
+| <a id="static_files"></a>`static_files`               | module | Fixed-capacity static directory and file response handler             | [Static files](/docs/http/static-files)                                 |
+| <a id="HttpMethod"></a>`HttpMethod`                   | type   | HTTP method selector used by generic route registration               | [Routing](/docs/http/routing)                                           |
+| <a id="Handler"></a>`Handler`                         | type   | Context-free synchronous route callback                               | [Routing](/docs/http/routing)                                           |
+| <a id="ContextHandler"></a>`ContextHandler`           | type   | Synchronous route callback carrying caller-owned context              | [Routing](/docs/http/routing)                                           |
+| <a id="AsyncHandler"></a>`AsyncHandler`               | type   | Deferred route callback receiving an asynchronous response token      | [Async responses](/docs/concepts/async-responses)                       |
+| <a id="ContextAsyncHandler"></a>`ContextAsyncHandler` | type   | Deferred route callback carrying caller-owned context                 | [Async responses](/docs/concepts/async-responses)                       |
+| <a id="MiddlewareResult"></a>`MiddlewareResult`       | type   | Result that controls whether route dispatch continues                 | [Middleware](/docs/http/middleware)                                     |
+| <a id="MiddlewareHandler"></a>`MiddlewareHandler`     | type   | Ordered middleware callback carrying caller-owned context             | [Middleware](/docs/http/middleware)                                     |
+
+## JSON and JSON-RPC [#json-and-json-rpc]
+
+| Export                          | Kind   | What it is                                                 | Primary page               |
+| ------------------------------- | ------ | ---------------------------------------------------------- | -------------------------- |
+| <a id="json_rpc"></a>`json_rpc` | module | Fixed-capacity JSON-RPC 2.0 services and procedure helpers | [JSON-RPC](/docs/json-rpc) |
+
+## WebSocket [#websocket]
+
+| Export                                                      | Kind     | What it is                                            | Primary page                                              |
+| ----------------------------------------------------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------- |
+| <a id="WebSocket"></a>`WebSocket`                           | type     | Server-side RFC 6455 connection handle                | [WebSocket](/docs/websocket)                              |
+| <a id="WsBehavior"></a>`WsBehavior`                         | type     | WebSocket route callbacks and bounded behavior limits | [WebSocket](/docs/websocket)                              |
+| <a id="WsCompression"></a>`WsCompression`                   | type     | WebSocket compression policy selected per route       | [Compression](/docs/websocket/compression)                |
+| <a id="Opcode"></a>`Opcode`                                 | type     | RFC 6455 frame opcode                                 | [Messages](/docs/websocket/messages)                      |
+| <a id="websocket_mask"></a>`websocket_mask`                 | module   | Position-aware WebSocket masking helpers              | [Handshake](/docs/websocket/handshake)                    |
+| <a id="websocket_backpressure"></a>`websocket_backpressure` | module   | Pure functional backpressure transition model         | [Backpressure](/docs/websocket/backpressure)              |
+| <a id="WebSocketStream"></a>`WebSocketStream`               | function | Transport-specialized pull-based stream constructor   | [WebSocket streams](/docs/http/helpers/websocket-streams) |
+| <a id="NativeWebSocketStream"></a>`NativeWebSocketStream`   | type     | WebSocket stream bound to the native server transport | [WebSocket streams](/docs/http/helpers/websocket-streams) |
+
+## TLS and transport [#tls-and-transport]
+
+| Export                                    | Kind   | What it is                                                            | Primary page                                                              |
+| ----------------------------------------- | ------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| <a id="tls"></a>`tls`                     | module | TLS context API backed by BoringSSL                                   | [TLS](/docs/security/tls)                                                 |
+| <a id="crypto_subtle"></a>`crypto_subtle` | module | BoringSSL-backed Web Crypto subset                                    | [TLS](/docs/security/tls)                                                 |
+| <a id="transport"></a>`transport`         | module | Compile-time transport separation for protocol-only cores             | [Transports](/docs/architecture/transports)                               |
+| <a id="ktls"></a>`ktls`                   | module | Linux kernel TLS and zero-copy file and pipe transmission             | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="xdp"></a>`xdp`                     | module | AF_XDP zero-copy socket and UMEM ring support                         | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="xdp_transport"></a>`xdp_transport` | module | Opportunistic AF_XDP policy, UMEM helpers, and fallback state         | [kTLS and XDP](/docs/architecture/ktls-and-xdp)                           |
+| <a id="udp"></a>`udp`                     | module | Completion-driven UDP and QUIC transport API                          | [QUIC transport](/docs/http3/quic-transport)                              |
+| <a id="shared_memory"></a>`shared_memory` | module | Generation-checked shared memory and Cap'n Proto envelopes            | [Transports](/docs/architecture/transports)                               |
+| <a id="TransportMode"></a>`TransportMode` | type   | Requested transport backend selected through `ServerConfig.transport` | [Features and transport](/reference/server-config#features-and-transport) |
+
+## Observability [#observability]
+
+| Export                        | Kind   | What it is                                                   | Primary page                                        |
+| ----------------------------- | ------ | ------------------------------------------------------------ | --------------------------------------------------- |
+| <a id="metrics"></a>`metrics` | module | Fixed-capacity zero-allocation Prometheus metrics registry   | [Metrics](/docs/operations/metrics)                 |
+| <a id="dev_log"></a>`dev_log` | module | Colored, allocation-free development log with batched writes | [Development log](/docs/operations/development-log) |
+| <a id="ebpf"></a>`ebpf`       | module | Pinned eBPF per-CPU histogram reader                         | [eBPF](/docs/operations/ebpf)                       |
+
+## HTTP/2 and HTTP/3 [#http2-and-http3]
+
+| Export                                          | Kind   | What it is                                                                | Primary page                                         |
+| ----------------------------------------------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| <a id="http2"></a>`http2`                       | module | Bounded HTTP/2 frame and stream state machine                             | [HTTP/2](/docs/http2)                                |
+| <a id="http2_hpack"></a>`http2_hpack`           | module | Bounded HPACK decoder, dynamic table, Huffman codec, and response encoder | [HPACK](/docs/http2/hpack)                           |
+| <a id="http2_server"></a>`http2_server`         | module | Allocation-free HTTP/2 request session and response framing API           | [Frames and streams](/docs/http2/frames-and-streams) |
+| <a id="http3_extensions"></a>`http3_extensions` | module | HTTP/3 extended CONNECT, push, and early-data helpers                     | [HTTP/3](/docs/http3)                                |
+| <a id="webtransport"></a>`webtransport`         | module | Bounded WebTransport-over-HTTP/3 draft protocol state                     | [WebTransport](/docs/http3/webtransport)             |
+| <a id="datagram_ring"></a>`datagram_ring`       | module | Fixed-capacity SoA queue for pending WebTransport datagrams               | [WebTransport](/docs/http3/webtransport)             |
+| <a id="datagram"></a>`datagram`                 | module | Fixed-capacity WebTransport datagram route table                          | [WebTransport](/docs/http3/webtransport)             |
+
+## Drift check [#drift-check]
+
+`src/root.zig` is the only source of truth for this page. It declares 79
+`pub const` names, and every one appears exactly once above. Several modules
+expose additional public declarations inside their own files; those are reached
+through the module row, not through a second root export. `src/root.zig` also
+analyzes `src/c_api.zig` in a `comptime` block so the `uwz_*` symbols reach the
+static library, but the C ABI is a separate surface documented in
+[C ABI](/reference/c-abi).
+
+When a release adds, renames, or removes a root export, update this table in the
+same change. A table row without a matching `pub const`, or a `pub const` without
+a row, is documentation drift.
+
+## Related [#related]
+
+- [ServerConfig](/reference/server-config) maps each startup field to a builder
+  method and a slab region.
+- [Limits](/reference/limits) lists the protocol bounds enforced behind these
+  types.
+- [Errors](/reference/errors) lists the error names returned by the modules
+  above.

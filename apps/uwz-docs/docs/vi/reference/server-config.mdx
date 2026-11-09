@@ -1,0 +1,253 @@
+---
+title: ServerConfig
+description: Tra cứu từng field ServerConfig, default, ràng buộc, builder override, preset, slab region và validation error.
+sidebar:
+  order: 2
+search:
+  tags: [reference, capacity]
+---
+
+`ServerConfig` là đầu vào duy nhất của startup slab. Mỗi field là một capacity,
+một timeout hoặc một chính sách được cố định trước khi listener đầu tiên khởi
+động. `Server.builder` biến một configuration thành một application type được
+sinh ra và đúng một allocation. Trang này liệt kê mọi field, default, ràng buộc,
+builder method thay thế nó và region mà nó định cỡ.
+
+Hành vi từ chối theo protocol nằm ở [Limits](/reference/limits). Chi tiết
+HTTP và rejection document nằm ở [HTTP limits](/docs/http/limits). Phần giải
+thích capacity nằm ở [Capacity model](/docs/concepts/capacity-model).
+
+## Capacity là compile-time [#compile-time-capacities]
+
+Capacity định cỡ `App` type được sinh ra, nên không thể đọc từ một biến runtime.
+`ServerConfig.with` nhận override tuỳ chọn và trả về configuration mới.
+`Server.builder` có một method `with_*` cho mỗi field, và mỗi method nhận giá trị
+`comptime`. Truyền literal hoặc `const`:
+
+```zig
+const config = uz.ServerConfig{}.with(.{
+    .max_connections = 512,
+    .max_body_size = 128 * 1024,
+});
+
+const bytes = try config.slab_bytes();
+std.debug.print("startup slab: {d} bytes\n", .{bytes});
+```
+
+`slab_bytes()` chạy đúng layout có kiểm tra như `carve`, nên sizing và phân vùng
+không thể lệch nhau. `Server.builder(...).slab_bytes()` báo cùng con số trước
+`build`. `build(allocator)` thực hiện đúng một allocation và trả về giá trị phải
+giữ địa chỉ ổn định sau `listen`.
+
+## Preset [#presets]
+
+Mỗi preset là một `ServerConfig` bình thường, nên override `with_*` nào cũng
+áp dụng được. Bắt đầu bằng `Server.builder(init.io).preset(uz.Presets.microservice)`
+hoặc `Server.preset(init.io, uz.Presets.microservice)`.
+
+| Preset                          | Connection | WS message | Write queue | Request body | Idle timeout | Cấu hình khác                                                             |
+| ------------------------------- | ---------: | ---------: | ----------: | -----------: | -----------: | ------------------------------------------------------------------------- |
+| `Presets.microservice`          |        256 |      8 KiB |      16 KiB |       64 KiB |         30 s | Default ở các field còn lại                                               |
+| `Presets.websocket_chat`        |        512 |     32 KiB |      32 KiB |        4 KiB |        120 s | `compression = true`                                                      |
+| `Presets.file_server`           |        128 |      4 KiB |     512 KiB |        8 KiB |        300 s | Default ở các field còn lại                                               |
+| `Presets.kernel_bypass`         |        512 |      8 KiB |      32 KiB |       16 KiB |         60 s | `transport = .kernel_bypass`, `observability = true`                      |
+| `Presets.webtransport_realtime` |        512 |      8 KiB |      32 KiB |        4 KiB |         60 s | `max_datagram_size = 1200`, `datagram_slots = 64`, `observability = true` |
+
+Các preset chọn số connection vừa phải vì mỗi HTTP/2 session nhúng trong
+connection chiếm phần lớn footprint. Chúng dồn byte vào capacity mà workload
+thực sự dùng thay vì tối đa hoá mọi chiều.
+
+## Field [#fields]
+
+### Connection và request buffer [#connection-and-buffers]
+
+| Field                   | Default | Miền giá trị hoặc ràng buộc                                                      | Builder override             | Định cỡ gì                                                                                                                                  |
+| ----------------------- | ------: | -------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `max_connections`       |   1.024 | Tối thiểu 1                                                                      | `with_max_clients`           | Connection pool, freelist, mọi region theo connection và capacity connection của QUIC                                                       |
+| `max_ws_message_size`   |  16 KiB | Tối thiểu 1; `WsBehavior.max_message_size` của route không được vượt giá trị này | `with_max_ws_message_size`   | Region message WebSocket theo connection, kích thước message trong cluster inbox, RFC 7692 scratch                                          |
+| `write_queue_size`      |  64 KiB | Tối thiểu 1                                                                      | `with_write_queue_size`      | Write ring đầu ra theo connection, HTTP/3 response body, static file body (giá trị này trừ 4 KiB khi queue lớn hơn 4 KiB)                   |
+| `max_body_size`         |  16 KiB | Tối thiểu 1                                                                      | `with_max_body_size`         | HTTP/1 request buffer và body, `request_body_limit` của HTTP/2, HTTP gzip output scratch, rejection policy                                  |
+| `max_request_line_size` |   8 KiB | Tối thiểu 1                                                                      | `with_max_request_line_size` | Request buffer stride và giới hạn parser cho request line                                                                                   |
+| `max_header_size`       |  16 KiB | Tối thiểu 1 và tối đa `u32`; bật HTTP/3 yêu cầu tối đa 65.535                    | `with_max_header_size`       | HTTP/1 header block, request header storage của HTTP/2 và HTTP/3, rejection policy                                                          |
+| `max_header_count`      |      64 | Tối thiểu 64; pointer storage cho phần vượt mức không được tràn                  | `with_max_header_count`      | Mảng `Request` inline cộng một cặp name/value cho mỗi header vượt mức trong slab của từng connection; cap field decode của HTTP/2 và HTTP/3 |
+
+`max_header_count` không thể thấp hơn 64 vì mảng `Request` inline không co lại
+được. Giá trị lớn hơn carve hai slice cho mỗi header vượt mức vào slab của từng
+connection.
+
+### Router [#router]
+
+| Field                     | Default | Miền giá trị hoặc ràng buộc                                            | Builder override               | Định cỡ gì                                                                                           |
+| ------------------------- | ------: | ---------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `max_route_nodes`         |     256 | 1 đến 65.535; cộng với `max_pattern_routes` tối đa 65.535              | `with_max_route_nodes`         | Mảng radix node, static route index, ngân sách route OpenAPI                                         |
+| `max_pattern_routes`      |      64 | 0 đến 255; tổng node và pattern tối đa 65.535                          | `with_max_pattern_routes`      | Bảng route tham số hoá và wildcard                                                                   |
+| `max_middleware`          |      32 | 0 đến 255                                                              | `with_max_middleware`          | Mảng middleware có thứ tự                                                                            |
+| `max_route_path_size`     |   2.048 | 1 đến 65.535; registry phải chứa ít nhất một path dài bằng giá trị này | `with_max_route_path_size`     | Path storage cho từng route và route path dài nhất được chấp nhận                                    |
+| `max_route_params`        |      16 | Tối thiểu 16; pointer storage cho phần vượt mức không được tràn        | `with_max_route_params`        | Capture `Request` inline cộng pointer capture cho mỗi parameter vượt mức; capture storage của HTTP/3 |
+| `max_route_registry_size` |  64 KiB | Tối thiểu `max_route_path_size` và tối đa `u32`                        | `with_max_route_registry_size` | Registry path của router dùng cho introspection và OpenAPI                                           |
+
+Tổng node và pattern phải nằm trong `u16`, và
+`(max_route_nodes + max_pattern_routes) * max_route_path_size` phải nằm trong
+`u32`. Configuration không biểu diễn được sẽ fail validation thay vì bị cắt.
+
+### HTTP/2 và HTTP/3 [#http2-and-http3]
+
+| Field                          | Default | Miền giá trị hoặc ràng buộc                                    | Builder override                    | Định cỡ gì                                                  |
+| ------------------------------ | ------: | -------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------- |
+| `max_h2_header_block_size`     |  16 KiB | Tối thiểu 1                                                    | `with_max_h2_header_block_size`     | Buffer HPACK block trong HTTP/2 session của từng connection |
+| `max_h2_body_size`             |  16 KiB | Tối thiểu 1                                                    | `with_max_h2_body_size`             | Body slab theo stream và ceiling cứng của HTTP/2 body       |
+| `max_h2_response_header_size`  |   4 KiB | Tối thiểu 1                                                    | `with_max_h2_response_header_size`  | Encoded response header block; encoder fail closed khi vượt |
+| `max_h2_response_header_count` |      32 | Tối thiểu 1; gồm status và `content-length` được sinh          | `with_max_h2_response_header_count` | Mảng response field theo stream                             |
+| `max_h3_body_size`             |  16 KiB | Tối thiểu 1; `max_h3_body_size + max_header_size` tối đa `u32` | `with_max_h3_body_size`             | Body storage theo stream của QUIC, nằm ngoài startup slab   |
+| `max_h3_response_header_size`  | 4.096 B | 1 đến 65.535; offset và length của field là `u16`              | `with_max_h3_response_header_size`  | Encoded response header storage của HTTP/3 theo response    |
+| `max_h3_response_header_count` |      64 | 1 đến 4.096                                                    | `with_max_h3_response_header_count` | Mảng transmit descriptor theo response                      |
+
+HTTP/2 body cũng không được vượt `max_body_size`: session đặt
+`request_body_limit` từ chính sách HTTP/1, còn stream slab đã compile là ceiling
+cứng. QUIC engine cấp phát pool tại `listen_udp`, nên `slab_bytes()` không tính
+chúng. `listen_udp` còn từ chối `max_header_size` lớn hơn 65.535 bằng
+`error.InvalidHttp3Capacity`.
+
+### Timeout [#timeouts]
+
+| Field                    | Default | Miền giá trị hoặc ràng buộc          | Builder override              | Định cỡ gì                                                                 |
+| ------------------------ | ------: | ------------------------------------ | ----------------------------- | -------------------------------------------------------------------------- |
+| `idle_timeout_ms`        | 120.000 | Tối đa `maxInt(i64)`; 0 tắt deadline | `with_idle_timeout_ms`        | Idle deadline keep-alive của HTTP/1 và idle deadline connection của HTTP/2 |
+| `header_read_timeout_ms` |  30.000 | Tối đa `maxInt(i64)`; 0 tắt deadline | `with_header_read_timeout_ms` | Request head và body HTTP/1 chưa hoàn tất                                  |
+
+### Feature và transport [#features-and-transport]
+
+| Field               |     Default | Miền giá trị hoặc ràng buộc                             | Builder override              | Định cỡ gì                                                  |
+| ------------------- | ----------: | ------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| `compression`       |     `false` | Boolean                                                 | `with_compression`            | RFC 7692 scratch theo cặp cho từng connection               |
+| `http_compression`  |     `false` | Boolean                                                 | `with_http_compression`       | Một gzip codec theo worker và output scratch nằm ngoài slab |
+| `transport`         | `.standard` | `.standard` hoặc `.kernel_bypass`                       | `with_kernel_bypass`          | AF_XDP UMEM và transport state; căn page cho slab           |
+| `max_datagram_size` |           0 | 0 hoặc 1 đến `u32`; bằng 0 yêu cầu slot bằng 0          | `with_webtransport_datagrams` | WebTransport datagram payload lớn nhất theo slot            |
+| `datagram_slots`    |           0 | 0 hoặc 1 đến `u32`; bằng 0 yêu cầu size bằng 0          | `with_webtransport_datagrams` | Số slot datagram ring theo connection                       |
+| `xdp_frame_size`    |       2.048 | Khi chọn bypass: luỹ thừa của hai, 1.024 đến 65.536     | `with_xdp_umem`               | Kích thước chunk AF_XDP UMEM                                |
+| `xdp_frame_count`   |       1.024 | Khi chọn bypass: luỹ thừa của hai, khác 0, tối đa 4.096 | `with_xdp_umem`               | Số frame UMEM; byte UMEM bằng frame size nhân frame count   |
+
+`kernel_bypass` là một yêu cầu, không phải bảo đảm. Target không phải Linux loại
+bỏ nó lúc compile, và host Linux từ chối probe sẽ giữ standard stack. Các ràng
+buộc frame chỉ được kiểm tra khi `transport == .kernel_bypass`.
+
+### Observability [#observability]
+
+| Field            |    Default | Miền giá trị hoặc ràng buộc                                                                                                       | Builder override     | Định cỡ gì                                        |
+| ---------------- | ---------: | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
+| `observability`  |    `false` | Boolean                                                                                                                           | `with_observability` | Carve metrics registry và serve endpoint ẩn       |
+| `metrics_path`   | `/metrics` | Khác rỗng và bắt đầu bằng `/` khi observability bật; borrow suốt vòng đời application                                             | `with_metrics_path`  | Path của endpoint ẩn                              |
+| `enable_dev_log` |     `true` | Boolean                                                                                                                           | `with_dev_log`       | Wordmark lúc startup, ready summary và event line |
+| `watch_paths`    |       Rỗng | Tối đa 8 root; mỗi root 1 đến 4.095 byte trong buffer path 4.096 byte; yêu cầu `enable_dev_log`; borrow suốt vòng đời application | `with_watch_paths`   | Watcher development chạy đệ quy                   |
+
+## Slab region [#slab-regions]
+
+`src/router/config.zig` tính layout bằng phép toán có kiểm tra. `slab_bytes()`
+và `carve` dùng chung một phép tính offset, nên sizing và phân vùng không thể
+lệch. Nhân mọi dòng theo connection với `max_connections`.
+
+| Region                             | Kích thước                                                 | Có mặt khi                      |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------- |
+| Connection pool                    | `max_connections * sizeof(TcpConnection)`                  | Luôn có                         |
+| Pool freelist                      | `max_connections * sizeof(usize)`                          | Luôn có                         |
+| HTTP/1 request buffer              | `max_connections * request_stride`                         | Luôn có                         |
+| Header extras                      | `max_connections * (max_header_count - 64) * 2 slices`     | `max_header_count` lớn hơn 64   |
+| Route-capture extras               | `max_connections * (max_route_params - 16) * 2 slices`     | `max_route_params` lớn hơn 16   |
+| HTTP/2 session                     | `max_connections * h2_session_stride`                      | Luôn có                         |
+| Write queue                        | `max_connections * write_queue_size`                       | Luôn có                         |
+| WebSocket message                  | `max_connections * max_ws_message_size`                    | Luôn có                         |
+| RFC 7692 scratch                   | `max_connections * 2 * worst_case_scratch`                 | `compression` bật               |
+| Datagram metadata, ring và payload | Mảng slot cộng `max_connections * datagram_stride`         | Datagram bật                    |
+| AF_XDP UMEM                        | `xdp_frame_size * xdp_frame_count` cộng một `XdpTransport` | `transport` là `.kernel_bypass` |
+| Metrics registry                   | Một `Registry`                                             | `observability` bật             |
+| Router storage                     | Mảng node, pattern, middleware và registry                 | Luôn có                         |
+
+`request_stride` bằng `max_request_line_size + max_header_size + max_body_size`
+cộng 1.024 byte slack cho framing, làm tròn lên bội số 16 byte. Slab bắt đầu tại
+mốc ít nhất 64 byte, hoặc một page khi chọn kernel bypass. Danh sách trên theo
+đúng thứ tự carve; router storage nằm sau các region theo connection để tăng
+route capacity không làm dịch storage của connection.
+
+`slab_bytes()` không tính bảng backend của libxev, HTTP gzip pool theo worker,
+object `SSL_CTX` theo worker, cluster inbox hay pool QUIC engine do `listen_udp`
+tạo. Những allocation đó xảy ra một lần lúc build, enable hoặc listen và nằm
+ngoài slab.
+
+## Builder hoàn chỉnh [#complete-builder]
+
+Ví dụ giả định module `uWebZockets` đã được nối vào `build.zig` của bạn.
+[Hello world](/examples/hello-world#build-wiring) chỉ bước `zig fetch --save` và
+import module.
+
+```zig src/main.zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| {
+        std.debug.print("response error: {}\n", .{err});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    const builder = uz.Server.builder(init.io)
+        .preset(uz.Presets.microservice)
+        .with_max_clients(512)
+        .with_max_body_size(128 * 1024)
+        .with_write_queue_size(96 * 1024)
+        .with_idle_timeout_ms(60_000)
+        .with_observability(true)
+        .with_metrics_path("/internal/metrics");
+
+    std.debug.print("startup slab: {d} bytes\n", .{try builder.slab_bytes()});
+
+    var server = try builder.build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.get("/", hello);
+    try server.listen("0.0.0.0", 3000);
+    try server.run();
+}
+```
+
+Chuỗi bắt đầu từ preset microservice, thay sáu field, bật endpoint metrics ẩn,
+in kích thước slab chính xác rồi allocate một lần. `build` trả về application
+type được sinh; route được đăng ký trên giá trị đó trước `listen`. Capacity
+không vừa kiểu sinh ra sẽ fail lúc compile thay vì lúc runtime.
+
+## Validation error [#validation-errors]
+
+`ServerConfig.validate` từ chối configuration không thể tạo slab dùng được.
+Builder gọi nó lúc compile và fail bằng `@compileError` có tên error;
+`slab_bytes()` và `carve` gọi lại trong bước lập layout. `MisalignedSlab` và
+`SlabTooSmall` đến từ `carve` và `init_from_slab`, không phải từ `validate`.
+
+| Error                             | Nguyên nhân                                                                                                                                                                                                    | Cách sửa                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `InvalidConnectionCapacity`       | `max_connections == 0`                                                                                                                                                                                         | Đặt tối thiểu 1                                                      |
+| `InvalidWebSocketMessageCapacity` | `max_ws_message_size == 0`                                                                                                                                                                                     | Đặt tối thiểu 1                                                      |
+| `InvalidWriteQueueCapacity`       | `write_queue_size == 0`                                                                                                                                                                                        | Đặt tối thiểu 1                                                      |
+| `InvalidBodyCapacity`             | `max_body_size == 0`                                                                                                                                                                                           | Đặt tối thiểu 1                                                      |
+| `InvalidRequestLineCapacity`      | `max_request_line_size == 0`                                                                                                                                                                                   | Đặt tối thiểu 1                                                      |
+| `InvalidHeaderCapacity`           | `max_header_size == 0` hoặc `max_header_count < 64`                                                                                                                                                            | Dùng header block khác 0 và ít nhất 64 header slot                   |
+| `InvalidHttp2Capacity`            | Một capacity HTTP/2 bằng 0 hoặc layout session storage bị tràn                                                                                                                                                 | Cho mỗi size và count HTTP/2 một giá trị khác 0 vừa slab             |
+| `InvalidHttp3Capacity`            | Body hoặc response capacity HTTP/3 bằng 0, response field count vượt 4.096, response header size vượt 65.535, header byte vượt `u32`, `listen_udp` thấy `max_header_size` trên 65.535 hoặc engine storage tràn | Giảm giá trị HTTP/3 hoặc header size dùng chung                      |
+| `InvalidRouterCapacity`           | Capture dưới 16, router limit ngoài miền, registry nhỏ hơn một route path hoặc tích record hay byte của router bị tràn                                                                                         | Tăng `max_route_params` và cân lại node, pattern, path, registry     |
+| `InvalidIdleTimeout`              | `idle_timeout_ms` vượt `maxInt(i64)`                                                                                                                                                                           | Giảm giá trị hoặc dùng 0                                             |
+| `InvalidHeaderReadTimeout`        | `header_read_timeout_ms` vượt `maxInt(i64)`                                                                                                                                                                    | Giảm giá trị hoặc dùng 0                                             |
+| `InvalidDatagramCapacity`         | Datagram size và slot không cùng bằng 0 hoặc cùng khác 0, hoặc một giá trị vượt `u32`                                                                                                                          | Đặt cả hai hoặc đặt cả hai bằng 0                                    |
+| `InvalidTransportConfiguration`   | Frame size của kernel bypass ngoài khoảng 1.024 đến 65.536, frame size hoặc count không phải luỹ thừa của hai, hoặc count vượt 4.096                                                                           | Dùng size 1.024 đến 65.536 và count tối đa 4.096                     |
+| `InvalidMetricsPath`              | Observability bật nhưng path rỗng hoặc không bắt đầu bằng `/`                                                                                                                                                  | Dùng path root-relative                                              |
+| `InvalidWatchConfiguration`       | Nhiều hơn 8 root, root rỗng hoặc root không vừa buffer path 4.096 byte                                                                                                                                         | Giảm số root hoặc rút ngắn path                                      |
+| `WatchRequiresDevLog`             | Có watch path nhưng development log tắt                                                                                                                                                                        | Bật development log                                                  |
+| `MisalignedSlab`                  | Storage của caller không đạt `required_alignment()`                                                                                                                                                            | Dùng page alignment cho kernel bypass, ngược lại dùng slab alignment |
+| `SlabSizeOverflow`                | Một tích kích thước hoặc offset có kiểm tra vượt `usize`, gồm cả header hoặc route-capture pointer stride                                                                                                      | Giảm capacity gây tràn                                               |
+| `SlabTooSmall`                    | Storage của caller ngắn hơn `slab_bytes()`                                                                                                                                                                     | Cấp phát ít nhất kích thước đã báo                                   |
+
+## Tiếp theo [#next]
+
+- [Capacity model](/docs/concepts/capacity-model) giải thích cách một
+  configuration trở thành startup slab.
+- [Limits](/reference/limits) liệt kê bound protocol và hành vi khi vượt.
+- [HTTP limits](/docs/http/limits) đi sâu vào rejection document của HTTP.
+- [Zig API index](/reference/zig) nối từng type và builder tới trang tác vụ.

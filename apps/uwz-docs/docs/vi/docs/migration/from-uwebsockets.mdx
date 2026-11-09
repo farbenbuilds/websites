@@ -1,0 +1,307 @@
+---
+title: Chuyển từ uWebSockets
+description: Port một service C++ uWebSockets sang Zig bằng cách map event loop, vòng đời handler, route, hành vi WebSocket, pub/sub, TLS và cluster deployment.
+sidebar:
+  order: 1
+search:
+  tags: [migration, websocket, http1, cluster]
+---
+
+uWebSockets là thư viện C++. Port một service sang µWebZockets nghĩa là viết lại
+phần glue bằng Zig trong khi giữ nguyên contract HTTP và WebSocket. Dùng trang này
+để migrate từng service một. Không có chế độ tương thích header và không có
+wrapper tương thích source. Trang này map những khái niệm thay đổi và những khái
+niệm giữ nguyên.
+
+## Trước: service uWebSockets [#before]
+
+Service đăng ký một route có parameter, buffer body của request và chạy một chat
+room. Đây là code uWebSockets tiêu biểu, không phải một production server hoàn
+chỉnh.
+
+```cpp
+#include "App.h"
+#include <iostream>
+#include <string>
+
+struct PerSocketData {};
+
+int main() {
+    uWS::App()
+        .get("/users/:id", [](auto *res, auto *req) {
+            (void) req;
+            std::string id(req->getParameter(0));
+            res->writeHeader("content-type", "text/plain");
+            res->end("user " + id);
+        })
+        .post("/users", [](auto *res, auto *req) {
+            (void) req;
+            res->onData([res, body = std::string()](std::string_view chunk, bool is_end) mutable {
+                body.append(chunk.data(), chunk.length());
+                if (is_end) res->end("created " + std::to_string(body.size()) + " bytes");
+            });
+            res->onAborted([]() {});
+        })
+        .ws<PerSocketData>("/chat", {
+            .open = [](auto *ws) { ws->subscribe("room"); },
+            .message = [](auto *ws, std::string_view message, uWS::OpCode op_code) {
+                ws->publish("room", message, op_code);
+            },
+            .close = [](auto *ws, int code, std::string_view message) {
+                (void) ws;
+                (void) code;
+                (void) message;
+            }
+        })
+        .listen(3000, [](auto *token) {
+            if (!token) std::cerr << "listen failed\n";
+        })
+        .run();
+}
+```
+
+## Sau: bản port µWebZockets [#after]
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn show_user(req: *uz.Request, res: *uz.Response) void {
+    const id = req.get_param("id") orelse "0";
+    var buffer: [96]u8 = undefined;
+    const body = std.fmt.bufPrint(&buffer, "user {s}", .{id}) catch |err| {
+        std.log.err("format failed: {}", .{err});
+        res.text("user") catch |res_err| std.log.err("response failed: {}", .{res_err});
+        return;
+    };
+    res.text(body) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn create_user(req: *uz.Request, res: *uz.Response) void {
+    res.text(req.text()) catch |err| std.log.err("response failed: {}", .{err});
+}
+
+fn on_open(ws: *uz.WebSocket) void {
+    ws.subscribe("room") catch |err| std.log.err("subscribe failed: {}", .{err});
+}
+
+fn on_message(ws: *uz.WebSocket, message: []const u8, opcode: uz.Opcode) void {
+    _ = ws.publish("room", message, opcode == .text);
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(512).init(init.io);
+    defer app.deinit();
+
+    _ = try app.get("/users/:id", show_user);
+    _ = try app.post("/users", create_user);
+    _ = try app.ws("/chat", .{
+        .open = on_open,
+        .message = on_message,
+        .compression = .permessage_deflate,
+    });
+
+    try app.catch_shutdown_signals();
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+Thêm dependency bằng:
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Giữ `build.zig` và module import của chính bạn, như mô tả trong
+[Quickstart](/docs/getting-started/quickstart). Không vendor và không clone
+repository của framework.
+
+## Event loop và thread [#event-loop-and-threads]
+
+uWebSockets chạy một `uWS::App` cho mỗi thread, và mỗi app sở hữu một event loop.
+`app.run()` block trên loop đó. µWebZockets giữ nguyên hình dạng mỗi application
+một loop: `uz.App(N)` sở hữu một event loop, một slab và một router, còn
+`app.run()` block đến khi shutdown drain xong.
+
+Để dùng nhiều core, thay một `App` bằng một cluster. `build_cluster` tạo một
+worker cho mỗi core, mỗi worker có loop và slab riêng, và bind port chung qua
+`SO_REUSEPORT`. Không có connection state nào được chia sẻ giữa các worker.
+
+```zig
+var group = try uz.Server.builder(init.io)
+    .with_max_clients(512)
+    .build_cluster(std.heap.page_allocator, 4, .{});
+defer group.deinit();
+
+const Cluster = @TypeOf(group);
+try group.configure(struct {
+    fn routes(worker: *Cluster.Worker, index: usize) !void {
+        _ = index;
+        _ = try worker.get("/users/:id", show_user);
+    }
+}.routes);
+
+try group.listen("0.0.0.0", 3000);
+try group.run();
+```
+
+Giá trị `App` hoặc `Cluster` phải ở một địa chỉ cố định sau `listen` hoặc `run`.
+Giữ nó trong `main` và không chuyển nó vào một container có thể relocate.
+
+## Chữ ký handler và vòng đời [#handler-signature-and-lifetimes]
+
+Thứ tự tham số đảo ngược. Route uWebSockets là một lambda nhận `(res, req)`.
+Route µWebZockets nhận `(req, res)` và là một hàm Zig có tên với chữ ký
+`fn (*uz.Request, *uz.Response) void`.
+
+Trong uWebSockets, `req` chết khi handler trả về, còn `res` sống đến khi response
+kết thúc hoặc `onAborted` chạy. Trong µWebZockets, cả hai pointer chỉ có hiệu lực
+trong callback. Request field và route capture borrow storage của connection, chỉ
+có hiệu lực trong synchronous callback hoặc đến khi async token complete. Copy dữ
+liệu cần giữ vào bounded application storage, hoặc dùng `req.clone(allocator)` để
+có snapshot thuộc sở hữu của bạn.
+
+Không có `*Response` được giữ lại và không có callback `onAborted`. Công việc
+deferred đăng ký bằng `route_async` và nhận một `AsyncResponse` token có thể
+copy, complete đúng một lần trên owning loop. Peer bị disconnect, generation bị
+tái sử dụng hoặc token hết hạn sẽ fail closed. Xem
+[Async responses](/docs/concepts/async-responses).
+
+## Map request và response [#request-and-response-mapping]
+
+| uWebSockets                              | µWebZockets                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `req->getMethod()`                       | `req.method`                                                                                                   |
+| `req->getUrl()`                          | `req.url()`, hoặc `req.path` và `req.query` riêng                                                              |
+| `req->getQuery()`                        | `req.query`                                                                                                    |
+| `req->getHeader("x")`                    | `req.get_header("x")`                                                                                          |
+| `req->getParameter(0)`                   | `req.get_param("id")` theo tên capture                                                                         |
+| `res->writeStatus("200 OK")`             | Tham số status của `res.end`, `res.text` hoặc `res.end_with_headers`                                           |
+| `res->writeHeader(name, value)`          | `res.append_header(name, value)` trước body helper                                                             |
+| `res->end(body)`                         | `res.text`, `res.bytes`, `res.json` hoặc `res.end("200 OK", body)`                                             |
+| `res->onData` buffering                  | Body được buffer có giới hạn; đọc `req.text()` trong handler                                                   |
+| `res->tryEnd`, `onWritable`, `onAborted` | `res.begin_stream`, `res.begin_chunked` hoặc `res.sse`; backpressure là `error.WouldBlock` cùng drain callback |
+
+Body limit mặc định là 16 KiB. Route uWebSockets có buffer upload lớn phải tăng
+`max_body_size` lúc khởi động hoặc thiết kế lại endpoint. µWebZockets buffer toàn
+bộ body có giới hạn trước khi dispatch; nó không expose một request stream không
+giới hạn.
+
+## Routing và middleware [#routing-and-middleware]
+
+Cả hai router đều ưu tiên route tĩnh hơn `:param`, và `:param` hơn wildcard.
+Route any-method thua route có method cụ thể tương đương. µWebZockets dùng `:name`
+cho một segment và `*name` ở cuối cho phần còn lại; đăng ký pattern sai sẽ fail
+thay vì fallback sang matching mơ hồ.
+
+uWebSockets không có middleware tích hợp và khuyến nghị higher-order function.
+µWebZockets có global middleware chain theo thứ tự, tối đa 32 callback. Đăng ký
+bằng `app.use`, và giữ composition riêng cho từng route trong handler. Xem
+[Routing](/docs/http/routing) và [Middleware](/docs/http/middleware).
+
+| uWebSockets                      | µWebZockets                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `app.get`, `app.post`, `app.any` | Cùng method helper trên `App`                  |
+| `"/users/:id"`                   | `"/users/:id"`, đọc bằng `get_param("id")`     |
+| `"/*"`                           | `"/*path"`; wildcard phải là segment cuối      |
+| Higher-order route wrapper       | `app.use(context, handler)` cho global concern |
+
+## Hành vi WebSocket [#websocket-behavior]
+
+| uWebSockets                                                                       | µWebZockets                                                                                        |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `.upgrade`, `.open`, `.message`, `.drain`, `.close`                               | Cùng field `.upgrade`, `.open`, `.message`, `.drain`, `.close`                                     |
+| `.ping`, `.pong` handler                                                          | Heartbeat cấu hình bằng `ping_interval_ms` và `pong_timeout_ms`                                    |
+| `.maxPayloadLength`, `.idleTimeout`                                               | `.max_message_size`, `.max_frame_size` và application idle timeout                                 |
+| `.compression` với `DISABLED` hoặc `SHARED_COMPRESSOR` / `DEDICATED_COMPRESSOR_*` | `.compression = .disabled` hoặc `.permessage_deflate`                                              |
+| `ws->send` trả `BACKPRESSURE`, `SUCCESS` hoặc `DROPPED`                           | `ws.send` trả error union; `error.WouldBlock` là backpressure                                      |
+| `getBufferedAmount`                                                               | `ws.buffered_amount()`                                                                             |
+| `PerSocketData` trên socket                                                       | Không có per-socket user-data slot; giữ state trong context rõ ràng hoặc application-owned storage |
+
+µWebZockets negotiate per-message deflate với `server_no_context_takeover` và
+`client_no_context_takeover`. Nó không expose các tier compressor của
+uWebSockets. Bật compression sẽ reserve scratch theo cặp cho mỗi connection; đặt
+`ServerConfig.compression = true` để đưa scratch đó vào startup slab. Xem
+[Compression](/docs/websocket/compression).
+
+Service uWebSockets lưu session state trong `PerSocketData` phải chuyển state đó
+sang chỗ khác. µWebZockets không expose per-socket slot và không có handoff từ
+upgrade callback sang `open`. Giữ state trong một application table cố định và
+key bằng token mà client gửi trong từng message, hoặc dùng topic subscription cho
+shared room state.
+
+## Pub/sub [#pubsub]
+
+`ws.subscribe(topic)`, `ws.unsubscribe(topic)` và
+`ws.publish(topic, message, is_text)` giữ nguyên tên. Kiểu trả về khác:
+`publish` của µWebZockets trả số subscriber được chạm tới, còn uWebSockets trả
+boolean. Publish không allocate và chỉ hoạt động trong application loop hiện tại.
+
+Pub/sub của uWebSockets chỉ trong phạm vi một `App`. µWebZockets thêm
+`Cluster.publish`, broadcast qua bounded ring của từng worker, và
+`Cluster.publish_report`, báo cáo queued, dropped và wakeup thất bại. Giao đến mọi
+worker không chứng minh rằng application subscriber đã consume message. Xem
+[Pub/sub](/docs/websocket/pub-sub) và
+[Cluster model](/docs/concepts/cluster-model).
+
+## Compression, TLS và deployment [#compression-tls-and-deployment]
+
+| Khu vực               | uWebSockets                               | µWebZockets                                                     |
+| --------------------- | ----------------------------------------- | --------------------------------------------------------------- |
+| WebSocket compression | Compressor tier                           | Per-message deflate không context takeover                      |
+| TLS setup             | `uWS::SSLApp` với certificate và key file | `init_https` hoặc `init_https_ephemeral`, sau đó `listen`       |
+| TLS version           | Phụ thuộc stack được link                 | Chỉ TLS 1.3, ALPN `h2` rồi `http/1.1`                           |
+| Cluster TLS           | Application tự quản lý                    | Một `SSL_CTX` cho mỗi worker; credential đọc trước listen       |
+| Shutdown              | Xử lý process quanh `run`                 | `catch_shutdown_signals`, hoặc `Cluster.catch_shutdown_signals` |
+| Build output          | Binary C++ link với TLS stack đã chọn     | Binary Zig với BoringSSL và lsquic build qua dependency         |
+
+Rotate certificate cần restart vì mỗi worker đọc credential trước khi listener
+khởi động. Client chỉ hỗ trợ TLS 1.2 sẽ fail handshake với µWebZockets; kiểm tra
+client stack trước khi chuyển. Platform support cũng khác. Xem
+[Compatibility](/reference/compatibility) trước khi cam kết deployment Windows
+hoặc BSD. Không mang nguyên platform matrix của uWebSockets sang bản port.
+
+## Checklist port [#port-checklist]
+
+| Bước | Hành động                                          | Bằng chứng                        |
+| ---- | -------------------------------------------------- | --------------------------------- |
+| 1    | Thay `uWS::App` bằng `uz.App(N)` và chọn `N`       | Slab sizing trong `main`          |
+| 2    | Viết lại từng lambda thành hàm `(req, res)` có tên | Route table trong `main`          |
+| 3    | Chuyển dữ liệu request cần giữ vào owned storage   | `req.clone` hoặc bounded copy     |
+| 4    | Thay capture `res` bằng `route_async` token        | Test async token completion       |
+| 5    | Map route pattern và tên parameter                 | Cùng path, tên trong `get_param`  |
+| 6    | Chuyển `PerSocketData` sang application state      | Không lookup bằng socket pointer  |
+| 7    | Chỉ chọn `.permessage_deflate` nơi client được lợi | Test compression                  |
+| 8    | Thay thread scaling bằng `build_cluster`           | Bốn worker, một port              |
+| 9    | Chạy bộ client cũ với cả hai server                | `curl`, `wscat` hoặc service test |
+| 10   | Thêm signal watcher và drain trước rollout         | Shutdown log                      |
+
+## Kiểm tra bản port [#verify-the-port]
+
+```sh
+curl -s http://127.0.0.1:3000/users/42
+```
+
+```console
+user 42
+```
+
+```sh
+wscat -c ws://127.0.0.1:3000/chat
+```
+
+Gửi một message và xác nhận mọi client khác trong `room` đều nhận được. Sau đó
+gửi `SIGTERM` và kiểm tra `run` trả về sau khi drain.
+
+## Tiếp theo [#next]
+
+- [Async responses](/docs/concepts/async-responses) giải thích token completion
+  và marshalling giữa các thread.
+- [Ownership and lifetimes](/docs/concepts/ownership-and-lifetimes) liệt kê mọi
+  giá trị borrowed.
+- [Cluster](/docs/guides/cluster) bao phủ worker count, TLS và failure report.
+- [Breaking changes](/docs/migration/breaking-changes) ghi lại version contract
+  mà bạn đang port sang.
+- [CHANGELOG](https://github.com/farbenbuilds/uWebZockets/blob/main/CHANGELOG.md)
+  liệt kê release chứa từng public API.

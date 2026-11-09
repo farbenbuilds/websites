@@ -1,0 +1,159 @@
+---
+title: Examples
+description: Start with a guided tutorial or read the canonical program for each µWebZockets capability, with build wiring, run commands, and expected output.
+search:
+  tags: [tutorial, reference, http1, websocket, json-rpc, tls, cluster, http3]
+---
+
+This section has two tracks. The guided tutorials build one capability at a time
+from the project created in [Quickstart](/docs/getting-started/quickstart). The
+canonical programs show the exact source in the framework `examples/` directory,
+with the capacities it chooses and a variation worth trying. Both tracks use the
+same consumer project and run with `zig build run`.
+
+## Choose a track [#choose-a-track]
+
+<CardGroup cols={2}>
+  <Card title="Guided tutorials" href="#guided-tutorials" icon="route">
+    Learn the request path, upgrade handshake, RPC mount, TLS context, worker group, and QUIC
+    listener step by step.
+  </Card>
+  <Card title="Canonical programs" href="#canonical-programs" icon="file-code">
+    Read the exact shipped program, its build wiring, expected output, and capacity choices.
+  </Card>
+</CardGroup>
+
+## Guided tutorials [#guided-tutorials]
+
+<CardGroup cols={2}>
+  <Card title="Your first HTTP server" href="/examples/first-http-server" icon="server">
+    Register routes, read a capture, and verify the listener with `curl`.
+  </Card>
+  <Card title="Your first WebSocket" href="/examples/first-websocket" icon="messages-square">
+    Add an echo route with open, message, and close callbacks.
+  </Card>
+  <Card title="Your first JSON-RPC service" href="/examples/first-json-rpc-service" icon="braces">
+    Mount a typed `math.add` procedure and call it with `curl`.
+  </Card>
+  <Card title="Your first TLS server" href="/examples/first-tls-server" icon="lock">
+    Generate a local certificate in memory, then switch to PEM files.
+  </Card>
+  <Card title="Your first cluster" href="/examples/first-cluster" icon="cpu">
+    Run one worker per core with a shared port and per-worker slabs.
+  </Card>
+  <Card title="Your first HTTP/3 server" href="/examples/first-http3-server" icon="zap">
+    Serve the same handler over QUIC on UDP port 8443.
+  </Card>
+</CardGroup>
+
+### Before you start [#before-you-start]
+
+Complete [Installation](/docs/getting-started/installation) and
+[Quickstart](/docs/getting-started/quickstart) first. The examples assume:
+
+- Zig 0.16.0 is installed from [ziglang.org/download](https://ziglang.org/download/).
+- Your project already depends on `uWebZockets` version 2.1.6.
+- `src/main.zig` contains the program you want to run.
+- `zig build run` starts the project.
+
+## Canonical programs [#canonical-programs]
+
+Each page documents one program from the framework `examples/` directory. It
+gives the complete source, the consumer `build.zig` wiring, the run command, the
+expected output, the capacities the example chooses, and one variation.
+
+| Example                                                    | Shows                                            | Protocol                | Default port |
+| ---------------------------------------------------------- | ------------------------------------------------ | ----------------------- | -----------: |
+| [Hello world](/examples/hello-world)                       | `App(128)`, one route, one response              | HTTP/1.1                |         3000 |
+| [HTTPS server](/examples/https-server)                     | In-memory TLS certificate and ALPN               | HTTPS, HTTP/1.1, HTTP/2 |         3443 |
+| [Shared-nothing cluster](/examples/shared-nothing-cluster) | Four workers, one slab and loop each             | HTTP/1.1                |         3000 |
+| [TLS cluster](/examples/tls-cluster)                       | Per-worker TLS contexts and runtime worker count | HTTPS, HTTP/1.1, HTTP/2 |         8443 |
+| [Basic microservice](/examples/basic-microservice)         | `Presets.microservice`, JSON, query parsing      | HTTP/1.1                |         3000 |
+| [Custom builder](/examples/custom-builder)                 | Fluent capacities and `slab_bytes()`             | HTTP/1.1                |         3001 |
+| [Chat server](/examples/chat-server)                       | WebSocket open, message, close, and pub/sub      | WebSocket               |         3000 |
+| [RPC server](/examples/rpc-server)                         | Typed JSON-RPC procedure                         | JSON-RPC                |         3000 |
+| [HTTP/3 server](/examples/http3-server)                    | QUIC listener and in-memory TLS                  | HTTP/3                  |     8443 UDP |
+| [Delayed response](/examples/delay-server)                 | Async token and timing wheel                     | HTTP/1.1                |         3000 |
+
+## Run an example in your project [#run-an-example-in-your-project]
+
+<Steps>
+  <Step title="Add the dependency">
+    ```sh
+    zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+    ```
+  </Step>
+  <Step title="Wire the module">
+    ```zig build.zig
+    const std = @import("std");
+
+    pub fn build(b: *std.Build) void {
+        const target = b.standardTargetOptions(.{});
+        const optimize = b.standardOptimizeOption(.{});
+        const uz = b.dependency("uWebZockets", .{
+            .target = target,
+            .optimize = optimize,
+        });
+
+        const exe = b.addExecutable(.{
+            .name = "example",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        exe.root_module.addImport("uWebZockets", uz.module("uWebZockets"));
+        b.installArtifact(exe);
+
+        const run = b.addRunArtifact(exe);
+        b.step("run", "Run the example").dependOn(&run.step);
+    }
+    ```
+
+  </Step>
+  <Step title="Copy the program">
+    Copy the page source into `src/main.zig`. The full source link on each
+    canonical page points at the framework file the page mirrors.
+  </Step>
+  <Step title="Build and run">
+    ```sh
+    zig build run
+    ```
+  </Step>
+  <Step title="Verify">
+    Use the `curl` or `wscat` command on the example page. The TLS cluster and
+    HTTP/3 examples install the signal watcher and drain on Ctrl+C; the other
+    examples terminate immediately.
+  </Step>
+</Steps>
+
+## Upstream build steps [#upstream-build-steps]
+
+The framework repository also exposes each canonical program as a named build
+step, such as `zig build hello_world` or `zig build tls_cluster`. Those commands
+run inside a framework checkout and are contributor shortcuts; they are not the
+consumer path. In your project, use `zig build run` after copying the source.
+
+## Capacities chosen by the examples [#capacities-chosen-by-the-examples]
+
+| Example                |    Connections | Write queue |   Body | Message | Why                              |
+| ---------------------- | -------------: | ----------: | -----: | ------: | -------------------------------- |
+| Hello world            |            128 |      64 KiB | 16 KiB |  16 KiB | Small default footprint          |
+| HTTPS server           |            128 |      64 KiB | 16 KiB |  16 KiB | Same shape, TLS only             |
+| Shared-nothing cluster | 128 per worker |      32 KiB | 16 KiB |  16 KiB | Four small workers               |
+| TLS cluster            |   128 to 2,048 |      64 KiB | 16 KiB |  16 KiB | Benchmark controls               |
+| Basic microservice     |            256 |      16 KiB | 64 KiB |   8 KiB | JSON request/response            |
+| Custom builder         |              4 |     256 KiB | 50 MiB |  16 KiB | Large uploads, few peers         |
+| Chat server            |            128 |      64 KiB | 16 KiB |  16 KiB | Default WebSocket path           |
+| RPC server             |            128 |      64 KiB | 16 KiB |  16 KiB | Small typed payloads             |
+| HTTP/3 server          |            128 |      64 KiB | 16 KiB |  16 KiB | QUIC request/response            |
+| Delayed response       |            128 |      64 KiB | 16 KiB |  16 KiB | Parked responses use timer slots |
+
+## Related
+
+- [Quickstart](/docs/getting-started/quickstart) creates the project these
+  examples extend.
+- [Capacity model](/docs/concepts/capacity-model) explains how these values
+  become one startup slab.
+- [ServerConfig](/reference/server-config) lists every field and default.

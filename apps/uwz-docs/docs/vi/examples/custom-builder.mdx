@@ -1,0 +1,214 @@
+---
+title: Custom builder
+description: Cấu hình server với capacity tường minh, đọc kích thước slab trước khi allocate và nhận upload 50 MiB với 413 có cấu trúc khi vượt giới hạn.
+sidebar:
+  order: 12
+search:
+  tags: [reference, tutorial, http1, capacity]
+---
+
+Ví dụ này dựng server với capacity tường minh thay vì preset. Nó cho phép bốn
+connection đồng thời, reserve request body 50 MiB cho mỗi connection, đặt write
+queue 256 KiB và idle timeout 60 s, rồi in slab đã tính trước khi allocate.
+Chương trình là `examples/custom_builder.zig` trong framework repository.
+
+## Source [#source]
+
+```zig src/main.zig
+//! Custom builder: fluent overrides with automatic slab math.
+//!
+//! Build and run:
+//!   zig build custom_builder -Doptimize=ReleaseSafe
+//!   curl -s -X POST http://127.0.0.1:3001/upload --data-binary @large.json
+//!
+//! The body limit below reserves a 50 MiB request buffer per connection, so
+//! only a few connections fit comfortably; the builder reports the exact slab
+//! before allocating it once. A request that exceeds the configured limit is
+//! answered with a structured 413 that names the limit and the knob to raise.
+
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn upload(req: *uz.Request, res: *uz.Response) void {
+    var scratch: [128]u8 = undefined;
+    res.json_buf(.{ .received_bytes = req.bytes().len }, &scratch) catch {};
+}
+
+pub fn main(init: std.process.Init) !void {
+    const builder = uz.Server.builder(init.io)
+        .with_max_clients(4)
+        .with_max_body_size(50 * 1024 * 1024)
+        .with_write_queue_size(256 * 1024)
+        .with_idle_timeout_ms(60_000);
+
+    std.debug.print(
+        "custom_builder: one startup slab of {d} MiB\n",
+        .{(try builder.slab_bytes()) / (1024 * 1024)},
+    );
+
+    var server = try builder.build(std.heap.page_allocator);
+    defer server.deinit();
+
+    _ = try server.post("/upload", upload);
+
+    try server.listen("0.0.0.0", 3001);
+    try server.run();
+}
+```
+
+[Full source](https://github.com/farbenbuilds/uWebZockets/blob/v2.1.6/examples/custom_builder.zig)
+
+Mỗi lệnh `with_*` trả một builder type mới với giá trị cố định lúc compile
+time. `slab_bytes()` chạy cùng checked layout như `build`, nên kích thước in ra
+khớp với allocation tiếp theo.
+
+## Build wiring [#build-wiring]
+
+Sao chép chương trình vào `src/main.zig` của project import package. Dependency
+fetch và module `build.zig` dùng chung cho mọi example:
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+Làm theo [Run an example in your project](/examples#run-an-example-in-your-project)
+để lấy block `build.zig` và bước `run`. Build thêm module import `uWebZockets`
+và không cần framework checkout.
+
+Dòng `zig build custom_builder` trong module header là bước trong framework
+checkout. Lệnh đó là contributor shortcut, không phải application path.
+
+## Run [#run]
+
+```sh
+zig build run
+```
+
+```console
+custom_builder: one startup slab of 204 MiB
+```
+
+Dòng này báo 204 MiB trên build Linux x86_64 tham chiếu. Giá trị phụ thuộc
+target và capacity chính xác, nên đọc dòng mà build của bạn in ra. Phép chia
+cắt phần lẻ MiB.
+
+Process bind `0.0.0.0:3001` và block trong `server.run()`. Chương trình không
+gọi `catch_shutdown_signals`, nên Ctrl+C kết thúc process mà không qua graceful
+drain path.
+
+## Verify [#verify]
+
+Gửi một body nhỏ:
+
+```sh
+printf '{"hello":"world"}' > small.json
+curl -s -X POST http://127.0.0.1:3001/upload --data-binary @small.json
+```
+
+```console
+{"received_bytes":17}
+```
+
+Handler đọc độ dài body đang borrow và không copy hay parse các byte. Response
+là 200 kèm số byte đã nhận.
+
+Gửi body vượt giới hạn một byte:
+
+```sh
+head -c 52428801 /dev/zero > large.bin
+curl -s -o response.json -w '%{http_code}\n' \
+  -X POST http://127.0.0.1:3001/upload --data-binary @large.bin
+cat response.json
+```
+
+```console
+413
+{"error":{"code":"payload_too_large","message":"Request body exceeded the 50MB limit. Consider increasing 'max_body_size' in ServerConfig.","limit_bytes":52428800}}
+```
+
+50 MiB là 52.428.800 byte. Document từ chối được transport ghi, không phải
+`upload`, và nó nêu cả giới hạn đã cấu hình lẫn field `max_body_size` để tăng.
+Giá trị dùng binary unit với nhãn `MB`.
+
+## Slab math [#slab-math]
+
+Startup slab 204 MiB bị chi phối bởi các request buffer:
+
+| Region                                         |            Approximate contribution |
+| ---------------------------------------------- | ----------------------------------: |
+| Bốn HTTP/1.1 request buffer, mỗi buffer 50 MiB |                             200 MiB |
+| Bốn write queue 256 KiB                        |                               1 MiB |
+| Bốn HTTP/2 session nhúng                       | Phụ thuộc target, khoảng 3 MiB tổng |
+| Bốn WebSocket message buffer 16 KiB            |                              64 KiB |
+| Router storage                                 |               Mảng cố định mặc định |
+
+Request buffer là phần dự trữ cho mỗi connection, không phải allocation cho mỗi
+request. Vùng body 50 MiB tồn tại trước upload đầu tiên, và các byte body rơi
+vào vùng đã dự trữ đó. `req.bytes()` borrow vùng này cho callback. Sau khi
+callback trả về, buffer được dùng lại cho request tiếp theo trên connection.
+
+Connection count và body limit đánh đổi lẫn nhau. Bốn connection có thể giữ bốn
+request 50 MiB cùng lúc, và connection đồng thời thứ năm bị từ chối. Chỉ tăng
+một trong hai giá trị sau khi kiểm tra slab mới.
+
+## Key APIs [#key-apis]
+
+| Call                                     | Effect                                                  |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `uz.Server.builder(init.io)`             | Bắt đầu từ capacity mặc định                            |
+| `.with_max_clients(4)`                   | Cố định bốn connection slot lúc compile time            |
+| `.with_max_body_size(50 * 1024 * 1024)`  | Reserve request buffer 50 MiB cho mỗi connection        |
+| `.with_write_queue_size(256 * 1024)`     | Đặt pending-output queue 256 KiB cho mỗi connection     |
+| `.with_idle_timeout_ms(60_000)`          | Đóng keep-alive connection đã drain sau 60 s            |
+| `builder.slab_bytes()`                   | Chạy checked layout và trả kích thước startup chính xác |
+| `builder.build(std.heap.page_allocator)` | Thực hiện allocation slab duy nhất                      |
+| `server.post("/upload", upload)`         | Đăng ký upload route trước khi listener start           |
+| `req.bytes().len`                        | Đọc độ dài body đang borrow mà không copy               |
+| `res.json_buf(...)`                      | Format số byte vào 128 byte stack scratch               |
+| `server.listen` / `server.run()`         | Bind port 3001 và chạy event loop                       |
+
+## Capacities [#capacities]
+
+| Capacity          |                  Value | Set by                                  | Consequence                                     |
+| ----------------- | ---------------------: | --------------------------------------- | ----------------------------------------------- |
+| Connections       |                      4 | `.with_max_clients(4)`                  | Connection đồng thời thứ năm bị từ chối         |
+| Request body      |                 50 MiB | `.with_max_body_size(50 * 1024 * 1024)` | Body lớn hơn nhận `413`                         |
+| Write queue       |                256 KiB | `.with_write_queue_size(256 * 1024)`    | Queue đầy trả `error.WouldBlock`                |
+| Idle timeout      |                   60 s | `.with_idle_timeout_ms(60_000)`         | Keep-alive connection đã drain sẽ đóng          |
+| WebSocket message |                 16 KiB | Default                                 | Message lớn hơn bị từ chối trên route WebSocket |
+| Request line      |                  8 KiB | Default                                 | Request line lớn hơn nhận `431`                 |
+| Headers           |      16 KiB, 64 fields | Default                                 | Header block lớn hơn nhận `431`                 |
+| Router            | 256 nodes, 64 patterns | Default                                 | Route table lớn hơn không đăng ký được          |
+
+Ví dụ đổi connection count lấy body size. Việc dự trữ 50 MiB cho mỗi connection
+hữu ích với vài upload peer tin cậy và lãng phí với nhiều JSON client nhỏ. Write
+queue 256 KiB lớn hơn nhu cầu của handler này; nó để sẵn chỗ cho response lớn
+hơn mà không phải đổi kích thước server sau.
+
+## Variation [#variation]
+
+Đổi body size lấy thêm peer:
+
+```zig
+const builder = uz.Server.builder(init.io)
+    .with_max_clients(16)
+    .with_max_body_size(8 * 1024 * 1024)
+    .with_write_queue_size(256 * 1024)
+    .with_idle_timeout_ms(60_000);
+```
+
+Mười sáu request buffer 8 MiB tổng cộng 128 MiB trước các vùng HTTP/2, queue và
+router, nên slab in ra nhỏ hơn baseline 204 MiB. Đừng giả định quan hệ tuyến
+tính: mỗi connection còn mang một HTTP/2 session, một write queue và message
+storage. Gọi `slab_bytes()` để lấy kết quả chính xác.
+
+## Next [#next]
+
+- [Basic microservice](/examples/basic-microservice) dùng preset cho nhiều
+  request JSON nhỏ thay vì body limit tùy chỉnh.
+- [Uploads](/docs/guides/uploads) trình bày streaming upload mà không buffer
+  toàn bộ body.
+- [HTTP limits](/docs/http/limits) liệt kê các rejection cho request, header và
+  body trong ngữ cảnh.
+- [Capacity model](/docs/concepts/capacity-model) giải thích một `ServerConfig`
+  trở thành slab như thế nào.

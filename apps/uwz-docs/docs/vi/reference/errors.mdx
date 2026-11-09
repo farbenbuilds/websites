@@ -1,0 +1,283 @@
+---
+title: Errors
+description: Tra cứu mọi error name của µWebZockets theo subsystem, kèm nguyên nhân, HTTP consequence, cách xử lý và source module sở hữu.
+sidebar:
+  order: 4
+search:
+  tags: [reference, troubleshooting]
+---
+
+Dùng trang này để xác định một lỗi Zig, JSON-RPC fault, WebSocket rejection hoặc
+C ABI code. [Errors and failure modes](/docs/concepts/errors) giải thích hai kênh
+báo lỗi; [HTTP errors](/docs/http/errors) trình bày response document. Các bảng
+dưới đây là nơi tra cứu tên lỗi và nguyên nhân.
+
+## How to read an error [#how-to-read-an-error]
+
+Lỗi Zig là một giá trị trong error union. Nó mang một tên ổn định, không phải
+message đã format, và `@errorName` trả về tên đó. Lỗi startup và registration
+xảy ra trước khi có request, nên không có HTTP status. Lỗi lúc request sẽ trở
+thành response status, WebSocket close code hoặc transport abort do đoạn code
+bắt lỗi quyết định.
+
+```zig
+const std = @import("std");
+const uz = @import("uWebZockets");
+
+fn hello(_: *uz.Request, res: *uz.Response) void {
+    res.text("ok") catch |err| {
+        std.debug.print("response: {s}\n", .{@errorName(err)});
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var app = try uz.App(128).init(init.io);
+    defer app.deinit();
+
+    _ = app.get("/", hello) catch |err| {
+        std.debug.print("route registration: {s}\n", .{@errorName(err)});
+        return err;
+    };
+    try app.listen("0.0.0.0", 3000);
+    try app.run();
+}
+```
+
+| Form                         | Meaning                                    |
+| ---------------------------- | ------------------------------------------ |
+| `error.RouteCapacityReached` | Error tag Zig mà một call trả về           |
+| `@errorName(err)`            | Tag dưới dạng string, dùng cho log và test |
+| `uwz_error_name(code)`       | Tên C ABI tĩnh, gồm cả `unknown error`     |
+| `4xx` hoặc `5xx`             | Status dành cho peer, không phải error tag |
+
+Dùng `switch` để so khớp giá trị lỗi; không parse log line hay status string để
+lấy lại tên. Một lỗi terminal cần đổi cấu hình hoặc code, không phải vòng retry.
+
+## ServerConfig validation [#serverconfig-validation]
+
+`ServerConfig.validate` trả về tập này trước khi slab được cấp phát. Mọi lỗi đều
+là lỗi startup. [ServerConfig](/reference/server-config) liệt kê field và default.
+
+| Zig error name                          | Cause                                                                                                                                                                                                               | HTTP status                               | Fix                                                                     | Source module                                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
+| `error.InvalidConnectionCapacity`       | `max_connections` là `0`                                                                                                                                                                                            | Không có, lúc khởi động                   | Đặt ít nhất một connection slot                                         | `src/router/config.zig`                       |
+| `error.InvalidWebSocketMessageCapacity` | `max_ws_message_size` là `0`                                                                                                                                                                                        | Không có, lúc khởi động                   | Đặt WebSocket message bound khác `0`                                    | `src/router/config.zig`                       |
+| `error.InvalidWriteQueueCapacity`       | `write_queue_size` là `0`                                                                                                                                                                                           | Không có, lúc khởi động                   | Dành ít nhất một byte write cho mỗi connection                          | `src/router/config.zig`                       |
+| `error.InvalidBodyCapacity`             | `max_body_size` là `0`                                                                                                                                                                                              | Không có, lúc khởi động                   | Đặt body limit khác `0`                                                 | `src/router/config.zig`                       |
+| `error.InvalidRequestLineCapacity`      | `max_request_line_size` là `0`                                                                                                                                                                                      | Không có, lúc khởi động                   | Đặt request-line limit khác `0`                                         | `src/router/config.zig`                       |
+| `error.InvalidHeaderCapacity`           | `max_header_size` là `0`, hoặc `max_header_count` thấp hơn `64` field inline                                                                                                                                        | Không có, lúc khởi động                   | Tăng giới hạn byte và field của header                                  | `src/router/config.zig`                       |
+| `error.InvalidHttp2Capacity`            | HTTP/2 session planner từ chối tổ hợp shared header, body, response-header size hoặc count, hay dynamic table                                                                                                       | Không có, lúc khởi động                   | Giảm capacity H2 hoặc tăng slab plan                                    | `src/router/config.zig`                       |
+| `error.InvalidHttp3Capacity`            | H3 body, response-header size hoặc field count là `0`; count vượt `4096`; response size vượt `65535`; shared header vượt `u32`, hoặc vượt `65535` khi `listen_udp` bật H3; body cộng header tràn; engine bytes tràn | Không có, lúc khởi động hoặc `listen_udp` | Đưa từng giá trị H3 vào giới hạn                                        | `src/router/config.zig`, `src/router/app.zig` |
+| `error.InvalidRouterCapacity`           | `max_route_params` thấp hơn `16` inline, hoặc router node, pattern, path hay registry không biểu diễn được trong `u16` hoặc `u32`                                                                                   | Không có, lúc khởi động                   | Tăng route params lên ít nhất `16` và giữ giá trị router trong giới hạn | `src/router/config.zig`                       |
+| `error.InvalidIdleTimeout`              | `idle_timeout_ms` vượt `maxInt(i64)`                                                                                                                                                                                | Không có, lúc khởi động                   | Dùng timeout nhỏ hơn, hoặc `0` để tắt                                   | `src/router/config.zig`                       |
+| `error.InvalidHeaderReadTimeout`        | `header_read_timeout_ms` vượt `maxInt(i64)`                                                                                                                                                                         | Không có, lúc khởi động                   | Dùng timeout nhỏ hơn, hoặc `0` để tắt                                   | `src/router/config.zig`                       |
+| `error.InvalidDatagramCapacity`         | `max_datagram_size` và `datagram_slots` không cùng bằng `0` hoặc cùng khác `0`, hoặc một giá trị vượt `u32`                                                                                                         | Không có, lúc khởi động                   | Đặt cả hai bằng `0`, hoặc cả hai khác `0` trong `u32`                   | `src/router/config.zig`                       |
+| `error.InvalidTransportConfiguration`   | Frame size của `.kernel_bypass` không phải power of two hoặc ngoài `1024..65536`; frame count không phải power of two hoặc vượt `4096`                                                                              | Không có, lúc khởi động                   | Sửa frame size và count của AF_XDP                                      | `src/router/config.zig`                       |
+| `error.InvalidMetricsPath`              | `observability` bật và `metrics_path` rỗng hoặc không bắt đầu bằng `/`                                                                                                                                              | Không có, lúc khởi động                   | Dùng path tuyệt đối như `/metrics`                                      | `src/router/config.zig`                       |
+| `error.InvalidWatchConfiguration`       | `watch_paths` có hơn tám root, path rỗng, hoặc path từ `4096` byte trở lên                                                                                                                                          | Không có, lúc khởi động                   | Watch tối đa tám root ngắn hơn                                          | `src/router/config.zig`                       |
+| `error.WatchRequiresDevLog`             | `watch_paths` khác rỗng trong khi `enable_dev_log` là `false`                                                                                                                                                       | Không có, lúc khởi động                   | Bật development log hoặc xóa watch list                                 | `src/router/config.zig`                       |
+| `error.MisalignedSlab`                  | Slab do caller cấp không đạt `required_alignment`                                                                                                                                                                   | Không có, lúc khởi động                   | Cấp phát qua builder, hoặc page-align slab cho `.kernel_bypass`         | `src/router/config.zig`                       |
+| `error.SlabSizeOverflow`                | Phép tính slab layout có kiểm tra bị tràn `usize`                                                                                                                                                                   | Không có, lúc khởi động                   | Giảm các capacity nhân vào slab                                         | `src/router/config.zig`                       |
+| `error.SlabTooSmall`                    | Slab do caller cấp ngắn hơn `slab_bytes()`                                                                                                                                                                          | Không có, lúc khởi động                   | Cấp phát `slab_bytes()` hoặc để builder cấp phát                        | `src/router/config.zig`                       |
+
+## Route registration [#route-registration]
+
+Các lỗi này xảy ra khi đăng ký route, middleware, WebSocket handler hoặc static
+mount. Capacity mặc định là `256` node, `64` pattern route, `32` middleware
+callback, `2 KiB` mỗi path và `64 KiB` cho route registry.
+
+| Zig error name                        | Cause                                                                                                                                                                                          | HTTP status            | Fix                                                                                             | Source module                                        |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `error.InvalidRoutePath`              | Rỗng, không bắt đầu bằng `/`, dài hơn `max_route_path_size`, hoặc chứa `?`, `#`, CR hay LF. Static mount prefix cũng từ chối `:` và `*`                                                        | Không có, registration | Dùng literal path bắt đầu bằng `/`, không có query, fragment hoặc control byte                  | `src/router/radix_pattern.zig`, `src/router/app.zig` |
+| `error.InvalidRoutePattern`           | Tên capture rỗng hoặc ngoài `[A-Za-z0-9_-]`, wildcard không phải segment cuối, hoặc hai capture trùng tên                                                                                      | Không có, registration | Đặt tên mỗi capture một lần và chỉ kết thúc bằng `*` ở cuối path                                | `src/router/radix_pattern.zig`                       |
+| `error.RouteCapacityReached`          | Không còn radix node, pattern slot hoặc route record                                                                                                                                           | Không có, registration | Đơn giản hóa shared prefix, hoặc tăng `max_route_nodes` và `max_pattern_routes`                 | `src/router/radix.zig`                               |
+| `error.RouteStorageCapacityReached`   | Route path được giữ vượt `max_route_registry_size`, mặc định `64 KiB`                                                                                                                          | Không có, registration | Tăng `max_route_registry_size`, hoặc rút ngắn path                                              | `src/router/radix.zig`                               |
+| `error.RouteParameterCapacityReached` | Pattern cần nhiều capture hơn `max_route_params`, mặc định `16`                                                                                                                                | Không có, registration | Tăng `max_route_params`, hoặc làm phẳng pattern                                                 | `src/router/radix_pattern.zig`                       |
+| `error.RoutePatternConflicts`         | Hai pattern cùng shape nhưng khác tên capture, ví dụ `/users/:id` và `/users/:name`                                                                                                            | Không có, registration | Giữ một cách đặt tên capture cho một route shape                                                | `src/router/radix.zig`                               |
+| `error.RouteAlreadyRegistered`        | Cùng method và path được đăng ký hai lần                                                                                                                                                       | Không có, registration | Xóa route trùng, hoặc đăng ký method khác                                                       | `src/router/radix.zig`                               |
+| `error.MiddlewareCapacityReached`     | Hơn `max_middleware`, mặc định `32`, callback được đăng ký                                                                                                                                     | Không có, registration | Tăng `max_middleware`, hoặc gộp middleware                                                      | `src/router/radix.zig`                               |
+| `error.StaticRouteCapacityReached`    | Hơn tám static mount `app.static`                                                                                                                                                              | Không có, registration | Serve nhiều tree từ một mount, hoặc giữ tối đa tám mount                                        | `src/router/app.zig`                                 |
+| `error.RoutesLocked`                  | Đăng ký route hoặc middleware sau khi `listen`, `listen_all` hay `listen_udp` thành công                                                                                                       | Không có, registration | Đăng ký mọi route trước lần gọi listener đầu tiên                                               | `src/router/app.zig`                                 |
+| `error.InvalidWebSocketLimits`        | Frame hoặc message bound bằng `0`, frame size vượt message size, một heartbeat timeout được đặt mà thiếu cái còn lại, timeout vượt `i64`, hoặc message bound vượt WebSocket buffer đã cấu hình | Không có, registration | Đặt frame và message bound khác `0`, giữ frame không vượt message, và đặt cặp heartbeat timeout | `src/router/app.zig`                                 |
+
+`app.datagram` và `app.datagram_context` dùng bảng 16 path riêng trong
+`src/router/datagram.zig`. Chúng dùng lại tên `error.RouteCapacityReached` và
+`error.RouteAlreadyRegistered`, và trả `error.InvalidPath` khi path không bắt
+đầu bằng `/`.
+
+## Lifecycle [#lifecycle]
+
+| Zig error name                        | Cause                                                                                                           | HTTP status                       | Fix                                                                                       | Source module        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- | -------------------- |
+| `error.ApplicationAlreadyRunning`     | `run` được gọi khi cùng application đang chạy                                                                   | Không có, trạng thái chương trình | Gọi `run` một lần cho mỗi application                                                     | `src/router/app.zig` |
+| `error.AlreadyListening`              | `listen`, `listen_all` hoặc `listen_udp` lần thứ hai sau khi listener đã bind                                   | Không có, trạng thái chương trình | Bind một lần, hoặc truyền mọi endpoint vào `listen_all`                                   | `src/router/app.zig` |
+| `error.ShutdownIncomplete`            | Shutdown trả về khi connection, completion, timer, watch root, listener hoặc QUIC transport vẫn đang drain      | Không có, trạng thái chương trình | Để completion hoàn tất và không block event loop; run đang active sẽ drain transport      | `src/router/app.zig` |
+| `error.ApplicationUnavailable`        | `run`, `listen`, registration hoặc `catch_shutdown_signals` được gọi sau khi shutdown bắt đầu hoặc sau `deinit` | Không có, trạng thái chương trình | Hoàn tất registration và listener setup trước `run`; không dùng lại application đã deinit | `src/router/app.zig` |
+| `error.ApplicationDeinitialized`      | `shutdown` được gọi sau `deinit`                                                                                | Không có, trạng thái chương trình | Gọi shutdown trước `deinit`; `deinit` là terminal                                         | `src/router/app.zig` |
+| `error.SignalWatcherAlreadyInstalled` | Đã có process-wide shutdown watcher                                                                             | Không có, trạng thái chương trình | Cài một watcher, hoặc dùng cluster watcher cho worker group                               | `src/router/app.zig` |
+
+## Response and async completion [#response-and-async]
+
+| Zig error name                        | Cause                                                                                                             | HTTP status                             | Fix                                                                                                | Source module                             |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `error.ResponseAlreadyStarted`        | `end`, `end_with_headers`, `begin_chunked`, `end_gzip` hoặc JSON helper chạy sau khi response rời trạng thái idle | Không có; response đã commit            | Gửi đúng một response, và kiểm tra `is_started()` trước fallback                                   | `src/http/response.zig`                   |
+| `error.ResponseNotStreaming`          | `write_chunk` hoặc `end_chunks` chạy trước `begin_chunked`                                                        | Không có; chưa mở chunked response      | Bắt đầu streaming response trước                                                                   | `src/http/response.zig`                   |
+| `error.WouldBlock`                    | Write queue hoặc socket send window đã đầy                                                                        | Không có; write không thể xếp vào queue | Tăng `write_queue_size`, stream với backpressure, hoặc tiếp tục sau callback `drain` của WebSocket | `src/core/tcp.zig`, `src/quic/stream.zig` |
+| `error.AsyncResponseExpired`          | Generation của token không còn khớp vì peer đã rời hoặc slot được tái sử dụng                                     | Không có; peer có thể đã mất            | Bỏ công việc; không retry token cũ                                                                 | `src/http/response.zig`                   |
+| `error.AsyncResponseAlreadyCompleted` | Cùng async token được complete hai lần                                                                            | Không có; response đã complete          | Hoàn tất đúng một lần và chỉ copy token trước khi trả pending                                      | `src/http/response.zig`                   |
+
+## Cluster and workers [#cluster-and-workers]
+
+`publish` trả về số message được nhận và `publish_report` cho thấy inbox bị drop,
+nên inbox đầy là một field trong report trên cluster path. Queue error tồn tại
+khi caller dùng inbox trực tiếp.
+
+| Zig error name                    | Cause                                                                  | HTTP status              | Fix                                                                                       | Source module                                           |
+| --------------------------------- | ---------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `error.ClusterDeinitialized`      | Cluster storage đang release hoặc đã release                           | Không có, worker control | Không gọi cluster sau `deinit` hoặc `deinit_checked`                                      | `src/router/worker_group.zig`                           |
+| `error.ClusterRunning`            | `run` bắt đầu group đang chạy, hoặc release chạy khi worker còn active | Không có, worker control | Chạy một lần, và join trước khi release                                                   | `src/router/worker_group.zig`                           |
+| `error.ClusterStopped`            | Publish, run hoặc listen chạy sau khi mọi worker đã join               | Không có, worker control | Tạo cluster mới; stopped là terminal                                                      | `src/router/worker_group.zig`                           |
+| `error.ClusterWorkerFailed`       | Event loop hoặc cleanup sau run của một worker trả lỗi                 | Không có, worker control | Đọc `first_failure()` hoặc `failure_count()`, sửa lỗi worker, rồi tạo cluster mới         | `src/router/cluster.zig`                                |
+| `error.InvalidWorkerCount`        | Count được yêu cầu là `0` hoặc vượt capacity đã compile                | Không có, worker control | Chọn count từ `1` đến capacity                                                            | `src/router/cluster.zig`, `src/router/worker_group.zig` |
+| `error.ClusterQueueFull`          | Một inbox của worker đã giữ `64` message chưa đọc                      | Không có, worker control | Xử lý message nhanh hơn, hoặc xem `dropped` và `first_dropped_worker` từ `publish_report` | `src/router/cluster.zig`                                |
+| `error.EmptyTopic`                | Topic rỗng                                                             | Không có, worker control | Publish topic khác rỗng                                                                   | `src/router/cluster.zig`                                |
+| `error.TopicTooLong`              | Topic vượt `127` byte                                                  | Không có, worker control | Rút ngắn tên topic                                                                        | `src/router/cluster.zig`                                |
+| `error.ClusterMessageTooLarge`    | Payload vượt message bound đã compile                                  | Không có, worker control | Tăng message capacity của queue, hoặc gửi ít hơn                                          | `src/router/cluster.zig`                                |
+| `error.WorkerGroupAlreadyRunning` | Group cấp thấp nhận `start` sau khi đã start                           | Không có, worker control | Khởi động một worker set cho mỗi lần chạy group                                           | `src/router/worker_group.zig`                           |
+| `error.WorkerGroupNotRunning`     | Group cấp thấp nhận `start` ngoài trạng thái running                   | Không có, worker control | Bắt đầu group run trước khi start thread                                                  | `src/router/worker_group.zig`                           |
+
+## JSON-RPC [#json-rpc]
+
+Handler error trở thành JSON-RPC error object; HTTP status giữ `200` trừ khi
+dispatch tự fail. Các code chuẩn là `-32700` parse error, `-32600` invalid
+request, `-32601` method not found, `-32602` invalid params và `-32603` internal
+error.
+
+| Zig error name                       | Cause                                                                   | HTTP status                                                             | Fix                                                  | Source module          |
+| ------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------- |
+| `error.Aborted`                      | Abort signal được phát vì request, timeout hoặc socket đã mất           | `500` chỉ khi transport còn ghi được; không có response khi peer đã mất | Dừng công việc và không ghi result                   | `src/rpc/json_rpc.zig` |
+| `error.ApplicationError`             | Handler trả `Call.fail(code, message)`                                  | `200` với application fault code                                        | Dùng application code ổn định và message ngắn        | `src/rpc/json_rpc.zig` |
+| `error.InternalError`                | Handler trả `error.InternalError`                                       | `200`, JSON-RPC `-32603`                                                | Sửa procedure hoặc trả application fault có type     | `src/rpc/json_rpc.zig` |
+| `error.InvalidParams`                | Params không có, hoặc JSON không khớp typed shape                       | `200`, JSON-RPC `-32602`                                                | Validate payload của client và giữ Zig type khớp     | `src/rpc/json_rpc.zig` |
+| `error.OutOfMemory`                  | Allocator parse params thất bại                                         | `200`, JSON-RPC `-32603`                                                | Giảm kích thước params, hoặc dùng fixed storage      | `src/rpc/json_rpc.zig` |
+| `error.ResultAlreadyWritten`         | `Call.result` chạy hơn một lần                                          | `200`, JSON-RPC `-32603`                                                | Trả đúng một result                                  | `src/rpc/json_rpc.zig` |
+| `error.ResultTooLarge`               | Result đã encode không vừa service response buffer                      | `200`, JSON-RPC `-32603`                                                | Tăng `response_capacity`, hoặc trả ít byte hơn       | `src/rpc/json_rpc.zig` |
+| `error.ResponseTooLarge`             | Dispatch document không vừa response buffer                             | `500` từ `rpc.http`                                                     | Tăng service response capacity                       | `src/rpc/json_rpc.zig` |
+| `error.DuplicateProcedure`           | Hai procedure dùng cùng method name                                     | Không có, registration                                                  | Đăng ký mỗi method một lần                           | `src/rpc/json_rpc.zig` |
+| `error.InvalidMethodName`            | Tên rỗng, vượt `255` byte, UTF-8 không hợp lệ, hoặc bắt đầu bằng `rpc.` | Không có, registration                                                  | Dùng tên hợp lệ ngắn hơn, không có prefix dành riêng | `src/rpc/json_rpc.zig` |
+| `error.MethodStorageCapacityReached` | Method name vượt `4 KiB` storage                                        | Không có, registration                                                  | Rút ngắn tên, hoặc tăng `method_storage_capacity`    | `src/rpc/json_rpc.zig` |
+| `error.ProcedureCapacityReached`     | Hơn `64` procedure được đăng ký                                         | Không có, registration                                                  | Tăng `max_procedures`, hoặc tách service             | `src/rpc/json_rpc.zig` |
+| `error.RegistryLocked`               | Procedure được đăng ký sau `seal`; `app.rpc` seal service               | Không có, registration                                                  | Đăng ký mọi procedure trước khi mount service        | `src/rpc/json_rpc.zig` |
+
+## WebSocket handshake [#websocket-handshake]
+
+HTTP/1.1 upgrade ánh xạ handshake validation thành `400 Bad Request` hoặc
+`426 Upgrade Required`. Route `upgrade` callback trả `false` sẽ gửi
+`403 Forbidden` mà không đặt error name.
+
+| Zig error name                   | Cause                                              | HTTP status | Fix                                       | Source module          |
+| -------------------------------- | -------------------------------------------------- | ----------- | ----------------------------------------- | ---------------------- |
+| `error.InvalidMethod`            | Upgrade request không phải `GET`                   | `400`       | Gửi `GET` upgrade request                 | `src/ws/handshake.zig` |
+| `error.MissingConnectionUpgrade` | `Connection` không có hoặc thiếu token `upgrade`   | `400`       | Gửi `Connection: Upgrade`                 | `src/ws/handshake.zig` |
+| `error.MissingUpgradeWebSocket`  | `Upgrade` không có hoặc không phải `websocket`     | `400`       | Gửi `Upgrade: websocket`                  | `src/ws/handshake.zig` |
+| `error.MissingVersion`           | `Sec-WebSocket-Version` không có hoặc bị duplicate | `426`       | Gửi một field `Sec-WebSocket-Version: 13` | `src/ws/handshake.zig` |
+| `error.UnsupportedVersion`       | Version không phải `13`                            | `426`       | Dùng RFC 6455 version `13`                | `src/ws/handshake.zig` |
+| `error.MissingKey`               | `Sec-WebSocket-Key` không có hoặc bị duplicate     | `400`       | Gửi một key field                         | `src/ws/handshake.zig` |
+| `error.InvalidKey`               | Key không phải base64 canonical cho 16 byte        | `400`       | Gửi key base64 16 byte mới                | `src/ws/handshake.zig` |
+
+`handshake.validate_extended_connect` dùng lại `error.MissingVersion` và
+`error.UnsupportedVersion` cho RFC 8441. Caller chọn rejection; helper không ghi
+response.
+
+## WebSocket compression [#websocket-compression]
+
+| Zig error name                | Cause                                                                  | HTTP status                              | Fix                                                                | Source module        |
+| ----------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ | -------------------- |
+| `error.OutOfMemory`           | Cấp phát compression context fail                                      | Không có, lúc khởi động                  | Giảm message bound, hoặc giải phóng memory trước startup           | `src/ws/deflate.zig` |
+| `error.InitFailed`            | libdeflate không cấp phát được compressor hoặc decompressor            | Không có, lúc khởi động                  | Kiểm tra allocator và libdeflate build                             | `src/ws/deflate.zig` |
+| `error.SizeOverflow`          | Paired scratch bound tràn `usize`                                      | Không có, lúc khởi động                  | Giảm `max_ws_message_size`                                         | `src/ws/deflate.zig` |
+| `error.BufferTooSmall`        | Scratch hoặc output buffer nhỏ hơn compressed message cần              | WebSocket close `1007` trên receive path | Reserve paired scratch; không giảm dưới `worst_case_scratch_bound` | `src/ws/deflate.zig` |
+| `error.InvalidCompressedData` | Payload là deflate không hợp lệ, sai window, hoặc fail sync-flush tail | WebSocket close `1007`                   | Gửi frame RFC 7692 hợp lệ với window đã negotiate                  | `src/ws/deflate.zig` |
+| `error.OutputTooLarge`        | Message decode vượt route message bound                                | WebSocket close `1009`                   | Tăng `max_message_size`, hoặc gửi message nhỏ hơn                  | `src/ws/deflate.zig` |
+
+## TLS initialization [#tls-initialization]
+
+Các lỗi này xảy ra khi load server context hoặc tạo ephemeral credential. Chúng
+là lỗi startup và không bao giờ đến request handler.
+
+| Zig error name                              | Cause                                               | HTTP status             | Fix                                           | Source module        |
+| ------------------------------------------- | --------------------------------------------------- | ----------------------- | --------------------------------------------- | -------------------- |
+| `error.CertificateLoadFailed`               | Certificate chain không đọc được hoặc malformed     | Không có, lúc khởi động | Truyền PEM chain đọc được, leaf trước         | `src/crypto/tls.zig` |
+| `error.PrivateKeyLoadFailed`                | Private key không đọc được hoặc malformed           | Không có, lúc khởi động | Truyền PEM private key khớp                   | `src/crypto/tls.zig` |
+| `error.KeyMismatch`                         | Certificate và private key không cùng cặp           | Không có, lúc khởi động | Load cặp từ cùng lần issuance                 | `src/crypto/tls.zig` |
+| `error.TlsContextCreationFailed`            | BoringSSL không cấp phát hoặc cấu hình được context | Không có, lúc khởi động | Kiểm tra BoringSSL build và process memory    | `src/crypto/tls.zig` |
+| `error.ProtocolConfigurationFailed`         | Không pin được TLS 1.3 làm min hoặc max version     | Không có, lúc khởi động | Dùng BoringSSL build được hỗ trợ              | `src/crypto/tls.zig` |
+| `error.InvalidClientAuthConfig`             | mTLS bật với CA path rỗng                           | Không có, lúc khởi động | Cung cấp client CA bundle, hoặc dùng `.none`  | `src/crypto/tls.zig` |
+| `error.TrustStoreLoadFailed`                | Client CA bundle không load được                    | Không có, lúc khởi động | Truyền PEM trust store đọc được               | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateInstallFailed`   | Credential sinh ra không install được trên context  | Không có, lúc khởi động | Kiểm tra BoringSSL build                      | `src/crypto/tls.zig` |
+| `error.EphemeralKeyGenerationFailed`        | Sinh P-256 key fail                                 | Không có, lúc khởi động | Kiểm tra BoringSSL build và entropy source    | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateCreationFailed`  | Không build được self-signed certificate            | Không có, lúc khởi động | Kiểm tra BoringSSL build                      | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateSigningFailed`   | Không sign được self-signed certificate             | Không có, lúc khởi động | Kiểm tra BoringSSL build                      | `src/crypto/tls.zig` |
+| `error.EphemeralCertificateExtensionFailed` | Không thêm được subject alternative name extension  | Không có, lúc khởi động | Kiểm tra certificate names và BoringSSL build | `src/crypto/tls.zig` |
+
+## Client [#client]
+
+Client setup failure trả Zig error từ `fetch`; fetch hoàn tất báo `FailureKind`
+là `connect`, `tls`, `protocol`, `timeout`, `closed` hoặc `capacity` trong
+`FetchOutcome`. [Client](/docs/client) trình bày request và response contract.
+
+| Zig error name                       | Cause                                                                  | HTTP status                        | Fix                                                            | Source module               |
+| ------------------------------------ | ---------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------- | --------------------------- |
+| `error.CaPathRequired`               | `verify` true và `ca_path` null                                        | Không áp dụng; failure kind `.tls` | Truyền PEM CA bundle, hoặc tắt verification chỉ cho local work | `src/client/client.zig`     |
+| `error.CaPathTooLong`                | CA path vượt fixed client bound                                        | Không áp dụng; `.tls`              | Dùng path ngắn hơn                                             | `src/client/client.zig`     |
+| `error.CertificateLoadFailed`        | Client CA bundle không đọc được hoặc malformed                         | Không áp dụng; `.tls`              | Truyền PEM bundle đọc được                                     | `src/crypto/tls_client.zig` |
+| `error.TlsContextCreationFailed`     | Không tạo được client TLS context                                      | Không áp dụng; `.tls`              | Kiểm tra BoringSSL build và memory                             | `src/crypto/tls_client.zig` |
+| `error.TlsConfigurationMismatch`     | Một client được dùng lại với trust rule khác                           | Không áp dụng; `.tls`              | Dùng lại client với một TLS policy cố định                     | `src/client/client.zig`     |
+| `error.TlsUnavailable`               | Connection không có TLS context                                        | Không áp dụng; `.tls`              | Truyền `FetchOptions.tls` cho HTTPS fetch                      | `src/client/connection.zig` |
+| `error.ServerNameEmpty`              | TLS server name rỗng                                                   | Không áp dụng; `.tls`              | Đặt `TlsOptions.server_name`                                   | `src/crypto/tls_client.zig` |
+| `error.ServerNameTooLong`            | Server name vượt fixed bound                                           | Không áp dụng; `.tls`              | Dùng DNS name ngắn hơn                                         | `src/crypto/tls_client.zig` |
+| `error.SslAllocationFailed`          | Cấp phát BoringSSL session fail                                        | Không áp dụng; `.tls`              | Kiểm tra process memory                                        | `src/crypto/tls_client.zig` |
+| `error.BioAllocationFailed`          | Cấp phát memory BIO fail                                               | Không áp dụng; `.tls`              | Kiểm tra process memory                                        | `src/crypto/tls_client.zig` |
+| `error.SniConfigurationFailed`       | Không cấu hình được SNI                                                | Không áp dụng; `.tls`              | Kiểm tra server name và BoringSSL build                        | `src/crypto/tls_client.zig` |
+| `error.AlpnConfigurationFailed`      | Không cấu hình được ALPN                                               | Không áp dụng; `.tls`              | Dùng BoringSSL build được hỗ trợ                               | `src/crypto/tls_client.zig` |
+| `error.HostnameVerificationFailed`   | Không arm được hostname verification                                   | Không áp dụng; `.tls`              | Kiểm tra server name và trust policy                           | `src/crypto/tls_client.zig` |
+| `error.TlsHandshakeStalled`          | Handshake không tiến triển trước read deadline                         | Không áp dụng; `.tls`              | Tăng `read_timeout_ms`, hoặc kiểm tra peer và network          | `src/core/tcp.zig`          |
+| `error.InvalidHostAddress`           | `Request.host` không phải numeric IP                                   | Không áp dụng; `.connect`          | Truyền numeric address, không phải DNS name                    | `src/client/connection.zig` |
+| `error.InflightCapacityReached`      | Mọi client request slot đang bận                                       | Không áp dụng; `.capacity`         | Tăng `client(max_inflight)`, hoặc chờ completion               | `src/client/client.zig`     |
+| `error.ResponseBodyCapacityExceeded` | `response_body_capacity` vượt mức tối đa `64 KiB` của client           | Không áp dụng; `.capacity`         | Giảm bound, hoặc dùng response nhỏ hơn                         | `src/client/client.zig`     |
+| `error.InvalidPath`                  | Request target rỗng hoặc malformed                                     | Không áp dụng; `.protocol`         | Gửi origin-form path như `/status`                             | `src/client/request.zig`    |
+| `error.InvalidHost`                  | Field `Host` malformed                                                 | Không áp dụng; `.protocol`         | Dùng host hợp lệ hoặc numeric address                          | `src/client/request.zig`    |
+| `error.InvalidHeaderName`            | Header name của caller không phải HTTP token                           | Không áp dụng; `.protocol`         | Dùng field name hợp lệ                                         | `src/client/request.zig`    |
+| `error.InvalidHeaderValue`           | Header value chứa CR hoặc LF                                           | Không áp dụng; `.protocol`         | Xóa control byte khỏi value                                    | `src/client/request.zig`    |
+| `error.ReservedHeader`               | Caller đặt `Host`, `Content-Length`, `Transfer-Encoding` hoặc `Expect` | Không áp dụng; `.protocol`         | Để builder sinh các field đó                                   | `src/client/request.zig`    |
+| `error.HeadTooLarge`                 | Request head sinh ra vượt `8 KiB`                                      | Không áp dụng; `.protocol`         | Gửi ít header hơn hoặc ngắn hơn                                | `src/client/request.zig`    |
+| `error.BufferOverflow`               | `FetchStorage` không chứa được response head hoặc body                 | Không áp dụng; `.capacity`         | Tăng storage bound, hoặc dùng callback client                  | `src/client/http1.zig`      |
+
+## C ABI codes [#c-abi-codes]
+
+Các giá trị âm là append-only và thuộc ABI.
+[`uwz_error_name`](/reference/c-abi#uwz_error) trả string tĩnh cho mỗi code, và
+`unknown error` ngoài enum.
+
+|  Code | Constant                     | Name string        | Reported when                                                                      |
+| ----: | ---------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+|   `0` | `UWZ_OK`                     | `ok`               | Call hoàn tất                                                                      |
+|  `-1` | `UWZ_ERROR_INVALID_ARGUMENT` | `invalid argument` | Slice sai, out-handle đã chiếm, route không hợp lệ, method hoặc limit không hợp lệ |
+|  `-2` | `UWZ_ERROR_OUT_OF_MEMORY`    | `out of memory`    | Slab, TLS context hoặc QUIC engine allocation fail                                 |
+|  `-3` | `UWZ_ERROR_INVALID_STATE`    | `invalid state`    | Sai lifecycle step, response đã start, token cũ, HTTP/3 chưa init                  |
+|  `-4` | `UWZ_ERROR_ALREADY_EXISTS`   | `already exists`   | Route pattern trùng hoặc listener đã bind                                          |
+|  `-5` | `UWZ_ERROR_CAPACITY`         | `capacity reached` | Route, middleware, parameter, storage hoặc peer capacity đã đạt giới hạn           |
+|  `-6` | `UWZ_ERROR_WOULD_BLOCK`      | `would block`      | Output queue hoặc write path đầy                                                   |
+|  `-7` | `UWZ_ERROR_PROTOCOL`         | `protocol error`   | Framing, handshake hoặc output quá lớn                                             |
+|  `-8` | `UWZ_ERROR_IO`               | `I/O error`        | Socket, bind hoặc TLS read và write fail                                           |
+|  `-9` | `UWZ_ERROR_UNSUPPORTED`      | `unsupported`      | HTTP/3 không có, hoặc backend không có                                             |
+| `-10` | `UWZ_ERROR_INTERNAL`         | `internal error`   | Lỗi không có mapping hẹp hơn                                                       |
+
+## Related [#related]
+
+- [Errors and failure modes](/docs/concepts/errors) giải thích hai kênh báo lỗi.
+- [HTTP errors](/docs/http/errors) trình bày structured rejection document.
+- [ServerConfig](/reference/server-config) sở hữu field và default tạo ra các
+  startup error.
+- [C ABI](/reference/c-abi) liệt kê mọi C function và enum value.
+- [Troubleshooting](/docs/operations/troubleshooting) map symptom sang fix.

@@ -1,0 +1,387 @@
+---
+title: C ABI reference
+description: Look up every handle, enum, function, fixed capacity, ownership rule, and link requirement in the µWebZockets C header.
+sidebar:
+  order: 5
+search:
+  tags: [reference, c-abi]
+---
+
+`include/uWebZockets.h` exposes a fixed-capacity HTTP and WebSocket server to C
+and C++. Use this page for the complete declaration lookup. The build-and-run
+walkthrough is [Embed from C or C++](/docs/guides/c-abi); archive production and
+installation are [C ABI operations](/docs/operations/c-abi).
+
+The C surface has no entry points for `ServerConfig`, `uz.schema`, `uz.json_rpc`,
+`uz.client`, HTTP/2 frame or HPACK control, HTTP/3 extensions, WebTransport,
+mTLS, or certificate rotation. Async HTTP routes and per-route WebSocket
+compression are exposed.
+
+## Header and version [#header-and-version]
+
+Include `<uWebZockets.h>`. The header pulls in `stdbool.h`, `stddef.h`, and
+`stdint.h`, and wraps every declaration in `extern "C"` for C++.
+
+The header defines `UWZ_VERSION_MAJOR` as `2`, `UWZ_VERSION_MINOR` as `1`, and
+`UWZ_VERSION_PATCH` as `6`. `uwz_version()` returns the runtime string, such as
+`2.1.6`. Use the header and archive from the same release; a mismatched pair can
+compile against one enum layout and call into another.
+
+## Handles and value types [#handles-and-value-types]
+
+| Handle               | Kind          | Meaning                                                         |
+| -------------------- | ------------- | --------------------------------------------------------------- |
+| `uwz_app`            | Opaque        | Application, listeners, event loop, and fixed storage           |
+| `uwz_request`        | Opaque        | Callback-local request view                                     |
+| `uwz_response`       | Opaque        | Response writer for one request                                 |
+| `uwz_websocket`      | Opaque        | One upgraded WebSocket connection                               |
+| `uwz_async_response` | Public struct | Copyable one-shot completion token; treat the fields as private |
+
+```c
+typedef struct uwz_slice {
+    const uint8_t *data;
+    size_t length;
+} uwz_slice;
+```
+
+A zero-length slice may use `NULL` data. A nonempty slice is borrowed for the
+call unless the registration function states that it copies the bytes:
+`uwz_app_route` and `uwz_app_ws` copy the route path; `user_data` stays
+caller-owned.
+
+`uwz_async_response` is a public struct with `void *state` and
+`uint64_t generation` fields; treat both as private. The token is
+callback-local. A handler that returns `UWZ_HANDLER_PENDING` must copy the whole
+struct into storage it owns. The copy is valid on the owning event loop until
+completion or app shutdown, and never after destruction.
+
+### Callback typedefs [#callback-typedefs]
+
+| Typedef                  | Signature                                                                   | Contract                                              |
+| ------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `uwz_http_handler`       | `void (*)(const uwz_request *, uwz_response *, void *)`                     | Complete the response before returning                |
+| `uwz_async_handler`      | `uwz_handler_result (*)(const uwz_request *, uwz_async_response *, void *)` | Copy the token before returning `UWZ_HANDLER_PENDING` |
+| `uwz_middleware`         | `uwz_middleware_result (*)(const uwz_request *, uwz_response *, void *)`    | Ordered and synchronous; may end the response         |
+| `uwz_ws_upgrade_handler` | `bool (*)(const uwz_request *, void *)`                                     | Return `false` to reject the upgrade with `403`       |
+| `uwz_ws_open_handler`    | `void (*)(uwz_websocket *, void *)`                                         | Runs after the `101` response                         |
+| `uwz_ws_message_handler` | `void (*)(uwz_websocket *, uwz_slice, uwz_ws_opcode, void *)`               | Receives one complete decoded message                 |
+| `uwz_ws_event_handler`   | `void (*)(uwz_websocket *, void *)`                                         | Used for `drain` and `close`                          |
+
+### `uwz_ws_behavior` [#uwz_ws_behavior]
+
+```c
+typedef struct uwz_ws_behavior {
+    uwz_ws_upgrade_handler upgrade;
+    uwz_ws_open_handler open;
+    uwz_ws_message_handler message;
+    uwz_ws_event_handler drain;
+    uwz_ws_event_handler close;
+    void *user_data;
+    uwz_ws_compression compression;
+    uint64_t max_frame_size;
+    uint64_t max_message_size;
+} uwz_ws_behavior;
+```
+
+The `upgrade` callback authorizes the handshake before the `101`; `false` sends
+`403`. `open`, `message`, `drain`, and `close` follow the connection lifecycle.
+`user_data` is caller-owned. Both size bounds must be nonzero, frame size must
+not exceed message size, and message size must fit the app WebSocket buffer.
+
+The field order, field types, and size are frozen by the header. New behavior is
+exposed through new entry points, not added fields.
+
+## Enums [#enums]
+
+### `uwz_error` [#uwz_error]
+
+The negative values are append-only and part of the ABI.
+
+| Value                        | Number | `uwz_error_name`   |
+| ---------------------------- | -----: | ------------------ |
+| `UWZ_OK`                     |    `0` | `ok`               |
+| `UWZ_ERROR_INVALID_ARGUMENT` |   `-1` | `invalid argument` |
+| `UWZ_ERROR_OUT_OF_MEMORY`    |   `-2` | `out of memory`    |
+| `UWZ_ERROR_INVALID_STATE`    |   `-3` | `invalid state`    |
+| `UWZ_ERROR_ALREADY_EXISTS`   |   `-4` | `already exists`   |
+| `UWZ_ERROR_CAPACITY`         |   `-5` | `capacity reached` |
+| `UWZ_ERROR_WOULD_BLOCK`      |   `-6` | `would block`      |
+| `UWZ_ERROR_PROTOCOL`         |   `-7` | `protocol error`   |
+| `UWZ_ERROR_IO`               |   `-8` | `I/O error`        |
+| `UWZ_ERROR_UNSUPPORTED`      |   `-9` | `unsupported`      |
+| `UWZ_ERROR_INTERNAL`         |  `-10` | `internal error`   |
+
+### `uwz_http_method` [#uwz_http_method]
+
+|   Number | Values                              |
+| -------: | ----------------------------------- |
+| `0`, `1` | `UWZ_HTTP_GET`, `UWZ_HTTP_HEAD`     |
+| `2`, `3` | `UWZ_HTTP_POST`, `UWZ_HTTP_PUT`     |
+| `4`, `5` | `UWZ_HTTP_DELETE`, `UWZ_HTTP_PATCH` |
+| `6`, `7` | `UWZ_HTTP_OPTIONS`, `UWZ_HTTP_ANY`  |
+| `8`, `9` | `UWZ_HTTP_QUERY`, `UWZ_HTTP_TRACE`  |
+
+`UWZ_HTTP_ANY` is the fallback method, and `UWZ_HTTP_QUERY` is RFC 10008
+`QUERY`. There is no `CONNECT` value; RFC 8441 extended CONNECT is handled by
+the HTTP/2 and HTTP/3 dispatchers, not by this route enum.
+
+### Results, opcodes, and compression [#results-opcodes-and-compression]
+
+| Enum                    | Value                                   | Number | Meaning                                                  |
+| ----------------------- | --------------------------------------- | -----: | -------------------------------------------------------- |
+| `uwz_handler_result`    | `UWZ_HANDLER_COMPLETE`                  |    `0` | The callback completed the token before returning        |
+| `uwz_handler_result`    | `UWZ_HANDLER_PENDING`                   |    `1` | The callback copied the token and will complete it later |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_CONTINUE`               |    `0` | Continue to the next middleware or route                 |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_COMPLETE`               |    `1` | Stop chain dispatch; the response may already be ended   |
+| `uwz_middleware_result` | `UWZ_MIDDLEWARE_PENDING`                |    `2` | Reserved; middleware is synchronous and fails closed     |
+| `uwz_ws_opcode`         | `UWZ_WS_TEXT`                           |  `0x1` | UTF-8 text frame                                         |
+| `uwz_ws_opcode`         | `UWZ_WS_BINARY`                         |  `0x2` | Binary frame                                             |
+| `uwz_ws_opcode`         | `UWZ_WS_CLOSE`                          |  `0x8` | Close frame                                              |
+| `uwz_ws_opcode`         | `UWZ_WS_PING`                           |  `0x9` | Ping frame                                               |
+| `uwz_ws_opcode`         | `UWZ_WS_PONG`                           |  `0xa` | Pong frame                                               |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_DISABLED`           |    `0` | No compression                                           |
+| `uwz_ws_compression`    | `UWZ_WS_COMPRESSION_PERMESSAGE_DEFLATE` |    `1` | RFC 7692 per-message deflate                             |
+
+`uwz_websocket_send` accepts only `UWZ_WS_TEXT` and `UWZ_WS_BINARY`. Use
+`uwz_websocket_send_close` for a close frame; other opcode values return
+`UWZ_ERROR_INVALID_ARGUMENT`.
+
+## Functions [#functions]
+
+Every function below uses the C calling convention. Fallible calls return
+`uwz_error`; the remaining calls return a slice, a count, or `void`.
+
+### Version and error text [#version-and-error-text]
+
+| Function                                     | Returns       | Contract                                          |
+| -------------------------------------------- | ------------- | ------------------------------------------------- |
+| `const char *uwz_version(void)`              | Static string | Version of the linked library                     |
+| `const char *uwz_error_name(uwz_error code)` | Static string | Name for a code; `unknown error` outside the enum |
+
+### Application lifecycle [#application-lifecycle]
+
+| Function                                                                               | Returns     | Contract                                                         |
+| -------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------- |
+| `uwz_error uwz_app_create(uwz_app **out_app)`                                          | `uwz_error` | Plaintext app; `*out_app` must be `NULL`                         |
+| `uwz_error uwz_app_create_tls(const char *cert, const char *key, uwz_app **out_app)`   | `uwz_error` | HTTPS app from NUL-terminated PEM paths                          |
+| `uwz_error uwz_app_create_http3(const char *cert, const char *key, uwz_app **out_app)` | `uwz_error` | HTTP/1.1 and HTTP/3 app from PEM paths                           |
+| `uwz_error uwz_app_create_tls_ephemeral(uwz_app **out_app)`                            | `uwz_error` | HTTPS app with an in-memory localhost certificate                |
+| `uwz_error uwz_app_create_http3_ephemeral(uwz_app **out_app)`                          | `uwz_error` | HTTP/1.1 and HTTP/3 app with an in-memory certificate            |
+| `uwz_error uwz_app_shutdown(uwz_app *app)`                                             | `uwz_error` | Stops listeners and drains; from a callback it requests shutdown |
+| `uwz_error uwz_app_destroy(uwz_app **app)`                                             | `uwz_error` | Drains and releases; writes `NULL` on success                    |
+
+Every create function requires `*out_app == NULL`, so a live handle is never
+overwritten. Ephemeral certificates are for local development only.
+`uwz_app_destroy` from a callback returns `UWZ_ERROR_INVALID_STATE` and leaves
+the handle valid; destroy after `uwz_app_run` returns.
+
+### Registration [#registration]
+
+| Function                                                                                                                                                | Returns     | Contract                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------ |
+| `uwz_error uwz_app_route(uwz_app *app, uwz_http_method method, const char *path, size_t path_length, uwz_http_handler handler, void *user_data)`        | `uwz_error` | Registers a synchronous route; copies `path`                       |
+| `uwz_error uwz_app_route_async(uwz_app *app, uwz_http_method method, const char *path, size_t path_length, uwz_async_handler handler, void *user_data)` | `uwz_error` | Registers a deferred route; copies `path`                          |
+| `uwz_error uwz_app_use(uwz_app *app, uwz_middleware middleware, void *user_data)`                                                                       | `uwz_error` | Appends ordered middleware                                         |
+| `uwz_error uwz_app_ws(uwz_app *app, const char *path, size_t path_length, const uwz_ws_behavior *behavior)`                                             | `uwz_error` | Registers a WebSocket route; copies `path` and the behavior fields |
+
+Register every route, middleware entry, and WebSocket route before the first
+listener call. A path may not contain an embedded NUL. `user_data` remains
+caller-owned and must stay valid until shutdown has drained callbacks.
+
+### Serving and publish [#serving-and-publish]
+
+| Function                                                                                                | Returns        | Contract                                                         |
+| ------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------- |
+| `uwz_error uwz_app_listen(uwz_app *app, const char *address, size_t address_length, uint16_t port)`     | `uwz_error`    | Binds a TCP listener and locks route registration                |
+| `uwz_error uwz_app_listen_udp(uwz_app *app, const char *address, size_t address_length, uint16_t port)` | `uwz_error`    | Starts the QUIC listener; requires an HTTP/3 app                 |
+| `uwz_error uwz_app_run(uwz_app *app)`                                                                   | `uwz_error`    | Blocks until shutdown drains the loop                            |
+| `size_t uwz_app_publish(uwz_app *app, uwz_slice topic, uwz_slice message, bool is_text)`                | Delivery count | Publishes to local subscribers; `0` on invalid input or no match |
+
+`uwz_app_run` does not install a signal watcher. A supervisor or host program
+calls `uwz_app_shutdown` on SIGINT or SIGTERM. A shutdown requested from a
+callback returns `UWZ_OK`; the active run drains before returning.
+
+### Request access [#request-access]
+
+All request slices are borrowed for the callback invocation. Copy any field
+that must survive the callback, including when the callback returns pending.
+
+| Function                                                                                                                                                                                                                                                           | Returns                 | Contract                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | --------------------------------------------------------------------------------------------- |
+| `uwz_slice uwz_request_method(const uwz_request *)`, `uwz_slice uwz_request_target(const uwz_request *)`, `uwz_slice uwz_request_path(const uwz_request *)`, `uwz_slice uwz_request_query(const uwz_request *)`, `uwz_slice uwz_request_body(const uwz_request *)` | Borrowed slices         | Method token as received, target with query, path without query, raw query, and complete body |
+| `uwz_slice uwz_request_header(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                         | Borrowed slice or empty | First case-insensitive match for `name`                                                       |
+| `size_t uwz_request_header_count(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                      | Count                   | Number of fields with that name                                                               |
+| `uwz_slice uwz_request_parameter(const uwz_request *request, uwz_slice name)`                                                                                                                                                                                      | Borrowed slice or empty | Case-sensitive `:name` or terminal `*name` capture                                            |
+| `size_t uwz_request_parameter_count(const uwz_request *request)`                                                                                                                                                                                                   | Count                   | Total captures on this request                                                                |
+
+A null handle or invalid slice returns an empty slice or `0`. There is no
+indexed header accessor; use `header_count` to detect duplicates and
+`uwz_request_header` for the first value.
+
+### Response [#response]
+
+Status strings are raw lines such as `200 OK`; the first three bytes must be a
+code from `200` through `599`. Header strings are raw `Name: value\r\n` fields
+without the final blank line. The ABI adds framing before the body.
+
+| Function                                                                                                               | Returns     | Contract                                   |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------ |
+| `uwz_error uwz_response_end(uwz_response *response, uwz_slice status, uwz_slice body)`                                 | `uwz_error` | Completes a response with no extra headers |
+| `uwz_error uwz_response_end_with_headers(uwz_response *response, uwz_slice status, uwz_slice headers, uwz_slice body)` | `uwz_error` | Completes with validated raw header fields |
+| `uwz_error uwz_response_begin_chunked(uwz_response *response, uwz_slice status, uwz_slice headers)`                    | `uwz_error` | Starts a chunked response                  |
+| `uwz_error uwz_response_write_chunk(uwz_response *response, uwz_slice chunk)`                                          | `uwz_error` | Appends one chunk to a streaming response  |
+| `uwz_error uwz_response_end_chunks(uwz_response *response)`                                                            | `uwz_error` | Finishes the chunked response              |
+
+The status, header, and body slices are borrowed only for the call; the bytes
+are copied into bounded transport storage before the function returns. A second
+completion returns `UWZ_ERROR_INVALID_STATE`.
+
+### Async response [#async-response]
+
+| Function                                                                                                                           | Returns     | Contract                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------- |
+| `uwz_error uwz_async_response_end(uwz_async_response *response, uwz_slice status, uwz_slice body)`                                 | `uwz_error` | Completes one copied token with no extra headers  |
+| `uwz_error uwz_async_response_end_with_headers(uwz_async_response *response, uwz_slice status, uwz_slice headers, uwz_slice body)` | `uwz_error` | Completes one copied token with raw header fields |
+
+Status, header, and body slices are borrowed for the completion call. The token
+is generation-checked; a stale or duplicate token returns
+`UWZ_ERROR_INVALID_STATE`.
+
+### WebSocket [#websocket]
+
+| Function                                                                                                | Returns        | Contract                                                |
+| ------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------- |
+| `uwz_error uwz_websocket_send(uwz_websocket *socket, uwz_slice message, uwz_ws_opcode opcode)`          | `uwz_error`    | Sends one text or binary message                        |
+| `uwz_error uwz_websocket_send_close(uwz_websocket *socket, uint16_t code, uwz_slice reason)`            | `uwz_error`    | Sends a close frame and closes after queued bytes drain |
+| `size_t uwz_websocket_buffered_amount(const uwz_websocket *socket)`                                     | Bytes          | Current queued output for this socket                   |
+| `uwz_error uwz_websocket_subscribe(uwz_websocket *socket, uwz_slice topic)`                             | `uwz_error`    | Subscribes to a copied bounded topic                    |
+| `bool uwz_websocket_unsubscribe(uwz_websocket *socket, uwz_slice topic)`                                | Boolean        | Reports whether the subscription existed                |
+| `size_t uwz_websocket_publish(uwz_websocket *socket, uwz_slice topic, uwz_slice message, bool is_text)` | Delivery count | Publishes through the socket's registry                 |
+| `void uwz_websocket_terminate(uwz_websocket *socket)`                                                   | None           | Terminates the transport immediately                    |
+
+A WebSocket send can return `UWZ_ERROR_WOULD_BLOCK` when the write queue is
+full. Wait for the route's `drain` callback before resuming the producer.
+
+## Fixed capacities [#fixed-capacities]
+
+| Limit                       |    Value | Source                                       |
+| --------------------------- | -------: | -------------------------------------------- |
+| `UWZ_MAX_ROUTES`            |     `64` | Fixed macro; route or WebSocket registration |
+| `UWZ_MAX_MIDDLEWARE`        |     `32` | Fixed macro; `uwz_app_use`                   |
+| `UWZ_MAX_ROUTE_PARAMETERS`  |     `16` | Fixed macro; inline captures                 |
+| `UWZ_MAX_ROUTE_PATH_LENGTH` |   `2048` | Fixed macro; route registration              |
+| Connection slots            |   `1024` | Fixed app default; no C override             |
+| Radix route nodes           |    `256` | Fixed app default; no C override             |
+| Pattern routes              |     `64` | Fixed app default; no C override             |
+| Route registry bytes        | `64 KiB` | Fixed app default; no C override             |
+| WebSocket message           | `16 KiB` | Fixed app default; no C override             |
+| Request body                | `16 KiB` | Fixed app default; no C override             |
+| Write queue                 | `64 KiB` | Fixed app default; no C override             |
+
+Sixty-four maximum-length route paths do not fit the `64 KiB` registry, so a
+long-path application can reach `UWZ_ERROR_CAPACITY` before the sixty-fifth
+route. The Zig API is the path for a different slab, route table, or body limit.
+
+## Ownership and lifetimes [#ownership-and-lifetimes]
+
+| Value                          | Valid until                                                    | Rule                                                                    |
+| ------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `uwz_app`                      | `uwz_app_destroy` succeeds                                     | One handle owns the slab, listeners, and loop                           |
+| `uwz_request`                  | The callback returns                                           | Copy fields needed after the callback, including from an async callback |
+| `uwz_response`                 | The callback returns                                           | Settle exactly one response; async uses `uwz_async_response`            |
+| `uwz_websocket`                | The receiving callback or a later event on the same connection | Do not retain past close                                                |
+| `uwz_async_response` copy      | Completion or app shutdown                                     | Never use after `uwz_app_destroy`                                       |
+| Route path                     | Copied at registration                                         | The caller may release its buffer                                       |
+| `user_data`                    | Shutdown has drained callbacks                                 | Keep it alive for the app lifetime                                      |
+| WebSocket message slice        | The receiving callback returns                                 | Copy the bytes to keep them                                             |
+| Status, header, body arguments | The response call returns                                      | Copied into bounded storage                                             |
+
+A route path is copied into C storage and then into the router registry, so a
+stack buffer is safe after `uwz_app_route` returns. The `uwz_ws_behavior` value
+is read during registration; its callback pointers and `user_data` are stored.
+
+## Async token rules [#async-token-rules]
+
+- The `uwz_async_response *` passed to an async callback is callback-local.
+  Returning `UWZ_HANDLER_PENDING` means the callback copied the whole struct,
+  including `state` and `generation`, into storage it owns.
+- Complete the copy on the event loop that owns the connection. There is no
+  cross-thread wake. Complete exactly once; a stale or duplicate token returns
+  `UWZ_ERROR_INVALID_STATE`.
+- The token remains valid until completion or app shutdown, and never after
+  `uwz_app_destroy`.
+- Copying the token does not extend the lifetime of request fields, route
+  captures, or WebSocket message slices. Copy those separately.
+
+`UWZ_HANDLER_COMPLETE` means the callback already completed the token before
+returning. It must not also return a token for later use.
+
+## Linking requirements [#linking]
+
+List each archive before the archives it calls into. An undefined symbol usually
+means a reversed order, a missing C++ runtime, or a missing platform library.
+
+```sh
+cc -std=c11 -O2 -o server main.c \
+  zig-out/lib/libuWebZockets.a zig-out/lib/liblsquic.a \
+  zig-out/lib/libssl.a zig-out/lib/libcrypto.a \
+  zig-out/lib/libdeflate.a zig-out/lib/libz.a \
+  -lstdc++ -lc -lm -lpthread
+```
+
+| Platform         | Runtime libraries                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| Linux with GCC   | `-lstdc++ -lc -lm -lpthread`                                                       |
+| macOS with Clang | `-lc++ -lc -lm -lpthread`                                                          |
+| Windows          | Add `-lws2_32 -lmswsock -lcrypt32 -ladvapi32`, and link the compiler's C++ runtime |
+
+The five dependency archives are `libssl.a`, `libcrypto.a`, `liblsquic.a`,
+`libdeflate.a`, and `libz.a`. The installed set also includes
+`libuWebZockets.a` and `zig-out/include/uWebZockets.h`.
+
+## Consumer `build.zig` [#consumer-buildzig]
+
+Add the tagged package to your own project. You do not clone or build the
+framework repository.
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.1.6.tar.gz'
+```
+
+```zig build.zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const uz = b.dependency("uWebZockets", .{ .target = target, .optimize = optimize });
+    const module = b.createModule(.{
+        .target = target, .optimize = optimize, .link_libc = true, .link_libcpp = true,
+    });
+    module.addIncludePath(uz.path("include"));
+    module.addCSourceFile(.{ .file = b.path("src/main.c"), .flags = &.{"-std=c11"} });
+    module.linkLibrary(uz.artifact("uWebZockets"));
+    for ([_][]const u8{ "ssl", "crypto", "lsquic", "deflate", "z" }) |name| {
+        module.linkLibrary(uz.artifact(name));
+    }
+    const exe = b.addExecutable(.{ .name = "c-server", .root_module = module });
+    b.installArtifact(exe);
+}
+```
+
+```sh
+zig build
+./zig-out/bin/c-server
+```
+
+`uz.path("include")` supplies the installed header. `uz.artifact("uWebZockets")`
+links the ABI archive, and the loop links the five dependency archives. Direct
+archive linking is covered in [C ABI operations](/docs/operations/c-abi); the
+complete C program is in [Embed from C or C++](/docs/guides/c-abi).
+
+## Related [#related]
+
+- [Embed from C or C++](/docs/guides/c-abi) builds a complete program.
+- [C ABI operations](/docs/operations/c-abi) produces and installs the archives.
+- [C ABI architecture](/docs/architecture/c-abi) explains the handle model.
+- [Errors](/reference/errors) maps every C code to its cause.
