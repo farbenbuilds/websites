@@ -3,8 +3,8 @@
 > Status: active
 > Canonical path: `uWZ-TODO.md` (repository root)
 > Owner: `docs-writer` with `integrator` as product reviewer; `architect` approves scope, `integrator` closes milestones
-> Last updated: 2026-11-09
-> Product baseline: µWebZockets 2.1.6, Zig 0.16.0
+> Last updated: 2026-11-10
+> Product baseline: µWebZockets 2.2.0, Zig 0.16.0
 > Site baseline: Blume 2.2.6, Astro, Svelte 5 islands, English and Vietnamese
 
 This file is the single planning surface for the uWebZockets documentation site.
@@ -27,7 +27,8 @@ files for the same scope.
 | Docs writer     | Section 5, then Section 6               | Pick a page and follow its content contract          |
 | Agent           | Section 0.3, then the assigned task row | Execute one bounded slice and report evidence        |
 | Reviewer        | Section 11 and the page row             | Check acceptance criteria without rewriting the page |
-| Maintainer      | Sections 12 and 13                      | Track risk, decisions, releases, and drift           |
+| Maintainer      | Sections 12, 13, and 19                 | Track risk, decisions, releases, drift, and upgrades |
+| Upgrader        | Section 19                              | Move a 2.1.6 service to 2.2.0 without guessing       |
 
 ### 0.2 Status vocabulary
 
@@ -875,16 +876,16 @@ section. The decision and boundary rules are in Section 4.7.
 
 ### 5.17 Migration
 
-| ID      | Route                                       | Page                      | Type      | Priority | Milestone | Source                  | Status |
-| ------- | ------------------------------------------- | ------------------------- | --------- | -------- | --------- | ----------------------- | ------ |
-| UWZ-300 | `/docs/migration`                           | Migration                 | Index     | P1       | M5        | This file               | Live   |
-| UWZ-301 | `/docs/migration/from-uwebsockets`          | From uWebSockets          | Migration | P1       | M5        | `docs/api.md`           | Live   |
-| UWZ-302 | `/docs/migration/from-std-http`             | From `std.http`           | Migration | P1       | M5        | `docs/http.md`          | Live   |
-| UWZ-303 | `/docs/migration/from-other-zig-frameworks` | From other Zig frameworks | Migration | P2       | M5        | This file               | Live   |
-| UWZ-304 | `/docs/migration/from-c`                    | From C servers            | Migration | P2       | M5        | `include/uWebZockets.h` | Live   |
-| UWZ-305 | `/docs/migration/v1-to-v2`                  | v1 to v2                  | Migration | P1       | M5        | `CHANGELOG.md`          | Live   |
-| UWZ-306 | `/docs/migration/v2-1-to-v2-2`              | 2.1 to 2.2                | Migration | P1       | M5        | `CHANGELOG.md`, roadmap | Live   |
-| UWZ-307 | `/docs/migration/breaking-changes`          | Breaking changes          | Reference | P1       | M5        | `CHANGELOG.md`          | Live   |
+| ID      | Route                                       | Page                      | Type      | Priority | Milestone | Source                     | Status |
+| ------- | ------------------------------------------- | ------------------------- | --------- | -------- | --------- | -------------------------- | ------ |
+| UWZ-300 | `/docs/migration`                           | Migration                 | Index     | P1       | M5        | This file                  | Live   |
+| UWZ-301 | `/docs/migration/from-uwebsockets`          | From uWebSockets          | Migration | P1       | M5        | `docs/api.md`              | Live   |
+| UWZ-302 | `/docs/migration/from-std-http`             | From `std.http`           | Migration | P1       | M5        | `docs/http.md`             | Live   |
+| UWZ-303 | `/docs/migration/from-other-zig-frameworks` | From other Zig frameworks | Migration | P2       | M5        | This file                  | Live   |
+| UWZ-304 | `/docs/migration/from-c`                    | From C servers            | Migration | P2       | M5        | `include/uWebZockets.h`    | Live   |
+| UWZ-305 | `/docs/migration/v1-to-v2`                  | v1 to v2                  | Migration | P1       | M5        | `CHANGELOG.md`             | Live   |
+| UWZ-306 | `/docs/migration/v2-1-to-v2-2`              | 2.1 to 2.2                | Migration | P1       | M5        | Section 19, `CHANGELOG.md` | Draft  |
+| UWZ-307 | `/docs/migration/breaking-changes`          | Breaking changes          | Reference | P1       | M5        | `CHANGELOG.md`             | Live   |
 
 ### 5.18 Reference
 
@@ -1077,8 +1078,9 @@ Required content:
   transport-neutral boundary, data-oriented memory, no hidden global state,
   evidence over claims.
 - `Installation`: the Zig download page, `zig fetch --save` with the pinned
-  v2.1.6 archive URL, `build.zig` wiring, package-consumer expectations, no
-  CMake or system zlib, first-build cost, offline cache behavior.
+  current-release archive URL (`v2.2.0` at this writing), `build.zig` wiring,
+  package-consumer expectations, no CMake or system zlib, first-build cost,
+  offline cache behavior.
 - `Quickstart`: one complete program, one command, one `curl`, one expected
   output, one next step. Do not combine six protocols in one page.
 - `Project structure`: the consumer's `build.zig`, `build.zig.zon`, `src/`, and
@@ -1737,7 +1739,8 @@ Required content:
 - From other Zig frameworks: what maps, what does not, and when not to migrate.
 - From C: C ABI scope, handles, fixed capacities, async tokens, linking.
 - v1 to v2: exact breaking changes from the changelog, not guessed.
-- 2.1 to 2.2: carried boundaries, new APIs, migration steps.
+- 2.1 to 2.2: shipped APIs, behavior changes, capacity facts, and upgrade
+  steps from Section 19. The current page is Draft until that rewrite lands.
 - Breaking changes index: version, API, old behavior, new behavior, action.
 - Checklist: dependencies, compiler, capacities, TLS, cluster, tests, rollout.
 
@@ -3555,7 +3558,848 @@ source at the time it is written.
 | 2026-11-01 | Documented the Vietnamese terminology rule and corrected Vietnamese prose across docs and landing copy                                                                                                                                                                                                                                                                       | Docs writing pass  |
 | 2026-11-03 | Shipped the WebSocket, HTTP/2, and HTTP/3 sections with Vietnamese mirrors; added the consumer documentation boundary in Section 8.12                                                                                                                                                                                                                                        | Docs writing pass  |
 | 2026-11-09 | Shipped the migration, reference, and example sections; merged the guided tutorials into `/examples` and folded the first HTTP tutorial into Hello world; added reference API coverage and docs parity tests                                                                                                                                                                 | Docs writing pass  |
+| 2026-11-10 | Added Section 19, the source-verified upgrade guide from 2.1.6 to 2.2.0; marked UWZ-306 Draft until the tagged rewrite lands and recorded the shipped file, static, streaming, multipart, and protocol changes                                                                                                                                                               | Release audit pass |
 | 2026-11-09 | Merged every remaining guided example into its canonical program page and merged repeated architecture, guide, glossary, JSON, and WebSocket-security pages into their owning topics; removed 20 duplicate pages in both locales, added direct 301s, and recorded the merge-not-duplicate rule. The site now has 474 documentation pages, 515 built pages, and 86 redirects. | Docs consolidation |
 
 Keep this table short. Detailed page changes belong in the page rows and the
 repository changelog, not here.
+
+## 19. Upgrade from 2.1.6 to 2.2.0
+
+> Status: active, source-verified 2026-11-10
+> Applies to: applications pinned at `v2.1.6` and website pages written against
+> the 2.1.6 baseline
+> Release: `v2.2.0`, merge commit `93f6a3a2910395d7bf4504e780eb4bf0ac20f93e`,
+> PR [#110](https://github.com/farbenbuilds/uWebZockets/pull/110)
+> Source of truth: `CHANGELOG.md` at `v2.2.0`, `src/root.zig`, the owner files
+> named in 19.3, and the tests named in each task
+> Supersedes: the "2.2.0 is not released" language in
+> `apps/uwz-docs/docs/docs/migration/v2-1-to-v2-2.mdx` and every 2.1.6
+> baseline claim that has not been re-checked against the tag
+
+This section is the release bridge between 2.1.6 and 2.2.0. It is written for
+two readers at once:
+
+- A human maintainer who needs to decide whether and how to upgrade a live
+  service.
+- An agent or docs writer who needs to update the website without inventing an
+  API, a limit, or a compatibility claim.
+
+Every row names the source that proves it. When the website and this section
+disagree, the tagged source wins. When this section and the tagged source
+disagree, stop and open a docs defect; do not smooth over the conflict.
+
+### 19.1 Reader contract
+
+| Reader                 | Read first        | Then use                                               |
+| ---------------------- | ----------------- | ------------------------------------------------------ |
+| Application maintainer | 19.2, 19.4, 19.6  | The upgrade checklist in 19.7                          |
+| Docs writer            | 19.1, 19.9, 19.10 | The page tasks in 19.11                                |
+| Agent                  | 19.3, 19.8, 19.11 | One task row at a time, with the named source and gate |
+| Reviewer               | 19.4, 19.7, 19.11 | The acceptance evidence, not prose preference          |
+| Release owner          | 19.2, 19.8, 19.12 | Tag, release, and evidence links                       |
+
+Do not mark a page or task complete because the section exists. A task closes
+only when its named source was read, the page was written against `v2.2.0`, the
+site gate passed, and the evidence is recorded.
+
+### 19.2 Release facts
+
+| Fact                   | 2.1.6                                      | 2.2.0                                              |
+| ---------------------- | ------------------------------------------ | -------------------------------------------------- |
+| Tag                    | `v2.1.6`                                   | `v2.2.0`                                           |
+| Release date           | 2026-10-26                                 | 2026-11-10                                         |
+| Release commit         | `bd40454b559ba954935101372cdbb5f496a3ff21` | `93f6a3a2910395d7bf4504e780eb4bf0ac20f93e`         |
+| Change scale           | patch release                              | 183 non-merge commits, 187 files, +25,711 / -6,167 |
+| Zig toolchain          | 0.16.0                                     | 0.16.0                                             |
+| Package version        | 2.1.6                                      | 2.2.0                                              |
+| Default slab, Linux    | 683,382,400 bytes                          | 689,821,312 bytes                                  |
+| Default slab growth    | -                                          | +6,438,912 bytes (0.94%)                           |
+| C ABI layout           | unchanged                                  | unchanged                                          |
+| Wire formats           | unchanged                                  | unchanged                                          |
+| TLS policy             | TLS 1.3 only                               | TLS 1.3 only                                       |
+| Default buffered body  | 16 KiB                                     | 16 KiB                                             |
+| Default route captures | 16 inline                                  | 16 inline plus configured extras                   |
+| WebTransport live path | not live                                   | not live; capability-gated                         |
+| HTTP/3 clustering      | unsupported                                | unsupported                                        |
+
+The 2.2.0 tag contains the release work only. Commits after the tag on `main`
+are post-release CI and dependency-maintenance changes; do not describe them as
+part of `v2.2.0` unless they are also in the tag.
+
+Release evidence at the tag:
+
+- Debug, ReleaseSafe, and ASan/UBSan suites: 880/880 tests.
+- MemorySanitizer: 16/16 build steps.
+- Windows and macOS cross-compile checks: 20/20 steps each.
+- Fuzz smoke: 3/3; OSS-Fuzz: 28/28 steps with six non-empty counter objects.
+- Downstream package consumer: 16/16 steps; package-path check clean.
+- HTTP/3 compliance: live 100 MB upload returned `104857600` with 140 KiB RSS
+  growth against a 64 MiB bound; a live TRACE returned `200 trace`.
+- Pull-request CI at the tagged commit: 14 passing checks and one non-gating
+  "Publish durable benchmark history" skip.
+
+Do not publish a number without its artifact or command. The 140 KiB figure is
+the final tagged-head CI artifact, not a general throughput claim.
+
+### 19.3 What 2.2.0 adds, by subsystem
+
+#### 19.3.1 Bounded file responses on every transport
+
+2.1.6 served plaintext files through the kernel `sendfile` path
+(`Response.send_file`). TLS, HTTP/2, and HTTP/3 still needed a whole-file
+buffer or the per-route file scratch, so a file larger than that scratch could
+fail with `413` even though the protocol did not require it.
+
+2.2.0 adds `Response.stream_file(status, headers, FileSource)`:
+
+```zig
+pub const FileSource = struct {
+    io: std.Io,
+    file: std.Io.File,
+    buffer: []u8,
+    offset: u64,
+    length: u64,
+};
+
+pub fn stream_file(
+    self: *Response,
+    status: []const u8,
+    headers: []const u8,
+    source: FileSource,
+) !void;
+```
+
+Contract:
+
+- On success the transport owns the descriptor and closes it exactly once after
+  completion, reset, or failure. Every returned error leaves the descriptor
+  with the caller.
+- `buffer` must be nonempty, stable for the transfer, exclusive to this source,
+  and disjoint from transport storage. `io` and the file must outlive the
+  transfer.
+- HEAD sends the declared `Content-Length` and closes the accepted descriptor
+  without reading. Empty files complete without body reads.
+- Bodyless statuses and a successful CONNECT response are refused before
+  ownership changes.
+- HTTP/1 and TLS use `Content-Length` and raw bytes, not chunk delimiters.
+- HTTP/2 bounds reads by both flow-control windows. HTTP/3 copies accepted
+  bytes into its existing body storage before a partial write.
+- Legacy custom targets without file support return
+  `error.FileStreamingUnsupported`.
+- `send_file` remains the plaintext kernel path. On TLS, HTTP/2, and HTTP/3 it
+  returns `error.ZeroCopyUnavailable`, which is the migration signal to use
+  `stream_file`.
+- There is no asynchronous disk I/O. Reads are bounded positional operations on
+  the owning loop. Plan scratch and file descriptors accordingly.
+
+Sources: `src/http/response.zig` (`FileSource`, `send_file`, `stream_file`),
+`docs/http.md#bounded-file-responses`, `docs/adr/0010-bounded-file-streaming.md`,
+and the file-stream tests under `src/tests/file_stream*_tests.zig`.
+
+#### 19.3.2 Static sidecars and filesystem hardening
+
+2.1.6 always treated the file under the static mount as identity. 2.2.0 adds
+optional `.gz` and `.br` sidecars:
+
+```zig
+try app.static("/assets", "public", .{ .precompressed = true });
+```
+
+The complete `static_files.Options` shape is:
+
+```zig
+pub const Options = struct {
+    index: ?[]const u8 = "index.html",
+    etag: bool = true,
+    max_age: u32 = 0,
+    precompressed: bool = false,
+};
+```
+
+Contract:
+
+- Sidecars are selected only from confined regular `.gz`/`.br` files whose
+  modification time is at least the source modification time.
+- Selection scans every `Accept-Encoding` field, including overflow headers,
+  honors explicit refusal, wildcard weights, duplicate codings, and absent
+  versus empty fields, and allocates nothing.
+- A complete refusal returns `406`.
+- Selected coding and metadata determine validators, lengths, and ranges.
+  Ranges address encoded bytes, not the identity file.
+- Negotiable responses include `Vary`; encoded responses include
+  `Content-Encoding`.
+- When identity wins even though `Accept-Encoding` is present, both sidecar
+  probes are skipped.
+- Source and sidecar candidates are preflighted as regular files. A stable FIFO
+  or other special file returns `404` without a blocking open.
+- Descriptor-kind checks and no-symlink confinement remain. A hostile
+  regular-to-FIFO substitution race is still the documented
+  operator-controlled filesystem boundary.
+- A static file head refused by bounded output pressure returns a retryable
+  `503`.
+- Identity-only mounts keep the 2.1.6 behavior; `.gz`/`.br` are opt-in.
+
+Sources: `src/http/static_files.zig`, `src/http/negotiate.zig`,
+`docs/http.md#static-files`, `docs/adr/0009-static-content-coding.md`, and
+`src/tests/static_sidecar_tests.zig`.
+
+#### 19.3.3 Live request-body streaming on all four transports
+
+2.1.6 buffered the complete request body before dispatch. 2.2.0 adds opt-in
+streaming routes on HTTP/1.1, TLS HTTP/1.1, HTTP/2, and HTTP/3:
+
+```zig
+_ = try app.post_stream("/upload", &route);
+_ = try app.put_stream("/upload", &route);
+_ = try app.patch_stream("/upload", &route);
+```
+
+The application-facing surface is:
+
+| Type                    | Purpose                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `BodyRoute`             | Borrowed immutable route configuration for the application lifetime                                                            |
+| `BodySink`              | `context`, `begin`, `chunk`, `end`, `cancel` callbacks                                                                         |
+| `BodyBinding`           | Per-request context returned by `begin`; passed to every later callback                                                        |
+| `BodyControl`           | Copyable, generation-checked `resume()` and `cancel()` token                                                                   |
+| `BodyLimits`            | `max_body_bytes` logical limit and `max_active` admission bound                                                                |
+| `BodyProgress`          | `consumed` prefix and `ready`/`paused` readiness                                                                               |
+| `BodyCancelReason`      | `cancelled`, `peer_closed`, `reset`, `invalid_body`, `body_too_large`, `timeout`, `shutdown`, `source_failure`, `sink_failure` |
+| `StreamingRequest`      | Metadata-only view: method, target, path, protocol, query, headers, route params                                               |
+| `OwnedStreamingRequest` | Allocator-owned metadata clone for deferred or cross-thread work                                                               |
+
+The internal `BodyState` lifecycle is shared by the transport adapters. It is
+not exported as an application API; use `BodyControl` and the callbacks.
+
+Behavior that matters during an upgrade:
+
+- `begin` receives a `BodyControl` and returns a `BodyBinding`. The binding
+  context is passed to `chunk`, `end`, and `cancel` exactly as the application
+  returned it. Do not use the route context as a substitute for per-request
+  state.
+- A sink may start paused. It may also pause in the middle of a chunk by
+  accepting a prefix and returning `.paused`. The unaccepted suffix is retained
+  and reoffered after `resume()`.
+- HTTP/1 and TLS allow one active upload per connection. HTTP/2 bounds
+  concurrent streams by `BodyLimits.max_active`. HTTP/3 allows one per stream.
+  The fixed slab remains the hard memory bound.
+- HTTP/2 withholds stream credit and retains a bounded DATA suffix while
+  paused. HTTP/3 stops reading and retains its bounded suffix.
+- An initial `Expect: 100-continue` receives an interim `100 Continue` after
+  admission on every transport. The application does not synthesize it.
+- Streaming routes execute `headers_only` global middleware once. Response
+  headers set by that middleware are carried to body end, so security and CORS
+  headers are not lost.
+- `middleware_policy = .reject_legacy` is the default. `headers_only`
+  explicitly authorizes global middleware that does not read the body. A
+  middleware callback that reads the body must not run on a streaming route.
+- `StreamingRequest.text()`, `bytes()`, `json()`, `form()`, and `multipart()`
+  are closed full-body views. They return `error.BodyNotBuffered`; consume
+  chunks through the sink or use a buffered route.
+- `StreamingRequest.clone(allocator)` copies metadata only. Body bytes,
+  transport pointers, and control tokens are never copied. Callbacks borrow
+  their pointers only for the callback; copy retained values before returning.
+- H1 fragmented request heads stay on the streaming path. H1 also honors
+  `Expect: 100-continue` and `Connection: close` after a streamed response.
+- A peer disconnect or protocol reset cancels the sink exactly once, releases
+  the binding, and clears the pooled H1 slot before reuse.
+- H2/H3 sink failures, invalid progress, and deferred cancellation deliver the
+  cancel callback and release the admission reservation.
+- `BodyEndFn` receives the response after the body is complete and may start
+  chunked, JSON, stream, or file responses. A response left incomplete fails
+  closed with `500`.
+- The H2 refusal paths return `413`, `425`, or `503` instead of mis-marking a
+  released stream.
+- H3 defers the buffered `Content-Length` ceiling until after route selection.
+  A streaming route may accept a body larger than its per-stream slab; a
+  buffered request still returns `413` before reading.
+- H2 streaming route captures beyond the inline 16 use per-stream overflow
+  storage. A configured `max_route_params` above 16 no longer falls back to
+  buffered dispatch.
+
+Sources: `src/http/request_body.zig`, `src/http/streaming_request.zig`,
+`src/router/app.zig`, `docs/api.md`, `docs/http.md`, `docs/http2.md`,
+`docs/quic.md`, `docs/adr/0008-request-body-streaming.md`,
+`examples/http3_server.zig`, and the request-body tests.
+
+#### 19.3.4 Incremental multipart
+
+2.1.6 shipped the buffered `Request.multipart()`, `multipart.Parser`, `Part`,
+and `ChunkIterator`. 2.2.0 adds an incremental scanner and a part-sink adapter:
+
+| Type                         | Purpose                                                       |
+| ---------------------------- | ------------------------------------------------------------- |
+| `multipart.StreamingLimits`  | `max_body_bytes`, `max_parts`, `max_part_headers`             |
+| `multipart.StreamingStorage` | caller-owned `headers` and `carry` slices                     |
+| `multipart.StreamingParser`  | incremental entity scanner with no I/O or allocation          |
+| `multipart.PartMeta`         | borrowed `name`, optional `filename`, optional `content_type` |
+| `multipart.StreamingEvent`   | `part_begin`, `part_data`, `part_end`                         |
+| `multipart.StreamingStep`    | consumed bytes and an optional event                          |
+| `multipart.MultipartSink`    | adapter from parser events to a `PartSink`                    |
+| `multipart.PartSink`         | `begin_part`, `write_chunk`, `end_part`, `cancel_part`        |
+
+Contract:
+
+- The boundary is copied, must be 1-70 valid bytes, and must not overlap the
+  working storage.
+- `headers` must be nonempty; `carry` must be at least `boundary.len + 4` and
+  disjoint from `headers` and from input.
+- The logical body limit counts the entire entity: preamble, framing, headers,
+  payload, and epilogue.
+- `next(input)` returns only consumed bytes; `part_data` additionally requires
+  `accept_data(n)`. Reoffer the exact unaccepted suffix.
+- `finish()` validates the closing delimiter and never flushes an undecided
+  prefix as payload.
+- Missing closes, truncated metadata, pending data, exceeded bounds, folding,
+  duplicate disposition/type fields, and invalid quoted values fail closed.
+- The part-sink adapter owns active-part cleanup when a callback pauses or
+  fails. `cancel(reason)` is harmless after success.
+- The buffered parser and `Request.multipart()` remain source-compatible.
+
+Sources: `src/http/multipart.zig`, `src/http/multipart_streaming.zig`,
+`src/http/multipart_sink.zig`, `docs/multipart.md`,
+`docs/adr/0011-incremental-multipart.md`, and the multipart tests.
+
+#### 19.3.5 Protocol, lifecycle, and security fixes
+
+| Area                         | 2.1.6 behavior                                              | 2.2.0 behavior                                                                  | Upgrade action                                                    |
+| ---------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| HTTP/2 reset backpressure    | An output-blocked reset could close healthy sibling streams | A bounded reset FIFO retains the reset and flushes it before later HEADERS/DATA | Expect stream-scoped failure, not connection loss                 |
+| HTTP/2 refusal path          | Could mis-mark a released stream                            | Returns `413`, `425`, or `503`                                                  | Retry or surface the status; do not assume an internal error      |
+| HTTP/2 capture overflow      | Streaming route matching used the inline 16 slots           | Per-stream overflow storage follows `max_route_params`                          | Set `with_max_route_params` if the route needs more than 16       |
+| HTTP/3 buffered body ceiling | Applied before route selection                              | Deferred until after route selection for streaming routes                       | A streaming route may accept more than `max_h3_body_size`         |
+| H1 fragmented head           | Could fall back to buffered dispatch                        | Stays on the streaming path                                                     | Re-test proxy and slow-client cases                               |
+| H1 `Expect: 100-continue`    | Not handled                                                 | Interim `100` after admission                                                   | Clients may wait for the interim response                         |
+| H1 `Connection: close`       | Not honored after a streamed response                       | Honored                                                                         | Re-test keep-alive assumptions                                    |
+| Producer completion          | `.done` without `end_chunks` could pass                     | Fails closed (H2 resets the stream; H3 returns 500 or closes)                   | Always call `end_chunks` before `.done`                           |
+| `Response.append_header`     | Accepted a loose field name                                 | Validates one HTTP token and rejects CR/LF splitting                            | Fix handlers that passed invalid names                            |
+| Static special files         | A stable FIFO could block a worker                          | Preflight rejects non-regular files with `404`                                  | Do not publish FIFOs or sockets                                   |
+| Parser diagnostics           | Incomplete request-line scan bytes could be counted twice   | Counted once                                                                    | No API change; update parser tests if they asserted the old count |
+| Timer overflow               | A large clock advance could skip an earlier due timer       | The wheel scans every overflow entry for the earliest migration time            | No API change; re-test deadlines after suspend/resume             |
+| qvalue parser                | Rejected some valid one-digit fractions                     | Accepts them and rejects overlong values consistently                           | Re-test `Accept`/`Accept-Encoding` edge cases                     |
+
+Sources: `CHANGELOG.md` 2.2.0, `docs/http.md`, `docs/http2.md`, `docs/quic.md`,
+`src/http2/server.zig`, `src/quic/stream.zig`, `src/core/tcp.zig`,
+`src/http/parser.zig`, and the matching tests.
+
+#### 19.3.6 Capacity and memory changes
+
+The default capacities did not change. The default slab grew because 2.2.0
+stores more per-connection and per-stream state inline:
+
+| Region                 | Change                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| H1 streaming headers   | A 2 KiB pending-header buffer per connection                                                        |
+| H1 streaming lifecycle | File slots, stream ids, and streaming state inline in the connection                                |
+| H2 streaming           | Per-stream body sink state and the per-stream route-capture pointer fields                          |
+| H2 middleware headers  | Reuses existing per-stream response storage instead of adding another 2 KiB per stream              |
+| Router capture extras  | Charged only when `max_route_params` is above 16                                                    |
+| H2 session storage     | Shared body/header strides remain the hard bound; overflow captures are charged per configured slot |
+
+The Linux default slab moves from `683,382,400` bytes at 2.1.6 to
+`689,821,312` bytes at 2.2.0, a growth of `6,438,912` bytes (0.94%). The
+platform-specific totals are asserted in `src/tests/config_tests.zig`; do not
+copy the Linux number into a macOS or Windows claim.
+
+Useful knobs:
+
+| Knob                           |       Default | Use                                       |
+| ------------------------------ | ------------: | ----------------------------------------- |
+| `max_body_size`                |        16 KiB | Buffered HTTP/1.1 body ceiling            |
+| `max_h2_body_size`             |        16 KiB | HTTP/2 buffered body ceiling per stream   |
+| `max_h3_body_size`             |        16 KiB | HTTP/3 buffered body ceiling per stream   |
+| `max_h2_header_block_size`     |        16 KiB | HTTP/2 header-block ceiling per request   |
+| `max_h2_response_header_size`  |         4 KiB | Encoded HTTP/2 response header ceiling    |
+| `max_h2_response_header_count` |            32 | HTTP/2 response field slots               |
+| `max_h3_response_header_size`  |         4 KiB | Encoded HTTP/3 response header storage    |
+| `max_h3_response_header_count` |            64 | HTTP/3 response field slots               |
+| `max_route_params`             |            16 | Inline captures plus configured overflow  |
+| `BodyLimits.max_body_bytes`    | route-defined | Streaming logical body ceiling            |
+| `BodyLimits.max_active`        | route-defined | Per-session active streaming upload bound |
+
+The streaming hard bound is the fixed connection/stream slab, not
+`ServerConfig.max_body_size`. A streaming route can accept a body larger than
+the buffered limit because the body is never materialized.
+
+Sources: `src/router/config.zig`, `docs/memory_model.md`,
+`src/tests/config_tests.zig`, and `docs/adr/0008-request-body-streaming.md`.
+
+### 19.4 Compatibility verdict
+
+2.2.0 is a minor release. It does not remove a documented public API, change the
+C ABI layout, change a wire format, change TLS policy, or require a data
+migration. The upgrade risk is concentrated in behavior that was previously
+implicit:
+
+1. A streaming response started before the request body is complete now returns
+   `error.BodyNotComplete`. Buffered handlers are unaffected because their
+   request body is complete by default.
+2. `send_file` on TLS, HTTP/2, and HTTP/3 now returns
+   `error.ZeroCopyUnavailable`; use `stream_file` there.
+3. Static mounts preflight special files and only expose `.gz`/`.br` when
+   `precompressed = true`.
+4. H2 reset pressure is stream-scoped and refusal statuses are explicit.
+5. `append_header` rejects invalid field names and CR/LF injection attempts.
+6. Producers that return `.done` without `end_chunks` fail closed.
+7. H1 streaming honors `Expect: 100-continue` and `Connection: close`.
+8. H3 streaming defers the buffered `Content-Length` ceiling; buffered requests
+   still fail before reading.
+
+Compatibility matrix:
+
+| Surface                             | 2.1.6 to 2.2.0          | Evidence                                        |
+| ----------------------------------- | ----------------------- | ----------------------------------------------- |
+| `Request` / `Response` core methods | Source-compatible       | `src/http/request.zig`, `src/http/response.zig` |
+| Buffered body helpers               | Source-compatible       | `Request.text/bytes/json/form/multipart` tests  |
+| Async tokens                        | Source-compatible       | `AsyncResponse` tests                           |
+| WebSocket API                       | Source-compatible       | RFC 6455/Autobahn CI                            |
+| JSON-RPC API                        | Source-compatible       | RPC tests                                       |
+| Cluster API                         | Source-compatible       | cluster tests                                   |
+| C ABI                               | Layout-compatible       | `include/uWebZockets.h`, C tests                |
+| TLS policy                          | Unchanged, TLS 1.3 only | `docs/tls.md`, TLS tests                        |
+| Wire formats                        | Unchanged               | HTTP/1.1, H2, H3 compliance jobs                |
+| Fixed-capacity model                | Unchanged               | `docs/memory_model.md`                          |
+
+If a service relied on a specific 2.1.6 error path, re-run that path. A minor
+release is source-compatible by policy, not a promise that every internal error
+name survived.
+
+### 19.5 Destination checks before touching an app
+
+Run these before changing code:
+
+```sh
+zig version
+# Expect 0.16.0
+
+git -C path/to/uWebZockets describe --tags --exact-match
+# Expect v2.2.0 for the release source
+
+rg -n 'send_file|begin_chunked|begin_stream|begin_json|sse|append_header' src
+rg -n 'App\.static|static\(' src
+rg -n 'post_stream|put_stream|patch_stream|BodyRoute|BodySink' src
+rg -n 'StreamingParser|MultipartSink|multipart\(' src
+rg -n 'max_route_params|max_h2_body_size|max_h3_body_size' src
+```
+
+Then answer:
+
+- Which routes serve files larger than the route scratch on TLS/H2/H3?
+- Which handlers start a response before reading the body?
+- Which static mounts need precompressed sidecars?
+- Which uploads are currently buffered and exceed the buffered ceiling?
+- Which routes capture more than 16 parameters?
+- Which middleware reads the body?
+- Which tests assert 2.1.6 error paths?
+
+If the answer is "none", the upgrade may be a tag bump plus a full test run. If
+any answer is "yes", use 19.6 and 19.7.
+
+### 19.6 Migration recipes
+
+#### 19.6.1 Pin the release
+
+```sh
+zig fetch --save 'https://github.com/farbenbuilds/uWebZockets/archive/refs/tags/v2.2.0.tar.gz'
+zig build test
+```
+
+Keep the tag pinned. Do not pin `main`; main may contain post-release CI fixes
+that are not part of `v2.2.0`.
+
+#### 19.6.2 Replace a large TLS/H2/H3 file response
+
+Before, the handler buffered or refused a file larger than the scratch:
+
+```zig
+// 2.1.6 pattern: only the plaintext path had a bounded kernel fallback.
+res.send_file(status, headers, file, offset, length) catch |err| switch (err) {
+    error.ZeroCopyUnavailable => {
+        // Buffer the file, or return 413/500.
+    },
+    else => return err,
+};
+```
+
+After, use `stream_file` with caller-owned scratch:
+
+```zig
+// Excerpt; the full ownership example is in docs/http.md and
+// src/tests/file_stream_tests.zig.
+try res.stream_file(status, headers, .{
+    .io = io,
+    .file = file,
+    .buffer = scratch,
+    .offset = offset,
+    .length = length,
+});
+```
+
+Rules:
+
+- Open the file before calling `stream_file`; the transport owns it only after a
+  successful call.
+- Keep `scratch` and `io` alive until completion or cancellation.
+- Do not share `scratch` with another active file response.
+- Do not use `send_file` on TLS, H2, or H3 and then retry with the same
+  descriptor; `send_file` returns `ZeroCopyUnavailable` before taking
+  ownership, so the caller still owns it.
+- HEAD and empty files need no special branch; the transport handles both.
+
+#### 19.6.3 Enable static sidecars
+
+```zig
+try app.static("/assets", "public", .{
+    .index = "index.html",
+    .etag = true,
+    .max_age = 3600,
+    .precompressed = true,
+});
+```
+
+Publish sidecars next to the source:
+
+```text
+public/app.js
+public/app.js.gz
+public/app.js.br
+```
+
+Rules:
+
+- The sidecar must be a regular file, not a symlink or FIFO.
+- The sidecar modification time must be at least the source modification time.
+- Ranges apply to the encoded bytes. Do not mix identity and encoded ranges.
+- Test `Accept-Encoding` absence, `identity`, `gzip`, `br`, refusal, wildcard,
+  duplicate fields, and `Vary`.
+- Identity-only mounts do not need sidecars; leave `precompressed` false.
+
+#### 19.6.4 Move a buffered upload to a streaming sink
+
+The canonical runnable example is `examples/http3_server.zig`. The shape is:
+
+```zig
+const Upload = struct {
+    bytes: u64 = 0,
+    active: bool = false,
+
+    fn begin(context: *anyopaque, request: *const uz.StreamingRequest, _: uz.BodyControl) !uz.BodyBinding {
+        const self: *Upload = @ptrCast(@alignCast(context));
+        if (self.active) return error.UploadBusy;
+        if (!std.mem.eql(u8, request.method, "POST")) return error.UnexpectedMethod;
+        if (!std.mem.eql(u8, request.path, "/upload")) return error.UnexpectedPath;
+        self.active = true;
+        self.bytes = 0;
+        return .{ .context = self, .readiness = .ready };
+    }
+
+    fn chunk(context: *anyopaque, input: []const u8) !uz.BodyProgress {
+        const self: *Upload = @ptrCast(@alignCast(context));
+        self.bytes += input.len;
+        return .{ .consumed = input.len, .readiness = .ready };
+    }
+
+    fn end(context: *anyopaque, _: *const uz.StreamingRequest, response: *uz.Response) !void {
+        const self: *Upload = @ptrCast(@alignCast(context));
+        self.active = false;
+        var buffer: [32]u8 = undefined;
+        const body = try std.fmt.bufPrint(&buffer, "{d}", .{self.bytes});
+        try response.end("200 OK", body);
+    }
+
+    fn cancel(context: *anyopaque, _: uz.BodyCancelReason) void {
+        const self: *Upload = @ptrCast(@alignCast(context));
+        self.active = false;
+    }
+};
+
+var upload = Upload{};
+var route = uz.BodyRoute{
+    .sink = .{
+        .context = &upload,
+        .begin = Upload.begin,
+        .chunk = Upload.chunk,
+        .end = Upload.end,
+        .cancel = Upload.cancel,
+    },
+    .limits = .{ .max_body_bytes = 128 * 1024 * 1024, .max_active = 1 },
+    .middleware_policy = .headers_only,
+};
+_ = try app.post_stream("/upload", &route);
+```
+
+Rules:
+
+- The route and its context must outlive the application.
+- The binding context is per request. Do not mutate the route context to hold a
+  second concurrent upload.
+- Store `BodyControl` only if the sink needs to pause or cancel later. A copy is
+  valid only on the owning event loop.
+- Return `.ready` only when the whole chunk was accepted. Return `.paused` with
+  an accepted prefix when the sink is full.
+- `cancel` is not optional cleanup. Release file handles, reservations, and
+  application state there.
+- `end` owns the response. Start it only after the body is complete.
+- If middleware must run, validate that every callback is header-only before
+  setting `middleware_policy = .headers_only`.
+
+#### 19.6.5 Adopt incremental multipart
+
+```zig
+var headers: [2048]u8 = undefined;
+var carry: [74]u8 = undefined;
+var parser = try uz.multipart.StreamingParser.init("upload-boundary", .{
+    .max_body_bytes = 100_000_000,
+    .max_parts = 128,
+    .max_part_headers = 16,
+}, .{ .headers = &headers, .carry = &carry });
+```
+
+Then call `next(input)` and acknowledge `part_data` with `accept_data(n)`.
+For a part sink, construct `uz.multipart.MultipartSink` with the initialized
+parser and a `PartSink`, call `consume(input)`, and call `finish()` at outer EOF.
+Keep the parser storage and sink context alive and exclusive for the upload.
+
+#### 19.6.6 Raise capture capacity for H2 streaming
+
+```zig
+var server = try uz.Server.builder(init.io)
+    .with_max_route_params(24)
+    .build(std.heap.page_allocator);
+defer server.deinit();
+```
+
+2.2.0 charges the extra capture slots only when configured. The inline 16 remain
+free. H2 streaming requests now use per-stream overflow storage, so a route with
+more than 16 captures no longer falls back to buffered dispatch.
+
+### 19.7 Upgrade checklist and milestones
+
+#### 19.7.1 U0: freeze the 2.1.6 facts
+
+- [ ] Record the current tag and commit (`git describe --tags --exact-match`).
+- [ ] Record the current `ServerConfig` and preset values.
+- [ ] Record the current static mount options.
+- [ ] Record which routes use buffered bodies and which use file responses.
+- [ ] Save a baseline of current `413`, `406`, `500`, and reset counts.
+- [ ] Confirm the toolchain is Zig 0.16.0.
+
+Exit: a one-page inventory exists and names every route that 19.5 flags.
+
+#### 19.7.2 U1: compile against 2.2.0
+
+- [ ] Pin `v2.2.0`.
+- [ ] Run the application's unit and integration tests.
+- [ ] Run a Debug and ReleaseSafe build.
+- [ ] Fix only real source breaks; do not rewrite for style.
+- [ ] Check `append_header` call sites for invalid field names.
+- [ ] Check producers for `.done` before `end_chunks`.
+
+Exit: clean build and tests on the new tag, with no behavior change yet.
+
+#### 19.7.3 U2: migrate file and static delivery
+
+- [ ] Replace TLS/H2/H3 large-file fallbacks with `stream_file`.
+- [ ] Verify descriptor ownership on success and on every error.
+- [ ] Verify HEAD and empty-file responses.
+- [ ] Enable `precompressed` only where sidecars exist and are fresh.
+- [ ] Test identity, gzip, br, refusal, wildcard, duplicate fields, and ranges.
+- [ ] Confirm FIFOs/special files return `404` and do not block.
+- [ ] Confirm output-pressure `503` is retried by the client.
+
+Exit: file and static routes pass the transport matrix and no descriptor leaks.
+
+#### 19.7.4 U3: migrate uploads
+
+- [ ] Move only uploads that exceed the buffered ceiling or need early
+      authentication.
+- [ ] Set `BodyLimits.max_body_bytes` and `max_active` from measured demand.
+- [ ] Return `.ready` only for fully accepted chunks.
+- [ ] Test begin-paused, mid-chunk pause, resume, cancel, peer disconnect, and
+      invalid progress.
+- [ ] Test `Expect: 100-continue` with a client that waits.
+- [ ] Test H2 flow-control pause and H3 stop-reading pause.
+- [ ] Confirm `headers_only` middleware is actually header-only.
+- [ ] Confirm cancel releases every application reservation.
+
+Exit: streaming uploads pass on H1, TLS, H2, and H3, or the route remains
+buffered with a documented reason.
+
+#### 19.7.5 U4: harden protocol behavior
+
+- [ ] Re-test H2 reset pressure with a blocked output queue; healthy siblings
+      must survive.
+- [ ] Re-test H2 refusal statuses (`413`, `425`, `503`).
+- [ ] Re-test H3 buffered `Content-Length` (`413` before read) and streaming
+      (`accepts larger body`).
+- [ ] Re-test H1 fragmented heads, `Expect`, and `Connection: close`.
+- [ ] Re-test static FIFO and symlink behavior.
+- [ ] Re-test `append_header` rejection of CR/LF and invalid tokens.
+- [ ] Re-test timer deadlines across suspend/resume.
+
+Exit: every behavior change in 19.3.5 has a targeted test or a written
+exception.
+
+#### 19.7.6 U5: verify and publish
+
+- [ ] Run Debug, ReleaseSafe, and sanitizer builds.
+- [ ] Run cross-compile checks for Windows and macOS.
+- [ ] Run the package-consumer check if the project consumes the Zig package.
+- [ ] Run the HTTP/3 compliance gate if HTTP/3 is enabled.
+- [ ] Update the site pages in 19.11.
+- [ ] Run `blume doctor`, `check`, `validate --strict`, `build`, and `audit`.
+- [ ] Publish only after the tag, changelog, and evidence links agree.
+
+Exit: the site and the application both point at `v2.2.0` with the same facts.
+
+### 19.8 Rollout and rollback
+
+Rollout:
+
+1. Deploy the tag to a canary with static and upload routes enabled.
+2. Watch `406`, `413`, `425`, `503`, reset counts, RSS, and descriptor counts.
+3. Confirm H1 keep-alive and `Expect: 100-continue` clients.
+4. Confirm H2 sibling streams survive a reset burst.
+5. Confirm H3 upload RSS stays flat under the configured bound.
+6. Raise traffic only after the canary matches the 2.1.6 baseline.
+
+Rollback:
+
+- The `v2.1.6` tag is immutable. Re-pin it and redeploy.
+- No data migration is required.
+- No wire-format migration is required.
+- If a static sidecar caused a regression, set `precompressed = false` first;
+  this restores identity delivery without a code rollback.
+- If a streaming route caused a regression, remove or re-register it as a
+  buffered route; the buffered request API is unchanged.
+- If `append_header` now rejects a field, fix the name; do not bypass the
+  validation.
+
+### 19.9 Evidence and claims rules
+
+Use these rules when writing the website page or a release note:
+
+- The tag, commit, date, PR number, and version come from 19.2. Do not guess.
+- A feature is "shipped" only when it is in the tagged tree and the changelog
+  section. A post-tag commit on `main` is not part of `v2.2.0`.
+- A limit comes from `src/router/config.zig` or the owning ADR, not from an old
+  page.
+- An error name comes from the source, not from memory.
+- A performance number needs the artifact or command that produced it.
+- Do not claim native Windows runtime support, official HttpArena results,
+  quiet-host numbers, live WebTransport, or HTTP/3 clustering.
+- Do not claim "zero allocation" for application JSON or multipart parsing that
+  explicitly takes an allocator. The zero-allocation claim applies to the
+  bounded request path and the helpers documented as allocation-free.
+- Do not call `StreamingRequest.text()` or `bytes()` to read an upload.
+- Do not expose `BodyState` as an application API.
+
+### 19.10 Stale-page sweep
+
+The current `v2-1-to-v2-2.mdx` page is wrong for 2.2.0 in four ways:
+
+1. It says "2.2.0 is not released" and "no 2.2.0 tag exists".
+2. It lists 2.2.0 as a planning target with no shipped API.
+3. It tells readers to pin 2.1.6 and not write against 2.2.0 names.
+4. It marks file, static, streaming, multipart, and H2/H3 work as "carried".
+
+Rewrite the page around the tagged facts in 19.2. Search for the same stale
+claims across the site:
+
+```sh
+rg -n '2\.2\.0 is not released|no 2\.2\.0|planning target|Carried for 2\.2\.0|pin 2\.1\.6' \
+  apps/uwz-docs/docs
+rg -n '2\.1\.6' apps/uwz-docs/docs/docs apps/uwz-docs/docs/reference
+rg -n 'stream_file|post_stream|precompressed|StreamingParser|MultipartSink' \
+  apps/uwz-docs/docs
+```
+
+Update at least:
+
+- `apps/uwz-docs/docs/docs/migration/v2-1-to-v2-2.mdx` and its Vietnamese
+  mirror.
+- `apps/uwz-docs/docs/docs/migration/v1-to-v2.mdx` and its mirror.
+- `apps/uwz-docs/docs/docs/migration/breaking-changes.mdx` and its mirror.
+- `apps/uwz-docs/docs/docs/http/static-files.mdx` if present, or the static
+  section of the HTTP page.
+- `apps/uwz-docs/docs/docs/http/streaming.mdx` if present, or the streaming
+  section of the HTTP page.
+- `apps/uwz-docs/docs/docs/http2/*` and `http3/*` for capture, pause/resume,
+  `100-continue`, and `stream_file`.
+- `apps/uwz-docs/docs/reference/limits.mdx` for the 2.2.0 slab and limits.
+- `apps/uwz-docs/docs/reference/compatibility.mdx` for the 2.2.0 tag.
+- `apps/uwz-docs/docs/docs/migration/meta.ts` if the page title or order
+  changes.
+
+Do not create a second migration page. Extend `UWZ-306`; do not fork it.
+
+### 19.11 Page tasks
+
+| ID        | Task                                                | Owner            | Priority | Source                               | Acceptance                                                                                  |
+| --------- | --------------------------------------------------- | ---------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| UWZ-UP-01 | Replace the 2.2.0 planning banner with tagged facts | Docs writer      | P0       | 19.2, `CHANGELOG.md` 2.2.0           | Page names `v2.2.0`, date, commit, PR #110, and Zig 0.16.0                                  |
+| UWZ-UP-02 | Rewrite the status table: shipped vs still carried  | Docs writer      | P0       | 19.3, 19.12                          | Every 2.2.0 row is `Shipped in 2.2.0` or explicitly `Carried beyond 2.2.0`                  |
+| UWZ-UP-03 | Add the file-response section and ownership table   | Docs writer      | P0       | 19.3.1, `docs/http.md`               | `FileSource`, `stream_file`, HEAD, empty, error ownership, and fallback are covered         |
+| UWZ-UP-04 | Add the static sidecar section and tests            | Docs writer      | P0       | 19.3.2, `docs/http.md`               | `precompressed`, freshness, `Vary`, validators, ranges, 406, FIFO 404 are covered           |
+| UWZ-UP-05 | Add the request-body streaming guide                | Docs writer      | P0       | 19.3.3, `examples/http3_server.zig`  | Begin/chunk/end/cancel, binding, pause/resume, limits, 100-continue, middleware are covered |
+| UWZ-UP-06 | Add the incremental multipart guide                 | Docs writer      | P1       | 19.3.4, `docs/multipart.md`          | Parser, storage, events, acknowledgement, sink, finish, and errors are covered              |
+| UWZ-UP-07 | Update H2/H3 pages                                  | Protocol writer  | P0       | 19.3.3, 19.3.5                       | Capture overflow, reset FIFO, refusal statuses, 100-continue, H3 ceiling are covered        |
+| UWZ-UP-08 | Update limits/reference pages                       | Reference writer | P0       | 19.3.6, `docs/memory_model.md`       | Default slab, capacity knobs, streaming limits, and platform variants match code            |
+| UWZ-UP-09 | Update the breaking-changes index                   | Docs writer      | P1       | 19.4, `CHANGELOG.md`                 | Each behavior change has old/new/action and a test or source link                           |
+| UWZ-UP-10 | Compile the new snippets                            | Verification     | P0       | 19.6, `tests/`, `examples/`          | Snippets compile against `v2.2.0` or are labelled excerpts with a full-source link          |
+| UWZ-UP-11 | Mirror the updated page into Vietnamese             | Translator       | P1       | English page, glossary               | Technical review passes; no machine translation is published unchecked                      |
+| UWZ-UP-12 | Run the site gates and record evidence              | Verification     | P0       | 19.7.6                               | `doctor`, `check`, `validate --strict`, `build`, `audit` pass; links resolve                |
+| UWZ-UP-13 | Sweep stale 2.1.6 claims outside migration          | Docs writer      | P1       | 19.10                                | `rg` results are either updated or recorded as intentional history                          |
+| UWZ-UP-14 | Update the page register row and change log         | Integrator       | P1       | `uWZ-TODO.md` sections 5.17 and 18.6 | `UWZ-306` status is accurate and the change log has one dated row                           |
+
+Task rules:
+
+- Read the named source before writing the page.
+- Use graphify for code questions; the relevant nodes are `BodyState`,
+  `StreamingRequest`, `BodyRoute`, `FileSource`, and the HTTP/2 server
+  community. Do not infer an API from a neighbouring page.
+- Keep code samples complete or label them as excerpts with the full source.
+- Do not claim a benchmark, Windows runtime, WebTransport, or quiet-host result.
+- Update the Vietnamese mirror only after the English page passes review.
+- Run the site gates from `apps/uwz-docs`; paste the commands and outcomes into
+  the task report.
+
+### 19.12 What remains carried beyond 2.2.0
+
+| Boundary                        | Why it remains                                                                                                                                              | Restoration criterion                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Oversized owners                | `src/core/tcp.zig`, `src/router/app.zig`, `src/http2/server.zig`, `src/http/response.zig`, and `src/quic/stream.zig` remain above the 1000-line review flag | Split named seams without weakening the gates; planned for 2.3.0                                                                                            |
+| WebTransport live path          | The maintained lsquic fork lacks the complete draft-16 server surface and a compatible client gate                                                          | A capability-gated fork sync plus a passing client gate                                                                                                     |
+| Receive-side UDP GRO            | The loop reads one datagram at a time                                                                                                                       | Ancillary control messages expose `UDP_GRO` segment sizes and the pinned HTTP/3 gates pass                                                                  |
+| Quiet-host performance evidence | No designated quiet host                                                                                                                                    | Run the v2.0/v2.1 pipeline, WebSocket, `json-comp`, and `latency-1m` contracts on a named host                                                              |
+| HttpArena `async` adapter       | External adapter and official run are outside this repository                                                                                               | An official run is recorded after the tag                                                                                                                   |
+| Native Windows runtime          | CI cross-compiles Windows; no native runtime job                                                                                                            | A hosted native Windows runtime gate passes                                                                                                                 |
+| lsquic integration pin          | The mirror is synced, but `uwz/main` still pins `85bd081c...`                                                                                               | Review and merge the compatible upstream range, update the source list for removed adaptive CC and added BBRv3, run the HTTP/3 gate, and pin all four views |
+| h1spec attribution              | The pinned submodule still has no license notice                                                                                                            | Resolve the attribution before redistributing the submodule                                                                                                 |
+| kTLS                            | Standalone helper only                                                                                                                                      | Measured benefit and a production integration decision                                                                                                      |
+| Asynchronous disk I/O           | `stream_file` uses bounded synchronous positional reads                                                                                                     | A portable async file path with the same ownership contract                                                                                                 |
+| HTTP/3 clustering               | `init_http3` and `listen_udp` are single-application                                                                                                        | A cluster listener design and passing compliance evidence                                                                                                   |
+
+Do not describe a carried boundary as a 2.2.0 feature. Do not remove a boundary
+row because the release shipped; only update it when the restoration criterion
+is evidenced.
+
+### 19.13 Quick reference card
+
+| Question                                     | Answer                                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Which tag should I pin?                      | `v2.2.0`                                                                               |
+| Is the C ABI compatible with 2.1.6?          | Yes, layout-compatible                                                                 |
+| Do buffered handlers need changes?           | No, unless they start a response before the body is complete                           |
+| Do large-file handlers need changes?         | Only TLS/H2/H3 paths that used `send_file`; move them to `stream_file`                 |
+| Are static sidecars automatic?               | No, opt in with `.precompressed = true`                                                |
+| Are uploads streamed automatically?          | No, register `post_stream`, `put_stream`, or `patch_stream`                            |
+| Is `StreamingRequest.text()` an upload body? | No, it returns `error.BodyNotBuffered`                                                 |
+| Is `BodyState` public?                       | No, use `BodyControl` and the callbacks                                                |
+| Are route captures still limited to 16?      | No, `max_route_params` controls the overflow; H2 streaming now uses per-stream storage |
+| What is the Linux default slab?              | `689,821,312` bytes at 2.2.0                                                           |
+| Does HTTP/3 cluster?                         | No                                                                                     |
+| Is WebTransport live?                        | No, capability-gated                                                                   |
+| Is native Windows runtime claimed?           | No, cross-compile only                                                                 |
+| Where is the release evidence?               | `CHANGELOG.md` 2.2.0, PR #110, and the tagged CI record                                |
