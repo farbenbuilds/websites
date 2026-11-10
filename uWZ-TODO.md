@@ -3569,7 +3569,8 @@ repository changelog, not here.
 > Status: active, source-verified 2026-11-10
 > Applies to: applications pinned at `v2.1.6` and website pages written against
 > the 2.1.6 baseline
-> Release: `v2.2.0`, merge commit `93f6a3a2910395d7bf4504e780eb4bf0ac20f93e`,
+> Release: `v2.2.0`, tag commit `70a3e488bc6a754e63fd6f59690f68d9ca6e7d45`,
+> PR merge commit `93f6a3a2910395d7bf4504e780eb4bf0ac20f93e`,
 > PR [#110](https://github.com/farbenbuilds/uWebZockets/pull/110)
 > Source of truth: `CHANGELOG.md` at `v2.2.0`, `src/root.zig`, the owner files
 > named in 19.3, and the tests named in each task
@@ -3623,9 +3624,10 @@ site gate passed, and the evidence is recorded.
 | WebTransport live path | not live                                   | not live; capability-gated                         |
 | HTTP/3 clustering      | unsupported                                | unsupported                                        |
 
-The 2.2.0 tag contains the release work only. Commits after the tag on `main`
-are post-release CI and dependency-maintenance changes; do not describe them as
-part of `v2.2.0` unless they are also in the tag.
+The 2.2.0 tag is `70a3e48`, the post-release fix commit that includes the
+release work plus the benchmark publisher and lsquic mirror updates. The PR
+merge commit is `93f6a3a`. Commits after `70a3e48` on `main` are not part of
+the tag.
 
 Release evidence at the tag:
 
@@ -3642,13 +3644,13 @@ Release evidence at the tag:
 Do not publish a number without its artifact or command. The 140 KiB figure is
 the final tagged-head CI artifact, not a general throughput claim.
 
-Post-release release-gate note: the immutable `v2.2.0` tag records the lsquic
-mirror at `413ca7c1...`, so its `Publish` provenance job fails the weekly
-upstream-equality check after upstream advanced to `cd23e526...`. The mirror
-was synced and recorded on `main` immediately after the tag. Treat the
-`v2.2.0` tag as immutable; either publish a follow-up patch release or obtain
-explicit maintainer approval before moving the tag. Do not describe the failed
-`Publish` run as a code or compliance failure.
+Release-window note: the tag was first cut at the PR merge commit
+`93f6a3a`, whose `scripts/dependency_mirrors.env` still recorded lsquic
+`413ca7c1...`. Upstream had already advanced to `cd23e526...`, so the first
+`Publish` provenance run failed. With maintainer approval, the tag was moved
+within the release window to `70a3e48`, which includes the reviewed mirror sync
+and the benchmark publisher fix; `Publish` was rerun on the new tag. Treat
+`70a3e48` as the immutable `v2.2.0` tag commit.
 
 ### 19.3 What 2.2.0 adds, by subsystem
 
