@@ -3611,7 +3611,7 @@ site gate passed, and the evidence is recorded.
 | Tag                    | `v2.1.6`                                   | `v2.2.0`                                           |
 | Release date           | 2026-10-26                                 | 2026-11-10                                         |
 | Release commit         | `bd40454b559ba954935101372cdbb5f496a3ff21` | `70a3e488bc6a754e63fd6f59690f68d9ca6e7d45`         |
-| Change scale           | patch release                              | 183 non-merge commits, 187 files, +25,711 / -6,167 |
+| Change scale           | patch release                              | 184 non-merge commits, 189 files, +25,747 / -6,170 |
 | Zig toolchain          | 0.16.0                                     | 0.16.0                                             |
 | Package version        | 2.1.6                                      | 2.2.0                                              |
 | Default slab, Linux    | 683,382,400 bytes                          | 689,821,312 bytes                                  |
