@@ -3610,7 +3610,7 @@ site gate passed, and the evidence is recorded.
 | ---------------------- | ------------------------------------------ | -------------------------------------------------- |
 | Tag                    | `v2.1.6`                                   | `v2.2.0`                                           |
 | Release date           | 2026-10-26                                 | 2026-11-10                                         |
-| Release commit         | `bd40454b559ba954935101372cdbb5f496a3ff21` | `93f6a3a2910395d7bf4504e780eb4bf0ac20f93e`         |
+| Release commit         | `bd40454b559ba954935101372cdbb5f496a3ff21` | `70a3e488bc6a754e63fd6f59690f68d9ca6e7d45`         |
 | Change scale           | patch release                              | 183 non-merge commits, 187 files, +25,711 / -6,167 |
 | Zig toolchain          | 0.16.0                                     | 0.16.0                                             |
 | Package version        | 2.1.6                                      | 2.2.0                                              |
@@ -3638,8 +3638,11 @@ Release evidence at the tag:
 - Downstream package consumer: 16/16 steps; package-path check clean.
 - HTTP/3 compliance: live 100 MB upload returned `104857600` with 140 KiB RSS
   growth against a 64 MiB bound; a live TRACE returned `200 trace`.
-- Pull-request CI at the tagged commit: 14 passing checks and one non-gating
+- Pull-request CI at the release source: 14 passing checks and one non-gating
   "Publish durable benchmark history" skip.
+- Main push CI at the tag commit: Lint, Test, Fuzz Targets, h1spec, HTTP/3,
+  and Autobahn pass; the post-release Benchmark and Dependency Mirrors
+  dispatches pass on the same tree.
 
 Do not publish a number without its artifact or command. The 140 KiB figure is
 the final tagged-head CI artifact, not a general throughput claim.
