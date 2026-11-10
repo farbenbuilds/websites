@@ -3642,6 +3642,14 @@ Release evidence at the tag:
 Do not publish a number without its artifact or command. The 140 KiB figure is
 the final tagged-head CI artifact, not a general throughput claim.
 
+Post-release release-gate note: the immutable `v2.2.0` tag records the lsquic
+mirror at `413ca7c1...`, so its `Publish` provenance job fails the weekly
+upstream-equality check after upstream advanced to `cd23e526...`. The mirror
+was synced and recorded on `main` immediately after the tag. Treat the
+`v2.2.0` tag as immutable; either publish a follow-up patch release or obtain
+explicit maintainer approval before moving the tag. Do not describe the failed
+`Publish` run as a code or compliance failure.
+
 ### 19.3 What 2.2.0 adds, by subsystem
 
 #### 19.3.1 Bounded file responses on every transport
