@@ -16,7 +16,7 @@ catalog:
   eslint-plugin-svelte: 3.24.0
   lefthook: ^2.2.2
   oxfmt: 0.76.0
-  oxlint: 1.91.0
+  oxlint: 1.92.0
   svelte: ^5.57.3
   takumi-js: ^2.19.0
   # Svelte and Astro tooling (svelte-check, @astrojs/svelte) don't support
