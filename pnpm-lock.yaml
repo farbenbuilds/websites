@@ -16,8 +16,8 @@ catalogs:
       specifier: 0.1.8
       version: 0.1.8
     '@x18n/core':
-      specifier: 0.1.8
-      version: 0.1.8
+      specifier: 0.1.13
+      version: 0.1.13
     blume:
       specifier: ^2.2.6
       version: 2.2.6
@@ -67,7 +67,7 @@ importers:
         version: 0.1.8(@devframes/agentic@1.2.5)(@typescript-eslint/types@8.72.1)(crossws@0.4.17(srvx@1.0.8))(srvx@1.0.8)(typescript@6.0.3)
       '@x18n/core':
         specifier: 'catalog:'
-        version: 0.1.8(typescript@6.0.3)
+        version: 0.1.13(typescript@6.0.3)
       eslint:
         specifier: 'catalog:'
         version: 10.14.0(jiti@2.7.0)
@@ -2418,6 +2418,9 @@ packages:
     resolution: {integrity: sha512-H1b9uDKMkc/OhGRV1YOGFCtB/D5PWlBdEOLzU2MjeSeLkYaVonnqA784FKurW3Nor71X9PRMJ9WxwkxN96ygSg==}
     engines: {node: '>=22'}
     hasBin: true
+
+  '@x18n/core@0.1.13':
+    resolution: {integrity: sha512-yR3Tfzb58hGT4plTjEfRyK/VxKCZU4roJ5doQD0aR33SkpYZ5TsRmyOpL8641xWh7ModO5GLwGHX7GbISaF2bQ==}
 
   '@x18n/core@0.1.8':
     resolution: {integrity: sha512-quJuQRX0fVgcdV8nNqZ29aWLcU3NrF53UAjh0DDlBi5qCf5YdaaVV+QzFSAGWW+MBIxbjHFTPGj5o90tyI3A2g==}
@@ -7465,6 +7468,13 @@ snapshots:
       - crossws
       - ocache
       - srvx
+      - typescript
+
+  '@x18n/core@0.1.13(typescript@6.0.3)':
+    dependencies:
+      nostics: 1.3.0
+      valibot: 1.5.0(typescript@6.0.3)
+    transitivePeerDependencies:
       - typescript
 
   '@x18n/core@0.1.8(typescript@6.0.3)':

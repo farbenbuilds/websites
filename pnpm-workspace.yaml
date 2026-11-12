@@ -9,7 +9,7 @@ catalog:
   "@astrojs/compiler-rs": 0.5.2
   "@astrojs/svelte": ^9.1.2
   "@x18n/cli": 0.1.8
-  "@x18n/core": 0.1.8
+  "@x18n/core": 0.1.13
   blume: ^2.2.6
   eslint: 10.14.0
   eslint-plugin-astro: 3.2.1
