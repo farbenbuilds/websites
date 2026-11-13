@@ -22,6 +22,8 @@
     "svelte": "catalog:"
   },
   "devDependencies": {
+    "@x18n/core": "catalog:",
+    "astro": "catalog:",
     "takumi-js": "catalog:"
   }
 }

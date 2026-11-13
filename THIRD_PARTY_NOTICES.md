@@ -25,6 +25,26 @@
 - Vendored path: `.agents/skills/untangle-codebase/`
 - Local changes: none. The body is upstream content.
 
+## Modern Web Guidance skill
+
+- Source: https://github.com/GoogleChrome/modern-web-guidance
+- Source path: `skills/modern-web-guidance/SKILL.md`
+- License: Apache-2.0
+- License text: [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)
+- Vendored path: `.agents/skills/modern-web-guidance/`
+- Local changes: none. The body is upstream content.
+
+## Knip skill
+
+- Source: https://github.com/netlify/build
+- Source path: `.agents/skills/knip/SKILL.md`
+- License: MIT
+- License text: [LICENSES/netlify-build-LICENSE-MIT.txt](LICENSES/netlify-build-LICENSE-MIT.txt)
+- Vendored path: `.agents/skills/knip/`
+- Local changes: none. The requested `brianlovin/agent-config` repository was
+  not reachable, so this public copy is the installed body; it matches the
+  `skills.sh` snapshot of the requested skill.
+
 ## Graphify
 
 - Source: https://github.com/Graphify-Labs/graphify

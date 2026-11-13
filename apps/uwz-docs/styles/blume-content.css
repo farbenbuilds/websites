@@ -36,11 +36,15 @@ html:has(#blume-content > article > h1) .prose > h1 {
 }
 
 html .prose > h2 {
-  @apply mt-11 border-t border-border pt-7 text-[1.375rem] font-semibold leading-[1.25] tracking-[-0.02em];
+  @apply mt-11 border-t border-border pt-7 text-[1.375rem] font-semibold leading-[1.25] tracking-[-0.02em] text-balance;
 }
 
 html .prose h3 {
-  @apply text-[1.125rem] font-semibold tracking-[-0.015em];
+  @apply text-[1.125rem] font-semibold tracking-[-0.015em] text-balance;
+}
+
+html .prose :is(p, li, blockquote) {
+  @apply text-pretty;
 }
 
 html .prose a {

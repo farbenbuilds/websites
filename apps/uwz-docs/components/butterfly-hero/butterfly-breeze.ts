@@ -8,7 +8,7 @@ export type BreezePointer = {
   readonly active: boolean;
 };
 
-export const BREEZE_RADIUS = 22;
+const BREEZE_RADIUS = 22;
 
 export function steerFromPointer(
   pointer: BreezePointer,

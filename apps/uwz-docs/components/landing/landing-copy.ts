@@ -8,19 +8,19 @@ import { FACEBOOK_URL, PRODUCT_REPOSITORY_URL, SPONSOR_URL, X_URL } from "../../
 
 export type LandingLocale = SiteLocale;
 
-export type LandingLink = {
+type LandingLink = {
   readonly label: string;
   readonly href: string;
 };
 
-export type LandingAction = LandingLink;
+type LandingAction = LandingLink;
 
-export type LandingStep = {
+type LandingStep = {
   readonly title: string;
   readonly text: string;
 };
 
-export type LandingSocial = {
+type LandingSocial = {
   readonly label: string;
   readonly value: string;
   readonly href: string;

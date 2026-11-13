@@ -34,6 +34,7 @@ on:
       - ".github/**"
       - ".oxlintrc.json"
       - ".oxfmtrc.json"
+      - "knip.jsonc"
   pull_request:
     branches:
       - main
@@ -67,6 +68,7 @@ on:
       - ".github/**"
       - ".oxlintrc.json"
       - ".oxfmtrc.json"
+      - "knip.jsonc"
   workflow_dispatch:
 
 permissions:
@@ -78,7 +80,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint, format, typecheck, size, and CSS
+    name: Lint, format, typecheck, size, unused code, and CSS
     environment: Lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -108,6 +110,9 @@ jobs:
 
       - name: Check file size
         run: pnpm check:size
+
+      - name: Check unused files, exports, and dependencies
+        run: pnpm check:unused
 
       - name: Check Tailwind-first and oklch CSS
         run: pnpm check:css
