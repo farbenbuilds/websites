@@ -1,6 +1,6 @@
 import { clamp, createRng, nextRandom, randomBetween, wrap, type Rng } from "./butterfly-math.ts";
 
-export type Pollen = {
+type Pollen = {
   x: number;
   y: number;
   vx: number;
@@ -11,7 +11,7 @@ export type Pollen = {
   alpha: number;
 };
 
-export type AirTrace = {
+type AirTrace = {
   x: number;
   y: number;
   heading: number;
@@ -21,7 +21,7 @@ export type AirTrace = {
   glyph: string;
 };
 
-export type WingBreeze = {
+type WingBreeze = {
   x: number;
   y: number;
   vx: number;

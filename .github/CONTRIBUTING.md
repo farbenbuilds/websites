@@ -63,6 +63,8 @@ pnpm test:watch                         # Vitest watch mode
 pnpm test:all                           # root Vitest plus every workspace test
 pnpm test:workspace                     # every docs app test task
 pnpm check:size                         # enforce the 400-line source limit
+pnpm check:unused                       # Knip: unused files, exports, and dependencies
+pnpm check:css                          # enforce Tailwind-first and oklch CSS
 pnpm build                              # every workspace build
 pnpm check:uwz                          # type-check the uWebZockets docs app
 pnpm check:vws                          # type-check the ventiws docs app
@@ -143,6 +145,10 @@ The full contract is [CODING_CONVENTION.md](../CODING_CONVENTION.md). In short:
   are PascalCase. Functions are camelCase, except exported HTTP method handlers.
 - Vitest tests live under category directories in `tests/` and import from
   `vite-plus/test`. See [tests/README.md](../tests/README.md).
+- Run `pnpm check:unused` after removing or moving source files. `knip.jsonc`
+  declares the Blume content, metadata, and component-registry entry points;
+  remove the reported files, exports, and dependencies instead of adding
+  ignore patterns.
 - Do not weaken a lint, test, build, accessibility, or CI gate.
 
 ## Commits

@@ -7,7 +7,7 @@ import { siteMessages } from "../../messages.ts";
 
 export type LandingLocale = DocsLocale;
 
-export type LandingHighlight = {
+type LandingHighlight = {
   readonly lead: readonly InlinePart[];
   readonly text: readonly InlinePart[];
 };

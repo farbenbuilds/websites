@@ -190,7 +190,7 @@ Vite+ notes:
 - `.agents/skills` holds installed third-party skills and project-owned skills.
 - `.opencode/agents` and `.codex/agents` mirror the same agent team.
 - `.oxlintrc.json`, `.oxfmtrc.json`, and `tools/oxlint/anti-slop` define lint
-  and format enforcement. `knip.json` declares the entry points for dead-code
+  and format enforcement. `knip.jsonc` declares the entry points for dead-code
   detection.
 - `lefthook.yml` defines the pre-commit gate.
 - `.github` holds community, security, and pull-request templates plus the

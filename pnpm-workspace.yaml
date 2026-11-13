@@ -10,10 +10,12 @@ catalog:
   "@astrojs/svelte": ^9.1.2
   "@x18n/cli": 0.1.8
   "@x18n/core": 0.1.8
+  astro: 7.4.2
   blume: ^2.2.6
   eslint: 10.14.0
   eslint-plugin-astro: 3.2.1
   eslint-plugin-svelte: 3.24.0
+  knip: 6.45.1
   lefthook: ^2.2.2
   oxfmt: 0.76.0
   oxlint: 1.91.0

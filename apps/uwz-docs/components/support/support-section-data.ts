@@ -5,12 +5,12 @@ import { siteMessages, type SiteMessages } from "../../messages.ts";
 
 export type SupportLocale = DocsLocale;
 
-export type SupportItem = {
+type SupportItem = {
   readonly title: string;
   readonly text: string;
 };
 
-export type PlatformRow = {
+type PlatformRow = {
   readonly platform: string;
   readonly architecture: string;
   readonly status: string;

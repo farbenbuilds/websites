@@ -21,6 +21,7 @@
     "svelte": "catalog:"
   },
   "devDependencies": {
+    "astro": "catalog:",
     "takumi-js": "catalog:"
   }
 }

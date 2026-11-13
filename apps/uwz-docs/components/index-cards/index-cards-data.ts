@@ -3,7 +3,7 @@ import { resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 import { siteMessages, type SiteMessages } from "../../messages.ts";
 import { localizeHref } from "../../site-links.ts";
 
-export type IndexCardsItem = {
+type IndexCardsItem = {
   readonly title: string;
   readonly description: string;
   readonly href: string;

@@ -19,7 +19,6 @@
     "dev": "svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.67.0",
     "cn": "^0.5.2",
     "shadcn-svelte": "^1.7.2",
     "tailwind-variants": "^4.0.1",
