@@ -210,8 +210,10 @@ restructures more than one module, record the decision log, and prove behavior
 parity before delivery.
 
 `modern-web-guidance` runs before any HTML, CSS, or client-side JavaScript
-change. Search it first, retrieve the matching guide, and apply the modern
-platform pattern instead of an ad-hoc workaround. `knip` owns dead-code
+change. Search it first with the pinned helper
+(`pnpm dlx modern-web-guidance@1.0.0 search "<query>"`), retrieve the matching
+guide, and apply the modern platform pattern instead of an ad-hoc workaround.
+Do not run an unpinned `@latest` helper. `knip` owns dead-code
 detection: run `pnpm check:unused` after a refactor and remove the reported
 files, exports, and dependencies instead of ignoring them. `chrome-extensions`
 is installed from the same GoogleChrome repository but is not routed to a role

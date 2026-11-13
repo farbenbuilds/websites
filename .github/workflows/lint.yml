@@ -80,7 +80,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint, format, typecheck, size, and CSS
+    name: Lint, format, typecheck, size, unused code, and CSS
     environment: Lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15

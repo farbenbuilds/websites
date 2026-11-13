@@ -25,6 +25,30 @@
 - Vendored path: `.agents/skills/untangle-codebase/`
 - Local changes: none. The body is upstream content.
 
+## Modern Web Guidance and Chrome Extensions skills
+
+- Source: https://github.com/GoogleChrome/modern-web-guidance
+- Source paths: `skills/modern-web-guidance/SKILL.md`,
+  `skills/chrome-extensions/SKILL.md`
+- License: Apache-2.0
+- License text: [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)
+- Vendored paths: `.agents/skills/modern-web-guidance/`,
+  `.agents/skills/chrome-extensions/`
+- Local changes: `chrome-extensions` carries
+  `opencode/autoinvoke: "false"` metadata so OpenCode does not select it for
+  unrelated work. The bodies are otherwise upstream content.
+
+## Knip skill
+
+- Source: https://github.com/netlify/build
+- Source path: `.agents/skills/knip/SKILL.md`
+- License: MIT
+- License text: [LICENSES/netlify-build-LICENSE-MIT.txt](LICENSES/netlify-build-LICENSE-MIT.txt)
+- Vendored path: `.agents/skills/knip/`
+- Local changes: none. The requested `brianlovin/agent-config` repository was
+  not reachable, so this public copy is the installed body; it matches the
+  `skills.sh` snapshot of the requested skill.
+
 ## Graphify
 
 - Source: https://github.com/Graphify-Labs/graphify

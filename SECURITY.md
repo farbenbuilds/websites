@@ -62,6 +62,9 @@ outside this repository; report those to the platform owner as well.
   source, examples, screenshots, or commit history.
 - Dependencies are pinned by `pnpm-lock.yaml`. A lockfile change is reviewed
   like source code.
+- Skill helper commands use a pinned release through pnpm, for example
+  `pnpm dlx modern-web-guidance@1.0.0 ...`. Do not run an unpinned `@latest`
+  helper against repository content.
 - Build output under `dist/` and `.blume/` is generated. Do not patch generated
   HTML or JSON by hand.
 - The shared UI package is source-only. A consuming app inherits its component

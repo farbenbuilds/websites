@@ -46,6 +46,7 @@ pnpm test:watch                           # run Vitest in watch mode
 pnpm test:all                             # root Vitest plus workspace test tasks
 pnpm test:workspace                       # every docs app test task
 pnpm check:size                           # enforce the 400-line source limit
+pnpm check:unused                         # Knip: unused files, exports, and dependencies
 pnpm check:css                            # enforce Tailwind-first and oklch CSS
 pnpm build                                # build every workspace member
 pnpm build:uwz                            # build the uWebZockets docs site

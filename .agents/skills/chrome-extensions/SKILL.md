@@ -11,6 +11,8 @@ description: >
   the Chrome browser UI. Also trigger for publishing to the Chrome Web Store: 'publish
   extension', preparing an extension for publishing, responding to a review rejection, writing
   permission justifications, or drafting a privacy policy.
+metadata:
+  opencode/autoinvoke: "false"
 ---
 
 # Chrome Extensions

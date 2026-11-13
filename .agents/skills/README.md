@@ -25,8 +25,10 @@ a multi-module refactor and keep the decision log its workflow describes.
 
 `modern-web-guidance` and `chrome-extensions` are installed from
 `GoogleChrome/modern-web-guidance`. The guidance skill runs before any HTML,
-CSS, or client-side JavaScript change. The extension skill is kept for future
-browser-extension work and is not routed to a role.
+CSS, or client-side JavaScript change. Run it through the pinned helper:
+`pnpm dlx modern-web-guidance@1.0.0 search "<query>"`. The extension skill is
+kept for future browser-extension work and carries `opencode/autoinvoke: "false"`
+so OpenCode does not select it for unrelated tasks.
 
 `knip` was requested from `brianlovin/agent-config`. That repository is not
 reachable from this environment, so the installed body is the public

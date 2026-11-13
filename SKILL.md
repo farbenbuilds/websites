@@ -49,6 +49,7 @@ pnpm test
 pnpm test:watch
 pnpm test:all
 pnpm check:size
+pnpm check:unused
 pnpm check:css
 pnpm build
 pnpm dev:uwz
@@ -151,10 +152,11 @@ Load `knip` before removing unused files, exports, or dependencies.
 
 1. Run `pnpm check:unused` and read configuration hints before findings.
 2. Fix the configuration first: add entry points for Blume content, metadata,
-   and component registries, and register the Astro and Svelte compilers.
+   and component registries, and declare the Astro and Svelte dependencies so
+   Knip registers their compilers.
 3. Remove unused files first, then dependencies, then exports and types.
-4. Keep a type exported only when another module imports it. A type used only
-   inside its own module is local.
+4. Remove an export when no other module imports it, unless the type is part of
+   an exported value's public signature.
 5. Re-run `pnpm check:unused` after each batch. A clean report is the evidence.
 
 ## Agent Team

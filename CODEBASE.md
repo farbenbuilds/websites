@@ -228,6 +228,7 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm check:size
+pnpm check:unused
 pnpm check:css
 pnpm test:all
 pnpm validate:docs

@@ -220,6 +220,15 @@ pnpm dlx skills@latest add <owner/repo> --skill <skill-id> -y
 Review the `skills-lock.json` diff and the installed `SKILL.md` before
 committing. Do not edit vendored skill bodies by hand.
 
+Run the modern web guidance helper through pnpm with a pinned version:
+
+```sh
+pnpm dlx modern-web-guidance@1.0.0 search "<query>"
+pnpm dlx modern-web-guidance@1.0.0 retrieve "<id>"
+```
+
+Do not run an unpinned `@latest` helper against repository content.
+
 An agent must not claim a check it did not run, suppress a review finding, or
 commit, push, and open a pull request without user authorization.
 

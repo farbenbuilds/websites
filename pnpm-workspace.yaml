@@ -8,6 +8,7 @@ catalogMode: prefer
 catalog:
   "@astrojs/compiler-rs": 0.5.2
   "@astrojs/svelte": ^9.1.2
+  "@lucide/svelte": 1.67.0
   "@x18n/cli": 0.1.8
   "@x18n/core": 0.1.8
   astro: 7.4.2
