@@ -23,6 +23,17 @@ no-emoji rule. Project-owned skills below follow the repository style.
 `untangle-codebase` is the whole-codebase refactor skill. Load it explicitly for
 a multi-module refactor and keep the decision log its workflow describes.
 
+`modern-web-guidance` and `chrome-extensions` are installed from
+`GoogleChrome/modern-web-guidance`. The guidance skill runs before any HTML,
+CSS, or client-side JavaScript change. The extension skill is kept for future
+browser-extension work and is not routed to a role.
+
+`knip` was requested from `brianlovin/agent-config`. That repository is not
+reachable from this environment, so the installed body is the public
+`netlify/build` copy, which matches the `skills.sh` snapshot of the requested
+skill. The lockfile records the reachable source; replace it through the CLI if
+the upstream repository becomes public.
+
 ## Project-Owned Skills
 
 These are maintained in this repository and are not listed in

@@ -122,7 +122,8 @@ These steps cover the current docs apps. A future app on another framework
 follows its own framework conventions with the same accessibility and evidence
 requirements.
 
-1. Start from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
+1. Search `modern-web-guidance` before choosing a platform pattern, then start
+   from the existing token palette in `packages/ui/src/lib/styles/theme.css`.
    Author any new color literal as `oklch()`.
 2. Compose with Tailwind utilities and existing shadcn-svelte primitives. Check
    `packages/ui/src/lib/components/ui` before installing one.
@@ -143,6 +144,18 @@ For a behavior-preserving refactor, load `untangle-codebase` and keep a decision
 log of hidden links, needless links, surplus, and special cases. Refactor in
 reversible slices, add behavior-level tests for extracted contracts, and run
 `pnpm ready`. Do not remove tests or restyle comments unless the user opts in.
+
+## Dead Code Workflow
+
+Load `knip` before removing unused files, exports, or dependencies.
+
+1. Run `pnpm check:unused` and read configuration hints before findings.
+2. Fix the configuration first: add entry points for Blume content, metadata,
+   and component registries, and register the Astro and Svelte compilers.
+3. Remove unused files first, then dependencies, then exports and types.
+4. Keep a type exported only when another module imports it. A type used only
+   inside its own module is local.
+5. Re-run `pnpm check:unused` after each batch. A clean report is the evidence.
 
 ## Agent Team
 

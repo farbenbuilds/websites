@@ -145,6 +145,7 @@ pnpm format:check
 pnpm typecheck
 pnpm i18n:check
 pnpm check:size
+pnpm check:unused
 pnpm check:css
 pnpm test
 pnpm test:all
@@ -205,23 +206,30 @@ Skills live in `.agents/skills/<id>/SKILL.md`. OpenCode loads them with the
 narrowest set that fits the phase; do not load the whole library. If a listed
 skill is missing, report the drift instead of guessing.
 
-| Role                | Load first                                                                                                                      | Add for the task                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `architect`         | `agent-team-orchestration`, `websites-conventions`, `grill-me`, `ponytail`                                                      | `untangle-codebase`, `pragmatic-functional-programming`, `thermo-nuclear-code-quality-review`, domain skills for the affected surface |
-| `developer`         | `websites-conventions`, `agent-team-orchestration`, `pragmatic-functional-programming`, `ponytail`, `typescript-best-practices` | `untangle-codebase`, `typescript-advanced-types`, `install-anti-slop`, `vite`, `vitest`, domain skills for the slice                  |
-| `reviewer`          | `websites-conventions`, `thermo-nuclear-code-quality-review`, `verification-and-release`                                        | `untangle-codebase`, `web-security-review`, `ui-ux-pro-max`, `impeccable`, `svelte5-best-practices`                                   |
-| `integrator`        | `agent-team-orchestration`, `verification-and-release`, `technical-documentation`                                               | `ponytail`, `docs-site-authoring`, `web-security-review`                                                                              |
-| `docs-writer`       | `technical-documentation`, `docs-site-authoring`, `blume`, `astro`                                                              | `context7`, `websites-conventions`, `impeccable` for reader-facing structure                                                          |
-| `ui-stylist`        | `web-ui-styling`, `ui-ux-pro-max`, `impeccable`, `tailwind-design-system`, `shadcn-svelte`                                      | `gsap-core`, `chrome-devtools`, `svelte5-best-practices`                                                                              |
-| `astro-blume`       | `astro`, `blume`, `docs-site-authoring`, `vite`                                                                                 | `technical-documentation`, `context7`, `nix-best-practices`                                                                           |
-| `svelte-engineer`   | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`, `typescript-best-practices`                             | `typescript-advanced-types`, `web-ui-styling`, `vitest`                                                                               |
-| `verification`      | `verification-and-release`, `vitest`, `vite`, `thermo-nuclear-code-quality-review`                                              | `install-anti-slop`, `typescript-best-practices`, `nix-best-practices`                                                                |
-| `security-reviewer` | `web-security-review`, `context7`, `find-skills`                                                                                | `technical-documentation`, `verification-and-release`                                                                                 |
+| Role                | Load first                                                                                                                      | Add for the task                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `architect`         | `agent-team-orchestration`, `websites-conventions`, `grill-me`, `ponytail`                                                      | `untangle-codebase`, `pragmatic-functional-programming`, `thermo-nuclear-code-quality-review`, domain skills for the affected surface               |
+| `developer`         | `websites-conventions`, `agent-team-orchestration`, `pragmatic-functional-programming`, `ponytail`, `typescript-best-practices` | `untangle-codebase`, `typescript-advanced-types`, `install-anti-slop`, `knip`, `modern-web-guidance`, `vite`, `vitest`, domain skills for the slice |
+| `reviewer`          | `websites-conventions`, `thermo-nuclear-code-quality-review`, `verification-and-release`                                        | `untangle-codebase`, `web-security-review`, `ui-ux-pro-max`, `impeccable`, `svelte5-best-practices`                                                 |
+| `integrator`        | `agent-team-orchestration`, `verification-and-release`, `technical-documentation`                                               | `ponytail`, `docs-site-authoring`, `web-security-review`                                                                                            |
+| `docs-writer`       | `technical-documentation`, `docs-site-authoring`, `blume`, `astro`                                                              | `context7`, `websites-conventions`, `impeccable` for reader-facing structure                                                                        |
+| `ui-stylist`        | `web-ui-styling`, `modern-web-guidance`, `ui-ux-pro-max`, `impeccable`, `tailwind-design-system`, `shadcn-svelte`               | `gsap-core`, `chrome-devtools`, `svelte5-best-practices`                                                                                            |
+| `astro-blume`       | `astro`, `blume`, `docs-site-authoring`, `modern-web-guidance`, `vite`                                                          | `technical-documentation`, `context7`, `nix-best-practices`                                                                                         |
+| `svelte-engineer`   | `svelte-core-bestpractices`, `svelte5-best-practices`, `modern-web-guidance`, `shadcn-svelte`, `typescript-best-practices`      | `typescript-advanced-types`, `web-ui-styling`, `vitest`                                                                                             |
+| `verification`      | `verification-and-release`, `knip`, `vitest`, `vite`, `thermo-nuclear-code-quality-review`                                      | `install-anti-slop`, `typescript-best-practices`, `nix-best-practices`                                                                              |
+| `security-reviewer` | `web-security-review`, `context7`, `find-skills`                                                                                | `technical-documentation`, `verification-and-release`                                                                                               |
 
 `caveman` is opt-in only when the user asks for terse output. `find-skills` is
 for discovering a missing capability, not for loading a skill that is already
 listed here. `context7` is for current library documentation, not for project
 rules.
+
+`modern-web-guidance` is mandatory before an HTML, CSS, or client-side
+JavaScript change. Search the guide, retrieve the matching pattern, and cite the
+applied rule in the delivery note. `knip` owns dead-code detection: run
+`pnpm check:unused` after a refactor, remove the reported files, exports, and
+dependencies, and re-run until the report is empty. `chrome-extensions` is
+installed but not routed because the repository ships no browser extension.
 
 `untangle-codebase` is explicit-load only. Its Comments and Tests additions are
 opt-in, and neither may remove a gate or a regression test. A refactor slice

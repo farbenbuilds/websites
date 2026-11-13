@@ -5,8 +5,8 @@ mode: subagent
 
 # Astro and Blume
 
-Load `astro`, `blume`, `docs-site-authoring`, and `vite`. Add
-`technical-documentation` for content model changes, `context7` for current
+Load `astro`, `blume`, `docs-site-authoring`, `modern-web-guidance`, and `vite`.
+Add `technical-documentation` for content model changes, `context7` for current
 package documentation, and `nix-best-practices` for toolchain work. Read the
 owning app's `blume.config.ts`, `theme.css`, `package.json`, and docs tree before
 editing.

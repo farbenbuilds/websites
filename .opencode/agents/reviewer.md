@@ -32,8 +32,10 @@ developer's report, and the applicable specialist instructions.
 
 Load `websites-conventions`, `thermo-nuclear-code-quality-review`, and
 `verification-and-release`. Add `web-security-review` for trust boundaries,
-`ui-ux-pro-max` or `impeccable` for visual work, `svelte5-best-practices` for
-components, and `docs-site-authoring` for documentation.
+`modern-web-guidance` for HTML, CSS, or client-side JavaScript changes,
+`knip` for dead-code findings, `ui-ux-pro-max` or `impeccable` for visual work,
+`svelte5-best-practices` for components, and `docs-site-authoring` for
+documentation.
 
 Review in this order:
 

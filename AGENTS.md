@@ -120,6 +120,7 @@ pnpm test:watch                         # Vitest watch mode
 pnpm test:all                           # root Vitest plus every workspace test task
 pnpm test:workspace                     # every docs app test task
 pnpm check:size                         # enforce the 400-line source limit
+pnpm check:unused                       # Knip: unused files, exports, and dependencies
 pnpm check:css                          # enforce Tailwind-first and oklch CSS
 pnpm build                              # every workspace build
 pnpm check:uwz                          # type-check the uWebZockets docs app
@@ -189,7 +190,8 @@ Vite+ notes:
 - `.agents/skills` holds installed third-party skills and project-owned skills.
 - `.opencode/agents` and `.codex/agents` mirror the same agent team.
 - `.oxlintrc.json`, `.oxfmtrc.json`, and `tools/oxlint/anti-slop` define lint
-  and format enforcement.
+  and format enforcement. `knip.json` declares the entry points for dead-code
+  detection.
 - `lefthook.yml` defines the pre-commit gate.
 - `.github` holds community, security, and pull-request templates plus the
   `ci`, `lint`, and `test` workflows.
@@ -207,6 +209,14 @@ vendored copies.
 restructures more than one module, record the decision log, and prove behavior
 parity before delivery.
 
+`modern-web-guidance` runs before any HTML, CSS, or client-side JavaScript
+change. Search it first, retrieve the matching guide, and apply the modern
+platform pattern instead of an ad-hoc workaround. `knip` owns dead-code
+detection: run `pnpm check:unused` after a refactor and remove the reported
+files, exports, and dependencies instead of ignoring them. `chrome-extensions`
+is installed from the same GoogleChrome repository but is not routed to a role
+because this repository ships no browser extension.
+
 ### Project Skills
 
 | Skill                      | Use                                                                  |
@@ -223,12 +233,13 @@ parity before delivery.
 | Area       | Skills                                                                                                    |
 | ---------- | --------------------------------------------------------------------------------------------------------- |
 | Process    | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming`, `untangle-codebase` |
-| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`                                         |
+| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`, `knip`                                 |
 | TypeScript | `typescript-advanced-types`, `install-anti-slop`                                                          |
 | Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`                                    |
-| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`                                      |
+| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`, `modern-web-guidance`               |
 | Docs       | `technical-documentation`, `blume`, `astro`, `context7`                                                   |
-| Build      | `vite`, `vitest`, `chrome-devtools`, `nix-best-practices`                                                 |
+| Browser    | `chrome-devtools`, `chrome-extensions` (installed, not routed)                                            |
+| Build      | `vite`, `vitest`, `nix-best-practices`                                                                    |
 
 ## Agent Team
 
