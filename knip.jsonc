@@ -6,7 +6,7 @@
       "project": ["scripts/**/*.mjs", "tests/**/*.ts", "tools/oxlint/astro-plugin/**/*.mjs"],
       // Oxlint and Oxfmt read these from their configs; Oxfmt resolves the Astro compiler.
       "ignoreDependencies": ["@astrojs/compiler-rs", "oxfmt", "oxlint"],
-      // The root has no Svelte source; keep the compiler for the UI package only.
+      // The root has no Svelte source; keep the compiler for workspaces that do.
       "svelte": false,
     },
     "apps/uwz-docs": {
