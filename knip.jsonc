@@ -6,6 +6,8 @@
       "project": ["scripts/**/*.mjs", "tests/**/*.ts", "tools/oxlint/astro-plugin/**/*.mjs"],
       // Oxlint and Oxfmt read these from their configs; Oxfmt resolves the Astro compiler.
       "ignoreDependencies": ["@astrojs/compiler-rs", "oxfmt", "oxlint"],
+      // The root has no Svelte source; keep the compiler for the UI package only.
+      "svelte": false,
     },
     "apps/uwz-docs": {
       "entry": [
@@ -36,6 +38,8 @@
       "project": ["**/*.{ts,astro,mjs}"],
       // Blume renders OG cards with takumi-js at build time.
       "ignoreDependencies": ["takumi-js"],
+      // This app has no Svelte source.
+      "svelte": false,
     },
     "packages/docs-components": {
       "entry": ["src/**/*.{ts,astro}"],

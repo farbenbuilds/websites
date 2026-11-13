@@ -230,8 +230,7 @@ JavaScript change. Search the guide with
 pattern, and cite the applied rule in the delivery note. Do not use an unpinned
 `@latest` helper. `knip` owns dead-code detection: run
 `pnpm check:unused` after a refactor, remove the reported files, exports, and
-dependencies, and re-run until the report is empty. `chrome-extensions` is
-installed but not routed because the repository ships no browser extension.
+dependencies, and re-run until the report is empty.
 
 `untangle-codebase` is explicit-load only. Its Comments and Tests additions are
 opt-in, and neither may remove a gate or a regression test. A refactor slice

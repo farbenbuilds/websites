@@ -215,9 +215,7 @@ change. Search it first with the pinned helper
 guide, and apply the modern platform pattern instead of an ad-hoc workaround.
 Do not run an unpinned `@latest` helper. `knip` owns dead-code
 detection: run `pnpm check:unused` after a refactor and remove the reported
-files, exports, and dependencies instead of ignoring them. `chrome-extensions`
-is installed from the same GoogleChrome repository but is not routed to a role
-because this repository ships no browser extension.
+files, exports, and dependencies instead of ignoring them.
 
 ### Project Skills
 
@@ -240,7 +238,7 @@ because this repository ships no browser extension.
 | Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`                                    |
 | Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`, `modern-web-guidance`               |
 | Docs       | `technical-documentation`, `blume`, `astro`, `context7`                                                   |
-| Browser    | `chrome-devtools`, `chrome-extensions` (installed, not routed)                                            |
+| Browser    | `chrome-devtools`                                                                                         |
 | Build      | `vite`, `vitest`, `nix-best-practices`                                                                    |
 
 ## Agent Team

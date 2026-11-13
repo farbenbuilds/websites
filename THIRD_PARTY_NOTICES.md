@@ -25,18 +25,14 @@
 - Vendored path: `.agents/skills/untangle-codebase/`
 - Local changes: none. The body is upstream content.
 
-## Modern Web Guidance and Chrome Extensions skills
+## Modern Web Guidance skill
 
 - Source: https://github.com/GoogleChrome/modern-web-guidance
-- Source paths: `skills/modern-web-guidance/SKILL.md`,
-  `skills/chrome-extensions/SKILL.md`
+- Source path: `skills/modern-web-guidance/SKILL.md`
 - License: Apache-2.0
 - License text: [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)
-- Vendored paths: `.agents/skills/modern-web-guidance/`,
-  `.agents/skills/chrome-extensions/`
-- Local changes: `chrome-extensions` carries
-  `opencode/autoinvoke: "false"` metadata so OpenCode does not select it for
-  unrelated work. The bodies are otherwise upstream content.
+- Vendored path: `.agents/skills/modern-web-guidance/`
+- Local changes: none. The body is upstream content.
 
 ## Knip skill
 

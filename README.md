@@ -27,7 +27,7 @@ Install dependencies and run the full check suite:
 
 ```bash
 pnpm install
-pnpm ready   # lint, format, typecheck, size, CSS, tests, link validation, builds
+pnpm ready   # lint, format, typecheck, size, unused, CSS, tests, link validation, builds
 ```
 
 Day-to-day commands, all through the project-local Vite+ CLI:
