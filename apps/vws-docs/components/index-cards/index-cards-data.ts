@@ -1,18 +1,15 @@
-import type { DocsLocale } from "@farben/docs-components/docs-locale.ts";
 import { localizeLocalePath, resolveDocsLocale } from "@farben/docs-components/docs-locale.ts";
 
 import { siteMessages, type SiteMessages } from "../../messages.ts";
 
-export type IndexCardsLocale = DocsLocale;
-
-export type IndexCard = {
+type IndexCard = {
   readonly title: string;
   readonly description: string;
   readonly href: string;
   readonly icon: string;
 };
 
-export type IndexCardsCopy = {
+type IndexCardsCopy = {
   readonly cards: readonly IndexCard[];
 };
 

@@ -1,8 +1,8 @@
 import { SPECIMEN_MAX } from "./butterfly-data.ts";
 import { clamp } from "./butterfly-math.ts";
 
-export const COMPACT_FIELD_MAX_WIDTH = 640;
-export const COMPACT_SPECIMEN_COUNT = 3;
+const COMPACT_FIELD_MAX_WIDTH = 640;
+const COMPACT_SPECIMEN_COUNT = 3;
 export const DEFAULT_SPECIMEN_COUNT = SPECIMEN_MAX;
 
 export function clampSpecimenCount(requestedCount: number): number {

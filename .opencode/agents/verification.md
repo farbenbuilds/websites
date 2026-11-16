@@ -5,7 +5,7 @@ mode: subagent
 
 # Verification
 
-Load `verification-and-release`, `vitest`, `vite`, and
+Load `verification-and-release`, `knip`, `vitest`, `vite`, and
 `thermo-nuclear-code-quality-review` before reporting. Add
 `install-anti-slop` for lint rule audits, `typescript-best-practices` for type
 failures, and `nix-best-practices` for toolchain failures. Read
@@ -17,6 +17,7 @@ failures, and `nix-best-practices` for toolchain failures. Read
 - Run the narrowest relevant check while a slice is in progress.
 - Run `pnpm ready` before the final verdict.
 - Audit changed source files against the 400-line limit.
+- Run `pnpm check:unused` and require an empty Knip report.
 - Confirm regression coverage for behavior changes.
 - Report exact commands, working directories, and outcomes.
 - Separate failures owned by the slice from failures outside it.

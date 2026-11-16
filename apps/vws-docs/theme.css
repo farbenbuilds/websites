@@ -2,6 +2,14 @@
  * Blume enables smooth scrolling on every page. Keep it on the landing page
  * only; documentation pages jump instantly to anchors.
  */
+:root {
+  @apply [color-scheme:light] [accent-color:var(--blume-accent)];
+}
+
+:root[data-theme="dark"] {
+  @apply [color-scheme:dark];
+}
+
 html {
   @apply scroll-auto;
 }

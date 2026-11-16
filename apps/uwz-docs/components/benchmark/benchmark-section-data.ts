@@ -6,14 +6,14 @@ import { BENCHMARK_URL, HTTP_ARENA_FRAMEWORK_URL } from "../../site-urls.ts";
 
 export type BenchmarkLocale = DocsLocale;
 
-export type BenchmarkBar = {
+type BenchmarkBar = {
   readonly name: string;
   readonly value: string;
   readonly share: number;
   readonly leader?: boolean;
 };
 
-export type ArenaMetric = {
+type ArenaMetric = {
   readonly label: string;
   readonly value: string;
   readonly unit: string;

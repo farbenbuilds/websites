@@ -60,6 +60,8 @@ html {
 }
 
 :root {
+  @apply [color-scheme:light] [accent-color:var(--blume-accent)];
+
   --blume-background: oklch(0.9555 0.014 88.68);
   --blume-foreground: oklch(0.1969 0.0067 78.16);
   --blume-muted: oklch(0.9231 0.0186 86.15);
@@ -120,6 +122,8 @@ html {
 }
 
 :root[data-theme="dark"] {
+  @apply [color-scheme:dark];
+
   --blume-background: oklch(0.1961 0.0042 84.59);
   --blume-foreground: oklch(0.9264 0.0173 84.59);
   --blume-muted: oklch(0.24 0.008 84.59);

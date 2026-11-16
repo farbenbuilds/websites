@@ -1,7 +1,7 @@
 import type { SpeciesSpec, WingPoint, WingSpec } from "./butterfly-data.ts";
 import { clamp, hash2 } from "./butterfly-math.ts";
 
-export type AnatomyPart = "none" | "body" | "antenna" | "fore" | "hind";
+type AnatomyPart = "none" | "body" | "antenna" | "fore" | "hind";
 
 export type AnatomySample = {
   hit: boolean;

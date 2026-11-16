@@ -123,7 +123,7 @@ html .prose .docs-home-eyebrow {
 }
 
 .docs-home-summary {
-  @apply m-0 max-w-[36ch] font-sans text-[1.0625rem] leading-[1.7] text-hero-muted [text-shadow:0_1px_2px_var(--hero-paper)];
+  @apply m-0 max-w-[36ch] font-sans text-[1.0625rem] leading-[1.7] text-pretty text-hero-muted [text-shadow:0_1px_2px_var(--hero-paper)];
 }
 
 html .prose .docs-home-summary {

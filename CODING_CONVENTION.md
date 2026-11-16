@@ -352,8 +352,9 @@ it.
 - `lefthook` runs lint, format, size, CSS, typecheck, and tests before a commit.
   Do not bypass the hook with `--no-verify`.
 - Run `pnpm lint --fix` and `pnpm format` for fixes, then `pnpm ready` for the
-  full workspace gate. `pnpm check:size` enforces the 400-line source limit and
-  `pnpm check:css` enforces Tailwind-first app CSS and oklch color literals.
+  full workspace gate. `pnpm check:size` enforces the 400-line source limit,
+  `pnpm check:unused` enforces an empty Knip report, and `pnpm check:css`
+  enforces Tailwind-first app CSS and oklch color literals.
 - Vitest tests live under `tests/<category>/<subject>.test.ts` and use
   `vite-plus/test`. The category groups related tests; the file names the
   behavior. See [tests/README.md](tests/README.md). Run them with

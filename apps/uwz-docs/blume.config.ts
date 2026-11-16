@@ -59,6 +59,11 @@ export default defineConfig({
   deployment: {
     site: "https://uwz.farben.build",
   },
+  seo: {
+    metatags: {
+      "color-scheme": "light dark",
+    },
+  },
   markdown: {
     code: {
       theme: {

@@ -6,7 +6,7 @@ import { separateField, separationSteer } from "./butterfly-separation.ts";
 import { specimenHalfHeight, specimenHalfSpan } from "./butterfly-shape.ts";
 import { angleDelta, clamp, createRng, normalizeAngle, randomBetween } from "./butterfly-math.ts";
 
-export type FieldPointer = {
+type FieldPointer = {
   x: number;
   y: number;
   active: boolean;

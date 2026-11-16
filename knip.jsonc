@@ -1,0 +1,58 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "tests/**/*.test.ts", "x18n.config.ts"],
+      "project": ["scripts/**/*.mjs", "tests/**/*.ts", "tools/oxlint/astro-plugin/**/*.mjs"],
+      // Oxlint and Oxfmt read these from their configs; Oxfmt resolves the Astro compiler.
+      "ignoreDependencies": ["@astrojs/compiler-rs", "oxfmt", "oxlint"],
+      // The root has no Svelte source; keep the compiler for workspaces that do.
+      "svelte": false,
+    },
+    "apps/uwz-docs": {
+      "entry": [
+        "blume.config.ts",
+        "blume-redirects.ts",
+        "blume-accessible-scroll-regions.ts",
+        "components.ts",
+        "site-links.ts",
+        "x18n.config.ts",
+        "components/**/*.astro",
+        "components/**/*.svelte",
+        "docs/**/*.mdx",
+        "docs/**/meta.ts",
+      ],
+      "project": ["**/*.{ts,svelte,astro,mjs}"],
+      // Blume renders OG cards with takumi-js at build time.
+      "ignoreDependencies": ["takumi-js"],
+    },
+    "apps/vws-docs": {
+      "entry": [
+        "blume.config.ts",
+        "components.ts",
+        "messages.ts",
+        "x18n.config.ts",
+        "components/**/*.astro",
+        "docs/**/*.mdx",
+      ],
+      "project": ["**/*.{ts,astro,mjs}"],
+      // Blume renders OG cards with takumi-js at build time.
+      "ignoreDependencies": ["takumi-js"],
+      // This app has no Svelte source.
+      "svelte": false,
+    },
+    "packages/docs-components": {
+      "entry": ["src/**/*.{ts,astro}"],
+      "project": ["src/**/*.{ts,astro}"],
+      // The Astro dependency enables Knip's Astro compiler for this package.
+      "ignoreDependencies": ["astro"],
+    },
+    "packages/ui": {
+      "entry": ["src/lib/components/**/index.ts"],
+      "project": ["src/**/*.{ts,svelte}"],
+      // theme.css imports these stylesheets, which the CSS compiler cannot resolve.
+      // components.json declares the lucide icon library for future registry components.
+      "ignoreDependencies": ["@lucide/svelte", "shadcn-svelte", "tw-animate-css"],
+    },
+  },
+}

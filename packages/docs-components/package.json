@@ -9,5 +9,8 @@
     "./inline-text.ts": "./src/inline-text.ts",
     "./inline-part.astro": "./src/inline-part.astro",
     "./inline-text.astro": "./src/inline-text.astro"
+  },
+  "devDependencies": {
+    "astro": "catalog:"
   }
 }

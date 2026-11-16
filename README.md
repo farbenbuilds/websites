@@ -27,7 +27,7 @@ Install dependencies and run the full check suite:
 
 ```bash
 pnpm install
-pnpm ready   # lint, format, typecheck, size, CSS, tests, link validation, builds
+pnpm ready   # lint, format, typecheck, size, unused, CSS, tests, link validation, builds
 ```
 
 Day-to-day commands, all through the project-local Vite+ CLI:
@@ -46,6 +46,7 @@ pnpm test:watch                           # run Vitest in watch mode
 pnpm test:all                             # root Vitest plus workspace test tasks
 pnpm test:workspace                       # every docs app test task
 pnpm check:size                           # enforce the 400-line source limit
+pnpm check:unused                         # Knip: unused files, exports, and dependencies
 pnpm check:css                            # enforce Tailwind-first and oklch CSS
 pnpm build                                # build every workspace member
 pnpm build:uwz                            # build the uWebZockets docs site

@@ -7,7 +7,7 @@ export type WingSpec = {
   readonly points: readonly WingPoint[];
 };
 
-export type EyespotSpec = {
+type EyespotSpec = {
   readonly x: number;
   readonly y: number;
   readonly radius: number;
