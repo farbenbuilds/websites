@@ -88,7 +88,10 @@ websites/
 ├── LICENSES/                     # third-party license texts
 ├── THIRD_PARTY_NOTICES.md        # vendored content provenance
 ├── .agents/skills/               # installed, project-owned, and tool skills
-│   └── graphify-codex/           # generated Codex graphify skill
+│   ├── graphify-codex/           # generated Codex graphify skill
+│   └── herdr/                    # herdr --skill copy for OpenCode and Codex
+├── .claude/                      # Claude Code project configuration
+│   └── skills/herdr -> ../../.agents/skills/herdr
 ├── .opencode/                    # OpenCode agents, skills, and project config
 │   ├── agents/
 │   └── skills/graphify/          # generated OpenCode graphify skill
@@ -100,6 +103,7 @@ websites/
 ├── vitest.config.ts              # root Vitest configuration
 ├── x18n.config.ts                # monorepo projects and shared locale defaults
 ├── AGENTS.md                     # root agent instructions
+├── CLAUDE.md                     # Claude Code entry point, imports AGENTS.md
 ├── CODING_CONVENTION.md          # engineering contract
 ├── TEAM_WORKFLOW.md              # architect/developer/reviewer/integrator flow
 ├── CODEBASE.md                   # this document
@@ -280,7 +284,8 @@ security review before launch. Client-side checks are not a security boundary.
 - Do not add a dependency for a behavior the platform or an existing package
   already provides.
 - Do not edit third-party skills under `.agents/skills`; update them through
-  `skills-lock.json` and the `skills` CLI. The tool-managed graphify copies are
-  the exception and follow [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-knowledge-graph).
+  `skills-lock.json` and the `skills` CLI. The tool-managed `graphify` and
+  `herdr` copies are the exception and follow
+  [.agents/skills/README.md](.agents/skills/README.md).
 - Project-owned skills, agents, and commands live beside the installed skills
   but are maintained in this repository.

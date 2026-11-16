@@ -42,8 +42,8 @@ bindings on musl hosts.
   shop app may use another framework and needs its own plan.
 - `packages/ui`: `@farben/ui`, shared shadcn-svelte components and theme tokens.
 - `tests/<category>`: root Vitest suites grouped by test category.
-- `.agents/skills`, `.opencode/skills`: agent skills, including the
-  tool-managed graphify copies.
+- `.agents/skills`, `.opencode/skills`: agent skills, including the tool-managed
+  graphify and herdr copies.
 - `.opencode/agents` and `.codex/agents`: the agent team.
 - `.github`: community, security, and pull-request templates.
 
@@ -209,6 +209,25 @@ Agent-assisted changes follow the same rules. The agent team is defined in
 - A whole-codebase refactor loads `untangle-codebase`, records a decision log,
   and proves behavior parity with the existing suite plus targeted tests for
   extracted contracts.
+
+### Optional Herdr Orchestration
+
+Herdr is a terminal workspace manager that can run several agent CLIs in
+parallel panes. It is optional, not a build dependency, and not part of CI.
+Contributors who use it follow the "Optional Herdr Orchestration" section in
+[AGENTS.md](../AGENTS.md) and load the `herdr` skill.
+
+- Run `herdr --skill` to print the release-matched skill. The repository vendors
+  that output at `.agents/skills/herdr/SKILL.md`.
+- Start the agent inside Herdr so `HERDR_ENV=1` is set. The skill refuses to
+  control a session from outside Herdr.
+- The orchestrator assigns one self-contained slice per worker pane and never
+  assigns two workers to edit the same file.
+- A worker pane executes its assigned slice and does not delegate further.
+- Review `git status` and `git diff` before reporting a delegated task complete.
+
+Claude Code reaches the same skill through the `.claude/skills/herdr` symlink.
+OpenCode and Codex read `.agents/skills` directly.
 
 Install or update a third-party skill from the repository root with the
 project-compatible CLI. `npx` is blocked by the pnpm `devEngines` requirement:

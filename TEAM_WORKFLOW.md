@@ -2,8 +2,9 @@
 
 This document defines how the Architect, Developer, Reviewer, and Integrator
 work together, and how specialist agents attach to each phase. The same workflow
-applies to OpenCode and Codex. Platform-specific agent files only translate the
-role contract into that platform's format.
+applies to Claude Code, OpenCode, and Codex. Platform-specific agent files only
+translate the role contract into that platform's format; [CLAUDE.md](CLAUDE.md)
+imports [AGENTS.md](AGENTS.md) for Claude Code.
 
 The root agent owns orchestration, user communication, and the final result. A
 phase is complete only when its required artifact exists. No agent may claim a
@@ -132,6 +133,9 @@ both declarations.
 - Edits to the same file are serialized.
 - Independent slices in different apps may run in parallel when they do not
   share generated files, lockfiles, or theme tokens.
+- Herdr panes are an optional transport for the same roles. When the user asks
+  for Herdr orchestration, the orchestrator follows this document and the
+  `herdr` skill, and a worker pane executes its slice without delegating further.
 - The Reviewer never runs in parallel with the Developer on the same slice.
 - The Integrator runs after the Reviewer verdict, not before.
 
@@ -202,9 +206,10 @@ cost, or public behavior.
 ## 8. Skill Routing
 
 Skills live in `.agents/skills/<id>/SKILL.md`. OpenCode loads them with the
-`skill` tool by ID. Codex reads the named `SKILL.md` before acting. Load the
-narrowest set that fits the phase; do not load the whole library. If a listed
-skill is missing, report the drift instead of guessing.
+`skill` tool by ID. Codex reads the named `SKILL.md` before acting. Claude Code
+loads `CLAUDE.md` and discovers the linked `herdr` skill under `.claude/skills`.
+Load the narrowest set that fits the phase; do not load the whole library. If a
+listed skill is missing, report the drift instead of guessing.
 
 | Role                | Load first                                                                                                                      | Add for the task                                                                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -223,6 +228,12 @@ skill is missing, report the drift instead of guessing.
 for discovering a missing capability, not for loading a skill that is already
 listed here. `context7` is for current library documentation, not for project
 rules.
+
+`herdr` is tool-managed and explicit-load only. Load it when the user asks for
+Herdr pane control or an active Herdr session is being orchestrated. It adds
+pane control, not a second role hierarchy; the worker loop-prevention,
+shared-file, and session-safety rules are in
+[AGENTS.md](AGENTS.md#optional-herdr-orchestration).
 
 `modern-web-guidance` is mandatory before an HTML, CSS, or client-side
 JavaScript change. Search the guide with

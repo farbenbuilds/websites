@@ -19,6 +19,8 @@ project skill for a single surface:
 - `web-ui-styling` for design, Tailwind, and shadcn-svelte work.
 - `verification-and-release` for gates and pull-request readiness.
 - `web-security-review` for security-sensitive changes.
+- `herdr` for optional pane orchestration when the user explicitly asks for it
+  and the agent runs inside a Herdr pane.
 
 ## Project Overview
 
@@ -171,6 +173,12 @@ Specialists: `docs-writer`, `ui-stylist`, `astro-blume`, `svelte-engineer`,
 The root agent orchestrates. The Architect plans without editing. The Developer
 implements one slice. The Reviewer verifies independently. The Integrator checks
 the combined result. A phase is complete only when its artifact exists.
+
+Claude Code loads [AGENTS.md](AGENTS.md) through [CLAUDE.md](CLAUDE.md). Herdr is
+an optional transport for the same roles: use it only when the user asks for pane
+orchestration, load the `herdr` skill first, and follow
+[AGENTS.md](AGENTS.md#optional-herdr-orchestration). A worker pane does not
+delegate further.
 
 ## Delivery
 
