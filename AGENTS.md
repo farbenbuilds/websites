@@ -19,6 +19,7 @@ presentation, and tooling as separate products with separate owners.
 | [CODEBASE.md](CODEBASE.md)                                   | Architecture, workspace layout, docs pipeline, ownership boundaries      |
 | [CODING_CONVENTION.md](CODING_CONVENTION.md)                 | Non-negotiable coding rules, FP, separation of concerns, file-size limit |
 | [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)                         | Architect, Developer, Reviewer, Integrator, specialist handoffs          |
+| [CLAUDE.md](CLAUDE.md)                                       | Claude Code entry point; imports this guide and links the Herdr skill    |
 | [CONTRIBUTING.md](.github/CONTRIBUTING.md)                   | Environment, commands, branch and PR process                             |
 | [SECURITY.md](SECURITY.md)                                   | Reporting, supported versions, trust boundaries                          |
 | [SKILL.md](SKILL.md)                                         | Project master skill and skill routing                                   |
@@ -230,21 +231,23 @@ files, exports, and dependencies instead of ignoring them.
 
 ### Installed Skills
 
-| Area       | Skills                                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------------------------- |
-| Process    | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming`, `untangle-codebase` |
-| Review     | `thermo-nuclear-code-quality-review`, `typescript-best-practices`, `knip`                                 |
-| TypeScript | `typescript-advanced-types`, `install-anti-slop`                                                          |
-| Svelte     | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`                                    |
-| Styling    | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`, `modern-web-guidance`               |
-| Docs       | `technical-documentation`, `blume`, `astro`, `context7`                                                   |
-| Browser    | `chrome-devtools`                                                                                         |
-| Build      | `vite`, `vitest`, `nix-best-practices`                                                                    |
+| Area          | Skills                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| Process       | `find-skills`, `grill-me`, `ponytail`, `caveman`, `pragmatic-functional-programming`, `untangle-codebase` |
+| Review        | `thermo-nuclear-code-quality-review`, `typescript-best-practices`, `knip`                                 |
+| TypeScript    | `typescript-advanced-types`, `install-anti-slop`                                                          |
+| Svelte        | `svelte-core-bestpractices`, `svelte5-best-practices`, `shadcn-svelte`                                    |
+| Styling       | `tailwind-design-system`, `ui-ux-pro-max`, `impeccable`, `gsap-core`, `modern-web-guidance`               |
+| Docs          | `technical-documentation`, `blume`, `astro`, `context7`                                                   |
+| Browser       | `chrome-devtools`                                                                                         |
+| Build         | `vite`, `vitest`, `nix-best-practices`                                                                    |
+| Orchestration | `herdr` (optional, only inside a Herdr pane)                                                              |
 
 ## Agent Team
 
-The canonical workflow is [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md). OpenCode and
-Codex expose the same roles.
+The canonical workflow is [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md). Claude Code
+loads this guide through [CLAUDE.md](CLAUDE.md); OpenCode and Codex expose the
+same roles.
 
 Core roles:
 
@@ -294,6 +297,49 @@ and actual outcomes. Never claim an unrun check passed.
   remaining risk. Assign the requested maintainer and use the repository labels.
 - Do not commit, push, or open a pull request unless the root agent has user
   authorization for that action.
+
+## Optional Herdr Orchestration
+
+Herdr is an optional terminal workspace manager for running several agent CLIs
+in parallel panes. It is not a build dependency, it is not required for any
+task, and CI never runs it. Use it only when the user asks for Herdr
+orchestration, or when this session already runs inside a Herdr pane and the
+user asks to delegate work across panes.
+
+- **Detect the session.** `test "${HERDR_ENV:-}" = 1` must succeed before any
+  control command. If Herdr was not requested, run the task directly and do not
+  inspect a Herdr session. If the user asked for Herdr control and the check
+  fails, say the session is not inside Herdr and stop. Load the `herdr` skill
+  from `.agents/skills/herdr/SKILL.md` before issuing control commands; the
+  installed binary is the authority when syntax is uncertain.
+- **Assign project roles.** Any supported agent CLI can act as the orchestrator
+  or a worker. The orchestrator follows [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) and
+  assigns one self-contained slice per worker pane. A worker executes the
+  assigned slice directly and does not delegate further.
+- **Dispatch self-contained prompts.** Worker panes do not see the
+  orchestrator's chat history. Include exact file paths, function signatures,
+  expected inputs and outputs, acceptance criteria, and the checks to run.
+- **Use the current CLI.** Discover state with `herdr agent list` and
+  `herdr pane list`. Create a sibling pane with
+  `herdr pane split --current --direction right --cwd "$PWD" --no-focus`, start
+  an agent with `herdr agent start <name> --kind <kind> --pane <pane-id>`, and
+  submit work with
+  `herdr agent prompt <name> "<prompt>" --wait --timeout <milliseconds>`.
+  Consult the skill for wait, read, focus, and key commands.
+- **Verify the result.** Wait until the agent returns from `working` to `idle`
+  or `done`, and read the pane with `herdr agent read` when the state is
+  unclear. Report a `blocked` pane to the user instead of answering its prompt.
+  Review `git status` and `git diff` before reporting completion.
+- **Serialize shared files.** Never assign two worker panes to edit the same file
+  or shared generated output at the same time.
+- **Protect the user's session.** Do not close panes, tabs, or workspaces you did
+  not create, stop the Herdr server, or kill the main Herdr process. Use
+  `--no-focus` for background work unless the user asks to switch panes.
+
+Herdr support is vendored from the installed binary with `herdr --skill` at
+`.agents/skills/herdr/SKILL.md`. Claude Code reaches the same skill through
+`.claude/skills/herdr`, which links to that directory. Open `.agents/skills/README.md`
+for the update procedure; do not edit the vendored skill body by hand.
 
 ## graphify
 

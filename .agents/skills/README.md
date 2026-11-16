@@ -66,6 +66,16 @@ are in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). The update and
 cleanup procedure is in
 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md#optional-knowledge-graph).
 
+Herdr is installed by the `herdr` binary, not the `skills` CLI, so it is not
+listed in `skills-lock.json`. Its canonical copy is `.agents/skills/herdr/`,
+produced by `herdr --skill` from the installed release. OpenCode and Codex read
+it directly. Claude Code discovers it through `.claude/skills/herdr`, a symlink
+to the canonical directory. The body is upstream content and is Apache-2.0; do
+not edit it by hand. To update, upgrade Herdr, rerun
+`herdr --skill > .agents/skills/herdr/SKILL.md`, review the diff, and update the
+version in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). Herdr is
+optional local tooling and is not a CI dependency.
+
 ## Adding a Project Skill
 
 1. Create `.agents/skills/<kebab-case-id>/SKILL.md`.
@@ -80,5 +90,6 @@ cleanup procedure is in
 ## Loading
 
 OpenCode and Codex discover `.agents/skills` automatically. OpenCode also
-discovers `.opencode/skills`. Load the narrowest skill that matches the current
-phase.
+discovers `.opencode/skills`. Claude Code reads `CLAUDE.md` and discovers skills
+through `.claude/skills`; the Herdr entry links to the canonical copy. Load the
+narrowest skill that matches the current phase.

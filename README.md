@@ -149,9 +149,11 @@ The short version:
 
 ## Agents and skills
 
-The repository ships a shared agent team for OpenCode and Codex. The canonical roles live in [AGENTS.md](AGENTS.md) and [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md); platform files are mirrored under `.opencode/agents/` and `.codex/agents/`.
+The repository ships a shared agent team for Claude Code, OpenCode, and Codex. The canonical roles live in [AGENTS.md](AGENTS.md) and [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md); Claude Code loads them through [CLAUDE.md](CLAUDE.md), and platform files are mirrored under `.opencode/agents/` and `.codex/agents/`.
 
-Third-party skills are pinned by `skills-lock.json` and installed under `.agents/skills/`. Project-owned skills cover repository conventions, docs authoring, UI styling, verification, security review, and team orchestration. Update third-party skills with the `skills` CLI instead of editing their vendored files, except for the tool-managed graphify copies below.
+Third-party skills are pinned by `skills-lock.json` and installed under `.agents/skills/`. Project-owned skills cover repository conventions, docs authoring, UI styling, verification, security review, and team orchestration. Update third-party skills with the `skills` CLI instead of editing their vendored files, except for the tool-managed graphify and herdr copies below.
+
+Herdr is optional pane orchestration for contributors who run several agent CLIs in parallel. It is not a build dependency. The skill is vendored from `herdr --skill` at `.agents/skills/herdr/`; Claude Code reaches it through `.claude/skills/herdr`. See the optional orchestration section in [AGENTS.md](AGENTS.md#optional-herdr-orchestration) and the contributor notes in [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-herdr-orchestration).
 
 Graphify is optional local codebase-graph tooling. Its generated skills live in `.opencode/skills/graphify/` and `.agents/skills/graphify-codex/`; see [CONTRIBUTING.md](.github/CONTRIBUTING.md#optional-knowledge-graph) for install, update, and data-egress notes. License and provenance are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

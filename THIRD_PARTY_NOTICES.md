@@ -61,6 +61,18 @@
   skill bodies pin install commands to `graphifyy==0.9.76` and fail instead of
   falling back to `pip`. The bodies are otherwise upstream content.
 
+## Herdr skill
+
+- Source: https://github.com/herdrdev/herdr
+- Version: 0.9.5
+- Source path: `skills/herdr/SKILL.md`
+- License: Apache-2.0
+- License text: [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)
+- Vendored path: `.agents/skills/herdr/`
+- Local changes: none. The body is the release-matched copy printed by
+  `herdr --skill`. Claude Code reaches it through the `.claude/skills/herdr`
+  symlink.
+
 The anti-slop plugin carries its own upstream license under
 `tools/oxlint/anti-slop/`.
 
