@@ -38,6 +38,18 @@ html [data-blume-header] a[href="/vi/"] :is(img, svg) {
 }
 
 /*
+ * Every route shares the same header, so the header uses the reading frame on
+ * every route once it has room. Scoping the frame to reading pages made the
+ * brand and section tabs shift horizontally between the docs home and a
+ * reading page.
+ */
+@media (min-width: 80rem) {
+  html [data-blume-header] {
+    @apply px-[max(1.5rem,calc((100%_-_var(--uwz-docs-frame-width))_/_2))];
+  }
+}
+
+/*
  * Section tabs: attach Docs / Reference / Examples to the brand instead of
  * centering them in Blume's three-column header grid. The labels use the same
  * mono label system as the sidebar, TOC, and footer, and the active section
