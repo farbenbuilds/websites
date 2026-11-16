@@ -34,6 +34,11 @@ pnpm ready
 Use the project-local CLI through pnpm. The global `vp` cannot load musl native
 bindings on musl hosts.
 
+If a CSS-only change appears after a hard reload but not after a client-side
+navigation while `blume dev` is running, the generated stylesheet is stale.
+Refresh it with `touch apps/uwz-docs/.blume/src/generated/app.css` (or the
+matching app path), then reload; restart the dev server if it persists.
+
 ## Repository Layout
 
 - `apps/uwz-docs`: uWebZockets documentation, Blume, Astro, Svelte islands.
