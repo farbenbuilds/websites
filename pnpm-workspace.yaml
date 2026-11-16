@@ -8,7 +8,7 @@ catalogMode: prefer
 catalog:
   "@astrojs/compiler-rs": 0.5.2
   "@astrojs/svelte": ^9.1.2
-  "@lucide/svelte": 1.67.0
+  "@lucide/svelte": 1.72.0
   "@x18n/cli": 0.1.14
   "@x18n/core": 0.1.14
   astro: 7.4.2
@@ -65,7 +65,7 @@ peerDependencyRules:
 runtimeOnFail: ignore
 pmOnFail: ignore
 minimumReleaseAgeExclude:
-  - "@lucide/svelte@1.67.0"
+  - "@lucide/svelte@1.72.0"
   - "@oxfmt/binding-android-arm-eabi@0.76.0"
   - "@oxfmt/binding-android-arm64@0.76.0"
   - "@oxfmt/binding-darwin-arm64@0.76.0"
