@@ -366,6 +366,12 @@ Header decisions:
 - Keep the header sticky and visible on docs pages. On the docs home hero, hide
   it while the hero covers the viewport, mark it `inert`, and reveal it after the
   reader scrolls past. Restore it without JavaScript.
+- At `80rem` and wider, align the header's inner content to the reading frame on
+  every route, up to `82.5rem` with a `1.5rem` minimum gutter. The docs home uses
+  the frame too, so the brand, section tabs, and actions keep one horizontal
+  position when the reader moves between the home page and a reading page. The
+  docs home content keeps its 70rem cap, so the shared header frame is wider than
+  the landing section rules at large viewports.
 - Keep Blume's 64px height because its sticky offsets are built around it.
 - Prefer Blume theme tokens first and a small app-local selector adapter second.
   Use only `data-blume-*` hooks that M0 verifies in the built HTML. They are an

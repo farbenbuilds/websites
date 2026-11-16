@@ -5,7 +5,9 @@
  * leaves the 42rem prose column floating far from both rails on wide screens.
  * These overrides keep a centered frame with narrower rails and oRPC's rail,
  * gutter, and main padding measurements. The direct-child h1 guard keeps the
- * landing page, including its full-screen hero, on the original shell.
+ * landing page, including its full-screen hero, on the original shell. The
+ * shared header frame lives in blume-chrome.css because it applies to every
+ * route.
  *
  * Selectors target Blume 2.2.6 data hooks. Re-measure after every Blume upgrade.
  */
@@ -35,10 +37,6 @@ html:has(#blume-content > article > h1) [data-blume-doc-grid] {
 
   html:has(#blume-content > article > h1) [data-blume-toc] {
     @apply px-4 pt-12 pb-10;
-  }
-
-  html:has(#blume-content > article > h1) [data-blume-header] {
-    @apply px-[max(1.5rem,calc((100%_-_var(--uwz-docs-frame-width))_/_2))];
   }
 }
 
