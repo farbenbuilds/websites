@@ -35,6 +35,11 @@ export default defineConfig({
       { code: "vi", label: "Tiếng Việt" },
     ],
   },
+  seo: {
+    metatags: {
+      "color-scheme": "light dark",
+    },
+  },
   agents: {
     markdownComponents: {
       LandingIntro: introMarkdown,
