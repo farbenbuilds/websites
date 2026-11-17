@@ -52,6 +52,10 @@ allowBuilds:
   "@scarf/scarf": false
 
 overrides:
+  # Astro 7.4.12's optional rolldown wasm fallback pulls emnapi 2.0.0-beta.2,
+  # which breaks astro2tsx's peer pair during blume check.
+  "@napi-rs/wasm-runtime>@emnapi/core": 1.11.3
+  "@napi-rs/wasm-runtime>@emnapi/runtime": 1.11.3
   vite@*: "catalog:"
 peerDependencyRules:
   allowAny:
