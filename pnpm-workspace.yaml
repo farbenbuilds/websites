@@ -7,7 +7,7 @@ catalogMode: prefer
 
 catalog:
   "@astrojs/compiler-rs": 0.5.3
-  "@astrojs/svelte": ^9.1.2
+  "@astrojs/svelte": ^9.1.6
   "@lucide/svelte": 1.72.0
   "@x18n/cli": 0.1.14
   "@x18n/core": 0.1.14
