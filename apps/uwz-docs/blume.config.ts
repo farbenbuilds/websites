@@ -3,6 +3,7 @@ import { defineConfig, type ComponentMarkdown } from "blume";
 
 import { accessibleScrollRegions } from "./blume-accessible-scroll-regions.ts";
 import { createRedirects } from "./blume-redirects.ts";
+import { svelteSsrExternal } from "./blume-svelte-ssr.ts";
 import { renderBenchmarkMarkdown } from "./components/benchmark/benchmark-section-data.ts";
 import { renderSiteColophonMarkdown } from "./components/colophon/site-colophon-markdown.ts";
 import { renderIndexCardsMarkdown } from "./components/index-cards/index-cards-data.ts";
@@ -72,7 +73,7 @@ export default defineConfig({
       },
     },
   },
-  integrations: [svelte(), accessibleScrollRegions],
+  integrations: [svelte(), svelteSsrExternal, accessibleScrollRegions],
   agents: {
     llmsTxt: {
       details:
